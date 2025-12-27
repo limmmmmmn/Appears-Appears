@@ -1,66 +1,122 @@
-# _scripts/FieldMonster.gd
+# _scripts/characters/field_monster.gd
 extends CharacterBody2D
 
-# 몬스터 상태 정의 (가만히 있거나, 쫓거나)
 enum State { IDLE, CHASE }
 var current_state = State.IDLE
 
-var target_player = null # 쫓아갈 대상
-const SPEED = 80.0 # 플레이어보다 조금 느리게 (플레이어는 150)
+var target_player = null
+var is_triggered = false
 
-var is_triggered = false # <--- 1. 이 변수 추가! (중복 충돌 방지용)
+# --- 배회 변수 ---
+@onready var origin_position = global_position 
+var wander_target = Vector2.ZERO 
+var is_resting = false 
+var move_speed = 30.0  
+var chase_speed = 80.0 
+
+# [수정 1] 느낌표의 원래 위치를 기억할 변수 추가
+var emote_start_pos = Vector2.ZERO 
+
+func _ready():
+	if has_node("Emote"):
+		$Emote.visible = false
+		# [수정 2] 에디터에서 잡아둔 위치를 변수에 저장!
+		emote_start_pos = $Emote.position 
+		
+	origin_position = global_position
+	start_rest()
 
 func _physics_process(delta):
 	match current_state:
 		State.IDLE:
-			# 가만히 있을 때는 아무것도 안 함 (숨쉬기 운동만)
-			velocity = Vector2.ZERO
-			
+			_process_idle(delta)
 		State.CHASE:
-			if target_player:
-				# 1. 플레이어 방향 알아내기
-				var direction = global_position.direction_to(target_player.global_position)
-				
-				# 2. 그 방향으로 이동
-				velocity = direction * SPEED
-				
-				# 3. (옵션) 몬스터가 플레이어를 보게 뒤집기
-				if direction.x < 0:
-					$Sprite2D.flip_h = false # 왼쪽 봄
-				else:
-					$Sprite2D.flip_h = true  # 오른쪽 봄
+			_process_chase(delta)
 	
-# _scripts/FieldMonster.gd
-
-# ... (위쪽 코드는 그대로)
-
 	move_and_slide()
-
-# 충돌 체크 부분 수정
+	
 	for i in get_slide_collision_count():
 		var collision = get_slide_collision(i)
-		
-		# 플레이어랑 부딪혔고, 아직 처리가 안 된 상태라면?
 		if collision.get_collider().name == "PlayerHead" and is_triggered == false:
-			
-			is_triggered = true # <--- 2. "자, 이제 처리 들어간다!" 하고 깃발 꽂기
-			
+			is_triggered = true
 			print("전투 윈도우 생성 요청! ⚔️")
 			BattleManager.start_battle(self)
 			queue_free()
 
-# --- 아래는 시야 감지(Area2D) 신호 연결 ---
+# --- 배회 로직 ---
+func _process_idle(delta):
+	if is_resting:
+		velocity = Vector2.ZERO
+		return
 
+	var direction = global_position.direction_to(wander_target)
+	velocity = direction * move_speed
+	
+	if velocity.x < 0: $Sprite2D.flip_h = true
+	elif velocity.x > 0: $Sprite2D.flip_h = false
+
+	if global_position.distance_to(wander_target) < 2.0:
+		start_rest()
+
+func start_rest():
+	is_resting = true
+	velocity = Vector2.ZERO
+	var wait_time = randf_range(1.0, 3.0)
+	await get_tree().create_timer(wait_time).timeout
+	pick_new_target()
+
+func pick_new_target():
+	var random_x = randf_range(-30, 30)
+	var random_y = randf_range(-30, 30)
+	wander_target = origin_position + Vector2(random_x, random_y)
+	is_resting = false
+
+# --- 추격 로직 ---
+func _process_chase(delta):
+	if target_player:
+		var direction = global_position.direction_to(target_player.global_position)
+		velocity = direction * chase_speed
+		if velocity.x < 0: $Sprite2D.flip_h = true
+		else: $Sprite2D.flip_h = false
+
+# --- 시야 감지 ---
 func _on_detection_area_body_entered(body):
-	# 내 시야(원) 안에 누군가 들어왔는데, 그게 플레이어라면?
 	if body.name == "PlayerHead":
+		if current_state == State.CHASE:
+			return
 		current_state = State.CHASE
 		target_player = body
-		print("발견했다! 쫓아간다!")
+		is_resting = false 
+		show_emote()
 
 func _on_detection_area_body_exited(body):
-	# 플레이어가 시야 밖으로 도망치면?
 	if body.name == "PlayerHead":
 		current_state = State.IDLE
 		target_player = null
-		print("놓쳤다...")
+		start_rest()
+
+# --- [수정 3] 느낌표 연출 함수 ---
+func show_emote():
+	if not has_node("Emote"): return
+	
+	var emote = $Emote
+	emote.visible = true       
+	emote.modulate.a = 1.0     
+	
+	# [핵심 변경] 강제로 -50 하지 말고, 아까 기억해둔 위치(emote_start_pos)로 되돌리기!
+	emote.position = emote_start_pos     
+	emote.scale = Vector2(1, 1)
+
+	var tween = create_tween()
+	tween.set_trans(Tween.TRANS_ELASTIC) 
+	tween.set_ease(Tween.EASE_OUT)
+	
+	# 기억해둔 위치에서 위로 20만큼만 더 튀어오름
+	tween.tween_property(emote, "position", emote_start_pos + Vector2(0, -20), 0.5)
+	tween.parallel().tween_property(emote, "scale", Vector2(1.5, 1.5), 0.5)
+	
+	var tween_fade = create_tween()
+	tween_fade.tween_interval(1.0) 
+	tween_fade.tween_property(emote, "modulate:a", 0.0, 0.5) 
+	
+	tween_fade.tween_callback(emote.hide)

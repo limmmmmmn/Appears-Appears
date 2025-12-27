@@ -54,6 +54,26 @@ position = Vector2(1030, 554)
 y_sort_enabled = true
 position = Vector2(907, 394)
 
+[node name="FieldMonster14" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(839, 315)
+
+[node name="FieldMonster15" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(1096, 439)
+
+[node name="FieldMonster16" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(1164, 561)
+
+[node name="FieldMonster17" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(1167, 652)
+
+[node name="FieldMonster18" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(1329, 763)
+
 [node name="FieldMonster2" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
 position = Vector2(652, 438)
@@ -64,7 +84,11 @@ position = Vector2(681, 686)
 
 [node name="FieldMonster4" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
-position = Vector2(1096, 745)
+position = Vector2(994, 664)
+
+[node name="FieldMonster19" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(1159, 834)
 
 [node name="FieldMonster5" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
@@ -72,7 +96,7 @@ position = Vector2(1226, 391)
 
 [node name="FieldMonster6" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
-position = Vector2(1329, 613)
+position = Vector2(1328, 614)
 
 [node name="FieldMonster7" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
@@ -81,6 +105,30 @@ position = Vector2(606, 288)
 [node name="FieldMonster8" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
 position = Vector2(538, 459)
+
+[node name="FieldMonster20" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(502, 419)
+
+[node name="FieldMonster21" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(403, 492)
+
+[node name="FieldMonster22" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(324, 545)
+
+[node name="FieldMonster23" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(479, 802)
+
+[node name="FieldMonster24" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(616, 828)
+
+[node name="FieldMonster25" parent="." instance=ExtResource("5_lvkeh")]
+y_sort_enabled = true
+position = Vector2(831, 882)
 
 [node name="FieldMonster9" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true

@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://b3hrqkrjwgv26"]
+[gd_scene load_steps=6 format=3 uid="uid://b3hrqkrjwgv26"]
 
 [ext_resource type="Script" uid="uid://mqvm82k3lgs6" path="res://_scripts/characters/field_monster.gd" id="1_ld14l"]
 [ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://sprites/monsters/aqua_slime.png" id="2_jvusb"]
@@ -8,6 +8,9 @@ radius = 6.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_o3owd"]
 radius = 126.01984
+
+[sub_resource type="LabelSettings" id="LabelSettings_ld14l"]
+font_color = Color(1, 1, 0, 1)
 
 [node name="FieldMonster" type="CharacterBody2D"]
 script = ExtResource("1_ld14l")
@@ -23,6 +26,18 @@ shape = SubResource("CircleShape2D_7pldm")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="DetectionArea"]
 shape = SubResource("CircleShape2D_o3owd")
+
+[node name="Emote" type="Label" parent="."]
+offset_left = -2.0
+offset_top = -20.0
+offset_right = 3.0
+offset_bottom = 3.0
+rotation = 0.015170217
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.96862745, 0.23529412, 0.8509804, 1)
+theme_override_font_sizes/font_size = 21
+text = "!"
+label_settings = SubResource("LabelSettings_ld14l")
 
 [connection signal="body_entered" from="DetectionArea" to="." method="_on_detection_area_body_entered"]
 [connection signal="body_exited" from="DetectionArea" to="." method="_on_detection_area_body_exited"]

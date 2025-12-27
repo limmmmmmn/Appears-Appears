@@ -1,88 +1,115 @@
 # _scripts/ui/battle_window.gd
 extends Control
 
+# --- [1. 노드 연결] ---
 @onready var enemy_group = $Panel/EnemyGroup
 @onready var action_bar = $ActionBar
 
+# --- [2. 데이터/설정] ---
+var popup_text_scene = preload("res://scenes/ui/floating_text.tscn")
+
 var attack_speed = 300.0 
-var damage = 35
+var damage = 80         
 
 func _ready():
-	# 1. 내 액션바 초기화
 	action_bar.max_value = 100
 	action_bar.value = 0
 	
-	# 2. 몬스터 랜덤 생성 (1마리 ~ 3마리)
 	var monster_count = randi_range(1, 3)
-	
 	for i in range(monster_count):
 		spawn_enemy()
 
 func _process(delta):
-	# 3. 오토 배틀: 게이지 차오름
 	action_bar.value += attack_speed * delta
 	
 	if action_bar.value >= action_bar.max_value:
 		perform_attack()
 		action_bar.value = 0
 
-# --- 몬스터 생성 함수 ---
+# --- [3. 몬스터 생성] ---
 func spawn_enemy():
-	# 몬스터 한 마리를 위한 세트(VBox) 만들기
 	var enemy_slot = VBoxContainer.new()
+	enemy_slot.alignment = BoxContainer.ALIGNMENT_CENTER
 	
-	# 1. 이미지 만들기
-	var tex_rect = TextureRect.new()
-	# (임시) 아이콘 이미지를 씀. 나중엔 monster_data에서 가져오면 됨
-	tex_rect.texture = load("res://sprites/monsters/aqua_slime.png") 
-	tex_rect.expand_mode = TextureRect.EXPAND_KEEP_SIZE
-	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tex_rect.custom_minimum_size = Vector2(20, 20) # 크기 지정
-	tex_rect.modulate = Color(randf(), randf(), randf()) # 색깔 랜덤
-	
-	# 2. 체력바 만들기
+	# A. 체력바
 	var hp = ProgressBar.new()
 	hp.max_value = 100
 	hp.value = 100
 	hp.custom_minimum_size = Vector2(40, 10)
-	hp.show_percentage = false # 숫자 끄기
+	hp.show_percentage = false
+	var style_box = StyleBoxFlat.new()
+	style_box.bg_color = Color(1, 0.3, 0.3)
+	hp.add_theme_stylebox_override("fill", style_box)
 	
-	# 3. 조립하기 (슬롯에 이미지+체력바 넣기)
-	enemy_slot.add_child(hp)       # 위에 체력바
-	enemy_slot.add_child(tex_rect) # 아래에 몬스터
+	# B. 이미지
+	var tex_rect = TextureRect.new()
+	# (본인 프로젝트 이미지 경로로 수정하세요!)
+	tex_rect.texture = load("res://sprites/monsters/aqua_slime.png") 
+	tex_rect.expand_mode = TextureRect.EXPAND_KEEP_SIZE
+	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tex_rect.custom_minimum_size = Vector2(20, 20)
+
 	
-	# 4. 그룹(화면)에 추가
+	# C. 조립
+	enemy_slot.add_child(hp)       
+	enemy_slot.add_child(tex_rect) 
+	
+	# D. 그룹에 추가
 	enemy_group.add_child(enemy_slot)
 
-# --- 공격 함수 ---
+# --- [4. 공격 로직] ---
 func perform_attack():
-	# 살아있는 몬스터 찾기
+	# enemy_group에는 이제 진짜 '몬스터 슬롯'만 들어있음!
 	var live_enemies = enemy_group.get_children()
 	
 	if live_enemies.size() > 0:
-		# 랜덤하게 한 놈 골라서 때리기
 		var target_slot = live_enemies.pick_random()
-		var target_hp_bar = target_slot.get_child(0) # 0번이 체력바였지?
+		var target_hp_bar = target_slot.get_child(0) 
 		
 		target_hp_bar.value -= damage
 		
-		# 때리는 연출 (창 흔들기)
+		# [수정 포인트 1] 데미지 함수 호출
+		show_damage(damage, target_slot)
+		
 		var tween = create_tween()
 		tween.tween_property(self, "position", position + Vector2(3, 0), 0.05)
 		tween.tween_property(self, "position", position, 0.05)
 		
-		print("공격! 남은 체력:", target_hp_bar.value)
-
-		# 죽었는지 확인
 		if target_hp_bar.value <= 0:
-			target_slot.queue_free() # 그 몬스터만 삭제
+			target_slot.queue_free()
 			
-			# 다 죽었는지 확인 (방금 죽인 놈 빼고 남은 게 없으면)
+			# (주의: 방금 죽인 1마리가 포함된 상태라 개수가 1개 이하면 전멸로 침)
 			if enemy_group.get_child_count() <= 1: 
 				win_battle()
 	else:
 		win_battle()
 
+# --- [5. 데미지 텍스트 띄우기 (여기가 중요!)] ---
+func show_damage(amount, target_node):
+	var popup = popup_text_scene.instantiate()
+	popup.set_text_value(amount, Color(1, 0.3, 0.3))
+	
+	# [수정 포인트 2] 
+	# 팝업을 'EnemyGroup'에 넣지 말고, 'BattleWindow(self)'에 넣어야 함!
+	# 그래야 공격 로직이 팝업을 몬스터로 착각하지 않음.
+	add_child(popup)
+	
+	# [수정 포인트 3]
+	# 위치는 '절대 좌표(global_position)'를 기준으로 잡으면 아주 편함.
+	# 몬스터 머리 위(Y - 20)에 띄우기
+	popup.global_position = target_node.global_position + Vector2(10, -20)
+
+# --- [6. 승리] ---
 func win_battle():
-	print("전원 처치! 승리!")
-	queue_free() # 창 닫기
+	var popup = popup_text_scene.instantiate()
+	popup.set_text_value("GOLD +50", Color(1, 0.8, 0.2))
+	
+	# 승리 메시지도 윈도우 중앙에
+	popup.position = size / 2 - Vector2(30, 10)
+	popup.scale = Vector2(1.5, 1.5)
+	add_child(popup)
+	
+	var timer = get_tree().create_timer(0.8)
+	await timer.timeout
+	
+	queue_free()

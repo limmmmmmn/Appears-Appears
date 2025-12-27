@@ -1,6 +1,15 @@
-[gd_scene load_steps=4 format=3 uid="uid://v4oait7iei6x"]
+[gd_scene load_steps=6 format=3 uid="uid://v4oait7iei6x"]
 
 [ext_resource type="Script" uid="uid://bsqaj8gpiuyx6" path="res://_scripts/data/battle_window.gd" id="1_t52ir"]
+
+[sub_resource type="Theme" id="Theme_t52ir"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_oss5i"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
 
 [sub_resource type="Theme" id="Theme_oss5i"]
 
@@ -21,6 +30,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = SubResource("Theme_t52ir")
+theme_override_styles/panel = SubResource("StyleBoxFlat_oss5i")
 
 [node name="EnemyGroup" type="HBoxContainer" parent="Panel"]
 layout_mode = 1
