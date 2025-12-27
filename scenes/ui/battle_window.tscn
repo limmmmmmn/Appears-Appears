@@ -1,0 +1,48 @@
+[gd_scene load_steps=4 format=3 uid="uid://v4oait7iei6x"]
+
+[ext_resource type="Script" uid="uid://bsqaj8gpiuyx6" path="res://_scripts/data/battle_window.gd" id="1_t52ir"]
+
+[sub_resource type="Theme" id="Theme_oss5i"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_8n6kp"]
+bg_color = Color(0.92941177, 0.9098039, 0, 1)
+
+[node name="BattleWindow" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 160.0
+offset_bottom = 140.0
+script = ExtResource("1_t52ir")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="EnemyGroup" type="HBoxContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ActionBar" type="ProgressBar" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -37.0
+offset_top = 20.0
+offset_right = 38.0
+offset_bottom = 29.0
+grow_horizontal = 2
+theme = SubResource("Theme_oss5i")
+theme_override_font_sizes/font_size = 3
+theme_override_styles/fill = SubResource("StyleBoxFlat_8n6kp")

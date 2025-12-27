@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://cjstvs7y4m3p3"]
+
+[ext_resource type="Script" uid="uid://dos2dvymnepae" path="res://_scripts/characters/party_member.gd" id="1_xjx1u"]
+[ext_resource type="Texture2D" uid="uid://lqktmk4ukghp" path="res://sprites/characters/black_mage_walk_right_strip1.png" id="2_xjx1u"]
+
+[node name="PartyMember" type="Node2D"]
+script = ExtResource("1_xjx1u")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_xjx1u")
