@@ -1,0 +1,26 @@
+[gd_scene load_steps=8 format=3 uid="uid://cvkni55j7gsck"]
+
+[ext_resource type="Script" uid="uid://caqntb3vj2ce3" path="res://Scripts/Player.gd" id="1_yrcjn"]
+[ext_resource type="PackedScene" uid="uid://b3agvrhger63g" path="res://Scenes/Field/PartyMember.tscn" id="2_uwibw"]
+[ext_resource type="Resource" uid="uid://dwgnsfv254v51" path="res://Resources/Jobs/Warrior.tres" id="3_oofsa"]
+[ext_resource type="Resource" uid="uid://dc6paid462wkh" path="res://Resources/Jobs/Priest.tres" id="4_o6g0o"]
+[ext_resource type="Resource" uid="uid://cn7nn2eeqlbtm" path="res://Resources/Jobs/Mage.tres" id="5_nr7aa"]
+[ext_resource type="Texture2D" uid="uid://xo4omnga4620" path="res://Assets/Sprites/characters/red_mage_walk_left_strip1.png" id="6_o8d7o"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_6my2s"]
+radius = 7.0
+
+[node name="Player" type="CharacterBody2D"]
+script = ExtResource("1_yrcjn")
+follower_scene = ExtResource("2_uwibw")
+jobs = Array[Resource]([ExtResource("3_oofsa"), ExtResource("4_o6g0o"), ExtResource("5_nr7aa")])
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("6_o8d7o")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 5)
+shape = SubResource("CircleShape2D_6my2s")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position_smoothing_enabled = true

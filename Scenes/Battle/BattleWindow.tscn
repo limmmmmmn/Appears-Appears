@@ -1,0 +1,41 @@
+[gd_scene load_steps=3 format=3 uid="uid://c80bry2jv3542"]
+
+[ext_resource type="Script" uid="uid://ckk4ld6xv1x2r" path="res://BattleWindow.gd" id="1_7af3j"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5q23i"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+
+[node name="BattleWindow" type="Control"]
+custom_minimum_size = Vector2(140, 120)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_7af3j")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_5q23i")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 14
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = 7.0
+offset_top = -22.0
+offset_right = -7.0
+offset_bottom = 22.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1

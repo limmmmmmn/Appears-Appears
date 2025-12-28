@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobData" load_steps=3 format=3 uid="uid://b80gk0hwv3s6x"]
+
+[ext_resource type="Script" uid="uid://bx1fabrxty1ed" path="res://Scripts/Data/EnemyData.gd" id="1_xqri7"]
+[ext_resource type="Texture2D" uid="uid://ccrca88iq8f6s" path="res://Assets/Sprites/monsters/blue_bat.png" id="2_8ekqn"]
+
+[resource]
+script = ExtResource("1_xqri7")
+enemy_name = "박"
+hp = 30
+attack = 7
+speed = 4
+exp_reward = 12
+gold_reward = 4
+sprite = ExtResource("2_8ekqn")
+metadata/_custom_type_script = "uid://bx1fabrxty1ed"
