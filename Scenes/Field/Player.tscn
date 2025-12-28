@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cvkni55j7gsck"]
+[gd_scene load_steps=9 format=3 uid="uid://cvkni55j7gsck"]
 
 [ext_resource type="Script" uid="uid://caqntb3vj2ce3" path="res://Scripts/Player.gd" id="1_yrcjn"]
 [ext_resource type="PackedScene" uid="uid://b3agvrhger63g" path="res://Scenes/Field/PartyMember.tscn" id="2_uwibw"]
@@ -6,6 +6,7 @@
 [ext_resource type="Resource" uid="uid://dc6paid462wkh" path="res://Resources/Jobs/Priest.tres" id="4_o6g0o"]
 [ext_resource type="Resource" uid="uid://cn7nn2eeqlbtm" path="res://Resources/Jobs/Mage.tres" id="5_nr7aa"]
 [ext_resource type="Texture2D" uid="uid://xo4omnga4620" path="res://Assets/Sprites/characters/red_mage_walk_left_strip1.png" id="6_o8d7o"]
+[ext_resource type="PackedScene" uid="uid://c7srj6dxj8eod" path="res://Scenes/UI/HPBar.tscn" id="7_uwibw"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_6my2s"]
 radius = 7.0
@@ -24,3 +25,9 @@ shape = SubResource("CircleShape2D_6my2s")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position_smoothing_enabled = true
+
+[node name="HPBar" parent="." instance=ExtResource("7_uwibw")]
+offset_left = -9.0
+offset_top = -17.0
+offset_right = 9.0
+offset_bottom = -14.0

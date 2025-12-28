@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3 uid="uid://c7srj6dxj8eod"]
+
+[ext_resource type="Script" uid="uid://ctna7vv7yg0eg" path="res://scenes/UI/HPBar.gd" id="1_pmbsu"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frph0"]
+bg_color = Color(0.18896914, 0.1889692, 0.18896905, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_02mqk"]
+bg_color = Color(0, 0.69803923, 0.28235295, 1)
+
+[node name="HPBar" type="ProgressBar"]
+custom_minimum_size = Vector2(10, 2)
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -9.5
+offset_top = -1.5
+offset_right = 9.5
+offset_bottom = 1.5
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/background = SubResource("StyleBoxFlat_frph0")
+theme_override_styles/fill = SubResource("StyleBoxFlat_02mqk")
+show_percentage = false
+script = ExtResource("1_pmbsu")

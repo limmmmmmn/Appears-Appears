@@ -9,6 +9,8 @@ extends Node2D
 
 @onready var player = $Player
 @onready var ui_layer = $UI # 방금 만든 CanvasLayer
+# [추가] 방금 추가한 로그 UI를 찾습니다.
+@onready var battle_log_ui = $UI/BattleLogUI
 
 # [추가] 최근 전투창 2개의 위치(Rect2)를 저장할 리스트
 var battle_window_history: Array[Rect2] = []
@@ -47,15 +49,12 @@ func _on_battle_requested(enemy_data: EnemyData):
 	var battle_window = battle_window_scene.instantiate()
 	ui_layer.add_child(battle_window)
 	
-	# [핵심 변경] setup 함수가 돌려주는 '최종 위치(final_rect)'를 받아서 변수에 담습니다.
-	var final_rect = battle_window.setup(enemy_data, battle_window_history)
+	# [핵심] 전투창의 'log_requested' 신호를 로그 UI의 'add_log' 함수에 연결!
+	# 이제 전투창이 신호를 보내면 자동으로 채팅창에 글이 써집니다.
+	battle_window.log_requested.connect(battle_log_ui.add_log)
 	
-	# 받은 정확한 위치를 족보(history)에 기록합니다.
+	var final_rect = battle_window.setup(enemy_data, battle_window_history, player.jobs)
+	
 	battle_window_history.push_front(final_rect)
-	
-	# 디버깅용: 콘솔에 좌표가 잘 찍히는지 확인해보세요!
-	print("전투창 생성됨: ", final_rect)
-	
-	# 기억은 2개까지만
-	if battle_window_history.size() > 2:
+	if battle_window_history.size() > 5: # 기억 갯수 좀 늘려도 됨
 		battle_window_history.pop_back()

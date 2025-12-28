@@ -1,10 +1,10 @@
 [gd_resource type="Resource" script_class="JobData" load_steps=3 format=3 uid="uid://dc6paid462wkh"]
 
-[ext_resource type="Script" uid="uid://bx1fabrxty1ed" path="res://Scripts/Data/EnemyData.gd" id="1_vegww"]
+[ext_resource type="Script" uid="uid://bgg54fmriqjx6" path="res://Scripts/Data/JobData.gd" id="1_vegww"]
 [ext_resource type="Texture2D" uid="uid://6ie8x4i04ojw" path="res://Assets/Sprites/characters/white_mage_walk_left_strip1.png" id="2_awmmg"]
 
 [resource]
 script = ExtResource("1_vegww")
 job_name = "Priest"
 sprite = ExtResource("2_awmmg")
-metadata/_custom_type_script = "uid://bx1fabrxty1ed"
+metadata/_custom_type_script = "uid://bgg54fmriqjx6"
