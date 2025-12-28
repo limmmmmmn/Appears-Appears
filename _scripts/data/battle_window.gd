@@ -1,115 +1,137 @@
 # _scripts/ui/battle_window.gd
 extends Control
 
-# --- [1. 노드 연결] ---
+# --- 노드 연결 ---
 @onready var enemy_group = $Panel/EnemyGroup
 @onready var action_bar = $ActionBar
 
-# --- [2. 데이터/설정] ---
+# --- 설정값 ---
 var popup_text_scene = preload("res://scenes/ui/floating_text.tscn")
+var attack_speed = 200.0
 
-var attack_speed = 300.0 
-var damage = 80         
+# [추가] 몬스터 공격 타이머
+var enemy_timer: float = 0.0
+var enemy_attack_delay: float = 1.0 # 1초마다 때림
+var enemy_damage: int = 5           # 몬스터 공격력
 
 func _ready():
 	action_bar.max_value = 100
 	action_bar.value = 0
 	
+	# 몬스터 생성 (1~3마리)
 	var monster_count = randi_range(1, 3)
 	for i in range(monster_count):
 		spawn_enemy()
+		
+	# [추가] 플레이어가 죽었을 때 신호 연결
+	PlayerData.player_died.connect(_on_player_died)
 
 func _process(delta):
+	# 1. 내 턴 (게이지 차오름)
 	action_bar.value += attack_speed * delta
-	
 	if action_bar.value >= action_bar.max_value:
 		perform_attack()
 		action_bar.value = 0
+		
+	# [추가] 2. 몬스터 턴 (시간 체크)
+	enemy_timer += delta
+	if enemy_timer >= enemy_attack_delay:
+		enemy_timer = 0
+		perform_enemy_attack() # 몬스터가 때림!
 
-# --- [3. 몬스터 생성] ---
+# 몬스터 생성
 func spawn_enemy():
 	var enemy_slot = VBoxContainer.new()
 	enemy_slot.alignment = BoxContainer.ALIGNMENT_CENTER
 	
-	# A. 체력바
 	var hp = ProgressBar.new()
 	hp.max_value = 100
 	hp.value = 100
-	hp.custom_minimum_size = Vector2(40, 10)
+	hp.custom_minimum_size = Vector2(10, 2)
 	hp.show_percentage = false
 	var style_box = StyleBoxFlat.new()
 	style_box.bg_color = Color(1, 0.3, 0.3)
 	hp.add_theme_stylebox_override("fill", style_box)
 	
-	# B. 이미지
 	var tex_rect = TextureRect.new()
-	# (본인 프로젝트 이미지 경로로 수정하세요!)
-	tex_rect.texture = load("res://sprites/monsters/aqua_slime.png") 
+	tex_rect.texture = load("res://sprites/monsters/aqua_slime.png") # 이미지 경로 확인!
 	tex_rect.expand_mode = TextureRect.EXPAND_KEEP_SIZE
 	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tex_rect.custom_minimum_size = Vector2(20, 20)
-
+	tex_rect.custom_minimum_size = Vector2(10, 10)
+	tex_rect.modulate = Color(randf(), randf(), randf())
 	
-	# C. 조립
 	enemy_slot.add_child(hp)       
 	enemy_slot.add_child(tex_rect) 
-	
-	# D. 그룹에 추가
 	enemy_group.add_child(enemy_slot)
 
-# --- [4. 공격 로직] ---
+# 내 공격
 func perform_attack():
-	# enemy_group에는 이제 진짜 '몬스터 슬롯'만 들어있음!
 	var live_enemies = enemy_group.get_children()
 	
 	if live_enemies.size() > 0:
 		var target_slot = live_enemies.pick_random()
 		var target_hp_bar = target_slot.get_child(0) 
 		
-		target_hp_bar.value -= damage
+		# PlayerData 공격력 사용
+		var dmg = PlayerData.attack_power
+		target_hp_bar.value -= dmg
 		
-		# [수정 포인트 1] 데미지 함수 호출
-		show_damage(damage, target_slot)
+		show_damage(dmg, target_slot, Color(1, 0.3, 0.3)) # 빨간색
 		
+		# 타격감 연출
 		var tween = create_tween()
 		tween.tween_property(self, "position", position + Vector2(3, 0), 0.05)
 		tween.tween_property(self, "position", position, 0.05)
 		
 		if target_hp_bar.value <= 0:
 			target_slot.queue_free()
-			
-			# (주의: 방금 죽인 1마리가 포함된 상태라 개수가 1개 이하면 전멸로 침)
 			if enemy_group.get_child_count() <= 1: 
 				win_battle()
 	else:
 		win_battle()
 
-# --- [5. 데미지 텍스트 띄우기 (여기가 중요!)] ---
-func show_damage(amount, target_node):
-	var popup = popup_text_scene.instantiate()
-	popup.set_text_value(amount, Color(1, 0.3, 0.3))
-	
-	# [수정 포인트 2] 
-	# 팝업을 'EnemyGroup'에 넣지 말고, 'BattleWindow(self)'에 넣어야 함!
-	# 그래야 공격 로직이 팝업을 몬스터로 착각하지 않음.
-	add_child(popup)
-	
-	# [수정 포인트 3]
-	# 위치는 '절대 좌표(global_position)'를 기준으로 잡으면 아주 편함.
-	# 몬스터 머리 위(Y - 20)에 띄우기
-	popup.global_position = target_node.global_position + Vector2(10, -20)
+# [추가] 몬스터 공격
+func perform_enemy_attack():
+	if enemy_group.get_child_count() > 0:
+		# 내 체력 깎기
+		PlayerData.take_damage(enemy_damage)
+		
+		# 화면 빨갛게 깜빡!
+		var tween = create_tween()
+		modulate = Color(1, 0.5, 0.5)
+		tween.tween_property(self, "modulate", Color.WHITE, 0.1)
+		
+		# 데미지 숫자 띄우기 (화면 중앙)
+		var popup = popup_text_scene.instantiate()
+		popup.set_text_value("-%d" % enemy_damage, Color(1, 0, 0)) # 새빨강
+		popup.position = size / 2 
+		add_child(popup)
 
-# --- [6. 승리] ---
-func win_battle():
+# 데미지 텍스트 띄우기 (공통 함수)
+func show_damage(amount, target_node, color):
 	var popup = popup_text_scene.instantiate()
-	popup.set_text_value("GOLD +50", Color(1, 0.8, 0.2))
+	popup.set_text_value(amount, color)
+	add_child(popup)
+	if target_node:
+		popup.global_position = target_node.global_position + Vector2(10, -20)
+
+# 승리
+func win_battle():
+	PlayerData.add_gold(50)
+	PlayerData.add_xp(40) # 경험치도 줌!
 	
-	# 승리 메시지도 윈도우 중앙에
+	var popup = popup_text_scene.instantiate()
+	popup.set_text_value("VICTORY!", Color(1, 0.8, 0.2))
 	popup.position = size / 2 - Vector2(30, 10)
 	popup.scale = Vector2(1.5, 1.5)
 	add_child(popup)
 	
 	var timer = get_tree().create_timer(0.8)
 	await timer.timeout
-	
+	queue_free()
+
+# [추가] 사망
+func _on_player_died():
+	print("사망!")
+	PlayerData.heal_hp_full() # 임시 부활
 	queue_free()

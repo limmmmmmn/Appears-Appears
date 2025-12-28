@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=4 uid="uid://cl2upwvavdgqe"]
+[gd_scene load_steps=11 format=4 uid="uid://cl2upwvavdgqe"]
 
 [ext_resource type="Texture2D" uid="uid://3fu5np055vfv" path="res://sprites/tilesets/grass1.png" id="1_55aix"]
 [ext_resource type="Texture2D" uid="uid://d8r3ysw1xgey" path="res://sprites/tilesets/mountain1_collision.png" id="2_lvkeh"]
 [ext_resource type="PackedScene" uid="uid://cymscvgbu0qg8" path="res://scenes/characters/player_head.tscn" id="3_74gp3"]
 [ext_resource type="PackedScene" uid="uid://cjstvs7y4m3p3" path="res://scenes/characters/party_member.tscn" id="4_pq5yi"]
 [ext_resource type="PackedScene" uid="uid://b3hrqkrjwgv26" path="res://scenes/characters/field_monster.tscn" id="5_lvkeh"]
+[ext_resource type="PackedScene" uid="uid://ri317s20bo8e" path="res://scenes/ui/game_ui.tscn" id="6_74gp3"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_av32x"]
 texture = ExtResource("1_55aix")
@@ -60,15 +61,15 @@ position = Vector2(839, 315)
 
 [node name="FieldMonster15" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
-position = Vector2(1096, 439)
+position = Vector2(1109, 431)
 
 [node name="FieldMonster16" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
-position = Vector2(1164, 561)
+position = Vector2(1195, 542)
 
 [node name="FieldMonster17" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
-position = Vector2(1167, 652)
+position = Vector2(1173, 695)
 
 [node name="FieldMonster18" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
@@ -84,7 +85,7 @@ position = Vector2(681, 686)
 
 [node name="FieldMonster4" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
-position = Vector2(994, 664)
+position = Vector2(995, 716)
 
 [node name="FieldMonster19" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
@@ -149,3 +150,5 @@ position = Vector2(309, 376)
 [node name="FieldMonster13" parent="." instance=ExtResource("5_lvkeh")]
 y_sort_enabled = true
 position = Vector2(1051, 224)
+
+[node name="GameUI" parent="." instance=ExtResource("6_74gp3")]
