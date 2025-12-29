@@ -1,17 +1,58 @@
-[gd_scene load_steps=4 format=3 uid="uid://xtfptybxlost"]
+[gd_scene load_steps=12 format=3 uid="uid://xtfptybxlost"]
 
-[ext_resource type="Script" uid="uid://chnsf4rornr4x" path="res://Enemy.gd" id="1_t0yn4"]
-[ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://Assets/Sprites/monsters/aqua_slime.png" id="2_8phk8"]
+[ext_resource type="Script" uid="uid://b3ucf17eqr3cc" path="res://Components/HealthComponent.gd" id="1_be54n"]
+[ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://Assets/Sprites/monsters/aqua_slime.png" id="1_gfcob"]
+[ext_resource type="Script" uid="uid://dkpr20uqn1twm" path="res://Scenes/Field/Enemy.gd" id="1_ljry2"]
+[ext_resource type="Script" uid="uid://d0tblo21exmgb" path="res://Components/MoveComponent.gd" id="2_gfcob"]
+[ext_resource type="Script" uid="uid://8vbtc3kv473f" path="res://Components/InteractionComponent.gd" id="3_ljry2"]
+[ext_resource type="Script" uid="uid://dfbo8h3mhtktk" path="res://Components/SimpleAIComponent.gd" id="4_essc5"]
+[ext_resource type="Script" uid="uid://bquvii6i02ay1" path="res://Resources/EnemyData.gd" id="6_essc5"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_be54n"]
-radius = 6.0
+[sub_resource type="Resource" id="Resource_essc5"]
+script = ExtResource("6_essc5")
+sprite = ExtResource("1_gfcob")
+metadata/_custom_type_script = "uid://bquvii6i02ay1"
 
-[node name="Enemy" type="CharacterBody2D" groups=["Enemies"]]
-script = ExtResource("1_t0yn4")
+[sub_resource type="CircleShape2D" id="CircleShape2D_ljry2"]
+radius = 7.0
+
+[sub_resource type="Resource" id="Resource_1jt0y"]
+script = ExtResource("6_essc5")
+sprite = ExtResource("1_gfcob")
+metadata/_custom_type_script = "uid://bquvii6i02ay1"
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_essc5"]
+radius = 103.01942
+
+[node name="Enemy" type="CharacterBody2D"]
+script = ExtResource("1_ljry2")
+data = SubResource("Resource_essc5")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("2_8phk8")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(-2, 2)
-shape = SubResource("CircleShape2D_be54n")
+position = Vector2(-2, 1)
+shape = SubResource("CircleShape2D_ljry2")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("1_be54n")
+metadata/_custom_type_script = "uid://b3ucf17eqr3cc"
+
+[node name="MoveComponent" type="Node" parent="."]
+script = ExtResource("2_gfcob")
+speed = 10.0
+metadata/_custom_type_script = "uid://d0tblo21exmgb"
+
+[node name="InteractionComponent" type="Area2D" parent="."]
+script = ExtResource("3_ljry2")
+enemy_data = SubResource("Resource_1jt0y")
+metadata/_custom_type_script = "uid://8vbtc3kv473f"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractionComponent"]
+position = Vector2(-2, 1)
+shape = SubResource("CircleShape2D_essc5")
+
+[node name="SimpleAIComponent" type="Node" parent="." node_paths=PackedStringArray("move_component")]
+script = ExtResource("4_essc5")
+move_component = NodePath("../MoveComponent")
+metadata/_custom_type_script = "uid://dfbo8h3mhtktk"

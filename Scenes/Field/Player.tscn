@@ -1,33 +1,37 @@
-[gd_scene load_steps=9 format=3 uid="uid://cvkni55j7gsck"]
+[gd_scene load_steps=8 format=3 uid="uid://bbo6lo3nb0vcs"]
 
-[ext_resource type="Script" uid="uid://caqntb3vj2ce3" path="res://Scripts/Player.gd" id="1_yrcjn"]
-[ext_resource type="PackedScene" uid="uid://b3agvrhger63g" path="res://Scenes/Field/PartyMember.tscn" id="2_uwibw"]
-[ext_resource type="Resource" uid="uid://dwgnsfv254v51" path="res://Resources/Jobs/Warrior.tres" id="3_oofsa"]
-[ext_resource type="Resource" uid="uid://dc6paid462wkh" path="res://Resources/Jobs/Priest.tres" id="4_o6g0o"]
-[ext_resource type="Resource" uid="uid://cn7nn2eeqlbtm" path="res://Resources/Jobs/Mage.tres" id="5_nr7aa"]
-[ext_resource type="Texture2D" uid="uid://xo4omnga4620" path="res://Assets/Sprites/characters/red_mage_walk_left_strip1.png" id="6_o8d7o"]
-[ext_resource type="PackedScene" uid="uid://c7srj6dxj8eod" path="res://Scenes/UI/HPBar.tscn" id="7_uwibw"]
+[ext_resource type="Script" uid="uid://caqntb3vj2ce3" path="res://Scenes/Field/Player.gd" id="1_bs27j"]
+[ext_resource type="Script" uid="uid://5denrinmfolo" path="res://Resources/JobData.gd" id="2_imdfw"]
+[ext_resource type="Script" uid="uid://b3ucf17eqr3cc" path="res://Components/HealthComponent.gd" id="2_xs7vc"]
+[ext_resource type="Script" uid="uid://d0tblo21exmgb" path="res://Components/MoveComponent.gd" id="3_imdfw"]
+[ext_resource type="Texture2D" uid="uid://dk18pryjp178x" path="res://Assets/Sprites/characters/player1_walk_right_strip1.png" id="3_yrcjn"]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_6my2s"]
-radius = 7.0
+[sub_resource type="Resource" id="Resource_uwibw"]
+script = ExtResource("2_imdfw")
+job_name = "전사"
+sprite = ExtResource("3_yrcjn")
+metadata/_custom_type_script = "uid://5denrinmfolo"
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_imdfw"]
+radius = 8.0
 
 [node name="Player" type="CharacterBody2D"]
-script = ExtResource("1_yrcjn")
-follower_scene = ExtResource("2_uwibw")
-jobs = Array[Resource]([ExtResource("3_oofsa"), ExtResource("4_o6g0o"), ExtResource("5_nr7aa")])
+script = ExtResource("1_bs27j")
+job_data = SubResource("Resource_uwibw")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("6_o8d7o")
+texture = ExtResource("3_yrcjn")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, 5)
-shape = SubResource("CircleShape2D_6my2s")
+position = Vector2(0, 4)
+shape = SubResource("CircleShape2D_imdfw")
 
 [node name="Camera2D" type="Camera2D" parent="."]
-position_smoothing_enabled = true
 
-[node name="HPBar" parent="." instance=ExtResource("7_uwibw")]
-offset_left = -9.0
-offset_top = -17.0
-offset_right = 9.0
-offset_bottom = -14.0
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_xs7vc")
+metadata/_custom_type_script = "uid://b3ucf17eqr3cc"
+
+[node name="MoveComponent" type="Node" parent="."]
+script = ExtResource("3_imdfw")
+metadata/_custom_type_script = "uid://d0tblo21exmgb"

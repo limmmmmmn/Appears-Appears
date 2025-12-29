@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3 uid="uid://0j8edti3gv6c"]
+
+[ext_resource type="Script" uid="uid://bhmdkbidn6nkj" path="res://Scenes/Battle/BattleScene.gd" id="1_u2duk"]
+[ext_resource type="Script" uid="uid://d36fpqfp2vm7q" path="res://Components/TurnSystem.gd" id="2_jaxsk"]
+
+[node name="BattleScene" type="Node"]
+script = ExtResource("1_u2duk")
+
+[node name="TurnSystem" type="Node" parent="."]
+script = ExtResource("2_jaxsk")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="BattleContainer" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+
+[node name="Panel" type="Panel" parent="UI/BattleContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 288.0
+offset_top = 167.0
+offset_right = -288.0
+offset_bottom = -167.0
+grow_horizontal = 2
+grow_vertical = 2

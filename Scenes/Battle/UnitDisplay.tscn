@@ -1,0 +1,27 @@
+[gd_scene load_steps=2 format=3 uid="uid://dq51mgyt43tox"]
+
+[ext_resource type="Script" uid="uid://devem1mtq0mpn" path="res://Scenes/Battle/UnitDisplay.gd" id="1_16mx0"]
+
+[node name="UnitDisplay" type="Control"]
+custom_minimum_size = Vector2(64, 80)
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_16mx0")
+
+[node name="Visual" type="TextureRect" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HPBar" type="ProgressBar" parent="."]
+layout_mode = 0
+offset_right = 4.0
+offset_bottom = 27.0
+show_percentage = false
+
+[node name="NameLabel" type="Label" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
