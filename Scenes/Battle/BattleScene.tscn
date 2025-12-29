@@ -1,7 +1,16 @@
-[gd_scene load_steps=3 format=3 uid="uid://0j8edti3gv6c"]
+[gd_scene load_steps=6 format=3 uid="uid://0j8edti3gv6c"]
 
 [ext_resource type="Script" uid="uid://bhmdkbidn6nkj" path="res://Scenes/Battle/BattleScene.gd" id="1_u2duk"]
 [ext_resource type="Script" uid="uid://d36fpqfp2vm7q" path="res://Components/TurnSystem.gd" id="2_jaxsk"]
+[ext_resource type="Script" uid="uid://c03g4kjegv2x1" path="res://Components/WindowPositionComponent.gd" id="3_k6flv"]
+[ext_resource type="Script" uid="uid://pfvit0ulfd43" path="res://Components/BattleStageSystem.gd" id="4_nutpp"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_k6flv"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
 
 [node name="BattleScene" type="Node"]
 script = ExtResource("1_u2duk")
@@ -13,21 +22,23 @@ script = ExtResource("2_jaxsk")
 
 [node name="BattleContainer" type="Control" parent="UI"]
 layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
+anchors_preset = 0
+offset_right = 300.0
+offset_bottom = 200.0
 size_flags_horizontal = 4
 
-[node name="Panel" type="Panel" parent="UI/BattleContainer"]
+[node name="Background" type="Panel" parent="UI/BattleContainer"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 288.0
-offset_top = 167.0
-offset_right = -288.0
-offset_bottom = -167.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_k6flv")
+
+[node name="WindowPositioner" type="Node" parent="." node_paths=PackedStringArray("target_control")]
+script = ExtResource("3_k6flv")
+target_control = NodePath("../UI/BattleContainer")
+
+[node name="BattleStageSystem" type="Node" parent="."]
+script = ExtResource("4_nutpp")
