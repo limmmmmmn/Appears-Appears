@@ -19,3 +19,7 @@ config/icon="res://icon.svg"
 
 SignalBus="*res://Scripts/Globals/SignalBus.gd"
 BattleManager="*res://Scripts/Globals/BattleManager.gd"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0

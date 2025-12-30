@@ -46,6 +46,3 @@ target_control = NodePath("../UI/BattleContainer")
 script = ExtResource("4_nutpp")
 unit_display_scene = ExtResource("5_18ceg")
 damage_label_scene = ExtResource("6_kb2gb")
-damage_offset = Vector2(0, 0)
-damage_spread_x = 10.0
-centering_offset = Vector2(0, 0)

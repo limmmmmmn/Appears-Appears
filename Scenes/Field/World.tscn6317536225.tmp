@@ -1,0 +1,29 @@
+[gd_scene load_steps=4 format=3 uid="uid://dbho1gvn5qbf"]
+
+[ext_resource type="Script" uid="uid://cbsklkmj2r6qb" path="res://Scenes/Field/World.gd" id="1_s638u"]
+[ext_resource type="PackedScene" uid="uid://xtfptybxlost" path="res://Scenes/Field/Enemy.tscn" id="2_x531p"]
+[ext_resource type="PackedScene" uid="uid://bbo6lo3nb0vcs" path="res://Scenes/Field/Player.tscn" id="3_5ogky"]
+
+[node name="World" type="Node2D"]
+script = ExtResource("1_s638u")
+
+[node name="Enemy" parent="." instance=ExtResource("2_x531p")]
+position = Vector2(530, 341)
+
+[node name="Enemy2" parent="." instance=ExtResource("2_x531p")]
+position = Vector2(629, 205)
+
+[node name="Enemy3" parent="." instance=ExtResource("2_x531p")]
+position = Vector2(335, 126)
+
+[node name="Enemy4" parent="." instance=ExtResource("2_x531p")]
+position = Vector2(187, 308)
+
+[node name="Enemy5" parent="." instance=ExtResource("2_x531p")]
+position = Vector2(279, 548)
+
+[node name="Enemy6" parent="." instance=ExtResource("2_x531p")]
+position = Vector2(692, 535)
+
+[node name="Player" parent="." instance=ExtResource("3_5ogky")]
+position = Vector2(372, 313)

@@ -4,6 +4,8 @@ extends Node
 @onready var turn_system = $TurnSystem
 @onready var stage_system = $BattleStageSystem # [New] 무대 관리자
 @onready var window_positioner = $WindowPositioner
+# [▼▼▼ 이 줄이 빠져있습니다! 여기에 추가해주세요 ▼▼▼]
+@onready var ui_container = $UI/BattleContainer
 
 var allies: Array[BattleUnit] = []
 var enemies: Array[BattleUnit] = []
@@ -14,14 +16,24 @@ func _ready():
 	stage_system.container = $UI/BattleContainer
 	
 	SignalBus.unit_damaged.connect(_on_unit_damaged)
+	
+# [New] 무대 중심점 잡기 (이게 있어야 중앙에서 커짐)
+	ui_container.pivot_offset = ui_container.size / 2
+	
+	# [New] 등장 애니메이션: 0에서 1로 '보이~잉' 하고 커짐
+	ui_container.scale = Vector2.ZERO # 일단 숨김
+	var tween = create_tween()
+	tween.tween_property(ui_container, "scale", Vector2.ONE, 0.4)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-func start_battle(player_data: JobData, base_enemy_data: EnemyData):
+func start_battle(player_data: JobData, base_enemy_data: EnemyData, min_count: int = 1, max_count: int = 3):
 	# 1. 데이터 생성 (로직)
 	var player_unit = BattleUnit.new(player_data, false)
 	allies = [player_unit]
 	all_units = [player_unit]
 	
-	var enemy_count = randi_range(1, 3)
+	# [수정] 받아온 인자 사용
+	var enemy_count = randi_range(min_count, max_count)
 	for i in range(enemy_count):
 		var enemy = BattleUnit.new(base_enemy_data, true)
 		enemy.unit_name = base_enemy_data.enemy_name + " " + String.chr(65 + i)
@@ -57,15 +69,27 @@ func _execute_attack(attacker: BattleUnit, target: BattleUnit):
 	
 	# 종료 체크 로직 (여긴 로직이라 남겨둠)
 	await get_tree().create_timer(0.3).timeout
-	if allies.all(func(u): return u.current_hp <= 0): _finish(false)
-	elif enemies.all(func(u): return u.current_hp <= 0): _finish(true)
+	# [수정 후] 함수 이름을 _finish_battle 로 변경!
+	if allies.all(func(u): return u.current_hp <= 0): _finish_battle(false)
+	elif enemies.all(func(u): return u.current_hp <= 0): _finish_battle(true)
 
 func _on_unit_damaged(target, amount, is_crit):
-	# [New] UI 업데이트도 관리자에게 위임
-	stage_system.play_damage(target, amount, target.current_hp <= 0)
+	# [수정] 인자 추가 (is_crit)
+	stage_system.play_damage(target, amount, is_crit, target.current_hp <= 0)
 
-func _finish(is_victory):
+func _finish_battle(is_victory: bool):
 	turn_system.stop()
-	print("승리!" if is_victory else "패배...")
+	
+	# 승리/패배 메시지 등...
+	
 	await get_tree().create_timer(1.0).timeout
-	queue_free()
+	
+	# [New] 퇴장 애니메이션: 1에서 0으로 '쇽!' 하고 작아짐
+	var tween = create_tween()
+	tween.tween_property(ui_container, "scale", Vector2.ZERO, 0.3)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	
+	# 애니메이션 끝날 때까지 기다림
+	await tween.finished
+	
+	queue_free() # 삭제
