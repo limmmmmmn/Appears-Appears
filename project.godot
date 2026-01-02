@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="HyperQuest"
-run/main_scene="uid://dbho1gvn5qbf"
+run/main_scene="uid://ckwae5gs4xxmy"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
