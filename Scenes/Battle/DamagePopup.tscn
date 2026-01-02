@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://go500pqt1l1w"]
+
+[ext_resource type="Script" uid="uid://c4surshfk03r1" path="res://Scenes/Battle/DamagePopup.gd" id="1_5wnpq"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_my5ko"]
+line_spacing = 24.0
+outline_size = 4
+outline_color = Color(0, 0, 0, 1)
+
+[node name="DamagePopup" type="Label"]
+pivot_offset = Vector2(16, 11)
+text = "-999"
+label_settings = SubResource("LabelSettings_my5ko")
+horizontal_alignment = 1
+vertical_alignment = 1
+script = ExtResource("1_5wnpq")

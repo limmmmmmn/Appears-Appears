@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=3 format=3 uid="uid://do2ttd7kg7u40"]
+
+[ext_resource type="Script" uid="uid://dxmmbcxq4dcck" path="res://Resources/_Definitions/EnemyData.gd" id="1_dbhmo"]
+[ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://Assets/Sprites/monsters/aqua_slime.png" id="4_jv3r8"]
+
+[resource]
+script = ExtResource("1_dbhmo")
+name = "Slime"
+texture = ExtResource("4_jv3r8")
+max_hp = 30
+attack_power = 5
+base_weapon_cooldown = 3.0
+metadata/_custom_type_script = "uid://dxmmbcxq4dcck"

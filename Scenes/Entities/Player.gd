@@ -1,0 +1,87 @@
+extends CharacterBody2D
+
+# --- 설정 상수 ---
+const SPEED = 100.0
+const HISTORY_LIMIT = 500
+const FOLLOWER_DELAY = 12
+
+# [NEW] 동료 씬을 인스펙터에 연결하기 위해 변수 추가
+@export var follower_scene: PackedScene 
+
+var unit_data: UnitData
+var position_history: Array[Vector2] = []
+var followers: Array[Node2D] = [] # Sprite2D -> Node2D로 타입 변경
+
+func _ready():
+	if PartyManager.party_members.size() > 0:
+		unit_data = PartyManager.party_members[0]
+	
+	z_index = PartyManager.party_members.size()
+	
+	# 씬이 준비될 때까지 안전하게 대기
+	await get_tree().process_frame
+	
+	# [중요] 코드로 follower_scene을 로드하지 않았다면 기본값 로드
+	if not follower_scene:
+		follower_scene = load("res://Scenes/Entities/Follower.tscn")
+		
+	setup_party_followers()
+
+func _physics_process(_delta):
+	var direction = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	
+	if direction:
+		velocity = direction * SPEED
+	else:
+		velocity = Vector2.ZERO
+
+	move_and_slide()
+
+	if velocity.x < 0:
+		$Sprite2D.flip_h = false
+	elif velocity.x > 0:
+		$Sprite2D.flip_h = true
+
+	if velocity.length() > 0:
+		record_position()
+		update_followers()
+
+func setup_party_followers():
+	var members = PartyManager.party_members
+	
+	if not get_parent(): return
+
+	# 기존에 팔로워를 코드로 생성하던 긴 부분을 싹 지우고 아래로 대체
+	for i in range(1, members.size()):
+		var member_data = members[i]
+		
+		# [NEW] 씬 인스턴스화
+		var follower = follower_scene.instantiate()
+		
+		# 월드에 추가
+		get_parent().add_child(follower)
+		follower.global_position = global_position
+		
+		# [NEW] 데이터 주입 및 설정 (Follower.gd의 setup 함수 호출)
+		follower.setup(member_data, i)
+		
+		# Z-Index 설정
+		follower.z_index = members.size() - i
+		
+		followers.append(follower)
+
+func record_position():
+	position_history.push_front(global_position)
+	if position_history.size() > HISTORY_LIMIT:
+		position_history.pop_back()
+
+func update_followers():
+	for i in range(followers.size()):
+		var history_index = (i + 1) * FOLLOWER_DELAY
+		
+		if history_index < position_history.size():
+			var target_pos = position_history[history_index]
+			
+			# [NEW] Follower 스크립트의 이동 함수 호출
+			# 방향 전환 등의 로직을 플레이어가 신경 쓸 필요 없음!
+			followers[i].move_to(target_pos)

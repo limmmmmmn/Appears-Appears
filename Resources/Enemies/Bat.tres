@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=3 format=3 uid="uid://c8tsmyl5dcjjy"]
+
+[ext_resource type="Script" uid="uid://dxmmbcxq4dcck" path="res://Resources/_Definitions/EnemyData.gd" id="1_7tdcd"]
+[ext_resource type="Texture2D" uid="uid://ccrca88iq8f6s" path="res://Assets/Sprites/monsters/blue_bat.png" id="2_7tdcd"]
+
+[resource]
+script = ExtResource("1_7tdcd")
+name = "Bat"
+texture = ExtResource("2_7tdcd")
+max_hp = 20
+attack_power = 8
+base_weapon_cooldown = 1.2
+agility = 30.0
+metadata/_custom_type_script = "uid://dxmmbcxq4dcck"

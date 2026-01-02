@@ -11,14 +11,23 @@ config_version=5
 [application]
 
 config/name="HyperQuest"
-run/main_scene="uid://dbho1gvn5qbf"
+run/main_scene="uid://ckwae5gs4xxmy"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
+GameSettings="*res://Scripts/Globals/GameSettings.gd"
+PartyManager="*res://Scripts/Globals/PartyManager.gd"
 SignalBus="*res://Scripts/Globals/SignalBus.gd"
-BattleManager="*res://Scripts/Globals/BattleManager.gd"
+
+[display]
+
+window/size/viewport_width=512
+window/size/viewport_height=288
+window/size/window_width_override=1920
+window/size/window_height_override=1080
+window/stretch/mode="viewport"
 
 [rendering]
 

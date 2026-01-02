@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=3 format=3 uid="uid://ba2613tmeyvi5"]
+
+[ext_resource type="Script" uid="uid://dxmmbcxq4dcck" path="res://Resources/_Definitions/EnemyData.gd" id="1_iy1v5"]
+[ext_resource type="Texture2D" uid="uid://c4dd34cusoeu8" path="res://Assets/Sprites/monsters/green_lizard.png" id="2_iy1v5"]
+
+[resource]
+script = ExtResource("1_iy1v5")
+name = "GreenLizard"
+texture = ExtResource("2_iy1v5")
+attack_power = 15
+base_defense = 3
+base_weapon_cooldown = 4.0
+agility = 10.0
+metadata/_custom_type_script = "uid://dxmmbcxq4dcck"

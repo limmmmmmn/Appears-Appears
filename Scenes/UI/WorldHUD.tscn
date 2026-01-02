@@ -1,0 +1,30 @@
+[gd_scene load_steps=3 format=3 uid="uid://dc8rtx63tn2xw"]
+
+[ext_resource type="Script" uid="uid://bqa564bjcoweu" path="res://Scenes/UI/WorldHUD.gd" id="1_16q0d"]
+[ext_resource type="PackedScene" uid="uid://bmr0hiud8iwpj" path="res://Scenes/UI/PartyMemberSlot.tscn" id="2_elkqn"]
+
+[node name="WorldHUD" type="CanvasLayer"]
+script = ExtResource("1_16q0d")
+slot_scene = ExtResource("2_elkqn")
+
+[node name="PartyContainer" type="VBoxContainer" parent="."]
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = -122.0
+offset_right = 40.0
+offset_bottom = 36.0
+grow_vertical = 2
+theme_override_constants/separation = 41
+
+[node name="LogPanel" type="PanelContainer" parent="."]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -88.0
+offset_right = 184.0
+grow_vertical = 0
+
+[node name="LogText" type="RichTextLabel" parent="LogPanel"]
+layout_mode = 2
+bbcode_enabled = true

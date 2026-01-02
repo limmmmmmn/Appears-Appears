@@ -1,15 +1,12 @@
 # res://Scripts/Globals/SignalBus.gd
 extends Node
 
-# [전투 관련 신호]
-signal battle_requested(enemy_data) # 적 만남!
-signal battle_ended(victory: bool)  # 전투 끝!
+# UI 관련
+signal game_log(text: String, color: Color) # 로그 출력 [cite: 82]
+signal party_updated() # 파티원 상태 변경 시 (HUD 갱신용)
 
-# [전투 내부 신호]
-# UI가 이 신호를 듣고 HP바를 깎습니다. (누가, 얼마나, 크리티컬?)
-signal unit_damaged(target_node, amount, is_crit) 
-signal unit_healed(target_node, amount)
-signal turn_changed(unit_name)
-
-# [로그 시스템]
-signal log_message(msg)
+# 전투 관련
+# 변경: 적 하나(Main)와 친구목록(Table)을 받음
+signal request_battle(main_enemy: EnemyData, spawn_table: Array[SpawnEntry])
+signal battle_started(battle_id: int)
+signal battle_ended(battle_id: int, victory: bool)

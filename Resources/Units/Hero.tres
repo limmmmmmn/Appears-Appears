@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UnitData" load_steps=3 format=3 uid="uid://d3g05lloii45u"]
+
+[ext_resource type="Script" uid="uid://dwglvdd1h1khl" path="res://Resources/_Definitions/UnitData.gd" id="1_2hi4x"]
+[ext_resource type="Texture2D" uid="uid://672g70mmkt0k" path="res://Assets/Sprites/characters/player1_walk_left_strip1.png" id="2_505vo"]
+
+[resource]
+script = ExtResource("1_2hi4x")
+name = "Hero"
+texture = ExtResource("2_505vo")
+current_hp = 120
+max_hp = 120
+attack_power = 15
+base_defense = 3
+base_weapon_cooldown = 1.5
+agility = 10.0
+metadata/_custom_type_script = "uid://dwglvdd1h1khl"

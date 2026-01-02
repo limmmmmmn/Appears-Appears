@@ -1,0 +1,43 @@
+[gd_scene load_steps=7 format=3 uid="uid://cvvlnjnknnauc"]
+
+[ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://Assets/Sprites/monsters/aqua_slime.png" id="1_8q37v"]
+[ext_resource type="Script" uid="uid://bkf53pem074xd" path="res://Scenes/Entities/Enemy.gd" id="1_jajit"]
+[ext_resource type="Script" uid="uid://cg5gfb2j3v36c" path="res://Scripts/Logic/BattleComponent.gd" id="3_wmvnc"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_8q37v"]
+radius = 7.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_362t3"]
+radius = 113.03982
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_jajit"]
+radius = 8.0
+
+[node name="Enemy" type="CharacterBody2D"]
+script = ExtResource("1_jajit")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("1_8q37v")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_8q37v")
+
+[node name="DetectionZone" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DetectionZone"]
+position = Vector2(-3, 1)
+shape = SubResource("CircleShape2D_362t3")
+
+[node name="NavigationAgent2D" type="NavigationAgent2D" parent="."]
+
+[node name="WanderTimer" type="Timer" parent="."]
+wait_time = 0.3
+autostart = true
+
+[node name="BattleTrigger" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BattleTrigger"]
+shape = SubResource("CircleShape2D_jajit")
+
+[node name="BattleComponent" type="Node" parent="."]
+script = ExtResource("3_wmvnc")
