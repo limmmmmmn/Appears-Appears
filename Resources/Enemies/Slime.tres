@@ -7,7 +7,7 @@
 script = ExtResource("1_dbhmo")
 name = "Slime"
 texture = ExtResource("4_jv3r8")
-max_hp = 50
-current_hp = 50
+max_hp = 30
 attack_power = 5
+base_weapon_cooldown = 3.0
 metadata/_custom_type_script = "uid://dxmmbcxq4dcck"

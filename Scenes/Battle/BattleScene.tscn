@@ -1,0 +1,37 @@
+[gd_scene load_steps=4 format=3 uid="uid://0j8edti3gv6c"]
+
+[ext_resource type="Script" uid="uid://bhmdkbidn6nkj" path="res://Scenes/Battle/BattleScene.gd" id="1_u2duk"]
+[ext_resource type="PackedScene" uid="uid://cmvr1y7spms3w" path="res://Scenes/Battle/BattleEnemySlot.tscn" id="2_jaxsk"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jaxsk"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+
+[node name="BattleScene" type="CanvasLayer"]
+script = ExtResource("1_u2duk")
+enemy_slot_scene = ExtResource("2_jaxsk")
+
+[node name="BackgroundPanel" type="Panel" parent="."]
+offset_right = 164.0
+offset_bottom = 128.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_jaxsk")
+
+[node name="EnemyContainer" type="HBoxContainer" parent="BackgroundPanel"]
+layout_mode = 1
+anchors_preset = 14
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_top = -30.0
+offset_bottom = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="BattleTimer" type="Timer" parent="."]

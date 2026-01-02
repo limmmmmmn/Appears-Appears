@@ -7,4 +7,8 @@
 script = ExtResource("1_7mrop")
 name = "Tank"
 texture = ExtResource("2_yl8xu")
+current_hp = 40
+max_hp = 40
+attack_power = 8
+base_defense = 8
 metadata/_custom_type_script = "uid://dwglvdd1h1khl"

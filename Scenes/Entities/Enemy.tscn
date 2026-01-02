@@ -1,144 +1,20 @@
-[gd_scene load_steps=6 format=3 uid="uid://cvvlnjnknnauc"]
+[gd_scene load_steps=7 format=3 uid="uid://cvvlnjnknnauc"]
 
 [ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://Assets/Sprites/monsters/aqua_slime.png" id="1_8q37v"]
-
-[sub_resource type="GDScript" id="GDScript_jajit"]
-script/source = "# res://Scenes/Entities/Enemy.gd
-extends CharacterBody2D
-
-# --- 설정 ---
-@export var enemy_data: EnemyData # 인스펙터에서 할당하거나 스포너가 주입
-@export var wander_radius: float = 50.0
-@export var speed: float = 100.0
-@export var chase_speed: float = 130.0
-
-# --- 상태 관리 ---
-enum State { IDLE, WANDER, CHASE }
-var current_state = State.IDLE
-var start_position: Vector2
-var target_position: Vector2
-var target_player: Node2D = null # 추격 대상
-
-@onready var sprite = $Sprite2D
-@onready var wander_timer = $WanderTimer
-
-func _ready():
-	# ... 기존 초기화 코드 ...
-	start_position = global_position
-	if enemy_data and enemy_data.texture:
-		sprite.texture = enemy_data.texture
-	
-	pick_new_state()
-	
-	$DetectionZone.body_entered.connect(_on_detection_zone_body_entered)
-	$DetectionZone.body_exited.connect(_on_detection_zone_body_exited)
-	
-	# [NEW] 전투 트리거(접촉 센서) 시그널 연결
-	# 1. 플레이어 본체(Body)와 닿았을 때
-	$BattleTrigger.body_entered.connect(_on_battle_trigger_body_entered)
-	# 2. 동료 히트박스(Area)와 닿았을 때
-	$BattleTrigger.area_entered.connect(_on_battle_trigger_area_entered)
-	
-	wander_timer.timeout.connect(pick_new_state)
-
-func _physics_process(_delta):
-	match current_state:
-		State.IDLE:
-			velocity = Vector2.ZERO
-			
-		State.WANDER:
-			# 목표 지점으로 이동
-			var direction = (target_position - global_position).normalized()
-			velocity = direction * speed
-			
-			# 목표 근처 도착 시 멈춤
-			if global_position.distance_to(target_position) < 10:
-				current_state = State.IDLE
-				
-		State.CHASE:
-			if target_player:
-				var direction = (target_player.global_position - global_position).normalized()
-				velocity = direction * chase_speed
-	
-	move_and_slide()
-	
-	
-	# 스프라이트 방향 전환
-	if velocity.x != 0:
-		sprite.flip_h = velocity.x > 0
-		
-# [NEW] 플레이어 본체(CharacterBody2D) 감지
-func _on_battle_trigger_body_entered(body):
-	if body.name == \"Player\" or body.is_in_group(\"player\"):
-		start_battle()
-
-# [NEW] 동료 히트박스(Area2D) 감지
-func _on_battle_trigger_area_entered(area):
-	if area.is_in_group(\"party_hitbox\"):
-		start_battle()
-
-func pick_new_state():
-	# 추격 중이 아닐 때만 새로운 행동 결정
-	if current_state == State.CHASE:
-		return
-
-	# 50% 확률로 멍때리기 or 움직이기
-	if randf() > 0.5:
-		current_state = State.IDLE
-	else:
-		current_state = State.WANDER
-		# 시작 위치 기준 랜덤 반경으로 이동
-		target_position = start_position + Vector2(randf_range(-wander_radius, wander_radius), randf_range(-wander_radius, wander_radius))
-
-func _on_detection_zone_body_entered(body):
-	# 플레이어(\"Player\")가 감지 범위에 들어오면 추격 시작
-	if body.name == \"Player\":
-		target_player = body
-		current_state = State.CHASE
-		# 추격 중엔 배회 타이머 일시 정지 (선택 사항)
-
-func _on_detection_zone_body_exited(body):
-	# 플레이어가 도망가면 다시 원래 자리로 돌아가거나 배회
-	if body == target_player:
-		target_player = null
-		current_state = State.IDLE
-		start_position = global_position # 현재 위치를 새로운 거점으로
-
-func check_collision_with_player():
-	# move_and_slide() 후 충돌체 확인
-	for i in get_slide_collision_count():
-		var collision = get_slide_collision(i)
-		var collider = collision.get_collider()
-		
-		if collider.name == \"Player\":
-			start_battle()
-
-func start_battle():
-	# 중복 실행 방지 (이미 사라지는 중이면 무시)
-	if is_queued_for_deletion(): return
-
-	print(\"전투 시작! 적: \" + enemy_data.name)
-	SignalBus.request_battle.emit([enemy_data])
-	queue_free()
-	
-	# 전투가 시작되면 필드의 적은 사라지거나 일시정지 되어야 함.
-	# 여기서는 간단히 제거(queue_free) 처리
-	queue_free()
-"
+[ext_resource type="Script" uid="uid://bkf53pem074xd" path="res://Scenes/Entities/Enemy.gd" id="1_jajit"]
+[ext_resource type="Script" uid="uid://cg5gfb2j3v36c" path="res://Scripts/Logic/BattleComponent.gd" id="3_wmvnc"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_8q37v"]
 radius = 7.0
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_362t3"]
-radius = 141.0
+radius = 113.03982
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_jajit"]
 radius = 8.0
 
 [node name="Enemy" type="CharacterBody2D"]
-script = SubResource("GDScript_jajit")
-speed = 30.0
-chase_speed = 60.0
+script = ExtResource("1_jajit")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture = ExtResource("1_8q37v")
@@ -162,3 +38,6 @@ autostart = true
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="BattleTrigger"]
 shape = SubResource("CircleShape2D_jajit")
+
+[node name="BattleComponent" type="Node" parent="."]
+script = ExtResource("3_wmvnc")

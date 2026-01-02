@@ -7,4 +7,9 @@
 script = ExtResource("1_rnnou")
 name = "Mage"
 texture = ExtResource("2_2v1bq")
+current_hp = 70
+max_hp = 70
+attack_power = 35
+base_weapon_cooldown = 2.5
+agility = 5.0
 metadata/_custom_type_script = "uid://dwglvdd1h1khl"

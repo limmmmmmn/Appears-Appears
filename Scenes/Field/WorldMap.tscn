@@ -1,15 +1,33 @@
-[gd_scene load_steps=14 format=4 uid="uid://ckwae5gs4xxmy"]
+[gd_scene load_steps=18 format=4 uid="uid://ckwae5gs4xxmy"]
 
 [ext_resource type="PackedScene" uid="uid://dc8rtx63tn2xw" path="res://Scenes/UI/WorldHUD.tscn" id="1_eyvlv"]
+[ext_resource type="Script" uid="uid://bvrvy2xdniovh" path="res://Scenes/Field/WorldMap.gd" id="1_hhat0"]
 [ext_resource type="Script" uid="uid://ycch75isxtit" path="res://Scenes/Field/EnemySpawner.gd" id="2_m3s1m"]
 [ext_resource type="PackedScene" uid="uid://cvvlnjnknnauc" path="res://Scenes/Entities/Enemy.tscn" id="2_uv8bf"]
 [ext_resource type="Resource" uid="uid://do2ttd7kg7u40" path="res://Resources/Enemies/Slime.tres" id="3_0a8e7"]
 [ext_resource type="PackedScene" uid="uid://ndqjtm1f15yt" path="res://Scenes/Entities/Player.tscn" id="4_i51f4"]
-[ext_resource type="Script" uid="uid://dxmmbcxq4dcck" path="res://Resources/_Definitions/EnemyData.gd" id="4_uv8bf"]
 [ext_resource type="Resource" uid="uid://c8tsmyl5dcjjy" path="res://Resources/Enemies/Bat.tres" id="5_0a8e7"]
+[ext_resource type="Script" uid="uid://c6jg4g713mpmj" path="res://Scripts/Logic/SpawnEntry.gd" id="5_eyvlv"]
 [ext_resource type="Resource" uid="uid://ba2613tmeyvi5" path="res://Resources/Enemies/GreenLizard.tres" id="7_0a8e7"]
 [ext_resource type="Texture2D" uid="uid://3fu5np055vfv" path="res://Assets/Sprites/tilesets/grass1.png" id="8_i51f4"]
 [ext_resource type="Texture2D" uid="uid://d8r3ysw1xgey" path="res://Assets/Sprites/tilesets/mountain1_collision.png" id="9_0q8fm"]
+
+[sub_resource type="Resource" id="Resource_hhat0"]
+script = ExtResource("5_eyvlv")
+enemy = ExtResource("3_0a8e7")
+weight = 20
+metadata/_custom_type_script = "uid://c6jg4g713mpmj"
+
+[sub_resource type="Resource" id="Resource_04wx3"]
+script = ExtResource("5_eyvlv")
+enemy = ExtResource("7_0a8e7")
+weight = 2
+metadata/_custom_type_script = "uid://c6jg4g713mpmj"
+
+[sub_resource type="Resource" id="Resource_tbfpu"]
+script = ExtResource("5_eyvlv")
+enemy = ExtResource("5_0a8e7")
+metadata/_custom_type_script = "uid://c6jg4g713mpmj"
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_0q8fm"]
 texture = ExtResource("8_i51f4")
@@ -29,6 +47,7 @@ sources/0 = SubResource("TileSetAtlasSource_0q8fm")
 sources/1 = SubResource("TileSetAtlasSource_eyvlv")
 
 [node name="WorldMap" type="Node2D"]
+script = ExtResource("1_hhat0")
 
 [node name="WorldHud" parent="." instance=ExtResource("1_eyvlv")]
 
@@ -39,7 +58,7 @@ position = Vector2(415, 280)
 position = Vector2(-5, 0)
 script = ExtResource("2_m3s1m")
 enemy_scene = ExtResource("2_uv8bf")
-spawn_list = Array[ExtResource("4_uv8bf")]([ExtResource("5_0a8e7"), ExtResource("3_0a8e7"), ExtResource("7_0a8e7")])
+spawn_table = Array[ExtResource("5_eyvlv")]([SubResource("Resource_hhat0"), SubResource("Resource_04wx3"), SubResource("Resource_tbfpu")])
 spawn_interval = 0.3
 max_enemies = 50
 spawn_radius_min = 400.0

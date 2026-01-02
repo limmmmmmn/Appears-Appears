@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://ndqjtm1f15yt"]
+[gd_scene load_steps=6 format=3 uid="uid://ndqjtm1f15yt"]
 
 [ext_resource type="Texture2D" uid="uid://672g70mmkt0k" path="res://Assets/Sprites/characters/player1_walk_left_strip1.png" id="1_3kvya"]
 [ext_resource type="PackedScene" uid="uid://bxgml4qvi706f" path="res://Scenes/Entities/Follower.tscn" id="1_v402d"]
+[ext_resource type="Script" uid="uid://cg5gfb2j3v36c" path="res://Scripts/Logic/BattleComponent.gd" id="3_agccv"]
 
 [sub_resource type="GDScript" id="GDScript_3kvya"]
 script/source = "extends CharacterBody2D
@@ -109,3 +110,6 @@ shape = SubResource("CircleShape2D_v402d")
 
 [node name="Camera2D" type="Camera2D" parent="." groups=["player"]]
 position_smoothing_enabled = true
+
+[node name="BattleComponent" type="Node" parent="."]
+script = ExtResource("3_agccv")

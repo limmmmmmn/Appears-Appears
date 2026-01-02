@@ -5,9 +5,10 @@
 
 [resource]
 script = ExtResource("1_iy1v5")
-name = "Green Lizard"
+name = "GreenLizard"
 texture = ExtResource("2_iy1v5")
-max_hp = 50
-current_hp = 50
-attack_power = 5
+attack_power = 15
+base_defense = 3
+base_weapon_cooldown = 4.0
+agility = 10.0
 metadata/_custom_type_script = "uid://dxmmbcxq4dcck"

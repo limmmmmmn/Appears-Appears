@@ -7,4 +7,10 @@
 script = ExtResource("1_16fje")
 name = "Rogue"
 texture = ExtResource("2_2sjvx")
+current_hp = 90
+max_hp = 90
+attack_power = 12
+base_defense = 1
+base_weapon_cooldown = 1.0
+agility = 50.0
 metadata/_custom_type_script = "uid://dwglvdd1h1khl"

@@ -21,9 +21,6 @@ func setup(unit: UnitData):
 	hp_bar.max_value = unit.max_hp
 	hp_bar.value = unit.current_hp
 	
-	# (선택) 체력바 색상 변경 (초록색 등)
-	# 테마 오버라이드나 StyleBox를 써야 하지만, 간단히 Modulate로 조절 가능
-	hp_bar.modulate = Color(0.3, 1.0, 0.3) 
 
 func update_hp():
 	if linked_unit:
