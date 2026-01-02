@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="UnitData" load_steps=3 format=3 uid="uid://bk4s6x7ybw6q"]
+
+[ext_resource type="Script" uid="uid://dwglvdd1h1khl" path="res://Resources/_Definitions/UnitData.gd" id="1_7mrop"]
+[ext_resource type="Texture2D" uid="uid://6ie8x4i04ojw" path="res://Assets/Sprites/characters/white_mage_walk_left_strip1.png" id="2_yl8xu"]
+
+[resource]
+script = ExtResource("1_7mrop")
+name = "Tank"
+texture = ExtResource("2_yl8xu")
+metadata/_custom_type_script = "uid://dwglvdd1h1khl"
