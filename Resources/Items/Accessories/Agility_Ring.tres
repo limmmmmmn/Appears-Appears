@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EquipmentData" load_steps=2 format=3 uid="uid://dmddhu8tn8c3b"]
+
+[ext_resource type="Script" uid="uid://df22elap44eyc" path="res://Resources/EquipmentData.gd" id="1_rk8rm"]
+
+[resource]
+script = ExtResource("1_rk8rm")
+slot = 2
+agility_bonus = 5
+item_name = "Agility Ring"
+description = "착용하면 몸이 가벼워지는 은반지입니다."
+price = 300
+type = 1
+metadata/_custom_type_script = "uid://df22elap44eyc"
