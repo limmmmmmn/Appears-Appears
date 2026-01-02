@@ -1,0 +1,44 @@
+[gd_scene load_steps=4 format=3 uid="uid://bmr0hiud8iwpj"]
+
+[ext_resource type="Script" uid="uid://d0r1l4b1kvyp0" path="res://Scenes/UI/PartyMemberSlot.gd" id="1_u1t04"]
+[ext_resource type="Texture2D" uid="uid://672g70mmkt0k" path="res://Assets/Sprites/characters/player1_walk_left_strip1.png" id="2_vhjda"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_1xnp5"]
+font_size = 8
+
+[node name="PartyMemberSlot" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 23.0
+offset_bottom = 43.0
+script = ExtResource("1_u1t04")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 0
+offset_top = 11.0
+offset_right = 22.0
+offset_bottom = 38.0
+color = Color(0, 0, 0, 1)
+
+[node name="TextureRect" type="TextureRect" parent="."]
+layout_mode = 0
+offset_left = 2.0
+offset_top = 11.0
+offset_right = 20.0
+offset_bottom = 36.0
+texture = ExtResource("2_vhjda")
+stretch_mode = 2
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 0
+offset_right = 24.52174
+offset_bottom = 12.0
+text = "Name"
+label_settings = SubResource("LabelSettings_1xnp5")
+
+[node name="ProgressBar" type="ProgressBar" parent="."]
+layout_mode = 0
+offset_top = 38.0
+offset_right = 22.0
+offset_bottom = 43.0
+show_percentage = false

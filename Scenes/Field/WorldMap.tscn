@@ -1,5 +1,6 @@
-[gd_scene load_steps=13 format=4 uid="uid://ckwae5gs4xxmy"]
+[gd_scene load_steps=14 format=4 uid="uid://ckwae5gs4xxmy"]
 
+[ext_resource type="PackedScene" uid="uid://dc8rtx63tn2xw" path="res://Scenes/UI/WorldHUD.tscn" id="1_eyvlv"]
 [ext_resource type="Script" uid="uid://ycch75isxtit" path="res://Scenes/Field/EnemySpawner.gd" id="2_m3s1m"]
 [ext_resource type="PackedScene" uid="uid://cvvlnjnknnauc" path="res://Scenes/Entities/Enemy.tscn" id="2_uv8bf"]
 [ext_resource type="Resource" uid="uid://do2ttd7kg7u40" path="res://Resources/Enemies/Slime.tres" id="3_0a8e7"]
@@ -28,6 +29,8 @@ sources/0 = SubResource("TileSetAtlasSource_0q8fm")
 sources/1 = SubResource("TileSetAtlasSource_eyvlv")
 
 [node name="WorldMap" type="Node2D"]
+
+[node name="WorldHud" parent="." instance=ExtResource("1_eyvlv")]
 
 [node name="Player" parent="." instance=ExtResource("4_i51f4")]
 position = Vector2(415, 280)
