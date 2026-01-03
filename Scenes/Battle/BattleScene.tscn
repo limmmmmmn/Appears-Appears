@@ -13,12 +13,13 @@ border_width_right = 2
 border_width_bottom = 2
 
 [node name="BattleScene" type="CanvasLayer"]
+layer = 10
 script = ExtResource("1_u2duk")
 enemy_slot_scene = ExtResource("2_jaxsk")
 
 [node name="BackgroundPanel" type="Panel" parent="."]
-offset_right = 141.0
-offset_bottom = 106.0
+offset_right = 160.0
+offset_bottom = 120.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_jaxsk")
 
 [node name="EnemyContainer" type="HBoxContainer" parent="BackgroundPanel"]

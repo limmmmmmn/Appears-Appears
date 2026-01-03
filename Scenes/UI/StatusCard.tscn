@@ -1,0 +1,53 @@
+[gd_scene load_steps=5 format=3 uid="uid://d2s63l627vno8"]
+
+[ext_resource type="Script" uid="uid://dm7lp4735nc4q" path="res://Scenes/UI/StatusCard.gd" id="1_pvqye"]
+[ext_resource type="PackedScene" uid="uid://v0gdjoaskavp" path="res://Scenes/UI_Components/EquipSlot.tscn" id="2_7e5em"]
+[ext_resource type="Texture2D" uid="uid://672g70mmkt0k" path="res://Assets/Sprites/characters/player1_walk_left_strip1.png" id="2_l48ll"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_l48ll"]
+bg_color = Color(0, 0, 0, 1)
+
+[node name="StatusCard" type="PanelContainer"]
+offset_right = 93.0
+offset_bottom = 262.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_l48ll")
+script = ExtResource("1_pvqye")
+
+[node name="MainVBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="HeaderBox" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+
+[node name="Portrait" type="TextureRect" parent="MainVBox/HeaderBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+texture = ExtResource("2_l48ll")
+expand_mode = 1
+stretch_mode = 4
+
+[node name="NameLabel" type="Label" parent="MainVBox/HeaderBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 10
+
+[node name="StatsLabel" type="Label" parent="MainVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+
+[node name="HSeparator" type="HSeparator" parent="MainVBox"]
+layout_mode = 2
+
+[node name="EquipBox" type="VBoxContainer" parent="MainVBox"]
+layout_mode = 2
+
+[node name="EquipSlot_Weapon" parent="MainVBox/EquipBox" instance=ExtResource("2_7e5em")]
+layout_mode = 2
+
+[node name="EquipSlot_Armor" parent="MainVBox/EquipBox" instance=ExtResource("2_7e5em")]
+layout_mode = 2
+slot_type = 1
+
+[node name="EquipSlot_Acc" parent="MainVBox/EquipBox" instance=ExtResource("2_7e5em")]
+layout_mode = 2
+slot_type = 2

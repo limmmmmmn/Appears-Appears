@@ -5,7 +5,7 @@ class_name TurnManager
 signal turn_ready(actor)
 
 var turn_gauges: Dictionary = {}
-var battle_speed: float = 20.0
+var battle_speed: float = 100.0
 var is_active: bool = false
 
 func initialize(all_units: Array):
@@ -62,6 +62,10 @@ func _is_dead(unit) -> bool:
 	return false
 
 func _get_agility(unit) -> float:
-	if unit is UnitData: return float(unit.agility)
-	if "enemy_data" in unit and unit.enemy_data: return float(unit.enemy_data.agility)
+	if unit is UnitData: 
+		# [수정] agility 대신 get_total_agility() 사용!
+		return unit.get_total_agility()
+		
+	if "enemy_data" in unit and unit.enemy_data: 
+		return float(unit.enemy_data.agility)
 	return 10.0

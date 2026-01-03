@@ -1,9 +1,17 @@
-[gd_scene load_steps=3 format=3 uid="uid://dc8rtx63tn2xw"]
+[gd_scene load_steps=6 format=3 uid="uid://dc8rtx63tn2xw"]
 
 [ext_resource type="Script" uid="uid://bqa564bjcoweu" path="res://Scenes/UI/WorldHUD.gd" id="1_16q0d"]
 [ext_resource type="PackedScene" uid="uid://bmr0hiud8iwpj" path="res://Scenes/UI/PartyMemberSlot.tscn" id="2_elkqn"]
+[ext_resource type="FontFile" uid="uid://dyyvy67qpfm2l" path="res://Assets/Fonts/pixel_operator/PixelOperator-Bold.ttf" id="3_iys36"]
+
+[sub_resource type="Theme" id="Theme_w1dd3"]
+default_font = ExtResource("3_iys36")
+
+[sub_resource type="LabelSettings" id="LabelSettings_iys36"]
+font = ExtResource("3_iys36")
 
 [node name="WorldHUD" type="CanvasLayer"]
+layer = 50
 script = ExtResource("1_16q0d")
 slot_scene = ExtResource("2_elkqn")
 
@@ -11,31 +19,33 @@ slot_scene = ExtResource("2_elkqn")
 anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
-offset_top = -122.0
-offset_right = 40.0
-offset_bottom = 36.0
+offset_top = -160.0
+offset_right = 67.0
+offset_bottom = 94.0
 grow_vertical = 2
-theme_override_constants/separation = 41
+theme_override_constants/separation = 50
 
 [node name="LogPanel" type="PanelContainer" parent="."]
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_top = -88.0
-offset_right = 184.0
+offset_top = -70.0
+offset_right = 166.0
 grow_vertical = 0
 
 [node name="LogText" type="RichTextLabel" parent="LogPanel"]
 layout_mode = 2
-theme_override_font_sizes/normal_font_size = 10
-theme_override_font_sizes/bold_font_size = 10
-theme_override_font_sizes/bold_italics_font_size = 10
-theme_override_font_sizes/italics_font_size = 10
-theme_override_font_sizes/mono_font_size = 10
+theme = SubResource("Theme_w1dd3")
+theme_override_font_sizes/normal_font_size = 8
+theme_override_font_sizes/bold_font_size = 8
+theme_override_font_sizes/bold_italics_font_size = 8
+theme_override_font_sizes/italics_font_size = 8
+theme_override_font_sizes/mono_font_size = 8
 bbcode_enabled = true
 scroll_following = true
-tab_size = 6
+tab_size = 8
 
 [node name="GoldLabel" type="Label" parent="."]
 offset_right = 40.0
 offset_bottom = 23.0
+label_settings = SubResource("LabelSettings_iys36")

@@ -12,7 +12,10 @@ class_name EnemyData
 @export_group("Rewards")
 @export var drop_gold: int = 10
 @export var drop_exp: int = 5
-@export var drop_items: Array[Resource] = [] # (선택사항) 아이템 드랍 테이블
+
+# [NEW] 드랍 아이템 설정
+@export var drop_item: ItemData  # 드랍할 아이템 (IronSword.tres 등을 넣으세요)
+@export var drop_chance: float = 0.5 # 드랍 확률 (0.0 ~ 1.0, 0.5면 50%)
 
 # --- [3. 행동 패턴 (AI & Movement)] ---
 # 이동 속도나 감지 범위도 여기서 관리하면, 몬스터별로 튜닝하기 편합니다.

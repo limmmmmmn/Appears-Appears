@@ -14,6 +14,7 @@ var battle_ended: bool = false
 # 보상 계산용 변수
 var total_gold_reward: int = 0
 var total_exp_reward: int = 0
+var loot_items: Array[ItemData] = [] # [NEW] 이번 전투에서 얻은 아이템 목록
 
 func _ready():
 	enemy_container.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -57,13 +58,15 @@ func perform_party_attack(member: UnitData):
 	if active_enemies.is_empty(): return
 	var target_slot = active_enemies.pick_random()
 	
-	var dmg = max(1, member.attack_power + randi_range(-2, 2))
+	# [수정] attack_power 대신 get_total_attack() 사용!
+	var final_atk = member.get_total_attack()
+	var dmg = max(1, final_atk + randi_range(-2, 2))
 	
-	await get_tree().create_timer(0.3).timeout
+	await get_tree().create_timer(0.1).timeout # 공격 전 뜸 들이는 시간
 	if is_instance_valid(target_slot):
 		target_slot.take_damage(dmg)
 		SignalBus.game_log.emit("%s의 공격! %s에게 %d 피해" % [member.name, target_slot.enemy_data.name, dmg], Color.WHITE)
-	await get_tree().create_timer(0.5).timeout
+	await get_tree().create_timer(0.1).timeout # [2] 공격 후 대기 시간
 
 func perform_enemy_attack(slot):
 	var live_members = PartyManager.party_members.filter(func(m): return not m.is_dead())
@@ -86,43 +89,33 @@ func check_victory():
 	for i in range(active_enemies.size() - 1, -1, -1):
 		var slot = active_enemies[i]
 		
-		# 적이 죽었거나 유효하지 않으면
+		# 적 처치 확인
 		if not is_instance_valid(slot) or (slot.has_method("is_dead") and slot.is_dead()):
 			
-			# [보상 축적]
 			if is_instance_valid(slot) and slot.enemy_data:
-				var gold = slot.enemy_data.drop_gold
+				var data = slot.enemy_data
 				
-				# 에러 방지: drop_exp가 없으면 0으로 처리
-				var exp_val = 0
-				if "drop_exp" in slot.enemy_data:
-					exp_val = slot.enemy_data.drop_exp
+				# 1. 골드/경험치 축적
+				total_gold_reward += data.drop_gold
+				if "drop_exp" in data: total_exp_reward += data.drop_exp
 				
-				total_gold_reward += gold
-				total_exp_reward += exp_val
+				# 2. [NEW] 아이템 드랍 체크!
+				if data.drop_item and randf() <= data.drop_chance:
+					loot_items.append(data.drop_item)
+					# 로그에 초록색으로 표시
+					SignalBus.game_log.emit("%s 획득!" % data.drop_item.name, Color.GREEN)
 				
-				SignalBus.game_log.emit("%s 처치! (+%d G)" % [slot.enemy_data.name, gold], Color.YELLOW)
+				# 처치 로그
+				SignalBus.game_log.emit("%s 처치! (+%d G)" % [data.name, data.drop_gold], Color.YELLOW)
 				
-			if is_instance_valid(slot):
-				slot.queue_free()
+			if is_instance_valid(slot): slot.queue_free()
 			active_enemies.remove_at(i)
 	
-	# 모든 적을 처치했다면?
+	# 승리 확정 시
 	if active_enemies.is_empty():
 		battle_ended = true
-		
-		# 보상 지급 실행
 		distribute_rewards()
-		
-		await get_tree().create_timer(1.5).timeout
-		queue_free()
-
-	# (추가) 아군 전멸 체크
-	var live_members = PartyManager.party_members.filter(func(m): return not m.is_dead())
-	if live_members.is_empty():
-		battle_ended = true
-		SignalBus.game_log.emit("전멸했습니다...", Color.RED)
-		await get_tree().create_timer(2.0).timeout
+		await get_tree().create_timer(0.1).timeout # 루팅 메시지 볼 시간 줌
 		queue_free()
 
 # --- [NEW] 보상 지급 함수 ---
@@ -130,16 +123,16 @@ func distribute_rewards():
 	# 1. 골드 지급
 	if total_gold_reward > 0:
 		GameSettings.add_gold(total_gold_reward)
-		SignalBus.game_log.emit("전투 승리! 총 %d 골드 획득." % total_gold_reward, Color.GOLD)
 	
 	# 2. 경험치 지급
 	if total_exp_reward > 0:
 		var live_members = PartyManager.party_members.filter(func(m): return not m.is_dead())
-		if not live_members.is_empty():
-			for member in live_members:
-				# member.gain_exp(total_exp_reward) 함수가 있어야 함!
-				if member.has_method("gain_exp"):
-					member.gain_exp(total_exp_reward)
-			
-			SignalBus.game_log.emit("파티원 전원 +%d 경험치 획득!" % total_exp_reward, Color.CYAN)
-			SignalBus.party_updated.emit()
+		for member in live_members:
+			if member.has_method("gain_exp"): member.gain_exp(total_exp_reward)
+		SignalBus.party_updated.emit()
+
+	# 3. [NEW] 아이템 인벤토리에 넣기
+	if not loot_items.is_empty():
+		for item in loot_items:
+			GameSettings.add_item(item)
+		SignalBus.game_log.emit("총 %d개의 아이템을 획득했습니다." % loot_items.size(), Color.CYAN)

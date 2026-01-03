@@ -5,8 +5,9 @@ var battle_speed: float = 1.0 # 전투 진행 속도 (기본 1배) [cite: 56]
 
 # 파티 공용 자산
 var current_gold: int = 0
-var inventory: Array[String] = [] # 아이템 이름(또는 ID)을 저장하는 가방
 
+# [변경] 이제 문자열이 아니라 'ItemData' 리소스를 담습니다!
+var inventory: Array[ItemData] = []
 
 func set_speed(speed: float):
 	battle_speed = speed
@@ -18,7 +19,12 @@ func add_gold(amount: int):
 	# 골드가 바뀌었다고 방송 (UI 갱신용)
 	SignalBus.gold_updated.emit(current_gold)
 
-func add_item(item_name: String):
-	inventory.append(item_name)
-	print("획득 아이템: " + item_name)
-	# 나중에 인벤토리 UI 갱신 신호도 필요하면 추가
+# [NEW] 아이템 획득 함수
+func add_item(item: ItemData):
+	inventory.append(item)
+	print("인벤토리 추가: " + item.name)
+
+# [NEW] 아이템 삭제 함수 (장착할 때 씀)
+func remove_item(item: ItemData):
+	if item in inventory:
+		inventory.erase(item)

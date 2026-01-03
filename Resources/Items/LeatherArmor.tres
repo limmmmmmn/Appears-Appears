@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://g2lvrxm7n8on"]
+
+[ext_resource type="Script" uid="uid://qj87etqv5gir" path="res://Resources/_Definitions/ItemData.gd" id="1_xcjc8"]
+
+[resource]
+script = ExtResource("1_xcjc8")
+name = "LeatherArmor"
+item_type = 1
+bonus_defense = 2
+bonus_hp = 20
+metadata/_custom_type_script = "uid://qj87etqv5gir"
