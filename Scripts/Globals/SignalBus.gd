@@ -10,3 +10,5 @@ signal party_updated() # 파티원 상태 변경 시 (HUD 갱신용)
 signal request_battle(main_enemy: EnemyData, spawn_table: Array[SpawnEntry])
 signal battle_started(battle_id: int)
 signal battle_ended(battle_id: int, victory: bool)
+
+signal gold_updated(new_amount) # 골드 변경 알림

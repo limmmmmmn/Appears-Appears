@@ -35,3 +35,7 @@ theme_override_font_sizes/mono_font_size = 10
 bbcode_enabled = true
 scroll_following = true
 tab_size = 6
+
+[node name="GoldLabel" type="Label" parent="."]
+offset_right = 40.0
+offset_bottom = 23.0

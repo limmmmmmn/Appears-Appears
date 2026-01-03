@@ -9,6 +9,10 @@ class_name UnitData
 @export var name: String = "Unknown"
 @export var texture: Texture2D
 
+@export var level: int = 1
+@export var current_exp: int = 0
+@export var exp_to_next_level: int = 100
+
 # --- [상태 정보] ---
 # max_hp는 부모에게 있으니 지우고, 변하는 값인 current_hp만 남깁니다.
 @export var current_hp: int = 100
@@ -39,3 +43,24 @@ func sync_hp(new_hp: int):
 	# 만약 힐을 해서 최대 체력을 넘지 않게 하려면 부모의 max_hp 사용
 	if current_hp > max_hp:
 		current_hp = max_hp
+		
+		
+# 경험치 획득 로직
+func gain_exp(amount: int):
+	current_exp += amount
+	
+	# 레벨업 체크
+	while current_exp >= exp_to_next_level:
+		current_exp -= exp_to_next_level
+		level_up()
+
+func level_up():
+	level += 1
+	exp_to_next_level = int(exp_to_next_level * 1.5) # 필요 경험치 증가
+	
+	# 스탯 상승 (예시)
+	max_hp += 10
+	attack_power += 2
+	current_hp = max_hp # 레벨업 시 체력 회복 국룰
+	
+	print(resource_name + " 레벨 업! Lv." + str(level))
