@@ -10,25 +10,11 @@ config_version=5
 
 [application]
 
-config/name="HyperQuest"
-run/main_scene="uid://ckwae5gs4xxmy"
+config/name="HyperQuset"
+run/main_scene="uid://dtc0cm6oymel0"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
-GameSettings="*res://Scripts/Globals/GameSettings.gd"
-PartyManager="*res://Scripts/Globals/PartyManager.gd"
-SignalBus="*res://Scripts/Globals/SignalBus.gd"
-
-[display]
-
-window/size/viewport_width=640
-window/size/viewport_height=360
-window/size/window_width_override=1920
-window/size/window_height_override=1080
-window/stretch/mode="canvas_items"
-
-[rendering]
-
-textures/canvas_textures/default_texture_filter=0
+PartyManager="*res://Scripts/Managers/PartyManager.gd"
