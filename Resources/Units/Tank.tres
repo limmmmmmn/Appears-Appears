@@ -11,4 +11,6 @@ current_hp = 40
 max_hp = 40
 attack_power = 8
 base_defense = 8
+base_weapon_cooldown = 1.0
+agility = 7.0
 metadata/_custom_type_script = "uid://dwglvdd1h1khl"

@@ -13,7 +13,7 @@ func setup(amount: int, color: Color = Color.WHITE):
 
 func animate():
 	# 위치 보정 (살짝 위에서 시작하거나 랜덤성 부여)
-	position += Vector2(randf_range(-10, 10), -20)
+	position += Vector2(randf_range(-10, 10), -5)
 	
 	var tween = create_tween()
 	tween.set_parallel(true) # 동시에 실행

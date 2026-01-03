@@ -12,5 +12,5 @@ max_hp = 90
 attack_power = 12
 base_defense = 1
 base_weapon_cooldown = 1.0
-agility = 50.0
+agility = 20.0
 metadata/_custom_type_script = "uid://dwglvdd1h1khl"
