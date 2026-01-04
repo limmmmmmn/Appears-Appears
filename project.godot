@@ -11,10 +11,12 @@ config_version=5
 [application]
 
 config/name="HyperQuset"
-run/main_scene="uid://dtc0cm6oymel0"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
-PartyManager="*res://Scripts/Managers/PartyManager.gd"
+SignalBus="*res://_autoloads/signal_bus.gd"
+PartyManager="*res://_autoloads/party_manager.gd"
+BattleManager="*res://_autoloads/battle_manager.gd"
+GameManager="*res://_autoloads/game_manager.gd"

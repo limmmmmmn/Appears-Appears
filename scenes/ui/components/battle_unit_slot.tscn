@@ -1,0 +1,3 @@
+[gd_scene format=3 uid="uid://bnrh0n2i8k8xa"]
+
+[node name="BattleUnitSlot" type="PanelContainer"]
