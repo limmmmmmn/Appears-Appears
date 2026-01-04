@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://nyw8lt5qdcxr"
-path="res://.godot/imported/town_tile.png-8688421f1b985c0742e547cf687ae59c.ctex"
+path="res://.godot/imported/town_tile.png-db8312702a99efc1059aec311c1a1170.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/tilesets/town_tile.png"
-dest_files=["res://.godot/imported/town_tile.png-8688421f1b985c0742e547cf687ae59c.ctex"]
+source_file="res://Assets/Sprites/Tilesets/town_tile.png"
+dest_files=["res://.godot/imported/town_tile.png-db8312702a99efc1059aec311c1a1170.ctex"]
 
 [params]
 

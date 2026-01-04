@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UnitData" load_steps=5 format=3 uid="uid://bckgykwsm7jcf"]
+
+[ext_resource type="Script" uid="uid://yeoaquem20he" path="res://Scripts/Resources/UnitData.gd" id="1_yq5t2"]
+[ext_resource type="Script" uid="uid://ift5xno6abwr" path="res://Scripts/Resources/SkillData.gd" id="2_k2wvl"]
+[ext_resource type="Resource" uid="uid://p3f8377xmsr8" path="res://Data/Skills/Scratch.tres" id="3_acwkw"]
+[ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://Assets/Sprites/Monsters/aqua_slime.png" id="4_x3nww"]
+
+[resource]
+script = ExtResource("1_yq5t2")
+name = "Slime"
+base_stats = {
+"atk": 5,
+"def": 0,
+"hp": 30
+}
+sprite = ExtResource("4_x3nww")
+skills = Array[ExtResource("2_k2wvl")]([ExtResource("3_acwkw")])
+metadata/_custom_type_script = "uid://yeoaquem20he"

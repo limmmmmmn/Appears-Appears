@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bl0e4o2mchi6x"
-path="res://.godot/imported/dark_sorcerer.png-1aaa767d2de0790aa4f0e63be0288d95.ctex"
+path="res://.godot/imported/dark_sorcerer.png-4fe5701732fd8025fe9bfb42345ec7b2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/monsters/dark_sorcerer.png"
-dest_files=["res://.godot/imported/dark_sorcerer.png-1aaa767d2de0790aa4f0e63be0288d95.ctex"]
+source_file="res://Assets/Sprites/Monsters/dark_sorcerer.png"
+dest_files=["res://.godot/imported/dark_sorcerer.png-4fe5701732fd8025fe9bfb42345ec7b2.ctex"]
 
 [params]
 

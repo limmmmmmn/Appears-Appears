@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dm7qvuf4tu4v1"
-path="res://.godot/imported/iron_knight.png-7d72e30c2ad09de0b69813ad85474e02.ctex"
+path="res://.godot/imported/iron_knight.png-8a13d6616cb00ec5eaf616c89a2da75b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/monsters/iron_knight.png"
-dest_files=["res://.godot/imported/iron_knight.png-7d72e30c2ad09de0b69813ad85474e02.ctex"]
+source_file="res://Assets/Sprites/Monsters/iron_knight.png"
+dest_files=["res://.godot/imported/iron_knight.png-8a13d6616cb00ec5eaf616c89a2da75b.ctex"]
 
 [params]
 

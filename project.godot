@@ -11,10 +11,26 @@ config_version=5
 [application]
 
 config/name="HyperQuset"
-run/main_scene="uid://dtc0cm6oymel0"
+run/main_scene="uid://5x1hgyx4guc0"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
-PartyManager="*res://Scripts/Managers/PartyManager.gd"
+SignalBus="*res://_Autoloads/SignalBus.gd"
+SoundManager="*res://_Autoloads/SoundManager.gd"
+PartyManager="*res://_Autoloads/PartyManager.gd"
+GameManager="*res://_Autoloads/GameManager.gd"
+BattleManager="*res://_Autoloads/BattleManager.gd"
+
+[display]
+
+window/size/viewport_width=480
+window/size/viewport_height=270
+window/size/window_width_override=1920
+window/size/window_height_override=1080
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0

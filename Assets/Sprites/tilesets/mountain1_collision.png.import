@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://d8r3ysw1xgey"
-path="res://.godot/imported/mountain1_collision.png-abe59ede8ea4156cd8327dbaf2081cac.ctex"
+path="res://.godot/imported/mountain1_collision.png-c6959d04bc1228ea29db1bb0a52cf31e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/tilesets/mountain1_collision.png"
-dest_files=["res://.godot/imported/mountain1_collision.png-abe59ede8ea4156cd8327dbaf2081cac.ctex"]
+source_file="res://Assets/Sprites/Tilesets/mountain1_collision.png"
+dest_files=["res://.godot/imported/mountain1_collision.png-c6959d04bc1228ea29db1bb0a52cf31e.ctex"]
 
 [params]
 

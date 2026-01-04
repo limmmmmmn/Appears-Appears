@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dyqfojfhhk0o2"
-path="res://.godot/imported/black_mage_walk_left_strip1.png-601e7a53c8258763ff6e49530fcfe735.ctex"
+path="res://.godot/imported/black_mage_walk_left_strip1.png-404eb7cab8e6b93fc135a7d12aa4e595.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/characters/black_mage_walk_left_strip1.png"
-dest_files=["res://.godot/imported/black_mage_walk_left_strip1.png-601e7a53c8258763ff6e49530fcfe735.ctex"]
+source_file="res://Assets/Sprites/Characters/black_mage_walk_left_strip1.png"
+dest_files=["res://.godot/imported/black_mage_walk_left_strip1.png-404eb7cab8e6b93fc135a7d12aa4e595.ctex"]
 
 [params]
 

@@ -1,0 +1,58 @@
+[gd_scene load_steps=4 format=3 uid="uid://qo1bu0kkjryr"]
+
+[ext_resource type="Script" uid="uid://nvlugbble0s1" path="res://Scenes/Battle/BattleWindow.gd" id="1_6fqf5"]
+[ext_resource type="Texture2D" uid="uid://ccrca88iq8f6s" path="res://Assets/Sprites/Monsters/blue_bat.png" id="2_g4ij8"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_g4ij8"]
+
+[node name="BattleWindow" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 160.0
+offset_bottom = 120.0
+script = ExtResource("1_6fqf5")
+
+[node name="Background" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Background"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Background/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 4
+alignment = 1
+
+[node name="EnemyName" type="Label" parent="Background/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="EnemyVisual" type="TextureRect" parent="Background/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+texture = ExtResource("2_g4ij8")
+stretch_mode = 5
+
+[node name="EnemyHP" type="ProgressBar" parent="Background/MarginContainer/VBoxContainer"]
+layout_mode = 2
+show_percentage = false
+
+[node name="ActionLog" type="Label" parent="Background/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+label_settings = SubResource("LabelSettings_g4ij8")
+
+[node name="BattleTimer" type="Timer" parent="."]
+
+[connection signal="timeout" from="BattleTimer" to="." method="_on_battle_timer_timeout"]

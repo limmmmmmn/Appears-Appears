@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bg0vlid66trpy"
-path="res://.godot/imported/rage_cat.png-edf30513dd75978662c050a6041845e0.ctex"
+path="res://.godot/imported/rage_cat.png-8b0aad1591c12cd6c7091a537e1d1980.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/monsters/rage_cat.png"
-dest_files=["res://.godot/imported/rage_cat.png-edf30513dd75978662c050a6041845e0.ctex"]
+source_file="res://Assets/Sprites/Monsters/rage_cat.png"
+dest_files=["res://.godot/imported/rage_cat.png-8b0aad1591c12cd6c7091a537e1d1980.ctex"]
 
 [params]
 

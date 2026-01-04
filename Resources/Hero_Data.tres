@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="UnitData" load_steps=3 format=3 uid="uid://cjpd7pg45eu3l"]
-
-[ext_resource type="Script" uid="uid://c76vn3t1ew66n" path="res://Scripts/Data/UnitData.gd" id="1_k8ygp"]
-[ext_resource type="Texture2D" uid="uid://672g70mmkt0k" path="res://Assets/Sprites/characters/player1_walk_left_strip1.png" id="2_r55xl"]
-
-[resource]
-script = ExtResource("1_k8ygp")
-sprite_texture = ExtResource("2_r55xl")
-metadata/_custom_type_script = "uid://c76vn3t1ew66n"

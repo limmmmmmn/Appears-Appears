@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3 uid="uid://p3f8377xmsr8"]
+
+[ext_resource type="Script" uid="uid://ift5xno6abwr" path="res://Scripts/Resources/SkillData.gd" id="1_1kk20"]
+
+[resource]
+script = ExtResource("1_1kk20")
+skill_name = "할퀴기"
+cooldown = 2.0
+metadata/_custom_type_script = "uid://ift5xno6abwr"
