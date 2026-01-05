@@ -3,12 +3,12 @@ class_name EnemySpawner extends Node2D
 
 # --- 인스펙터 설정 (Inspector Controls) ---
 @export_group("Spawn Settings")
-@export var enemy_scene: PackedScene  # 생성할 FieldEnemy 씬
-@export var spawn_interval: float = 2.0  # 생성 빈도 (초)
-@export var spawn_radius_padding: float = 100.0  # 카메라 밖 여유 거리
+@export var enemy_scene: PackedScene
+@export var spawn_interval: float = 2.0
+@export var spawn_radius_padding: float = 100.0
 
-@export_group("Enemy Pool")
-@export var enemy_data_list: Array[UnitData] = [] # 랜덤으로 뽑을 데이터 목록 [cite: 50]
+@export_group("Data")
+@export var spawn_table: SpawnTable # 변경: 단순 리스트 -> 스폰 테이블
 
 # --- 내부 변수 ---
 var _timer: Timer
@@ -30,24 +30,21 @@ func _ready() -> void:
 	add_child(_timer)
 
 func _on_spawn_timer_timeout() -> void:
-	if not _player or enemy_data_list.is_empty() or not enemy_scene:
+	# spawn_table 검사 추가
+	if not _player or not spawn_table or not enemy_scene:
 		return
-
 	_spawn_enemy()
 
 func _spawn_enemy() -> void:
-	# 1. 랜덤 데이터 선택
-	var random_data = enemy_data_list.pick_random()
+	# 1. 테이블에서 가중치 기반으로 뽑기
+	var random_data = spawn_table.pick_unit()
+	if not random_data: return # 데이터가 비었으면 패스
 	
 	# 2. 카메라 밖 위치 계산
 	var spawn_pos = _get_random_position_outside_camera()
-	
-	# 3. 인스턴스 생성 및 초기화
 	var enemy_instance = enemy_scene.instantiate() as FieldEnemy
-	get_parent().add_child(enemy_instance) # 월드에 추가 (스포너 자식이 아님)
-	
-	# 4. 데이터 주입 (Dependency Injection)
-	enemy_instance.setup(random_data, spawn_pos, _player)
+	get_parent().add_child(enemy_instance)
+	enemy_instance.setup(random_data, spawn_pos, _player, spawn_table)
 
 # 카메라 뷰포트 사각형 밖의 랜덤 좌표를 구하는 로직
 func _get_random_position_outside_camera() -> Vector2:

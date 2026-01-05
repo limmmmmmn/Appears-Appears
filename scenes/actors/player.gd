@@ -25,6 +25,18 @@ func _ready() -> void:
 
 func _physics_process(_delta: float) -> void:
 	_handle_movement()
+	# 이동 후 바라보는 방향 업데이트 추가
+	_update_facing_direction()
+	
+func _update_facing_direction() -> void:
+	# 스프라이트 기본 방향이 '왼쪽' 기준
+	if velocity.x > 0:
+		# 오른쪽으로 이동 중 -> 뒤집기
+		sprite_2d.flip_h = true
+	elif velocity.x < 0:
+		# 왼쪽으로 이동 중 -> 원래대로
+		sprite_2d.flip_h = false
+	# velocity.x == 0 일 때는 이전 상태를 유지합니다.
 
 func _handle_movement() -> void:
 	# Godot 4.5+ Input Handling

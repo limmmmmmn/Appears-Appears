@@ -17,10 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-SignalBus="*res://_autoloads/signal_bus.gd"
-PartyManager="*res://_autoloads/party_manager.gd"
 BattleManager="*res://_autoloads/battle_manager.gd"
-GameManager="*res://_autoloads/game_manager.gd"
 
 [display]
 
