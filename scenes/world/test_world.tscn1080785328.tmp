@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://cfw0586ctvdt"]
+
+[ext_resource type="PackedScene" uid="uid://80l6iaq6lh80" path="res://scenes/actors/player.tscn" id="1_tjl6x"]
+[ext_resource type="PackedScene" uid="uid://0rlr2seonhhv" path="res://scenes/world/enemy_spawner.tscn" id="2_xl1yy"]
+
+[node name="TestWorld" type="Node2D"]
+
+[node name="Player" parent="." instance=ExtResource("1_tjl6x")]
+
+[node name="EnemySpawner" parent="." instance=ExtResource("2_xl1yy")]

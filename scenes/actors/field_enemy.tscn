@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3 uid="uid://d3a60se71jc2e"]
+
+[ext_resource type="Script" uid="uid://dcr67hfh0mwg4" path="res://scenes/actors/field_enemy.gd" id="1_r6awr"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_2lw83"]
+
+[node name="FieldEnemy" type="CharacterBody2D" groups=["enemy"]]
+script = ExtResource("1_r6awr")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_2lw83")
