@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://djxw74kufajwl"]
-
-[ext_resource type="Script" uid="uid://cxjalrq54du3e" path="res://Scripts/Resources/ItemData.gd" id="1_cd5f4"]
-
-[resource]
-script = ExtResource("1_cd5f4")
-item_name = "끈적한 액체"
-type = 2
-metadata/_custom_type_script = "uid://cxjalrq54du3e"
