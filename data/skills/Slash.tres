@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3 uid="uid://chwdfs74efroy"]
+
+[ext_resource type="Script" uid="uid://ift5xno6abwr" path="res://Scripts/Resources/SkillData.gd" id="1_robmc"]
+
+[resource]
+script = ExtResource("1_robmc")
+skill_name = "베기"
+damage_multiplier = 1.2
+cooldown = 1.5
+metadata/_custom_type_script = "uid://ift5xno6abwr"

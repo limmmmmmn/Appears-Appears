@@ -1,0 +1,20 @@
+[gd_scene load_steps=5 format=3 uid="uid://cog5i05n5ya3x"]
+
+[ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://Assets/Sprites/Monsters/aqua_slime.png" id="1_77lyq"]
+[ext_resource type="Script" uid="uid://14neokf56x8u" path="res://Scenes/Actors/FieldEnemy.gd" id="1_4752c"]
+[ext_resource type="Resource" uid="uid://bckgykwsm7jcf" path="res://Data/Units/Slime.tres" id="2_v06fw"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_77lyq"]
+radius = 9.055386
+
+[node name="FieldEnemy" type="CharacterBody2D" groups=["FieldEnemy"]]
+script = ExtResource("1_4752c")
+host_unit_data = ExtResource("2_v06fw")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("1_77lyq")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_77lyq")
+
+[node name="MoveTimer" type="Timer" parent="."]
