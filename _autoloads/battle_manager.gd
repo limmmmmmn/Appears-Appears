@@ -21,15 +21,27 @@ func start_battle(source_unit_data: UnitData, spawn_table: SpawnTable) -> void:
 	var battle_instance := BattleInstance.new(enemies)
 	var window := battle_window_scene.instantiate() as BattleWindow
 	
+# 	B. UI 레이어에 추가 및 데이터 주입 [cite: 78]
 	_battle_ui_layer.add_child(window)
 	window.setup(battle_instance)
 	
-	# 배치 전 크기 강제 확정
-	window.custom_minimum_size = WINDOW_SIZE
+	# C. 위치 설정 및 트윈 애니메이션 준비
+	var target_pos := _find_smart_position()
+	window.position = target_pos
 	window.size = WINDOW_SIZE
 	
-	# [핵심] 절대 침범 불가 레이아웃 적용
-	window.position = _find_smart_position()
+	# --- 트윈(Tween) 추가: 팝업 애니메이션 ---
+	# 1. 피벗을 중앙으로 설정하여 중앙에서 커지도록 함
+	window.pivot_offset = WINDOW_SIZE / 2
+	window.scale = Vector2.ZERO
+	
+	var tween = create_tween()
+	# TRANS_BACK과 EASE_OUT을 사용하면 약간 더 커졌다가 돌아오는 "탄력" 효과가 생깁니다.
+	tween.tween_property(window, "scale", Vector2.ONE, 0.25)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	
+	_active_windows.append(window)
 	
 	_active_windows.append(window)
 	get_tree().create_timer(1.0).timeout.connect(func(): _end_battle(window))
