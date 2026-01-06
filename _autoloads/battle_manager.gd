@@ -11,6 +11,7 @@ const SAFE_AREA_SIZE: Vector2 = Vector2(40, 40)
 var _active_windows: Array[Control] = []
 var _battle_ui_layer: CanvasLayer
 
+
 func _ready() -> void:
 	_battle_ui_layer = CanvasLayer.new()
 	_battle_ui_layer.layer = 10 
@@ -42,13 +43,18 @@ func start_battle(source_unit_data: UnitData, spawn_table: SpawnTable) -> void:
 		.set_ease(Tween.EASE_OUT)
 	
 	_active_windows.append(window)
-	
-	_active_windows.append(window)
 	get_tree().create_timer(1.0).timeout.connect(func(): _end_battle(window))
 
 func _end_battle(window: BattleWindow) -> void:
+	# [안전장치] window가 null이거나 이미 삭제되었는지(Invalid) 확인합니다.
+	if not is_instance_valid(window):
+		return
+	
+	# 리스트에 있다면 제거
 	if window in _active_windows:
 		_active_windows.erase(window)
+	
+	# 안전하게 삭제
 	window.queue_free()
 
 # --- 5. 스마트 레이아웃 (중앙 침범 절대 방어) ---
@@ -136,3 +142,16 @@ func _pick_weighted_squared(table: SpawnTable) -> UnitData:
 		current += item.weight
 		if rnd < current: return item.unit
 	return null
+	
+# [Blueprint v1.4] 전투 관리자 - 정리 로직 추가
+
+func clear_all_battles() -> void:
+	# 1. 모든 전투창 제거
+	for window in _active_windows:
+		if is_instance_valid(window):
+			window.queue_free()
+			
+	# 2. 관리 리스트 초기화
+	_active_windows.clear()
+	
+	print("모든 전투창이 정리되었습니다.")

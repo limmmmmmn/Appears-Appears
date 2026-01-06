@@ -18,6 +18,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 BattleManager="*res://_autoloads/battle_manager.gd"
+PartyManager="*res://_autoloads/party_manager.gd"
 
 [display]
 

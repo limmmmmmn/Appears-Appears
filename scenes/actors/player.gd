@@ -38,6 +38,7 @@ func _update_facing_direction() -> void:
 		sprite_2d.flip_h = false
 	# velocity.x == 0 일 때는 이전 상태를 유지합니다.
 
+
 func _handle_movement() -> void:
 	# Godot 4.5+ Input Handling
 	var direction: Vector2 = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")

@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3 uid="uid://dryrj0cy34r1f"]
+
+[ext_resource type="Script" uid="uid://bf7kgbwcq5wil" path="res://scenes/objects/portal.gd" id="1_gd70c"]
+[ext_resource type="Texture2D" uid="uid://nyw8lt5qdcxr" path="res://assets/tilesets/town_tile.png" id="2_h5gno"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_osqbb"]
+size = Vector2(35, 20)
+
+[node name="Portal" type="Area2D"]
+script = ExtResource("1_gd70c")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_h5gno")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(-0.5, 0)
+shape = SubResource("RectangleShape2D_osqbb")
