@@ -9,8 +9,14 @@ class_name VillageMenu extends Control
 @export var shop_pool: ItemPool
 
 func _ready() -> void:
-	# 마을에 입장하자마자 현재 골드를 UI에 표시
+	# 1. 골드 UI 갱신 (기존 코드)
 	_update_gold_ui()
+	
+	# 2. 키보드 제어를 위해 첫 번째 버튼에 포커스 강제 할당
+	# $MainPanel/TavernButton 부분은 파트너님의 실제 노드 경로에 맞게 수정하세요.
+	var first_button = $MainPanel/TavernButton
+	if first_button:
+		first_button.grab_focus()
 
 func _on_tavern_button_pressed() -> void:
 	if not tavern_pool: return

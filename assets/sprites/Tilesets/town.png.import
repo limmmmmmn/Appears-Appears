@@ -2,25 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ydivj1i646te"
-<<<<<<< HEAD:Assets/Sprites/town.png.import
-path="res://.godot/imported/town.png-63fa61d263ba3cfa8fb68e09abc185bb.ctex"
-=======
-path="res://.godot/imported/town.png-edeeb2f0f781b1492ea40c59d2c9920b.ctex"
->>>>>>> 0105bdc2b6b81ba7a2804d0baff13db7cd04f69f:Assets/Sprites/Tilesets/town.png.import
+uid="uid://ddey3j8kjuc04"
+path="res://.godot/imported/town.png-7c4c73c2ddcac4493ed5c42043db12b9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-<<<<<<< HEAD:Assets/Sprites/town.png.import
-source_file="res://assets/sprites/town.png"
-dest_files=["res://.godot/imported/town.png-63fa61d263ba3cfa8fb68e09abc185bb.ctex"]
-=======
-source_file="res://Assets/Sprites/Tilesets/town.png"
-dest_files=["res://.godot/imported/town.png-edeeb2f0f781b1492ea40c59d2c9920b.ctex"]
->>>>>>> 0105bdc2b6b81ba7a2804d0baff13db7cd04f69f:Assets/Sprites/Tilesets/town.png.import
+source_file="res://assets/sprites/Tilesets/town.png"
+dest_files=["res://.godot/imported/town.png-7c4c73c2ddcac4493ed5c42043db12b9.ctex"]
 
 [params]
 
