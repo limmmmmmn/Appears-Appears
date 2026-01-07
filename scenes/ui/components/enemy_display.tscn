@@ -14,7 +14,6 @@ alignment = 1
 script = ExtResource("1_r1x6i")
 
 [node name="NameLabel" type="Label" parent="."]
-visible = false
 layout_mode = 2
 label_settings = SubResource("LabelSettings_1637e")
 horizontal_alignment = 1

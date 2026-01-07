@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="UnitData" load_steps=4 format=3 uid="uid://pffrrqh3ubvn"]
+
+[ext_resource type="Script" uid="uid://b4jfsr6jisrhy" path="res://scripts/defs/unit_data.gd" id="1_8lqd6"]
+[ext_resource type="Script" uid="uid://5tdx864i443w" path="res://scripts/defs/skill_data.gd" id="2_2ecyw"]
+[ext_resource type="Texture2D" uid="uid://6ie8x4i04ojw" path="res://assets/sprites/units/white_mage_walk_left_strip1.png" id="3_2ecyw"]
+
+[resource]
+script = ExtResource("1_8lqd6")
+name = "Cleric"
+texture = ExtResource("3_2ecyw")
+phys_spd = 0.8
+mag_spd = 1.5
+metadata/_custom_type_script = "uid://b4jfsr6jisrhy"

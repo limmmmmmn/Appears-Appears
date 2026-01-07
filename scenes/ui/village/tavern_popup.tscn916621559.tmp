@@ -1,0 +1,52 @@
+[gd_scene load_steps=2 format=3 uid="uid://ctj1ryhq7mwk1"]
+
+[ext_resource type="Script" uid="uid://ctoirwvkuk633" path="res://scenes/ui/village/tavern_popup.gd" id="1_sw8ng"]
+
+[node name="TavernPopup" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 108.0
+offset_top = 34.0
+offset_right = -108.0
+offset_bottom = -34.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_sw8ng")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Content" type="VBoxContainer" parent="ColorRect"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -48.0
+offset_right = 20.0
+offset_bottom = 48.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="CandidateList" type="HBoxContainer" parent="ColorRect/Content"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+mouse_filter = 0
+
+[node name="PartyList" type="HBoxContainer" parent="ColorRect/Content"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+mouse_filter = 0
+
+[node name="CloseButton" type="Button" parent="ColorRect/Content"]
+layout_mode = 2

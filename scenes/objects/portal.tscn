@@ -8,6 +8,7 @@ size = Vector2(35, 20)
 
 [node name="Portal" type="Area2D"]
 script = ExtResource("1_gd70c")
+target_scene = "uid://bvsfg828vtggy"
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture = ExtResource("2_h5gno")

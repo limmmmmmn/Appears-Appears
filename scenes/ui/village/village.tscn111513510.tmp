@@ -1,0 +1,99 @@
+[gd_scene load_steps=5 format=3 uid="uid://bvsfg828vtggy"]
+
+[ext_resource type="Script" uid="uid://byptlrha18jnq" path="res://scenes/ui/village/village.gd" id="1_ntkre"]
+[ext_resource type="PackedScene" uid="uid://b3r7ih7jjva0s" path="res://scenes/ui/village/tavern.tscn" id="2_eqehh"]
+
+[sub_resource type="GDScript" id="GDScript_q7fbv"]
+script/source = "class_name VillageShop extends Control
+
+signal closed
+
+@onready var item_list = $Content/ItemList
+@onready var close_button = $Content/CloseButton
+
+func setup(items: Array[ItemData]) -> void:
+	_refresh_shop(items)
+	_lock_focus_trap()
+
+func _refresh_shop(items: Array[ItemData]) -> void:
+	for child in item_list.get_children(): child.queue_free()
+	
+	for data in items:
+		var btn = Button.new()
+		btn.text = \"%s 구매 (%d G)\" % [data.name, data.price]
+		btn.pressed.connect(_on_buy_pressed.bind(data))
+		item_list.add_child(btn)
+
+func _lock_focus_trap() -> void:
+	await get_tree().process_frame
+	var buttons = []
+	for c in item_list.get_children(): if c is Button: buttons.append(c)
+	buttons.append(close_button)
+	
+	if buttons.size() > 0:
+		buttons[0].grab_focus()
+		buttons[0].focus_neighbor_top = buttons[0].get_path()
+		buttons[-1].focus_neighbor_bottom = buttons[-1].get_path()
+		for b in buttons:
+			b.focus_neighbor_left = b.get_path()
+			b.focus_neighbor_right = b.get_path()
+
+func _on_buy_pressed(data: ItemData) -> void:
+	# 아이템 구매 및 인벤토리 추가 로직 [cite: 67]
+	_lock_focus_trap()
+
+func _on_close_button_pressed() -> void:
+	closed.emit()
+	queue_free()
+"
+
+[sub_resource type="PackedScene" id="PackedScene_eqehh"]
+_bundled = {
+"conn_count": 0,
+"conns": PackedInt32Array(),
+"editable_instances": [],
+"names": PackedStringArray("Shop", "Control", "layout_mode", "anchors_preset", "script"),
+"node_count": 1,
+"node_paths": [],
+"nodes": PackedInt32Array(-1, -1, 1, 0, -1, 3, 2, 0, 3, 1, 4, 2, 0),
+"variants": [3, 0, SubResource("GDScript_q7fbv")],
+"version": 3
+}
+
+[node name="Village" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_ntkre")
+tavern_scene = ExtResource("2_eqehh")
+shop_scene = SubResource("PackedScene_eqehh")
+
+[node name="MainPanel" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+alignment = 1
+
+[node name="TavernButton" type="Button" parent="MainPanel"]
+layout_mode = 2
+text = "Tavern"
+
+[node name="ShopButton" type="Button" parent="MainPanel"]
+layout_mode = 2
+text = "Shop"
+
+[node name="GoldLabel" type="Label" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+text = "Gold : "
+
+[connection signal="pressed" from="MainPanel/TavernButton" to="." method="_on_tavern_button_pressed"]
+[connection signal="pressed" from="MainPanel/ShopButton" to="." method="_on_shop_button_pressed"]

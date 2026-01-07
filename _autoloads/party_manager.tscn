@@ -1,0 +1,12 @@
+[gd_scene load_steps=7 format=3 uid="uid://blffh3uytf4gb"]
+
+[ext_resource type="Script" uid="uid://dirwcxy3knmf7" path="res://_autoloads/party_manager.gd" id="1_yxqc8"]
+[ext_resource type="Script" uid="uid://b4jfsr6jisrhy" path="res://scripts/defs/unit_data.gd" id="2_d7vrj"]
+[ext_resource type="Resource" uid="uid://lukr66wpw62u" path="res://data/units/Warrior.tres" id="3_w3uda"]
+[ext_resource type="Resource" uid="uid://bbe344glwem7p" path="res://data/units/Mage.tres" id="4_ishye"]
+[ext_resource type="Resource" uid="uid://df33xdk0sbadn" path="res://data/units/Thief.tres" id="5_ydbng"]
+[ext_resource type="Resource" uid="uid://pffrrqh3ubvn" path="res://data/units/Cleric.tres" id="6_587er"]
+
+[node name="PartyManager" type="Node"]
+script = ExtResource("1_yxqc8")
+all_heroes_pool = Array[ExtResource("2_d7vrj")]([ExtResource("3_w3uda"), ExtResource("4_ishye"), ExtResource("5_ydbng"), ExtResource("6_587er")])
