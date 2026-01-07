@@ -83,6 +83,6 @@ func _on_exit_button_pressed() -> void:
 	if field_scene_path and ResourceLoader.exists(field_scene_path):
 		get_tree().change_scene_to_file(field_scene_path)
 	else:
-		print("오류: 필드 씬 경로를 찾을 수 없습니다! 인스펙터를 확인하세요.")
+		print("오류: 필드 씬 경로를 찾을 수 없습니다! 인스1`펙터를 확인하세요.")
 		# 경로 변수를 안 쓴다면 아래처럼 직접 적어도 됩니다.
 		# get_tree().change_scene_to_file("res://scenes/world/field.tscn")

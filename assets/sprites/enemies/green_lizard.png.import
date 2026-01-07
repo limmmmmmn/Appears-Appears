@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c4dd34cusoeu8"
-path="res://.godot/imported/green_lizard.png-103bcfe17e481569c9b1bc4c6ea285e3.ctex"
+path="res://.godot/imported/green_lizard.png-4e5dd328fb5c44778a9cb38636980f54.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/enemies/green_lizard.png"
-dest_files=["res://.godot/imported/green_lizard.png-103bcfe17e481569c9b1bc4c6ea285e3.ctex"]
+source_file="res://assets/sprites/enemies/green_lizard.png"
+dest_files=["res://.godot/imported/green_lizard.png-4e5dd328fb5c44778a9cb38636980f54.ctex"]
 
 [params]
 

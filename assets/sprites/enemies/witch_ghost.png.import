@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dn7ugy5vw1gle"
-path="res://.godot/imported/witch_ghost.png-046580cba0e1e9edb10d3a7cbcf9dabb.ctex"
+path="res://.godot/imported/witch_ghost.png-8092e0c3e579e3e3cb45486d876cc3b0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Assets/Sprites/enemies/witch_ghost.png"
-dest_files=["res://.godot/imported/witch_ghost.png-046580cba0e1e9edb10d3a7cbcf9dabb.ctex"]
+source_file="res://assets/sprites/enemies/witch_ghost.png"
+dest_files=["res://.godot/imported/witch_ghost.png-8092e0c3e579e3e3cb45486d876cc3b0.ctex"]
 
 [params]
 
