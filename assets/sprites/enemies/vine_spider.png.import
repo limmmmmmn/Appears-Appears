@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bgo86uhtbo8uo"
-path="res://.godot/imported/vine_spider.png-f77f3fca00037207837530c181adae84.ctex"
+path="res://.godot/imported/vine_spider.png-ddd37c9f5e9c7d643a960b8a8c1a1e11.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/vine_spider.png"
-dest_files=["res://.godot/imported/vine_spider.png-f77f3fca00037207837530c181adae84.ctex"]
+source_file="res://Assets/Sprites/enemies/vine_spider.png"
+dest_files=["res://.godot/imported/vine_spider.png-ddd37c9f5e9c7d643a960b8a8c1a1e11.ctex"]
 
 [params]
 

@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bnr4bjv8tgclu"
-path="res://.godot/imported/serpent_bird.png-6900e7c919ac4bb44e9b853c073180de.ctex"
+path="res://.godot/imported/serpent_bird.png-44907b8c40f25082cccdf842180e8805.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/serpent_bird.png"
-dest_files=["res://.godot/imported/serpent_bird.png-6900e7c919ac4bb44e9b853c073180de.ctex"]
+source_file="res://Assets/Sprites/enemies/serpent_bird.png"
+dest_files=["res://.godot/imported/serpent_bird.png-44907b8c40f25082cccdf842180e8805.ctex"]
 
 [params]
 

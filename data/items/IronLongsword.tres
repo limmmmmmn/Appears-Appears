@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3 uid="uid://u8lr7dkn14tv"]
+
+[ext_resource type="Script" uid="uid://5tdx864i443w" path="res://scripts/defs/skill_data.gd" id="1_nwc06"]
+[ext_resource type="Script" uid="uid://1xkcjq3jdq5v" path="res://scripts/defs/item_data.gd" id="2_7tb53"]
+
+[resource]
+script = ExtResource("2_7tb53")
+name = "Iron Longsword"
+bonus_atk = 15
+metadata/_custom_type_script = "uid://1xkcjq3jdq5v"

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3 uid="uid://cbw7c1hn6djul"]
+
+[ext_resource type="Script" uid="uid://5tdx864i443w" path="res://scripts/defs/skill_data.gd" id="1_s3r12"]
+[ext_resource type="Script" uid="uid://1xkcjq3jdq5v" path="res://scripts/defs/item_data.gd" id="2_go75n"]
+
+[resource]
+script = ExtResource("2_go75n")
+name = "Rusty Dagger"
+bonus_atk = 5
+bonus_phys_spd = 0.1
+metadata/_custom_type_script = "uid://1xkcjq3jdq5v"
