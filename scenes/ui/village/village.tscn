@@ -33,6 +33,10 @@ text = "Tavern"
 layout_mode = 2
 text = "Shop"
 
+[node name="ExitButton" type="Button" parent="MainPanel"]
+layout_mode = 2
+text = "Exit"
+
 [node name="GoldLabel" type="Label" parent="."]
 layout_mode = 0
 offset_right = 40.0
@@ -41,3 +45,4 @@ text = "Gold : "
 
 [connection signal="pressed" from="MainPanel/TavernButton" to="." method="_on_tavern_button_pressed"]
 [connection signal="pressed" from="MainPanel/ShopButton" to="." method="_on_shop_button_pressed"]
+[connection signal="pressed" from="MainPanel/ExitButton" to="." method="_on_exit_button_pressed"]

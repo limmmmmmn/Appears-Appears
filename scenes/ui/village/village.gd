@@ -3,14 +3,21 @@ class_name Village extends Control
 
 @export var tavern_scene: PackedScene 
 @export var shop_scene: PackedScene 
+# [추가] 필드 씬을 인스펙터에서 연결할 수 있게 변수 추가 (추천)
+@export var field_scene_path: String = "res://scenes/world/test_world.tscn"
 
 @onready var tavern_btn = $MainPanel/TavernButton
 @onready var shop_btn = $MainPanel/ShopButton
+@onready var exit_btn = $MainPanel/ExitButton # [추가] 나가기 버튼
 @onready var main_panel = $MainPanel
 @onready var gold_label = $GoldLabel
 
 func _ready() -> void:
 	update_gold_ui()
+	
+	# [추가] 나가기 버튼 시그널 연결
+	# 에디터 시그널 탭에서 연결해도 되지만, 코드로 하는 게 깔끔할 때가 많습니다.
+	exit_btn.pressed.connect(_on_exit_button_pressed)
 	# 마을 진입 시 첫 번째 버튼에 포커스 (TavernButton)
 	if tavern_btn:
 		tavern_btn.grab_focus()
@@ -67,3 +74,15 @@ func _open_sub_menu(menu: Control) -> void:
 		if is_instance_valid(tavern_btn):
 			tavern_btn.grab_focus()
 	)
+
+
+# --- [추가] 나가기 버튼 로직 ---
+func _on_exit_button_pressed() -> void:
+	# 필드 씬으로 전환!
+	# 주의: 실제 필드 씬 파일 경로("res://...")가 맞는지 꼭 확인하세요.
+	if field_scene_path and ResourceLoader.exists(field_scene_path):
+		get_tree().change_scene_to_file(field_scene_path)
+	else:
+		print("오류: 필드 씬 경로를 찾을 수 없습니다! 인스펙터를 확인하세요.")
+		# 경로 변수를 안 쓴다면 아래처럼 직접 적어도 됩니다.
+		# get_tree().change_scene_to_file("res://scenes/world/field.tscn")
