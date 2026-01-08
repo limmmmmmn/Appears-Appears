@@ -1,9 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://cmor3w6jeivth"]
-
-[ext_resource type="PackedScene" uid="uid://b2oah6wytjkfx" path="res://scenes/ui/windows/battle_window.tscn" id="1_ilv7d"]
-
-[node name="BattleCanvas" type="CanvasLayer"]
-
-[node name="BattleWindow" parent="." instance=ExtResource("1_ilv7d")]
-size_flags_horizontal = 4
-size_flags_vertical = 4
