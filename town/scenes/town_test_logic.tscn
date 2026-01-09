@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b2x80ltpbexhn"]
+
+[ext_resource type="Script" uid="uid://ci41xbq4bdh3w" path="res://town/scenes/town_test_logic.gd" id="1_mqbk5"]
+
+[node name="TownTestLogic" type="Node"]
+script = ExtResource("1_mqbk5")

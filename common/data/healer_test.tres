@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="UnitData" load_steps=2 format=3 uid="uid://dprnorg8nsiqj"]
+
+[ext_resource type="Script" uid="uid://ofrhdm02ehk0" path="res://common/defs/unit_data.gd" id="1_3e5p0"]
+
+[resource]
+script = ExtResource("1_3e5p0")
+id = "healer_01"
+name = "견습 사제"
+job_name = "힐러"
+base_hp = 80
+metadata/_custom_type_script = "uid://ofrhdm02ehk0"
