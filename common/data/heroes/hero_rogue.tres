@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="HeroDef" load_steps=2 format=3 uid="uid://bs4jhn40l0v6m"]
+
+[ext_resource type="Script" uid="uid://da8r7qdmwdesq" path="res://common/defs/HeroDef.gd" id="1_gk3nv"]
+
+[resource]
+script = ExtResource("1_gk3nv")
+id = "hero_rogue"
+base_stats = {
+"atk": 8,
+"def": 2,
+"hp": 50,
+"spd": 10
+}

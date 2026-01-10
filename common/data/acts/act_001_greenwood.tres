@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="ActDef" load_steps=2 format=3 uid="uid://b8eatp43gj6eu"]
+
+[ext_resource type="Script" uid="uid://dhv4sskpuxccf" path="res://common/defs/ActDef.gd" id="1_08ibi"]
+
+[resource]
+script = ExtResource("1_08ibi")
+id = "act_001_greenwood"
+display_name = "Act 1: Green Wood"

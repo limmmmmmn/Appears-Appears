@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemyDef" load_steps=2 format=3 uid="uid://bhm6ufwmpt8ln"]
+
+[ext_resource type="Script" uid="uid://cvflcfngojkr0" path="res://common/defs/EnemyDef.gd" id="1_gjkta"]
+
+[resource]
+script = ExtResource("1_gjkta")
+id = "enemy_mimic_elite"
+base_stats = {
+"atk": 5,
+"def": 0,
+"hp": 20,
+"spd": 8
+}

@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="TownDef" load_steps=2 format=3 uid="uid://dfjeb4j45naad"]
+
+[ext_resource type="Script" uid="uid://k1eod33c1pg2" path="res://common/defs/TownDef.gd" id="1_td4db"]
+
+[resource]
+script = ExtResource("1_td4db")
+id = "town_03_outpost"

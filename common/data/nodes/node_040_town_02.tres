@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="MapNodeDef" load_steps=2 format=3 uid="uid://b8d8wkny73yeh"]
+
+[ext_resource type="Script" uid="uid://xbw2dvdkei8t" path="res://common/defs/MapNodeDef.gd" id="1_fxxi7"]
+
+[resource]
+script = ExtResource("1_fxxi7")
+id = "node_040_town_02"

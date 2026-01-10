@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="StageDef" load_steps=2 format=3 uid="uid://brt5vujeveuf"]
+
+[ext_resource type="Script" uid="uid://c30rvr56rs6ie" path="res://common/defs/StageDef.gd" id="1_0gw0f"]
+
+[resource]
+script = ExtResource("1_0gw0f")
+id = "stage_boss_01_grove"
