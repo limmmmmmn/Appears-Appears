@@ -1,7 +1,0 @@
-[gd_resource type="Resource" script_class="MapNodeDef" load_steps=2 format=3 uid="uid://yfc1pg6dr6vr"]
-
-[ext_resource type="Script" uid="uid://xbw2dvdkei8t" path="res://common/defs/MapNodeDef.gd" id="1_8gbc4"]
-
-[resource]
-script = ExtResource("1_8gbc4")
-id = "node_010_field_01"

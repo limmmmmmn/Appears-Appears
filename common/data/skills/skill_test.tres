@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="SkillDef" load_steps=2 format=3 uid="uid://ddgdkksm5v4ee"]
+
+[ext_resource type="Script" uid="uid://bhnnyel5esnkn" path="res://common/defs/skill_def.gd" id="1_rc4ph"]
+
+[resource]
+script = ExtResource("1_rc4ph")
+id = "skill_test"
+metadata/_custom_type_script = "uid://bhnnyel5esnkn"

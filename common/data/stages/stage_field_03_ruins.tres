@@ -1,7 +1,0 @@
-[gd_resource type="Resource" script_class="StageDef" load_steps=2 format=3 uid="uid://cw1y8rsg8xbp7"]
-
-[ext_resource type="Script" uid="uid://c30rvr56rs6ie" path="res://common/defs/StageDef.gd" id="1_ctofp"]
-
-[resource]
-script = ExtResource("1_ctofp")
-id = "stage_field_03_ruins"

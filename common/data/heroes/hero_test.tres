@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="HeroDef" load_steps=2 format=3 uid="uid://bmvsx31i2ndv2"]
+
+[ext_resource type="Script" uid="uid://nppsqi2yahsm" path="res://common/defs/hero_def.gd" id="1_v2jtb"]
+
+[resource]
+script = ExtResource("1_v2jtb")
+id = "hero_test"
+display_name = "Test Hero"
+desc = "..."
+metadata/_custom_type_script = "uid://nppsqi2yahsm"

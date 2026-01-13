@@ -11,10 +11,18 @@ config_version=5
 [application]
 
 config/name="HyperQuest"
+run/main_scene="uid://bjt6kqs571um8"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
+Events="*res://common/systems/events.gd"
 DataRegistry="*res://common/systems/data_registry.gd"
-GameState="*res://common/systems/game_state.gd"
+SaveManager="*res://common/systems/save_manager.gd"
+InventoryManager="*res://common/systems/inventory_manager.gd"
+PartyManager="*res://common/systems/party_manager.gd"
+FieldStateManager="*res://common/systems/field_state_manager.gd"
+RunSystem="*res://common/systems/run_system.gd"
+UiRoot="*res://common/ui/ui_root.tscn"
+SoundManager="*res://common/systems/sound_manager.gd"
