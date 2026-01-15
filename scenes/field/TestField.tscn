@@ -1,0 +1,45 @@
+[gd_scene load_steps=8 format=3 uid="uid://b4gabb71r1teq"]
+
+[ext_resource type="Script" uid="uid://c58qahbrv28lh" path="res://scripts/field/TestField.gd" id="1_7y7m8"]
+[ext_resource type="PackedScene" uid="uid://dcfqb4trooqgu" path="res://scenes/player/Player.tscn" id="2_player"]
+[ext_resource type="Script" uid="uid://ufqmafwx0de4" path="res://scripts/field/TownExit.gd" id="3_exit"]
+[ext_resource type="Script" uid="uid://cppg8ns74jy0i" path="res://scripts/field/EnemySpawner.gd" id="5_spawner"]
+
+[sub_resource type="Gradient" id="Gradient_fjm37"]
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_rgg3u"]
+gradient = SubResource("Gradient_fjm37")
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_7y7m8"]
+size = Vector2(28, 29)
+
+[node name="TestField" type="Node2D"]
+script = ExtResource("1_7y7m8")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+offset_left = -1337.0
+offset_top = -889.0
+offset_right = 1377.0
+offset_bottom = 929.0
+color = Color(0.7019608, 0.8509804, 0.7019608, 1)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(336, -145)
+speed = null
+
+[node name="EnemySpawner" type="Node2D" parent="."]
+script = ExtResource("5_spawner")
+
+[node name="TownExit" type="Area2D" parent="."]
+position = Vector2(400, 0)
+script = ExtResource("3_exit")
+target_town = null
+
+[node name="Sprite2D" type="Sprite2D" parent="TownExit"]
+position = Vector2(-1, -1.0000019)
+scale = Vector2(0.453125, 0.4375)
+texture = SubResource("GradientTexture2D_rgg3u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="TownExit"]
+position = Vector2(-1, -0.5)
+shape = SubResource("RectangleShape2D_7y7m8")

@@ -1,0 +1,364 @@
+{
+  "synergies": {
+    "synergy_001": {
+      "id": "synergy_001",
+      "name": "상남자",
+      "name_en": "Bros",
+      "type": "inner",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "masculine",
+        "source": "inner",
+        "min_count": 2,
+        "max_count": null
+      },
+      
+      "effects": {
+        "type": "passive",
+        "stat_bonus": {
+          "attack": 1.3
+        },
+        "description": "공격력 +30%"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "남자의 우정! (여자? 몰라)",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_002": {
+      "id": "synergy_002",
+      "name": "연인",
+      "name_en": "Lovers",
+      "type": "relationship",
+      
+      "conditions": {
+        "type": "specific_heroes",
+        "hero_ids": ["hero_003", "hero_002"]
+      },
+      
+      "effects": {
+        "type": "passive",
+        "effect": "mutual_protect",
+        "description": "서로 HP 50% 이하 시 보호"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "사랑하는 사람을 지킨다",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_003": {
+      "id": "synergy_003",
+      "name": "사제",
+      "name_en": "Master and Student",
+      "type": "relationship",
+      
+      "conditions": {
+        "type": "specific_heroes",
+        "hero_ids": ["hero_004", "hero_005"]
+      },
+      
+      "effects": {
+        "type": "passive",
+        "effect": "skill_boost",
+        "target": "hero_005",
+        "stat_bonus": {
+          "attack": 1.3
+        },
+        "description": "제자(제인) 스킬 파워 +30%"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "스승의 가르침",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_004": {
+      "id": "synergy_004",
+      "name": "짐승의 유대",
+      "name_en": "Beast Bond",
+      "type": "special",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "beast",
+        "source": "item_tags",
+        "min_count": 1,
+        "max_count": null
+      },
+      
+      "effects": {
+        "type": "passive",
+        "stat_bonus": {
+          "luck": 1.5
+        },
+        "description": "행운 +50% (햄스터 효과!)"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "동물과의 교감",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_005": {
+      "id": "synergy_005",
+      "name": "균형 잡힌 파티",
+      "name_en": "Balanced Party",
+      "type": "job_combo",
+      
+      "conditions": {
+        "type": "diverse_classes",
+        "min_different_classes": 3
+      },
+      
+      "effects": {
+        "type": "passive",
+        "stat_bonus": {
+          "hp": 1.1,
+          "attack": 1.1,
+          "defense": 1.1
+        },
+        "description": "모든 스탯 +10%"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "다양성의 힘",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_006": {
+      "id": "synergy_006",
+      "name": "산의 전사들",
+      "name_en": "Mountain Warriors",
+      "type": "origin",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "mountain",
+        "source": "origin",
+        "min_count": 2,
+        "max_count": null
+      },
+      
+      "effects": {
+        "type": "passive",
+        "stat_bonus": {
+          "hp": 1.2,
+          "defense": 1.2
+        },
+        "description": "HP, 방어력 +20%"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "산악인의 끈기",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_007": {
+      "id": "synergy_007",
+      "name": "열혈 조합",
+      "name_en": "Hot Blooded Duo",
+      "type": "personality",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "hot_blooded",
+        "source": "personality",
+        "min_count": 2,
+        "max_count": null
+      },
+      
+      "effects": {
+        "type": "passive",
+        "stat_bonus": {
+          "attack_speed": 1.25
+        },
+        "description": "공격 속도 +25%"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "뜨거운 열정!",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_008": {
+      "id": "synergy_008",
+      "name": "검술의 대가들",
+      "name_en": "Sword Masters",
+      "type": "job_combo",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "sword",
+        "source": "weapon_type",
+        "min_count": 3,
+        "max_count": null
+      },
+      
+      "effects": {
+        "type": "passive",
+        "stat_bonus": {
+          "attack": 1.4
+        },
+        "description": "공격력 +40%"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "검의 도",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_009": {
+      "id": "synergy_009",
+      "name": "행운아들",
+      "name_en": "Lucky Ones",
+      "type": "stat_based",
+      
+      "conditions": {
+        "type": "stat_threshold",
+        "stat": "luck",
+        "threshold": 30,
+        "calculation": "party_total"
+      },
+      
+      "effects": {
+        "type": "passive",
+        "effect": "item_drop_boost",
+        "value": 1.5,
+        "description": "아이템 드랍률 +50%"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "행운이 함께한다",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_010": {
+      "id": "synergy_010",
+      "name": "도시 출신들",
+      "name_en": "City Folks",
+      "type": "origin",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "city",
+        "source": "origin",
+        "min_count": 2,
+        "max_count": null
+      },
+      
+      "effects": {
+        "type": "passive",
+        "effect": "shop_discount",
+        "value": 0.9,
+        "description": "상점 가격 10% 할인"
+      },
+      
+      "visual": {
+        "sprite_path": null,
+        "description": "도시 생활의 지혜",
+        "sound": null
+      },
+      
+      "enabled": true
+    },
+    
+    "synergy_011": {
+      "id": "synergy_011",
+      "name": "대머리 삼형제",
+      "name_en": "Bald Brothers",
+      "type": "appearance",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "bald",
+        "source": "appearance",
+        "min_count": 3,
+        "max_count": 3
+      },
+      
+      "effects": {
+        "type": "active_skill",
+        "skill_id": "sun_fist",
+        "cooldown": 30.0,
+        "description": "태양권! 강력한 전체 광역 공격"
+      },
+      
+      "visual": {
+        "sprite_path": "res://assets/synergies/sun_fist.png",
+        "description": "빛나는 세 개의 머리가 태양처럼!",
+        "sound": "res://assets/sounds/sun_fist.ogg"
+      },
+      
+      "enabled": false
+    },
+    
+    "synergy_012": {
+      "id": "synergy_012",
+      "name": "전설의 참치 어택",
+      "name_en": "Legendary Tuna Attack",
+      "type": "job_combo",
+      
+      "conditions": {
+        "type": "tag_count",
+        "tag": "fisher",
+        "source": "special",
+        "min_count": 3,
+        "max_count": null
+      },
+      
+      "effects": {
+        "type": "active_skill",
+        "skill_id": "tuna_attack",
+        "cooldown": 60.0,
+        "description": "모든 전투창의 적에게 데미지"
+      },
+      
+      "visual": {
+        "sprite_path": "res://assets/synergies/tuna.png",
+        "description": "거대 참치가 모든 전투를 휩쓴다!",
+        "sound": "res://assets/sounds/tuna.ogg"
+      },
+      
+      "enabled": false
+    }
+  }
+}

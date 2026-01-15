@@ -1,0 +1,37 @@
+[gd_scene load_steps=2 format=3 uid="uid://booaunsnk0kfx"]
+
+[ext_resource type="Script" uid="uid://dne8mkxl3ygjf" path="res://scripts/ui/HUD.gd" id="1_kw0id"]
+
+[node name="Hud" type="CanvasLayer"]
+layer = 50
+script = ExtResource("1_kw0id")
+
+[node name="TopBar" type="HBoxContainer" parent="."]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="LevelLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+
+[node name="ExpBar" type="ProgressBar" parent="TopBar"]
+layout_mode = 2
+
+[node name="GoldLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+
+[node name="KillLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+
+[node name="StageLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+
+[node name="TimerLabel" type="Label" parent="TopBar"]
+layout_mode = 2
+
+[node name="PartyHP" type="VBoxContainer" parent="."]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="SynergyPanel" type="VBoxContainer" parent="."]
+offset_right = 40.0
+offset_bottom = 40.0

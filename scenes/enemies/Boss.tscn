@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3 uid="uid://dmb2px7xesl0w"]
+
+[ext_resource type="Script" uid="uid://dxpyrfi5ye0km" path="res://scripts/enemies/Boss.gd" id="1_mj437"]
+[ext_resource type="Texture2D" uid="uid://b6bbtje5ogjr1" path="res://assets/enemies/aqua_slime.png" id="2_jlhw3"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_k7o7a"]
+radius = 57.070133
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_8axbs"]
+radius = 9.064327
+
+[node name="Boss" type="CharacterBody2D" groups=["enemies"]]
+script = ExtResource("1_mj437")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(6.76, 6.76)
+texture = ExtResource("2_jlhw3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_k7o7a")
+
+[node name="Hitbox" type="Area2D" parent="."]
+scale = Vector2(6.84, 6.84)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+shape = SubResource("CircleShape2D_8axbs")
+
+[connection signal="body_entered" from="Hitbox" to="." method="_on_hitbox_body_entered"]

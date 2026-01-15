@@ -1,0 +1,417 @@
+{
+  "items": {
+    "item_001": {
+      "id": "item_001",
+      "name": "기본 활",
+      "name_en": "Basic Bow",
+      "type": "weapon",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/bow_basic.png",
+      "slot": "main_hand",
+      "class_restriction": ["ranger"],
+      "stats": {
+        "attack": 15,
+        "attack_speed": 0.1
+      },
+      "tags": [],
+      "description": "평범한 활",
+      "shop_price": 100,
+      "sell_price": 25,
+      "enabled": true
+    },
+    
+    "item_002": {
+      "id": "item_002",
+      "name": "미니어쳐 자이언트 스페이스 햄스터",
+      "name_en": "Miniature Giant Space Hamster",
+      "type": "accessory",
+      "rarity": "unique",
+      "sprite_path": "res://assets/items/hamster.png",
+      "slot": "accessory",
+      "class_restriction": [],
+      "stats": {
+        "defense": 5,
+        "luck": 10
+      },
+      "tags": ["beast", "cute"],
+      "description": "고르의 충실한 동료. 부부(Boo).",
+      "shop_price": 0,
+      "sell_price": 0,
+      "enabled": true
+    },
+    
+    "item_003": {
+      "id": "item_003",
+      "name": "사제의 지팡이",
+      "name_en": "Priest Staff",
+      "type": "weapon",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/staff_priest.png",
+      "slot": "main_hand",
+      "class_restriction": ["priest"],
+      "stats": {
+        "attack": 8,
+        "magic_speed": 0.2
+      },
+      "tags": [],
+      "description": "치유에 특화된 지팡이",
+      "shop_price": 120,
+      "sell_price": 30,
+      "enabled": true
+    },
+    
+    "item_004": {
+      "id": "item_004",
+      "name": "전사의 대검",
+      "name_en": "Warrior Greatsword",
+      "type": "weapon",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/sword_great.png",
+      "slot": "main_hand",
+      "class_restriction": ["warrior"],
+      "stats": {
+        "attack": 30,
+        "attack_speed": -0.1
+      },
+      "tags": [],
+      "description": "무겁지만 강력한 대검",
+      "shop_price": 150,
+      "sell_price": 37,
+      "enabled": true
+    },
+    
+    "item_005": {
+      "id": "item_005",
+      "name": "가죽 모자",
+      "name_en": "Leather Cap",
+      "type": "helmet",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/cap_leather.png",
+      "slot": "helmet",
+      "class_restriction": [],
+      "stats": {
+        "defense": 3,
+        "hp": 10
+      },
+      "tags": [],
+      "description": "기본적인 모자",
+      "shop_price": 50,
+      "sell_price": 12,
+      "enabled": true
+    },
+    
+    "item_006": {
+      "id": "item_006",
+      "name": "가죽 갑옷",
+      "name_en": "Leather Armor",
+      "type": "armor",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/armor_leather.png",
+      "slot": "armor",
+      "class_restriction": [],
+      "stats": {
+        "defense": 8,
+        "hp": 20
+      },
+      "tags": [],
+      "description": "기본적인 갑옷",
+      "shop_price": 100,
+      "sell_price": 25,
+      "enabled": true
+    },
+    
+    "item_007": {
+      "id": "item_007",
+      "name": "사제의 로브",
+      "name_en": "Priest Robe",
+      "type": "armor",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/robe_priest.png",
+      "slot": "armor",
+      "class_restriction": ["priest"],
+      "stats": {
+        "defense": 5,
+        "hp": 15,
+        "magic_speed": 0.1
+      },
+      "tags": [],
+      "description": "신성한 로브",
+      "shop_price": 110,
+      "sell_price": 27,
+      "enabled": true
+    },
+    
+    "item_008": {
+      "id": "item_008",
+      "name": "철 투구",
+      "name_en": "Iron Helmet",
+      "type": "helmet",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/helmet_iron.png",
+      "slot": "helmet",
+      "class_restriction": ["warrior", "knight"],
+      "stats": {
+        "defense": 8,
+        "hp": 25
+      },
+      "tags": [],
+      "description": "튼튼한 투구",
+      "shop_price": 80,
+      "sell_price": 20,
+      "enabled": true
+    },
+    
+    "item_009": {
+      "id": "item_009",
+      "name": "전사의 갑옷",
+      "name_en": "Warrior Armor",
+      "type": "armor",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/armor_warrior.png",
+      "slot": "armor",
+      "class_restriction": ["warrior"],
+      "stats": {
+        "defense": 15,
+        "hp": 40,
+        "attack_speed": -0.05
+      },
+      "tags": [],
+      "description": "두꺼운 판금 갑옷",
+      "shop_price": 150,
+      "sell_price": 37,
+      "enabled": true
+    },
+    
+    "item_010": {
+      "id": "item_010",
+      "name": "명검 '바람결'",
+      "name_en": "Famous Sword 'Windcutter'",
+      "type": "weapon",
+      "rarity": "magic",
+      "sprite_path": "res://assets/items/sword_wind.png",
+      "slot": "main_hand",
+      "class_restriction": ["swordmaster", "swordfighter"],
+      "stats": {
+        "attack": 35,
+        "attack_speed": 0.3,
+        "luck": 5
+      },
+      "tags": [],
+      "description": "바람처럼 빠른 검",
+      "shop_price": 500,
+      "sell_price": 125,
+      "enabled": true
+    },
+    
+    "item_011": {
+      "id": "item_011",
+      "name": "검사의 도복",
+      "name_en": "Swordmaster Gi",
+      "type": "armor",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/gi_sword.png",
+      "slot": "armor",
+      "class_restriction": ["swordmaster"],
+      "stats": {
+        "defense": 10,
+        "hp": 30,
+        "attack_speed": 0.1
+      },
+      "tags": [],
+      "description": "검사의 전통 도복",
+      "shop_price": 120,
+      "sell_price": 30,
+      "enabled": true
+    },
+    
+    "item_012": {
+      "id": "item_012",
+      "name": "신참의 검",
+      "name_en": "Novice Sword",
+      "type": "weapon",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/sword_novice.png",
+      "slot": "main_hand",
+      "class_restriction": ["swordfighter"],
+      "stats": {
+        "attack": 20,
+        "attack_speed": 0.15
+      },
+      "tags": [],
+      "description": "제인의 애검",
+      "shop_price": 100,
+      "sell_price": 25,
+      "enabled": true
+    },
+    
+    "item_013": {
+      "id": "item_013",
+      "name": "가벼운 갑옷",
+      "name_en": "Light Armor",
+      "type": "armor",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/armor_light.png",
+      "slot": "armor",
+      "class_restriction": [],
+      "stats": {
+        "defense": 6,
+        "hp": 15,
+        "attack_speed": 0.05
+      },
+      "tags": [],
+      "description": "가볍고 민첩한 갑옷",
+      "shop_price": 90,
+      "sell_price": 22,
+      "enabled": true
+    },
+    
+    "item_014": {
+      "id": "item_014",
+      "name": "행운의 목걸이",
+      "name_en": "Lucky Necklace",
+      "type": "accessory",
+      "rarity": "magic",
+      "sprite_path": "res://assets/items/necklace_luck.png",
+      "slot": "accessory",
+      "class_restriction": [],
+      "stats": {
+        "luck": 15
+      },
+      "tags": ["lucky"],
+      "description": "행운을 부르는 목걸이",
+      "shop_price": 300,
+      "sell_price": 75,
+      "enabled": true
+    },
+    
+    "item_015": {
+      "id": "item_015",
+      "name": "힘의 반지",
+      "name_en": "Ring of Strength",
+      "type": "accessory",
+      "rarity": "magic",
+      "sprite_path": "res://assets/items/ring_strength.png",
+      "slot": "accessory",
+      "class_restriction": [],
+      "stats": {
+        "attack": 10,
+        "hp": 20
+      },
+      "tags": [],
+      "description": "착용자의 힘을 증폭시킨다",
+      "shop_price": 400,
+      "sell_price": 100,
+      "enabled": true
+    },
+    
+    "item_016": {
+      "id": "item_016",
+      "name": "신속의 장화",
+      "name_en": "Boots of Speed",
+      "type": "accessory",
+      "rarity": "magic",
+      "sprite_path": "res://assets/items/boots_speed.png",
+      "slot": "accessory",
+      "class_restriction": [],
+      "stats": {
+        "attack_speed": 0.25,
+        "magic_speed": 0.25
+      },
+      "tags": [],
+      "description": "빠르게 움직이게 해준다",
+      "shop_price": 450,
+      "sell_price": 112,
+      "enabled": true
+    },
+    
+    "item_017": {
+      "id": "item_017",
+      "name": "HP 포션",
+      "name_en": "HP Potion",
+      "type": "consumable",
+      "rarity": "common",
+      "sprite_path": "res://assets/items/potion_hp.png",
+      "slot": "consumable",
+      "class_restriction": [],
+      "stats": {},
+      "effect": {
+        "type": "heal",
+        "amount": 50
+      },
+      "tags": [],
+      "description": "HP를 50 회복한다",
+      "shop_price": 50,
+      "sell_price": 10,
+      "enabled": true
+    },
+    
+    "item_018": {
+      "id": "item_018",
+      "name": "강화 주문서",
+      "name_en": "Enchant Scroll",
+      "type": "consumable",
+      "rarity": "magic",
+      "sprite_path": "res://assets/items/scroll_enchant.png",
+      "slot": "consumable",
+      "class_restriction": [],
+      "stats": {},
+      "effect": {
+        "type": "enchant",
+        "stat": "attack",
+        "amount": 5
+      },
+      "tags": [],
+      "description": "무기의 공격력을 영구히 5 증가",
+      "shop_price": 200,
+      "sell_price": 50,
+      "enabled": true
+    },
+    
+    "item_019": {
+      "id": "item_019",
+      "name": "전설의 검 '용의 이빨'",
+      "name_en": "Legendary Sword 'Dragon Fang'",
+      "type": "weapon",
+      "rarity": "unique",
+      "sprite_path": "res://assets/items/sword_dragon.png",
+      "slot": "main_hand",
+      "class_restriction": [],
+      "stats": {
+        "attack": 50,
+        "attack_speed": 0.2,
+        "luck": 10,
+        "hp": 50
+      },
+      "tags": ["legendary", "dragon"],
+      "description": "용의 이빨로 만든 전설의 검",
+      "shop_price": 0,
+      "sell_price": 1000,
+      "enabled": true
+    },
+    
+    "item_020": {
+      "id": "item_020",
+      "name": "불사조의 깃털",
+      "name_en": "Phoenix Feather",
+      "type": "accessory",
+      "rarity": "unique",
+      "sprite_path": "res://assets/items/feather_phoenix.png",
+      "slot": "accessory",
+      "class_restriction": [],
+      "stats": {
+        "hp": 100,
+        "defense": 10
+      },
+      "effect": {
+        "type": "auto_revive",
+        "hp_percent": 0.5,
+        "charges": 1
+      },
+      "tags": ["legendary", "phoenix"],
+      "description": "사망 시 HP 50%로 자동 부활 (1회)",
+      "shop_price": 0,
+      "sell_price": 2000,
+      "enabled": true
+    }
+  }
+}

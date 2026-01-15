@@ -1,0 +1,26 @@
+[gd_scene load_steps=2 format=3 uid="uid://bml330vlt24xy"]
+
+[ext_resource type="Script" uid="uid://dus7a1gsry58c" path="res://scripts/ui/GameOverUI.gd" id="1_m61qa"]
+
+[node name="GameOverUi" type="Panel"]
+script = ExtResource("1_m61qa")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "GAME OVER"
+
+[node name="Stats" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="RestartButto" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "다시 시"
+
+[node name="QuitButton" type="Button" parent="VBoxContainer"]
+layout_mode = 2
+text = "종료"

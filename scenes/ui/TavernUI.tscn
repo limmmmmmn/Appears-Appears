@@ -1,0 +1,38 @@
+[gd_scene load_steps=2 format=3 uid="uid://dw04s1m0n8wan"]
+
+[ext_resource type="Script" uid="uid://bimamdmkafys5" path="res://scripts/ui/TavernUI.gd" id="1_qb4b5"]
+
+[node name="TavernUi" type="Panel"]
+custom_minimum_size = Vector2(500, 350)
+script = ExtResource("1_qb4b5")
+
+[node name="HBoxContainer" type="HSplitContainer" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="AvailablePanel" type="Panel" parent="HBoxContainer"]
+layout_mode = 2
+
+[node name="AvailableList" type="VBoxContainer" parent="HBoxContainer/AvailablePanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="PartyPanel" type="Panel" parent="HBoxContainer"]
+layout_mode = 2
+
+[node name="PartyList" type="VBoxContainer" parent="HBoxContainer/PartyPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="GoldLabel" type="Label" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+
+[node name="CloseButton" type="Button" parent="."]
+layout_mode = 0
+offset_right = 8.0
+offset_bottom = 8.0
