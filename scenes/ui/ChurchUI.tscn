@@ -1,6 +1,9 @@
-[gd_scene format=3 uid="uid://x2u85dakgn5g"]
+[gd_scene load_steps=2 format=3 uid="uid://x2u85dakgn5g"]
 
-[node name="ChurchUi" type="Panel"]
+[ext_resource type="Script" uid="uid://ccp1252u20fdp" path="res://scripts/ui/ChurchUI.gd" id="1_dsla2"]
+
+[node name="ChurchUI" type="Panel"]
+script = ExtResource("1_dsla2")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
 layout_mode = 0

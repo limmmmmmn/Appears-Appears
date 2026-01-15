@@ -4,13 +4,26 @@ extends Panel
 
 signal closed
 
-@onready var available_list = $HSplitContainer/AvailablePanel/AvailableList
-@onready var party_list = $HSplitContainer/PartyPanel/PartyList
-@onready var gold_label = $GoldLabel
-@onready var close_button = $CloseButton
+# UI 참조 - 노드 이름만으로 찾기
+var available_list: VBoxContainer
+var party_list: VBoxContainer
+var gold_label: Label
+var close_button: Button
 
 func _ready():
 	print("[TavernUI] Created")
+	
+	# 노드 찾기 (이름으로 검색)
+	available_list = find_child("AvailableList", true, false)
+	party_list = find_child("PartyList", true, false)
+	gold_label = find_child("GoldLabel", true, false)
+	close_button = find_child("CloseButton", true, false)
+	
+	# 디버그
+	print("  available_list: ", available_list)
+	print("  party_list: ", party_list)
+	print("  gold_label: ", gold_label)
+	print("  close_button: ", close_button)
 	
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
@@ -31,6 +44,11 @@ func update_gold_display():
 # ========================================
 
 func refresh_available_heroes():
+	if not available_list:
+		print("[TavernUI] ERROR: available_list is null!")
+		return
+	
+	# 기존 자식 제거
 	for child in available_list.get_children():
 		child.queue_free()
 	
@@ -49,8 +67,11 @@ func refresh_available_heroes():
 		
 		# 영입 버튼
 		var button = Button.new()
-		var cost = hero.recruitment.get("cost", 100)
-		button.text = "%s (%s)\n💰 %d Gold" % [hero.name, hero.class, cost]
+		var cost = 100
+		if hero.has("recruitment") and hero.recruitment.has("cost"):
+			cost = hero.recruitment.cost
+		
+		button.text = "%s (%s)\n💰 %d Gold" % [hero.name, hero.get("class", "?"), cost]
 		button.custom_minimum_size = Vector2(180, 50)
 		
 		# 골드 부족하면 비활성화
@@ -66,6 +87,11 @@ func refresh_available_heroes():
 # ========================================
 
 func refresh_party():
+	if not party_list:
+		print("[TavernUI] ERROR: party_list is null!")
+		return
+	
+	# 기존 자식 제거
 	for child in party_list.get_children():
 		child.queue_free()
 	
@@ -80,7 +106,7 @@ func refresh_party():
 		
 		# 영웅 정보
 		var info_label = Label.new()
-		info_label.text = "%s Lv.%d" % [hero.name, hero.level]
+		info_label.text = "%s Lv.%d" % [hero.name, hero.get("level", 1)]
 		info_label.custom_minimum_size = Vector2(120, 30)
 		hbox.add_child(info_label)
 		
@@ -98,7 +124,9 @@ func refresh_party():
 # ========================================
 
 func _on_recruit_pressed(hero: Dictionary):
-	var cost = hero.recruitment.get("cost", 100)
+	var cost = 100
+	if hero.has("recruitment") and hero.recruitment.has("cost"):
+		cost = hero.recruitment.cost
 	
 	if GameManager.gold < cost:
 		print("[Tavern] Not enough gold!")
@@ -134,7 +162,9 @@ func _on_fire_pressed(hero: Dictionary):
 	GameManager.party.erase(hero)
 	
 	# 환불 (절반)
-	var refund = hero.recruitment.get("cost", 100) / 2
+	var refund = 50
+	if hero.has("recruitment") and hero.recruitment.has("cost"):
+		refund = hero.recruitment.cost / 2
 	GameManager.add_gold(refund)
 	
 	print("[Tavern] Fired %s (+%d gold refund)" % [hero.name, refund])

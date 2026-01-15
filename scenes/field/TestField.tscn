@@ -25,10 +25,12 @@ color = Color(0.7019608, 0.8509804, 0.7019608, 1)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(336, -145)
-speed = null
 
 [node name="EnemySpawner" type="Node2D" parent="."]
+position = Vector2(2, -2)
 script = ExtResource("5_spawner")
+spawn_interval = 0.5
+max_enemies = 100
 
 [node name="TownExit" type="Area2D" parent="."]
 position = Vector2(400, 0)

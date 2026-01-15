@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bu25nqetddjt5" path="res://scripts/ui/ShopUI.gd" id="1_ivylx"]
 
-[node name="ShopUi" type="Panel"]
+[node name="ShopUI" type="Panel"]
 custom_minimum_size = Vector2(500, 350)
 script = ExtResource("1_ivylx")
 

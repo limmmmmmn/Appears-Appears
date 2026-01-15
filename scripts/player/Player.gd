@@ -17,11 +17,9 @@ func _ready():
 	setup_party_members()
 
 func _process(delta):
-	# UI 단축키
 	handle_ui_input()
 
 func _physics_process(delta):
-	# UI 열려있으면 이동 불가
 	if ui_open:
 		return
 	
@@ -35,19 +33,29 @@ func _physics_process(delta):
 	update_party_positions()
 
 func handle_ui_input():
-	# I 키: 인벤토리
-	if Input.is_action_just_pressed("inventory"):
-		open_inventory()
+	# ⭐ I 키: 인벤토리 (직접 키코드 체크)
+	if Input.is_key_pressed(KEY_I) and not ui_open:
+		# 한 번만 실행되도록
+		if not Input.is_action_just_pressed("ui_accept"):  # 더미 체크
+			open_inventory()
+			await get_tree().create_timer(0.3).timeout  # 중복 방지
 	
 	# ESC: UI 닫기
-	if Input.is_action_just_pressed("ui_cancel"):
+	if Input.is_action_pressed("ui_cancel"):
 		close_all_ui()
+
+func _input(event):
+	# ⭐ I 키 눌림 감지
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_I and not ui_open:
+			open_inventory()
 
 func open_inventory():
 	if ui_open:
 		return
 	
 	ui_open = true
+	print("[Player] Opening inventory")
 	
 	var inventory_ui = preload("res://scenes/ui/InventoryUI.tscn").instantiate()
 	
@@ -57,7 +65,6 @@ func open_inventory():
 	canvas.add_child(inventory_ui)
 	get_tree().root.add_child(canvas)
 	
-	# 중앙 배치
 	await get_tree().process_frame
 	var viewport_size = get_viewport().get_visible_rect().size
 	inventory_ui.position = Vector2(

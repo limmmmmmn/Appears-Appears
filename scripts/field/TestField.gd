@@ -33,7 +33,13 @@ func setup_spawner():
 	
 	enemy_spawner.spawn_interval = 3.0
 	enemy_spawner.max_enemies = 15
-	enemy_spawner.enemy_pool = ["enemy_001", "enemy_002", "enemy_003"]
+	
+	# ⭐ 수정: clear 후 append 방식으로 변경
+	enemy_spawner.enemy_pool.clear()
+	enemy_spawner.enemy_pool.append("enemy_001")
+	enemy_spawner.enemy_pool.append("enemy_002")
+	enemy_spawner.enemy_pool.append("enemy_003")
+	
 	enemy_spawner.start_spawning()
 	
 	print("[Field] Spawner ready")
@@ -176,15 +182,12 @@ func show_game_over_screen():
 	gameover_ui.show_game_over()
 
 # ========================================
-# 세이브 (ESC 메뉴에서)
+# 세이브 (P 키)
 # ========================================
 
 func _input(event):
-	# P 키: 일시정지 & 세이브
-	if event.is_action_pressed("pause"):
-		show_pause_menu()
-
-func show_pause_menu():
-	# TODO: 일시정지 메뉴 구현
-	print("[Field] Pause menu (press P again to save)")
-	SaveManager.save_game()
+	# ⭐ 직접 키코드 체크 (Input Map 필요 없음)
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_P:
+			print("[Field] Saving game...")
+			SaveManager.save_game()

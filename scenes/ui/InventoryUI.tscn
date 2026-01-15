@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://wldd6b0fm81" path="res://scripts/ui/InventoryUI.gd" id="1_p0ay3"]
 
-[node name="InventoryUi" type="Panel"]
+[node name="InventoryUI" type="Panel"]
 custom_minimum_size = Vector2(600, 400)
 script = ExtResource("1_p0ay3")
 
@@ -35,7 +35,7 @@ layout_mode = 0
 offset_right = 40.0
 offset_bottom = 23.0
 
-[node name="Button" type="Button" parent="."]
+[node name="CloseButton" type="Button" parent="."]
 layout_mode = 0
 offset_right = 8.0
 offset_bottom = 8.0

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://grsuv652good" path="res://scripts/ui/ItemChoiceUI.gd" id="1_kduac"]
 
-[node name="ItemChoiceUi" type="Panel"]
+[node name="ItemChoiceUI" type="Panel"]
 custom_minimum_size = Vector2(400, 300)
 script = ExtResource("1_kduac")
 
