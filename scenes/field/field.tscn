@@ -1,0 +1,22 @@
+[gd_scene load_steps=5 format=3 uid="uid://field001"]
+
+[ext_resource type="PackedScene" uid="uid://player001" path="res://scenes/player/player.tscn" id="1_player"]
+[ext_resource type="Script" path="res://scripts/enemy_spawner.gd" id="2_spawner"]
+[ext_resource type="Script" path="res://scripts/battle_manager.gd" id="3_battle"]
+[ext_resource type="Script" path="res://scripts/party_manager.gd" id="4_party"]
+
+[node name="Field" type="Node2D"]
+
+[node name="TileMap" type="TileMapLayer" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+position = Vector2(240, 135)
+
+[node name="PartyManager" type="Node2D" parent="."]
+script = ExtResource("4_party")
+
+[node name="EnemySpawner" type="Node2D" parent="."]
+script = ExtResource("2_spawner")
+
+[node name="BattleManager" type="CanvasLayer" parent="."]
+script = ExtResource("3_battle")

@@ -1,416 +1,50 @@
 {
   "skills": {
-    "slash": {
-      "name": "Slash",
-      "name_kr": "베기",
-      "type": "physical",
+    "skill_slash": {
+      "id": "skill_slash",
+      "name": "베기",
+      "description": "날카로운 일격을 가한다",
+      "type": "attack",
       "target": "single_enemy",
-      "description": "기본 검 공격",
-      "mp_cost": 0,
-      "power": 100,
-      "accuracy": 95,
-      "critical_bonus": 0,
-      "effect": null,
-      "classes": ["warrior", "tank", "rogue"],
-      "level_required": 1
+      "effects": [
+        {
+          "type": "damage",
+          "base_value": 15,
+          "stat_scaling": {
+            "stat": "attack",
+            "ratio": 0
+          }
+        }
+      ],
+      "visuals": {
+        "animation": "",
+        "sound": "",
+        "color": "ffffff"
+      },
+      "tags": ["physical", "melee"]
     },
-    "power_strike": {
-      "name": "Power Strike",
-      "name_kr": "강타",
-      "type": "physical",
+    "skill_strike": {
+      "id": "skill_strike",
+      "name": "타격",
+      "description": "단단하게 내리친다",
+      "type": "attack",
       "target": "single_enemy",
-      "description": "강력한 일격",
-      "mp_cost": 5,
-      "power": 150,
-      "accuracy": 90,
-      "critical_bonus": 5,
-      "effect": null,
-      "classes": ["warrior"],
-      "level_required": 3
-    },
-    "war_cry": {
-      "name": "War Cry",
-      "name_kr": "함성",
-      "type": "buff",
-      "target": "all_ally",
-      "description": "파티 전체의 공격력 증가",
-      "mp_cost": 8,
-      "effect": {
-        "type": "buff",
-        "stat": "attack",
-        "value": 20,
-        "duration": 3
+      "effects": [
+        {
+          "type": "damage",
+          "base_value": 10,
+          "stat_scaling": {
+            "stat": "attack",
+            "ratio": 0
+          }
+        }
+      ],
+      "visuals": {
+        "animation": "",
+        "sound": "",
+        "color": "ffffff"
       },
-      "classes": ["warrior"],
-      "level_required": 5
-    },
-    
-    "fire": {
-      "name": "Fire",
-      "name_kr": "파이어",
-      "type": "magic",
-      "element": "fire",
-      "target": "single_enemy",
-      "description": "화염 마법",
-      "mp_cost": 6,
-      "power": 120,
-      "accuracy": 100,
-      "critical_bonus": 0,
-      "effect": null,
-      "classes": ["mage"],
-      "level_required": 1
-    },
-    "fira": {
-      "name": "Fira",
-      "name_kr": "파이라",
-      "type": "magic",
-      "element": "fire",
-      "target": "all_enemy",
-      "description": "강력한 화염 마법",
-      "mp_cost": 15,
-      "power": 100,
-      "accuracy": 100,
-      "critical_bonus": 0,
-      "effect": null,
-      "classes": ["mage"],
-      "level_required": 8
-    },
-    "thunder": {
-      "name": "Thunder",
-      "name_kr": "선더",
-      "type": "magic",
-      "element": "lightning",
-      "target": "single_enemy",
-      "description": "번개 마법",
-      "mp_cost": 8,
-      "power": 130,
-      "accuracy": 95,
-      "critical_bonus": 10,
-      "effect": null,
-      "classes": ["mage"],
-      "level_required": 3
-    },
-    "blizzard": {
-      "name": "Blizzard",
-      "name_kr": "블리자드",
-      "type": "magic",
-      "element": "ice",
-      "target": "single_enemy",
-      "description": "냉기 마법",
-      "mp_cost": 7,
-      "power": 115,
-      "accuracy": 100,
-      "critical_bonus": 0,
-      "effect": {
-        "type": "debuff",
-        "stat": "speed",
-        "value": -20,
-        "duration": 2,
-        "chance": 30
-      },
-      "classes": ["mage"],
-      "level_required": 4
-    },
-    
-    "heal": {
-      "name": "Heal",
-      "name_kr": "힐",
-      "type": "healing",
-      "target": "single_ally",
-      "description": "HP 회복",
-      "mp_cost": 5,
-      "power": 50,
-      "effect": {
-        "type": "heal_hp",
-        "base": 30,
-        "magic_scale": 1.5
-      },
-      "classes": ["healer"],
-      "level_required": 1
-    },
-    "cura": {
-      "name": "Cura",
-      "name_kr": "케알라",
-      "type": "healing",
-      "target": "all_ally",
-      "description": "전체 HP 회복",
-      "mp_cost": 15,
-      "power": 40,
-      "effect": {
-        "type": "heal_hp",
-        "base": 20,
-        "magic_scale": 1.2
-      },
-      "classes": ["healer"],
-      "level_required": 6
-    },
-    "protect": {
-      "name": "Protect",
-      "name_kr": "프로텍트",
-      "type": "buff",
-      "target": "single_ally",
-      "description": "물리 방어력 증가",
-      "mp_cost": 6,
-      "effect": {
-        "type": "buff",
-        "stat": "defense",
-        "value": 30,
-        "duration": 4
-      },
-      "classes": ["healer"],
-      "level_required": 3
-    },
-    "shell": {
-      "name": "Shell",
-      "name_kr": "쉘",
-      "type": "buff",
-      "target": "single_ally",
-      "description": "마법 방어력 증가",
-      "mp_cost": 6,
-      "effect": {
-        "type": "buff",
-        "stat": "magic_defense",
-        "value": 30,
-        "duration": 4
-      },
-      "classes": ["healer"],
-      "level_required": 4
-    },
-    
-    "steal": {
-      "name": "Steal",
-      "name_kr": "훔치기",
-      "type": "special",
-      "target": "single_enemy",
-      "description": "적에게서 아이템 훔치기",
-      "mp_cost": 3,
-      "effect": {
-        "type": "steal",
-        "success_rate": 50
-      },
-      "classes": ["rogue"],
-      "level_required": 1
-    },
-    "backstab": {
-      "name": "Backstab",
-      "name_kr": "백스탭",
-      "type": "physical",
-      "target": "single_enemy",
-      "description": "높은 크리티컬 확률의 공격",
-      "mp_cost": 6,
-      "power": 120,
-      "accuracy": 90,
-      "critical_bonus": 30,
-      "effect": null,
-      "classes": ["rogue"],
-      "level_required": 4
-    },
-    "poison_dagger": {
-      "name": "Poison Dagger",
-      "name_kr": "독단검",
-      "type": "physical",
-      "target": "single_enemy",
-      "description": "독을 부여하는 공격",
-      "mp_cost": 8,
-      "power": 100,
-      "accuracy": 95,
-      "critical_bonus": 5,
-      "effect": {
-        "type": "status",
-        "status": "poison",
-        "duration": 3,
-        "chance": 60
-      },
-      "classes": ["rogue"],
-      "level_required": 6
-    },
-    "smoke_bomb": {
-      "name": "Smoke Bomb",
-      "name_kr": "연막탄",
-      "type": "debuff",
-      "target": "all_enemy",
-      "description": "적 전체의 명중률 감소",
-      "mp_cost": 10,
-      "effect": {
-        "type": "debuff",
-        "stat": "accuracy",
-        "value": -30,
-        "duration": 2
-      },
-      "classes": ["rogue"],
-      "level_required": 8
-    },
-    
-    "shield_bash": {
-      "name": "Shield Bash",
-      "name_kr": "방패 강타",
-      "type": "physical",
-      "target": "single_enemy",
-      "description": "방패로 공격",
-      "mp_cost": 4,
-      "power": 80,
-      "accuracy": 100,
-      "critical_bonus": 0,
-      "effect": {
-        "type": "status",
-        "status": "stun",
-        "duration": 1,
-        "chance": 25
-      },
-      "classes": ["tank"],
-      "level_required": 2
-    },
-    "provoke": {
-      "name": "Provoke",
-      "name_kr": "도발",
-      "type": "special",
-      "target": "single_enemy",
-      "description": "적의 공격을 자신에게 집중",
-      "mp_cost": 5,
-      "effect": {
-        "type": "taunt",
-        "duration": 2
-      },
-      "classes": ["tank"],
-      "level_required": 3
-    },
-    "guard": {
-      "name": "Guard",
-      "name_kr": "방어",
-      "type": "buff",
-      "target": "self",
-      "description": "받는 데미지 50% 감소",
-      "mp_cost": 3,
-      "effect": {
-        "type": "guard",
-        "damage_reduction": 50,
-        "duration": 1
-      },
-      "classes": ["tank", "warrior"],
-      "level_required": 1
-    },
-    "fortress": {
-      "name": "Fortress",
-      "name_kr": "철벽",
-      "type": "buff",
-      "target": "self",
-      "description": "방어력 대폭 증가",
-      "mp_cost": 12,
-      "effect": {
-        "type": "buff",
-        "stat": "defense",
-        "value": 50,
-        "duration": 3
-      },
-      "classes": ["tank"],
-      "level_required": 7
-    },
-    
-    "dark_bolt": {
-      "name": "Dark Bolt",
-      "name_kr": "암흑탄",
-      "type": "magic",
-      "element": "dark",
-      "target": "single_enemy",
-      "description": "암흑 마법 공격",
-      "mp_cost": 10,
-      "power": 140,
-      "accuracy": 95,
-      "critical_bonus": 5,
-      "effect": null,
-      "classes": ["boss"],
-      "level_required": 1
-    },
-    "drain_life": {
-      "name": "Drain Life",
-      "name_kr": "생명력 흡수",
-      "type": "magic",
-      "element": "dark",
-      "target": "single_enemy",
-      "description": "데미지의 50%를 흡수",
-      "mp_cost": 15,
-      "power": 100,
-      "accuracy": 100,
-      "critical_bonus": 0,
-      "effect": {
-        "type": "drain",
-        "percent": 50
-      },
-      "classes": ["boss"],
-      "level_required": 1
-    },
-    "fire_breath": {
-      "name": "Fire Breath",
-      "name_kr": "화염 브레스",
-      "type": "magic",
-      "element": "fire",
-      "target": "all_enemy",
-      "description": "강력한 화염 브레스",
-      "mp_cost": 20,
-      "power": 150,
-      "accuracy": 90,
-      "critical_bonus": 0,
-      "effect": null,
-      "classes": ["boss"],
-      "level_required": 1
-    },
-    "tail_swipe": {
-      "name": "Tail Swipe",
-      "name_kr": "꼬리 휘두르기",
-      "type": "physical",
-      "target": "all_enemy",
-      "description": "전체 물리 공격",
-      "mp_cost": 15,
-      "power": 120,
-      "accuracy": 85,
-      "critical_bonus": 0,
-      "effect": null,
-      "classes": ["boss"],
-      "level_required": 1
-    },
-    "roar": {
-      "name": "Roar",
-      "name_kr": "포효",
-      "type": "debuff",
-      "target": "all_enemy",
-      "description": "전체 공격력/방어력 감소",
-      "mp_cost": 10,
-      "effect": {
-        "type": "debuff_multi",
-        "stats": ["attack", "defense"],
-        "value": -15,
-        "duration": 2
-      },
-      "classes": ["boss"],
-      "level_required": 1
-    }
-  },
-  
-  "status_effects": {
-    "poison": {
-      "name": "Poison",
-      "name_kr": "독",
-      "type": "dot",
-      "damage_percent": 5,
-      "tick": "turn_end"
-    },
-    "stun": {
-      "name": "Stun",
-      "name_kr": "기절",
-      "type": "disable",
-      "skip_turn": true
-    },
-    "blind": {
-      "name": "Blind",
-      "name_kr": "암흑",
-      "type": "debuff",
-      "accuracy_penalty": -50
-    },
-    "silence": {
-      "name": "Silence",
-      "name_kr": "침묵",
-      "type": "disable",
-      "block_magic": true
+      "tags": ["physical", "melee"]
     }
   }
 }

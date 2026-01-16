@@ -1,385 +1,154 @@
 {
   "enemies": {
-    "slime": {
-      "name": "Slime",
-      "name_kr": "슬라임",
-      "type": "normal",
-      "min_stage": 1,
-      "max_stage": 3,
-      "stats": {
-        "level": 1,
-        "max_hp": 30,
-        "attack": 5,
-        "defense": 2,
-        "magic": 3,
-        "magic_defense": 3,
-        "speed": 4,
-        "critical": 1,
-        "evasion": 2
-      },
-      "rewards": {
-        "exp": 10,
-        "gold": {"min": 5, "max": 10},
-        "drop_rate": 0.1,
-        "drops": ["potion_small"]
-      },
-      "ai": "basic_attack",
-      "sprite": "slime.png"
-    },
-    "goblin": {
-      "name": "Goblin",
-      "name_kr": "고블린",
-      "type": "normal",
-      "min_stage": 1,
-      "max_stage": 4,
-      "stats": {
-        "level": 2,
-        "max_hp": 45,
-        "attack": 8,
-        "defense": 4,
-        "magic": 2,
-        "magic_defense": 3,
-        "speed": 7,
-        "critical": 5,
-        "evasion": 5
-      },
-      "rewards": {
-        "exp": 15,
-        "gold": {"min": 8, "max": 15},
-        "drop_rate": 0.12,
-        "drops": ["potion_small", "herb"]
-      },
-      "ai": "basic_attack",
-      "sprite": "goblin.png"
-    },
-    "bat": {
-      "name": "Bat",
-      "name_kr": "박쥐",
-      "type": "normal",
-      "min_stage": 1,
-      "max_stage": 5,
-      "stats": {
-        "level": 1,
-        "max_hp": 25,
-        "attack": 6,
-        "defense": 2,
-        "magic": 4,
-        "magic_defense": 4,
-        "speed": 12,
-        "critical": 8,
-        "evasion": 15
-      },
-      "rewards": {
-        "exp": 8,
-        "gold": {"min": 3, "max": 8},
-        "drop_rate": 0.08,
-        "drops": ["bat_wing"]
-      },
-      "ai": "fast_attack",
-      "sprite": "bat.png"
-    },
-    "skeleton": {
-      "name": "Skeleton",
-      "name_kr": "스켈레톤",
-      "type": "normal",
-      "min_stage": 2,
-      "max_stage": 5,
-      "stats": {
-        "level": 3,
-        "max_hp": 50,
-        "attack": 10,
-        "defense": 6,
-        "magic": 3,
-        "magic_defense": 2,
-        "speed": 6,
-        "critical": 5,
-        "evasion": 3
-      },
-      "rewards": {
-        "exp": 20,
-        "gold": {"min": 10, "max": 20},
-        "drop_rate": 0.15,
-        "drops": ["bone", "potion_small"]
-      },
-      "ai": "basic_attack",
-      "sprite": "skeleton.png"
-    },
-    "wolf": {
-      "name": "Wolf",
-      "name_kr": "늑대",
-      "type": "normal",
-      "min_stage": 2,
-      "max_stage": 4,
-      "stats": {
-        "level": 3,
-        "max_hp": 55,
-        "attack": 12,
-        "defense": 5,
-        "magic": 2,
-        "magic_defense": 4,
-        "speed": 10,
-        "critical": 10,
-        "evasion": 8
-      },
-      "rewards": {
-        "exp": 22,
-        "gold": {"min": 12, "max": 22},
-        "drop_rate": 0.12,
-        "drops": ["wolf_pelt", "fang"]
-      },
-      "ai": "aggressive",
-      "sprite": "wolf.png"
-    },
-    "orc": {
-      "name": "Orc",
-      "name_kr": "오크",
-      "type": "normal",
-      "min_stage": 3,
-      "max_stage": 5,
-      "stats": {
-        "level": 5,
-        "max_hp": 80,
-        "attack": 15,
-        "defense": 10,
-        "magic": 3,
-        "magic_defense": 5,
-        "speed": 5,
-        "critical": 6,
-        "evasion": 2
-      },
-      "rewards": {
-        "exp": 35,
-        "gold": {"min": 20, "max": 35},
-        "drop_rate": 0.18,
-        "drops": ["potion_medium", "orc_tooth"]
-      },
-      "ai": "aggressive",
-      "sprite": "orc.png"
-    },
-    "ghost": {
-      "name": "Ghost",
-      "name_kr": "유령",
-      "type": "normal",
-      "min_stage": 3,
-      "max_stage": 5,
-      "stats": {
-        "level": 4,
-        "max_hp": 40,
-        "attack": 5,
-        "defense": 3,
-        "magic": 14,
-        "magic_defense": 15,
-        "speed": 9,
-        "critical": 5,
-        "evasion": 20
-      },
-      "rewards": {
-        "exp": 28,
-        "gold": {"min": 15, "max": 28},
-        "drop_rate": 0.15,
-        "drops": ["ectoplasm", "ether_small"]
-      },
-      "ai": "magic_attack",
-      "sprite": "ghost.png"
-    },
-    "golem": {
-      "name": "Golem",
-      "name_kr": "골렘",
-      "type": "normal",
-      "min_stage": 4,
-      "max_stage": 5,
-      "stats": {
-        "level": 6,
-        "max_hp": 120,
-        "attack": 18,
-        "defense": 20,
-        "magic": 2,
-        "magic_defense": 8,
-        "speed": 3,
-        "critical": 2,
-        "evasion": 0
-      },
-      "rewards": {
-        "exp": 50,
-        "gold": {"min": 30, "max": 50},
-        "drop_rate": 0.2,
-        "drops": ["golem_core", "iron_ore"]
-      },
-      "ai": "tank",
-      "sprite": "golem.png"
-    },
-    "dark_mage": {
-      "name": "Dark Mage",
-      "name_kr": "암흑 마법사",
-      "type": "normal",
-      "min_stage": 4,
-      "max_stage": 5,
-      "stats": {
-        "level": 6,
-        "max_hp": 60,
-        "attack": 6,
-        "defense": 5,
-        "magic": 20,
-        "magic_defense": 18,
-        "speed": 8,
-        "critical": 10,
-        "evasion": 6
-      },
-      "rewards": {
-        "exp": 45,
-        "gold": {"min": 25, "max": 45},
-        "drop_rate": 0.18,
-        "drops": ["ether_medium", "magic_crystal"]
-      },
-      "ai": "magic_attack",
-      "sprite": "dark_mage.png"
-    }
-  },
-  
-  "bosses": {
-    "goblin_king": {
-      "name": "Goblin King",
-      "name_kr": "고블린 킹",
-      "type": "boss",
-      "stage": 1,
-      "stats": {
-        "level": 5,
-        "max_hp": 200,
-        "attack": 18,
-        "defense": 12,
-        "magic": 8,
-        "magic_defense": 10,
-        "speed": 8,
-        "critical": 10,
-        "evasion": 5
-      },
-      "rewards": {
-        "exp": 150,
-        "gold": {"min": 80, "max": 120},
-        "guaranteed_drops": ["goblin_crown"],
-        "drop_rate": 0.5,
-        "drops": ["potion_large", "ether_medium"]
-      },
-      "ai": "boss_aggressive",
-      "skills": ["power_strike", "war_cry"],
-      "sprite": "goblin_king.png"
-    },
-    "lich": {
-      "name": "Lich",
-      "name_kr": "리치",
-      "type": "boss",
-      "stage": 2,
-      "stats": {
-        "level": 10,
-        "max_hp": 350,
-        "attack": 12,
-        "defense": 10,
-        "magic": 30,
-        "magic_defense": 25,
-        "speed": 10,
-        "critical": 12,
-        "evasion": 8
-      },
-      "rewards": {
-        "exp": 300,
-        "gold": {"min": 150, "max": 250},
-        "guaranteed_drops": ["lich_phylactery"],
-        "drop_rate": 0.5,
-        "drops": ["ether_large", "dark_robe"]
-      },
-      "ai": "boss_magic",
-      "skills": ["dark_bolt", "drain_life", "summon_skeleton"],
-      "sprite": "lich.png"
-    },
-    "dragon": {
-      "name": "Dragon",
-      "name_kr": "드래곤",
-      "type": "boss",
-      "stage": 3,
-      "stats": {
-        "level": 15,
-        "max_hp": 600,
-        "attack": 35,
-        "defense": 25,
-        "magic": 25,
-        "magic_defense": 20,
-        "speed": 12,
-        "critical": 15,
-        "evasion": 5
-      },
-      "rewards": {
-        "exp": 500,
-        "gold": {"min": 300, "max": 500},
-        "guaranteed_drops": ["dragon_scale"],
-        "drop_rate": 0.6,
-        "drops": ["dragon_fang", "fire_crystal"]
-      },
-      "ai": "boss_balanced",
-      "skills": ["fire_breath", "tail_swipe", "roar"],
-      "sprite": "dragon.png"
-    }
-  },
-  
-  "ai_patterns": {
-    "basic_attack": {
-      "description": "기본 공격만 사용",
-      "actions": [
-        {"type": "attack", "weight": 100}
-      ]
-    },
-    "fast_attack": {
-      "description": "빠른 연속 공격",
-      "actions": [
-        {"type": "attack", "weight": 80},
-        {"type": "double_attack", "weight": 20}
-      ]
-    },
-    "aggressive": {
-      "description": "공격적인 패턴",
-      "actions": [
-        {"type": "attack", "weight": 60},
-        {"type": "power_attack", "weight": 40}
-      ]
-    },
-    "magic_attack": {
-      "description": "마법 공격 패턴",
-      "actions": [
-        {"type": "magic", "weight": 70},
-        {"type": "attack", "weight": 30}
-      ]
-    },
-    "tank": {
-      "description": "방어적인 패턴",
-      "actions": [
-        {"type": "attack", "weight": 50},
-        {"type": "defend", "weight": 30},
-        {"type": "power_attack", "weight": 20}
-      ]
-    },
-    "boss_aggressive": {
-      "description": "보스 공격 패턴",
-      "actions": [
-        {"type": "attack", "weight": 40},
-        {"type": "skill", "weight": 40},
-        {"type": "power_attack", "weight": 20}
-      ]
-    },
-    "boss_magic": {
-      "description": "보스 마법 패턴",
-      "actions": [
-        {"type": "magic", "weight": 50},
-        {"type": "skill", "weight": 35},
-        {"type": "attack", "weight": 15}
-      ]
-    },
-    "boss_balanced": {
-      "description": "보스 균형 패턴",
-      "actions": [
-        {"type": "attack", "weight": 30},
-        {"type": "magic", "weight": 30},
-        {"type": "skill", "weight": 30},
-        {"type": "defend", "weight": 10}
-      ]
-    }
+	"slime": {
+	  "id": "slime",
+	  "name": "슬라임",
+	  "description": "말랑말랑한 젤리 형태의 몬스터",
+	  "stats": {
+		"max_hp": 30,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0
+	  },
+	  "combat": {
+		"base_cooldown": 3.0,
+		"skills": ["skill_strike"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/aqua_slime.png",
+		"wander_range": 48,
+		"move_speed": 20
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/aqua_slime.png",
+		"position_type": "ground"
+	  },
+	  "rewards": {
+		"exp": 0,
+		"gold": 0,
+		"drops": []
+	  },
+	  "tags": ["normal", "organic"]
+	},
+	"bat": {
+	  "id": "bat",
+	  "name": "박쥐",
+	  "description": "어둠 속을 날아다니는 흡혈 생물",
+	  "stats": {
+		"max_hp": 20,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0
+	  },
+	  "combat": {
+		"base_cooldown": 1.8,
+		"skills": ["skill_slash"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/blue_bat.png",
+		"wander_range": 48,
+		"move_speed": 35
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/blue_bat.png",
+		"position_type": "flying"
+	  },
+	  "rewards": {
+		"exp": 0,
+		"gold": 0,
+		"drops": []
+	  },
+	  "tags": ["normal", "flying"]
+	},
+	"golem": {
+	  "id": "golem",
+	  "name": "골렘",
+	  "description": "마법으로 움직이는 거대한 바위 인형",
+	  "stats": {
+		"max_hp": 120,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0
+	  },
+	  "combat": {
+		"base_cooldown": 4.0,
+		"skills": ["skill_strike"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/golem.png",
+		"wander_range": 32,
+		"move_speed": 10
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/golem.png",
+		"position_type": "ground"
+	  },
+	  "rewards": {
+		"exp": 0,
+		"gold": 0,
+		"drops": []
+	  },
+	  "tags": ["elite", "construct"]
+	},
+	"skeleton": {
+	  "id": "skeleton",
+	  "name": "스켈레톤",
+	  "description": "죽음에서 깨어난 뼈다귀 전사",
+	  "stats": {
+		"max_hp": 50,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0
+	  },
+	  "combat": {
+		"base_cooldown": 2.5,
+		"skills": ["skill_slash"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/skeleton.png",
+		"wander_range": 48,
+		"move_speed": 25
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/skeleton.png",
+		"position_type": "ground"
+	  },
+	  "rewards": {
+		"exp": 0,
+		"gold": 0,
+		"drops": []
+	  },
+	  "tags": ["normal", "undead"]
+	},
+	"dragon": {
+	  "id": "dragon",
+	  "name": "드래곤",
+	  "description": "고대로부터 전해지는 전설의 존재",
+	  "stats": {
+		"max_hp": 200,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0
+	  },
+	  "combat": {
+		"base_cooldown": 3.5,
+		"skills": ["skill_slash"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/blaze_dragon.png",
+		"wander_range": 64,
+		"move_speed": 30
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/blaze_dragon.png",
+		"position_type": "large"
+	  },
+	  "rewards": {
+		"exp": 0,
+		"gold": 0,
+		"drops": []
+	  },
+	  "tags": ["boss", "dragon"]
+	}
   }
 }

@@ -1,0 +1,92 @@
+{
+  "heroes": {
+	"warrior": {
+	  "id": "warrior",
+	  "name": "전사",
+	  "description": "검과 방패를 다루는 전선의 수호자",
+	  "stats": {
+		"max_hp": 100,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0,
+		"luck": 0
+	  },
+	  "combat": {
+		"base_cooldown": 2.0,
+		"skills": ["skill_slash"]
+	  },
+	  "visuals": {
+		"field_sprite": "res://sprites/characters/player1_walk_right_strip1.png",
+		"portrait": "",
+		"color": "cc4444"
+	  },
+	  "tags": ["melee", "tank"]
+	},
+	"mage": {
+	  "id": "mage",
+	  "name": "마법사",
+	  "description": "원소의 힘을 다루는 신비술사",
+	  "stats": {
+		"max_hp": 60,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0,
+		"luck": 0
+	  },
+	  "combat": {
+		"base_cooldown": 2.5,
+		"skills": ["skill_strike"]
+	  },
+	  "visuals": {
+		"field_sprite": "res://sprites/characters/black_mage_walk_left_strip1.png",
+		"portrait": "",
+		"color": "4444cc"
+	  },
+	  "tags": ["ranged", "magic"]
+	},
+	"cleric": {
+	  "id": "cleric",
+	  "name": "성직자",
+	  "description": "신의 축복으로 동료를 치유하는 사제",
+	  "stats": {
+		"max_hp": 80,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0,
+		"luck": 0
+	  },
+	  "combat": {
+		"base_cooldown": 2.2,
+		"skills": ["skill_strike"]
+	  },
+	  "visuals": {
+		"field_sprite": "res://sprites/characters/white_mage_walk_left_strip1.png",
+		"portrait": "",
+		"color": "44cc44"
+	  },
+	  "tags": ["support", "magic"]
+	},
+	"thief": {
+	  "id": "thief",
+	  "name": "도적",
+	  "description": "빠른 손놀림과 기민한 움직임의 달인",
+	  "stats": {
+		"max_hp": 70,
+		"attack": 0,
+		"defense": 0,
+		"speed": 0,
+		"luck": 0
+	  },
+	  "combat": {
+		"base_cooldown": 1.5,
+		"skills": ["skill_slash"]
+	  },
+	  "visuals": {
+		"field_sprite": "res://sprites/characters/red_mage_walk_left_strip1.png",
+		"portrait": "",
+		"color": "aa44aa"
+	  },
+	  "tags": ["melee", "agile"]
+	}
+  }
+}
