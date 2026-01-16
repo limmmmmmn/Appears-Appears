@@ -1,355 +1,385 @@
 {
   "enemies": {
-    "enemy_001": {
-      "id": "enemy_001",
-      "name": "슬라임",
-      "name_en": "Slime",
+    "slime": {
+      "name": "Slime",
+      "name_kr": "슬라임",
       "type": "normal",
-      "sprite_path": "res://assets/enemies/slime.png",
-      "base_stats": {
-        "hp": 30,
+      "min_stage": 1,
+      "max_stage": 3,
+      "stats": {
+        "level": 1,
+        "max_hp": 30,
         "attack": 5,
         "defense": 2,
-        "attack_speed": 0.8,
-        "luck": 1
+        "magic": 3,
+        "magic_defense": 3,
+        "speed": 4,
+        "critical": 1,
+        "evasion": 2
       },
-      "skills": ["basic_attack"],
-      "ai_type": "random",
-      "drop_table": {
-        "gold_min": 5,
-        "gold_max": 15,
-        "item_drop_rate": 0.1,
-        "item_pool": ["item_001", "item_005", "item_017"]
+      "rewards": {
+        "exp": 10,
+        "gold": {"min": 5, "max": 10},
+        "drop_rate": 0.1,
+        "drops": ["potion_small"]
       },
-      "spawn_weight": 50,
-      "level_scaling": {
-        "hp": 1.2,
-        "attack": 1.1,
-        "defense": 1.05
-      },
-      "description": "가장 기본적인 몬스터",
-      "enabled": true
+      "ai": "basic_attack",
+      "sprite": "slime.png"
     },
-    
-    "enemy_001_elite": {
-      "id": "enemy_001_elite",
-      "name": "레드 슬라임",
-      "name_en": "Red Slime",
-      "type": "elite",
-      "sprite_path": "res://assets/enemies/slime_red.png",
-      "base_stats": {
-        "hp": 60,
-        "attack": 10,
-        "defense": 4,
-        "attack_speed": 0.8,
-        "luck": 2
-      },
-      "skills": ["basic_attack"],
-      "ai_type": "random",
-      "drop_table": {
-        "gold_min": 20,
-        "gold_max": 50,
-        "item_drop_rate": 0.7,
-        "item_pool": ["item_014", "item_015", "item_016"]
-      },
-      "spawn_weight": 0,
-      "level_scaling": {
-        "hp": 1.2,
-        "attack": 1.1,
-        "defense": 1.05
-      },
-      "description": "엘리트 슬라임. 던전 전용.",
-      "enabled": true
-    },
-    
-    "enemy_002": {
-      "id": "enemy_002",
-      "name": "고블린",
-      "name_en": "Goblin",
+    "goblin": {
+      "name": "Goblin",
+      "name_kr": "고블린",
       "type": "normal",
-      "sprite_path": "res://assets/enemies/goblin.png",
-      "base_stats": {
-        "hp": 40,
+      "min_stage": 1,
+      "max_stage": 4,
+      "stats": {
+        "level": 2,
+        "max_hp": 45,
         "attack": 8,
-        "defense": 3,
-        "attack_speed": 1.0,
-        "luck": 3
+        "defense": 4,
+        "magic": 2,
+        "magic_defense": 3,
+        "speed": 7,
+        "critical": 5,
+        "evasion": 5
       },
-      "skills": ["basic_attack"],
-      "ai_type": "target_low_hp",
-      "drop_table": {
-        "gold_min": 10,
-        "gold_max": 25,
-        "item_drop_rate": 0.15,
-        "item_pool": ["item_004", "item_006", "item_017"]
+      "rewards": {
+        "exp": 15,
+        "gold": {"min": 8, "max": 15},
+        "drop_rate": 0.12,
+        "drops": ["potion_small", "herb"]
       },
-      "spawn_weight": 35,
-      "level_scaling": {
-        "hp": 1.25,
-        "attack": 1.15,
-        "defense": 1.1
-      },
-      "description": "약삭빠른 고블린. HP 낮은 적 우선 공격.",
-      "enabled": true
+      "ai": "basic_attack",
+      "sprite": "goblin.png"
     },
-    
-    "enemy_002_elite": {
-      "id": "enemy_002_elite",
-      "name": "골든 고블린",
-      "name_en": "Golden Goblin",
-      "type": "elite",
-      "sprite_path": "res://assets/enemies/goblin_gold.png",
-      "base_stats": {
-        "hp": 80,
-        "attack": 16,
-        "defense": 6,
-        "attack_speed": 1.0,
-        "luck": 10
-      },
-      "skills": ["basic_attack"],
-      "ai_type": "target_low_hp",
-      "drop_table": {
-        "gold_min": 50,
-        "gold_max": 100,
-        "item_drop_rate": 0.8,
-        "item_pool": ["item_014", "item_015", "item_016", "item_019"]
-      },
-      "spawn_weight": 0,
-      "level_scaling": {
-        "hp": 1.25,
-        "attack": 1.15,
-        "defense": 1.1
-      },
-      "description": "금으로 뒤덮인 고블린. 골드 많이 드랍!",
-      "enabled": true
-    },
-    
-    "enemy_003": {
-      "id": "enemy_003",
-      "name": "박쥐",
-      "name_en": "Bat",
+    "bat": {
+      "name": "Bat",
+      "name_kr": "박쥐",
       "type": "normal",
-      "sprite_path": "res://assets/enemies/bat.png",
-      "base_stats": {
-        "hp": 25,
-        "attack": 10,
-        "defense": 1,
-        "attack_speed": 1.5,
-        "luck": 5
-      },
-      "skills": ["basic_attack"],
-      "ai_type": "random",
-      "drop_table": {
-        "gold_min": 3,
-        "gold_max": 10,
-        "item_drop_rate": 0.08,
-        "item_pool": ["item_017"]
-      },
-      "spawn_weight": 40,
-      "level_scaling": {
-        "hp": 1.15,
-        "attack": 1.2,
-        "defense": 1.0
-      },
-      "description": "빠른 공격의 박쥐",
-      "enabled": true
-    },
-    
-    "enemy_003_elite": {
-      "id": "enemy_003_elite",
-      "name": "흡혈박쥐",
-      "name_en": "Vampire Bat",
-      "type": "elite",
-      "sprite_path": "res://assets/enemies/bat_vampire.png",
-      "base_stats": {
-        "hp": 50,
-        "attack": 20,
+      "min_stage": 1,
+      "max_stage": 5,
+      "stats": {
+        "level": 1,
+        "max_hp": 25,
+        "attack": 6,
         "defense": 2,
-        "attack_speed": 1.5,
-        "luck": 8
+        "magic": 4,
+        "magic_defense": 4,
+        "speed": 12,
+        "critical": 8,
+        "evasion": 15
       },
-      "skills": ["basic_attack", "life_steal"],
-      "ai_type": "random",
-      "drop_table": {
-        "gold_min": 15,
-        "gold_max": 40,
-        "item_drop_rate": 0.75,
-        "item_pool": ["item_014", "item_016", "item_020"]
+      "rewards": {
+        "exp": 8,
+        "gold": {"min": 3, "max": 8},
+        "drop_rate": 0.08,
+        "drops": ["bat_wing"]
       },
-      "spawn_weight": 0,
-      "level_scaling": {
-        "hp": 1.15,
-        "attack": 1.2,
-        "defense": 1.0
-      },
-      "description": "공격 시 HP 흡수",
-      "enabled": true
+      "ai": "fast_attack",
+      "sprite": "bat.png"
     },
-    
-    "enemy_004": {
-      "id": "enemy_004",
-      "name": "오크",
-      "name_en": "Orc",
+    "skeleton": {
+      "name": "Skeleton",
+      "name_kr": "스켈레톤",
       "type": "normal",
-      "sprite_path": "res://assets/enemies/orc.png",
-      "base_stats": {
-        "hp": 70,
-        "attack": 15,
-        "defense": 8,
-        "attack_speed": 0.7,
-        "luck": 2
+      "min_stage": 2,
+      "max_stage": 5,
+      "stats": {
+        "level": 3,
+        "max_hp": 50,
+        "attack": 10,
+        "defense": 6,
+        "magic": 3,
+        "magic_defense": 2,
+        "speed": 6,
+        "critical": 5,
+        "evasion": 3
       },
-      "skills": ["basic_attack", "power_strike"],
-      "ai_type": "target_high_hp",
-      "drop_table": {
-        "gold_min": 20,
-        "gold_max": 40,
-        "item_drop_rate": 0.2,
-        "item_pool": ["item_004", "item_008", "item_009"]
+      "rewards": {
+        "exp": 20,
+        "gold": {"min": 10, "max": 20},
+        "drop_rate": 0.15,
+        "drops": ["bone", "potion_small"]
       },
-      "spawn_weight": 20,
-      "level_scaling": {
-        "hp": 1.3,
-        "attack": 1.2,
-        "defense": 1.15
-      },
-      "description": "강력한 오크 전사",
-      "enabled": true
+      "ai": "basic_attack",
+      "sprite": "skeleton.png"
     },
-    
-    "enemy_004_elite": {
-      "id": "enemy_004_elite",
-      "name": "오크 워로드",
-      "name_en": "Orc Warlord",
-      "type": "elite",
-      "sprite_path": "res://assets/enemies/orc_warlord.png",
-      "base_stats": {
-        "hp": 140,
-        "attack": 30,
-        "defense": 16,
-        "attack_speed": 0.7,
-        "luck": 5
-      },
-      "skills": ["basic_attack", "power_strike", "war_cry"],
-      "ai_type": "target_high_hp",
-      "drop_table": {
-        "gold_min": 80,
-        "gold_max": 150,
-        "item_drop_rate": 0.85,
-        "item_pool": ["item_010", "item_015", "item_019"]
-      },
-      "spawn_weight": 0,
-      "level_scaling": {
-        "hp": 1.3,
-        "attack": 1.2,
-        "defense": 1.15
-      },
-      "description": "오크 군단의 우두머리",
-      "enabled": true
-    },
-    
-    "enemy_005": {
-      "id": "enemy_005",
-      "name": "스켈레톤",
-      "name_en": "Skeleton",
+    "wolf": {
+      "name": "Wolf",
+      "name_kr": "늑대",
       "type": "normal",
-      "sprite_path": "res://assets/enemies/skeleton.png",
-      "base_stats": {
-        "hp": 35,
+      "min_stage": 2,
+      "max_stage": 4,
+      "stats": {
+        "level": 3,
+        "max_hp": 55,
         "attack": 12,
         "defense": 5,
-        "attack_speed": 1.1,
-        "luck": 1
+        "magic": 2,
+        "magic_defense": 4,
+        "speed": 10,
+        "critical": 10,
+        "evasion": 8
       },
-      "skills": ["basic_attack"],
-      "ai_type": "random",
-      "drop_table": {
-        "gold_min": 8,
-        "gold_max": 20,
-        "item_drop_rate": 0.12,
-        "item_pool": ["item_010", "item_012"]
+      "rewards": {
+        "exp": 22,
+        "gold": {"min": 12, "max": 22},
+        "drop_rate": 0.12,
+        "drops": ["wolf_pelt", "fang"]
       },
-      "spawn_weight": 30,
-      "level_scaling": {
-        "hp": 1.2,
-        "attack": 1.15,
-        "defense": 1.1
-      },
-      "description": "언데드 전사",
-      "enabled": true
+      "ai": "aggressive",
+      "sprite": "wolf.png"
     },
-    
-    "enemy_005_elite": {
-      "id": "enemy_005_elite",
-      "name": "스켈레톤 나이트",
-      "name_en": "Skeleton Knight",
-      "type": "elite",
-      "sprite_path": "res://assets/enemies/skeleton_knight.png",
-      "base_stats": {
-        "hp": 70,
-        "attack": 24,
+    "orc": {
+      "name": "Orc",
+      "name_kr": "오크",
+      "type": "normal",
+      "min_stage": 3,
+      "max_stage": 5,
+      "stats": {
+        "level": 5,
+        "max_hp": 80,
+        "attack": 15,
         "defense": 10,
-        "attack_speed": 1.1,
-        "luck": 3
+        "magic": 3,
+        "magic_defense": 5,
+        "speed": 5,
+        "critical": 6,
+        "evasion": 2
       },
-      "skills": ["basic_attack", "counter"],
-      "ai_type": "random",
-      "drop_table": {
-        "gold_min": 30,
-        "gold_max": 70,
-        "item_drop_rate": 0.78,
-        "item_pool": ["item_010", "item_011", "item_015"]
+      "rewards": {
+        "exp": 35,
+        "gold": {"min": 20, "max": 35},
+        "drop_rate": 0.18,
+        "drops": ["potion_medium", "orc_tooth"]
       },
-      "spawn_weight": 0,
-      "level_scaling": {
-        "hp": 1.2,
-        "attack": 1.15,
-        "defense": 1.1
-      },
-      "description": "갑옷을 입은 언데드 기사",
-      "enabled": true
+      "ai": "aggressive",
+      "sprite": "orc.png"
     },
-    
-    "boss_001": {
-      "id": "boss_001",
-      "name": "숲의 수호자",
-      "name_en": "Forest Guardian",
-      "type": "boss",
-      "sprite_path": "res://assets/enemies/boss_forest.png",
-      "base_stats": {
-        "hp": 500,
-        "attack": 30,
+    "ghost": {
+      "name": "Ghost",
+      "name_kr": "유령",
+      "type": "normal",
+      "min_stage": 3,
+      "max_stage": 5,
+      "stats": {
+        "level": 4,
+        "max_hp": 40,
+        "attack": 5,
+        "defense": 3,
+        "magic": 14,
+        "magic_defense": 15,
+        "speed": 9,
+        "critical": 5,
+        "evasion": 20
+      },
+      "rewards": {
+        "exp": 28,
+        "gold": {"min": 15, "max": 28},
+        "drop_rate": 0.15,
+        "drops": ["ectoplasm", "ether_small"]
+      },
+      "ai": "magic_attack",
+      "sprite": "ghost.png"
+    },
+    "golem": {
+      "name": "Golem",
+      "name_kr": "골렘",
+      "type": "normal",
+      "min_stage": 4,
+      "max_stage": 5,
+      "stats": {
+        "level": 6,
+        "max_hp": 120,
+        "attack": 18,
         "defense": 20,
-        "attack_speed": 1.0,
-        "luck": 5
+        "magic": 2,
+        "magic_defense": 8,
+        "speed": 3,
+        "critical": 2,
+        "evasion": 0
       },
-      "skills": ["basic_attack", "power_strike", "heal", "summon_minions"],
-      "ai_type": "boss_pattern",
-      "drop_table": {
-        "gold_min": 500,
-        "gold_max": 1000,
-        "item_drop_rate": 1.0,
-        "item_pool": ["item_019", "item_020"],
-        "guaranteed_items": ["item_019"]
+      "rewards": {
+        "exp": 50,
+        "gold": {"min": 30, "max": 50},
+        "drop_rate": 0.2,
+        "drops": ["golem_core", "iron_ore"]
       },
-      "spawn_weight": 0,
-      "level_scaling": {
-        "hp": 1.5,
-        "attack": 1.3,
-        "defense": 1.2
+      "ai": "tank",
+      "sprite": "golem.png"
+    },
+    "dark_mage": {
+      "name": "Dark Mage",
+      "name_kr": "암흑 마법사",
+      "type": "normal",
+      "min_stage": 4,
+      "max_stage": 5,
+      "stats": {
+        "level": 6,
+        "max_hp": 60,
+        "attack": 6,
+        "defense": 5,
+        "magic": 20,
+        "magic_defense": 18,
+        "speed": 8,
+        "critical": 10,
+        "evasion": 6
       },
-      "phases": [
-        {
-          "hp_threshold": 0.7,
-          "action": "summon_minions"
-        },
-        {
-          "hp_threshold": 0.3,
-          "action": "enrage"
-        }
-      ],
-      "description": "챕터 1 보스. 거대한 나무 정령.",
-      "enabled": true
+      "rewards": {
+        "exp": 45,
+        "gold": {"min": 25, "max": 45},
+        "drop_rate": 0.18,
+        "drops": ["ether_medium", "magic_crystal"]
+      },
+      "ai": "magic_attack",
+      "sprite": "dark_mage.png"
+    }
+  },
+  
+  "bosses": {
+    "goblin_king": {
+      "name": "Goblin King",
+      "name_kr": "고블린 킹",
+      "type": "boss",
+      "stage": 1,
+      "stats": {
+        "level": 5,
+        "max_hp": 200,
+        "attack": 18,
+        "defense": 12,
+        "magic": 8,
+        "magic_defense": 10,
+        "speed": 8,
+        "critical": 10,
+        "evasion": 5
+      },
+      "rewards": {
+        "exp": 150,
+        "gold": {"min": 80, "max": 120},
+        "guaranteed_drops": ["goblin_crown"],
+        "drop_rate": 0.5,
+        "drops": ["potion_large", "ether_medium"]
+      },
+      "ai": "boss_aggressive",
+      "skills": ["power_strike", "war_cry"],
+      "sprite": "goblin_king.png"
+    },
+    "lich": {
+      "name": "Lich",
+      "name_kr": "리치",
+      "type": "boss",
+      "stage": 2,
+      "stats": {
+        "level": 10,
+        "max_hp": 350,
+        "attack": 12,
+        "defense": 10,
+        "magic": 30,
+        "magic_defense": 25,
+        "speed": 10,
+        "critical": 12,
+        "evasion": 8
+      },
+      "rewards": {
+        "exp": 300,
+        "gold": {"min": 150, "max": 250},
+        "guaranteed_drops": ["lich_phylactery"],
+        "drop_rate": 0.5,
+        "drops": ["ether_large", "dark_robe"]
+      },
+      "ai": "boss_magic",
+      "skills": ["dark_bolt", "drain_life", "summon_skeleton"],
+      "sprite": "lich.png"
+    },
+    "dragon": {
+      "name": "Dragon",
+      "name_kr": "드래곤",
+      "type": "boss",
+      "stage": 3,
+      "stats": {
+        "level": 15,
+        "max_hp": 600,
+        "attack": 35,
+        "defense": 25,
+        "magic": 25,
+        "magic_defense": 20,
+        "speed": 12,
+        "critical": 15,
+        "evasion": 5
+      },
+      "rewards": {
+        "exp": 500,
+        "gold": {"min": 300, "max": 500},
+        "guaranteed_drops": ["dragon_scale"],
+        "drop_rate": 0.6,
+        "drops": ["dragon_fang", "fire_crystal"]
+      },
+      "ai": "boss_balanced",
+      "skills": ["fire_breath", "tail_swipe", "roar"],
+      "sprite": "dragon.png"
+    }
+  },
+  
+  "ai_patterns": {
+    "basic_attack": {
+      "description": "기본 공격만 사용",
+      "actions": [
+        {"type": "attack", "weight": 100}
+      ]
+    },
+    "fast_attack": {
+      "description": "빠른 연속 공격",
+      "actions": [
+        {"type": "attack", "weight": 80},
+        {"type": "double_attack", "weight": 20}
+      ]
+    },
+    "aggressive": {
+      "description": "공격적인 패턴",
+      "actions": [
+        {"type": "attack", "weight": 60},
+        {"type": "power_attack", "weight": 40}
+      ]
+    },
+    "magic_attack": {
+      "description": "마법 공격 패턴",
+      "actions": [
+        {"type": "magic", "weight": 70},
+        {"type": "attack", "weight": 30}
+      ]
+    },
+    "tank": {
+      "description": "방어적인 패턴",
+      "actions": [
+        {"type": "attack", "weight": 50},
+        {"type": "defend", "weight": 30},
+        {"type": "power_attack", "weight": 20}
+      ]
+    },
+    "boss_aggressive": {
+      "description": "보스 공격 패턴",
+      "actions": [
+        {"type": "attack", "weight": 40},
+        {"type": "skill", "weight": 40},
+        {"type": "power_attack", "weight": 20}
+      ]
+    },
+    "boss_magic": {
+      "description": "보스 마법 패턴",
+      "actions": [
+        {"type": "magic", "weight": 50},
+        {"type": "skill", "weight": 35},
+        {"type": "attack", "weight": 15}
+      ]
+    },
+    "boss_balanced": {
+      "description": "보스 균형 패턴",
+      "actions": [
+        {"type": "attack", "weight": 30},
+        {"type": "magic", "weight": 30},
+        {"type": "skill", "weight": 30},
+        {"type": "defend", "weight": 10}
+      ]
     }
   }
 }
