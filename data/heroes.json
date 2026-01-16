@@ -16,7 +16,7 @@
 		"skills": ["skill_slash"]
 	  },
 	  "visuals": {
-		"field_sprite": "res://sprites/characters/player1_walk_right_strip1.png",
+		"sprite": "res://sprites/characters/player1_walk_left_strip1.png",
 		"portrait": "",
 		"color": "cc4444"
 	  },
@@ -38,7 +38,7 @@
 		"skills": ["skill_strike"]
 	  },
 	  "visuals": {
-		"field_sprite": "res://sprites/characters/black_mage_walk_left_strip1.png",
+		"sprite": "res://sprites/characters/black_mage_walk_left_strip1.png",
 		"portrait": "",
 		"color": "4444cc"
 	  },
@@ -60,7 +60,7 @@
 		"skills": ["skill_strike"]
 	  },
 	  "visuals": {
-		"field_sprite": "res://sprites/characters/white_mage_walk_left_strip1.png",
+		"sprite": "res://sprites/characters/white_mage_walk_left_strip1.png",
 		"portrait": "",
 		"color": "44cc44"
 	  },
@@ -82,7 +82,7 @@
 		"skills": ["skill_slash"]
 	  },
 	  "visuals": {
-		"field_sprite": "res://sprites/characters/red_mage_walk_left_strip1.png",
+		"sprite": "res://sprites/characters/red_mage_walk_left_strip1.png",
 		"portrait": "",
 		"color": "aa44aa"
 	  },

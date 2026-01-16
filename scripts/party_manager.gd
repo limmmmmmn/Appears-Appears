@@ -1,4 +1,5 @@
 extends Node2D
+class_name PartyManager
 ## 파티 전체를 관리 (리더 + 따라다니는 동료들)
 
 @export var follower_distance: float = 18.0  # 동료 간 거리

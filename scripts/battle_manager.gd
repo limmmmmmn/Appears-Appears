@@ -1,13 +1,18 @@
 extends CanvasLayer
-## 단일 전투창을 관리하고 적을 추가
+class_name BattleManager
+## 다중 전투창 관리 - 랜덤 위치 배치
 
 var battle_window_scene: PackedScene = preload("res://scenes/ui/battle_window.tscn")
 var battle_hud_scene: PackedScene = preload("res://scenes/ui/battle_hud.tscn")
 
-var battle_window: BattleWindow = null
+var active_windows: Array = []
 var hud: BattleHUD = null
 
-const WINDOW_POS := Vector2(140, 20)  # 전투창 고정 위치 (상단 중앙)
+const WINDOW_SIZE := Vector2(180, 140)
+const SCREEN_SIZE := Vector2(640, 360)
+const CENTER_AVOID := Rect2(190, 85, 100, 100)  # 중앙 회피
+const MARGIN := 8
+const HUD_HEIGHT := 0  # 하단 HUD 공간
 
 
 func _ready() -> void:
@@ -21,45 +26,67 @@ func _setup_hud() -> void:
 
 
 func _on_battle_started(enemy_id: String) -> void:
-	# 전투창이 없으면 생성
-	if battle_window == null or not is_instance_valid(battle_window):
-		_create_battle_window()
-	
-	# 적 추가
-	battle_window.add_enemy(enemy_id)
-	
-	# 전투창 크기 조절 (적 수에 따라)
-	_resize_window()
+	_spawn_battle_window(enemy_id)
 
 
-func _create_battle_window() -> void:
-	battle_window = battle_window_scene.instantiate() as BattleWindow
-	battle_window.position = WINDOW_POS
+func _spawn_battle_window(enemy_id: String) -> void:
+	var window = battle_window_scene.instantiate() as BattleWindow
 	
-	add_child(battle_window)
+	var pos = _get_random_position()
+	window.position = pos
 	
-	# 시그널 연결
-	battle_window.battle_finished.connect(_on_battle_finished)
-	battle_window.log_message.connect(_on_log_message)
-	battle_window.party_updated.connect(_on_party_updated)
+	add_child(window)
+	active_windows.append(window)
+	
+	window.battle_finished.connect(_on_battle_finished.bind(window))
+	window.log_message.connect(_on_log_message)
+	window.party_updated.connect(_on_party_updated)
+	
+	window.start_battle(enemy_id)
 
 
-func _resize_window() -> void:
-	if battle_window == null:
-		return
+func _get_random_position() -> Vector2:
+	_cleanup_windows()
 	
-	# 적 수에 따라 창 너비 조절 (최소 200, 적당 +70)
-	var enemy_count = battle_window.get_enemy_count()
-	var width = max(200, 70 + enemy_count * 65)
-	battle_window.custom_minimum_size = Vector2(width, 110)
-	battle_window.size = Vector2(width, 110)
+	var max_attempts = 50
+	var max_y = SCREEN_SIZE.y - WINDOW_SIZE.y - HUD_HEIGHT - MARGIN
 	
-	# 중앙 정렬
-	battle_window.position.x = (480 - width) / 2
+	for i in range(max_attempts):
+		var x = randf_range(MARGIN, SCREEN_SIZE.x - WINDOW_SIZE.x - MARGIN)
+		var y = randf_range(MARGIN, max_y)
+		var pos = Vector2(x, y)
+		
+		var window_rect = Rect2(pos, WINDOW_SIZE)
+		
+		# 중앙 회피
+		if window_rect.intersects(CENTER_AVOID):
+			continue
+		
+		# 다른 창과 겹침 방지
+		var overlaps = false
+		for w in active_windows:
+			if is_instance_valid(w):
+				var other_rect = Rect2(w.position, WINDOW_SIZE)
+				if window_rect.intersects(other_rect):
+					overlaps = true
+					break
+		
+		if not overlaps:
+			return pos
+	
+	return Vector2(MARGIN, MARGIN)
 
 
-func _on_battle_finished(victory: bool) -> void:
-	battle_window = null
+func _cleanup_windows() -> void:
+	var valid = []
+	for w in active_windows:
+		if is_instance_valid(w):
+			valid.append(w)
+	active_windows = valid
+
+
+func _on_battle_finished(victory: bool, window: BattleWindow) -> void:
+	active_windows.erase(window)
 
 
 func _on_log_message(text: String) -> void:

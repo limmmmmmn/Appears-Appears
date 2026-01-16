@@ -72,6 +72,9 @@ func _pick_new_wander_target() -> void:
 
 
 func on_encountered() -> void:
+	if not is_active:
+		return  # 이미 처리됨
+	
 	is_active = false
 	visible = false
 	collision.set_deferred("disabled", true)

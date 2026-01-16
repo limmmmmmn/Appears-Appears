@@ -1,40 +1,29 @@
 [gd_scene load_steps=2 format=3 uid="uid://battlehud001"]
 
-[ext_resource type="Script" path="res://scripts/battle_hud.gd" id="1_hud"]
+[ext_resource type="Script" uid="uid://b2m3njn26p120" path="res://scripts/battle_hud.gd" id="1_hud"]
 
 [node name="BattleHUD" type="CanvasLayer"]
 layer = 10
 script = ExtResource("1_hud")
 
 [node name="PartyPanel" type="PanelContainer" parent="."]
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -150.0
-offset_top = -58.0
-offset_right = 150.0
-offset_bottom = -4.0
-grow_horizontal = 2
-grow_vertical = 0
+offset_left = 5.0
+offset_top = 8.0
+offset_right = 45.0
+offset_bottom = 180.0
 
-[node name="PartyContainer" type="HBoxContainer" parent="PartyPanel"]
+[node name="PartyContainer" type="VBoxContainer" parent="PartyPanel"]
 layout_mode = 2
 theme_override_constants/separation = 4
 alignment = 1
 
 [node name="LogPanel" type="PanelContainer" parent="."]
-anchors_preset = 0
-anchor_right = 0.0
-anchor_bottom = 0.0
 offset_left = 4.0
-offset_top = 4.0
-offset_right = 160.0
-offset_bottom = 80.0
+offset_top = 204.0
+offset_right = 97.0
+offset_bottom = 264.0
 
 [node name="BattleLog" type="Label" parent="LogPanel"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 7
-text = ""
 autowrap_mode = 2

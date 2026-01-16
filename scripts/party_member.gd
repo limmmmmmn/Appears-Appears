@@ -28,10 +28,12 @@ func _load_hero_data() -> void:
 	if data.is_empty():
 		return
 	
-	# 스프라이트 로드
 	var sprite_path: String = data.get("visuals", {}).get("sprite", "")
 	if sprite_path != "" and ResourceLoader.exists(sprite_path):
 		sprite.texture = load(sprite_path)
+	
+	# 기본 방향 왼쪽 (flip_h = false)
+	sprite.flip_h = false
 
 
 func _physics_process(_delta: float) -> void:
@@ -42,18 +44,16 @@ func _physics_process(_delta: float) -> void:
 
 
 func _follow_leader() -> void:
-	# 리더와의 거리 계산
 	var distance := global_position.distance_to(leader.global_position)
 	
 	if distance > follow_distance:
-		# 리더를 향해 이동
 		var direction := global_position.direction_to(leader.global_position)
 		velocity = direction * move_speed
 		
-		# 스프라이트 방향
-		if direction.x < 0:
+		# 왼쪽이 기본, 오른쪽 갈 때 뒤집기
+		if direction.x > 0:
 			sprite.flip_h = true
-		elif direction.x > 0:
+		elif direction.x < 0:
 			sprite.flip_h = false
 	else:
 		velocity = Vector2.ZERO
@@ -66,5 +66,5 @@ func setup(id: String, follow_target: Node2D, distance: float = 20.0) -> void:
 	leader = follow_target
 	follow_distance = distance
 	
-	# 리더 뒤에 초기 위치
-	global_position = follow_target.global_position - Vector2(distance, 0)
+	# 리더와 같은 위치에서 시작 (겹침)
+	global_position = follow_target.global_position

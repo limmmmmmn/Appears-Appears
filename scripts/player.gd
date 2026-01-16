@@ -7,6 +7,9 @@ class_name Player
 var party_members: Array[PartyMember] = []
 var party_member_scene: PackedScene = preload("res://scenes/player/party_member.tscn")
 
+var encountered_enemies: Array = []  # 이미 만난 적 추적
+
+
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var collision: CollisionShape2D = $CollisionShape2D
 @onready var hitbox: Area2D = $Hitbox
@@ -30,7 +33,7 @@ func _spawn_party_members() -> void:
 		return
 	
 	var prev_unit: Node2D = self
-	var base_distance := 18.0
+	var base_distance := 22.0 #18
 	
 	# 1번 인덱스부터 (0번은 플레이어 자신)
 	for i in range(1, party.size()):
@@ -38,6 +41,7 @@ func _spawn_party_members() -> void:
 		var member := party_member_scene.instantiate() as PartyMember
 		
 		member.setup(hero_id, prev_unit, base_distance)
+		member.z_index = -i  # 뒤에 있는 멤버일수록 뒤로
 		get_parent().add_child(member)
 		
 		party_members.append(member)
@@ -53,7 +57,7 @@ func _load_leader_sprite() -> void:
 	if hero_data.is_empty():
 		return
 	
-	var sprite_path: String = hero_data.get("visuals", {}).get("field_sprite", "")
+	var sprite_path: String = hero_data.get("visuals", {}).get("sprite", "")
 	if sprite_path != "" and ResourceLoader.exists(sprite_path):
 		sprite.texture = load(sprite_path)
 
@@ -84,23 +88,24 @@ func _get_input_direction() -> Vector2:
 
 
 func _update_sprite_direction(dir: Vector2) -> void:
-	# 좌우 반전 (필요시)
-	if dir.x < 0:
+	# 왼쪽이 기본, 오른쪽 갈 때 뒤집기
+	if dir.x > 0:
 		sprite.flip_h = true
-	elif dir.x > 0:
+	elif dir.x < 0:
 		sprite.flip_h = false
 
 
 func _on_hitbox_area_entered(area: Area2D) -> void:
-	# 적 감지 영역과 충돌
 	if area.is_in_group("enemy_hitbox"):
-		var enemy := area.get_parent() as FieldEnemy
-		if enemy and enemy.is_active:
+		var enemy = area.get_parent()
+		if enemy and enemy.is_active and not encountered_enemies.has(enemy):
+			encountered_enemies.append(enemy)
 			_encounter_enemy(enemy)
 
-
-func _encounter_enemy(enemy: FieldEnemy) -> void:
-	# 전투 시작
-	var enemy_id := enemy.enemy_id
+func _encounter_enemy(enemy) -> void:
+	if not enemy.is_active:
+		return
+	
+	var enemy_id = enemy.enemy_id
 	enemy.on_encountered()
 	GameManager.start_battle(enemy_id)

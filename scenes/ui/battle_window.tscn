@@ -1,13 +1,25 @@
-[gd_scene load_steps=2 format=3 uid="uid://battlewindow001"]
+[gd_scene load_steps=5 format=3 uid="uid://vktlc7r0gxnk"]
 
-[ext_resource type="Script" path="res://scripts/battle_window.gd" id="1_battle"]
+[ext_resource type="Script" uid="uid://ijuoxrs6lrqr" path="res://scripts/battle_window.gd" id="1_battle"]
+
+[sub_resource type="Theme" id="Theme_oss5i"]
+
+[sub_resource type="Theme" id="Theme_t52ir"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_oss5i"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
 
 [node name="BattleWindow" type="Control"]
-custom_minimum_size = Vector2(200, 110)
+custom_minimum_size = Vector2(180, 140)
 layout_mode = 3
 anchors_preset = 0
-offset_right = 200.0
-offset_bottom = 110.0
+offset_right = 120.0
+offset_bottom = 80.0
+theme = SubResource("Theme_oss5i")
 script = ExtResource("1_battle")
 
 [node name="Panel" type="Panel" parent="."]
@@ -15,21 +27,20 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-
-[node name="BattleTitle" type="Label" parent="Panel"]
-layout_mode = 1
-offset_left = 4.0
-offset_top = 2.0
-offset_right = 196.0
-offset_bottom = 14.0
-theme_override_font_sizes/font_size = 8
-text = "전투 중..."
-horizontal_alignment = 1
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_t52ir")
+theme_override_styles/panel = SubResource("StyleBoxFlat_oss5i")
 
 [node name="EnemiesContainer" type="HBoxContainer" parent="Panel"]
 layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 offset_left = 4.0
-offset_top = 16.0
-offset_right = 196.0
-offset_bottom = 106.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
 alignment = 1

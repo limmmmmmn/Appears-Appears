@@ -2,7 +2,7 @@ extends CanvasLayer
 class_name BattleHUD
 ## 전투 로그와 파티 상태를 표시하는 HUD
 
-@onready var party_container: HBoxContainer = $PartyPanel/PartyContainer
+@onready var party_container: VBoxContainer = $PartyPanel/PartyContainer
 @onready var battle_log: Label = $LogPanel/BattleLog
 
 var party_labels: Dictionary = {}  # hero_id: {name_label, hp_bar, cooldown_bar}
@@ -28,7 +28,7 @@ func _setup_party_ui() -> void:
 
 func _create_hero_panel(hero_id: String, hero_data: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(70, 50)
+	panel.custom_minimum_size = Vector2(40, 30)
 	
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 2)
@@ -43,7 +43,7 @@ func _create_hero_panel(hero_id: String, hero_data: Dictionary) -> PanelContaine
 	
 	# HP 바
 	var hp_bar := ProgressBar.new()
-	hp_bar.custom_minimum_size = Vector2(60, 8)
+	hp_bar.custom_minimum_size = Vector2(40, 8)
 	hp_bar.max_value = 100
 	hp_bar.value = 100
 	hp_bar.show_percentage = false
@@ -57,7 +57,7 @@ func _create_hero_panel(hero_id: String, hero_data: Dictionary) -> PanelContaine
 	
 	# 쿨다운 바
 	var cooldown_bar := ProgressBar.new()
-	cooldown_bar.custom_minimum_size = Vector2(60, 4)
+	cooldown_bar.custom_minimum_size = Vector2(40, 4)
 	cooldown_bar.max_value = 100
 	cooldown_bar.value = 0
 	cooldown_bar.show_percentage = false
