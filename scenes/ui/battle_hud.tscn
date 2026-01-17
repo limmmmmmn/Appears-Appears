@@ -19,11 +19,12 @@ alignment = 1
 
 [node name="LogPanel" type="PanelContainer" parent="."]
 offset_left = 4.0
-offset_top = 204.0
+offset_top = 290.0
 offset_right = 97.0
-offset_bottom = 264.0
+offset_bottom = 350.0
 
 [node name="BattleLog" type="Label" parent="LogPanel"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 7
+theme_override_constants/line_spacing = 1
+theme_override_font_sizes/font_size = 6
 autowrap_mode = 2

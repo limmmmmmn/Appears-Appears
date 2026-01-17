@@ -32,11 +32,23 @@ func _setup_party_ui() -> void:
 
 func _create_hero_panel(hero_id: String, hero_data: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(70, 50)
+	panel.custom_minimum_size = Vector2(30, 40)
 	
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 2)
 	panel.add_child(vbox)
+	
+	# 포트레이트 추가
+	var portrait := TextureRect.new()
+	portrait.custom_minimum_size = Vector2(16, 16)
+	portrait.expand_mode = TextureRect.EXPAND_KEEP_SIZE
+	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	
+	var portrait_path: String = str(hero_data.get("visuals", {}).get("portrait", ""))
+	if portrait_path != "" and ResourceLoader.exists(portrait_path):
+		portrait.texture = load(portrait_path)
+	
+	vbox.add_child(portrait)
 	
 	# 이름
 	var name_label := Label.new()
@@ -68,6 +80,7 @@ func _create_hero_panel(hero_id: String, hero_data: Dictionary) -> PanelContaine
 	vbox.add_child(cooldown_bar)
 	
 	party_labels[hero_id] = {
+		"portrait": portrait,
 		"hp_bar": hp_bar,
 		"hp_label": hp_label,
 		"cooldown_bar": cooldown_bar

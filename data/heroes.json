@@ -17,7 +17,7 @@
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/player1_walk_left_strip1.png",
-		"portrait": "",
+		"portrait": "res://sprites/characters/player1_walk_left_strip1.png",
 		"color": "cc4444"
 	  },
 	  "tags": ["melee", "tank"]
@@ -39,7 +39,7 @@
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/black_mage_walk_left_strip1.png",
-		"portrait": "",
+		"portrait": "res://sprites/characters/black_mage_walk_left_strip1.png",
 		"color": "4444cc"
 	  },
 	  "tags": ["ranged", "magic"]
@@ -61,7 +61,7 @@
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/white_mage_walk_left_strip1.png",
-		"portrait": "",
+		"portrait": "res://sprites/characters/white_mage_walk_left_strip1.png",
 		"color": "44cc44"
 	  },
 	  "tags": ["support", "magic"]
@@ -83,7 +83,7 @@
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/red_mage_walk_left_strip1.png",
-		"portrait": "",
+		"portrait": "res://sprites/characters/red_mage_walk_left_strip1.png",
 		"color": "aa44aa"
 	  },
 	  "tags": ["melee", "agile"]
