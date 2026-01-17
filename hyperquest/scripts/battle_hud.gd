@@ -2,7 +2,7 @@ extends CanvasLayer
 class_name BattleHUD
 ## 전투 로그와 파티 상태를 표시하는 HUD
 
-@onready var party_container: VBoxContainer = $PartyPanel/PartyContainer
+@onready var party_container: HBoxContainer = $PartyPanel/PartyContainer
 @onready var battle_log: Label = $LogPanel/BattleLog
 
 var party_labels: Dictionary = {}  # hero_id: {hp_bar, hp_label, cooldown_bar}

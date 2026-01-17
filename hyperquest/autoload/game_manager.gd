@@ -60,12 +60,10 @@ func _process_party_cooldowns(delta: float) -> void:
 		if current_cd > 0:
 			party_cooldowns[hero_id] = maxf(0, current_cd - delta)
 		
-		# 쿨다운 완료되면
-		if float(party_cooldowns[hero_id]) <= 0:
-			# 전투 중이면 공격
-			if active_battles.size() > 0:
-				hero_ready_to_attack.emit(hero_id)
-			# 쿨다운 리셋 (전투 유무 상관없이)
+		# 쿨다운 완료 & 전투 중이면 공격 가능 시그널
+		if float(party_cooldowns[hero_id]) <= 0 and active_battles.size() > 0:
+			hero_ready_to_attack.emit(hero_id)
+			# 쿨다운 리셋
 			party_cooldowns[hero_id] = float(party_max_cooldowns[hero_id])
 
 

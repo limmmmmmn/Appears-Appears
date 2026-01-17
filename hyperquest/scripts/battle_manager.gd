@@ -9,8 +9,8 @@ var active_windows: Array = []
 var hud: BattleHUD = null
 
 const WINDOW_SIZE := Vector2(170, 95)
-const SCREEN_SIZE := Vector2(640, 360)     # 변경!
-const CENTER_AVOID := Rect2(270, 130, 100, 100)  # 중앙 재계산
+const SCREEN_SIZE := Vector2(480, 270)
+const CENTER_AVOID := Rect2(190, 85, 100, 100)
 const MARGIN := 8
 const HUD_HEIGHT := 65
 
