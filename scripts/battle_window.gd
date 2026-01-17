@@ -168,6 +168,9 @@ func _enemy_attack(enemy: Dictionary) -> void:
 	if effects.size() > 0:
 		damage = int(effects[0].get("base_value", 10))
 	
+	# 공격 이펙트 재생
+	_play_attack_effect(enemy)
+	
 	GameManager.damage_hero(target_id, damage)
 	
 	log_message.emit("%s → %s %d!" % [
@@ -195,6 +198,9 @@ func _hero_attack(hero_id: String, alive_enemies: Array) -> void:
 	
 	target["hp"] = maxi(0, int(target["hp"]) - damage)
 	
+	# 피격 이펙트 재생
+	_play_hit_effect(target)
+	
 	log_message.emit("%s → %s %d!" % [
 		str(hero_data.get("name", hero_id)),
 		str(target["data"].get("name", "적")),
@@ -206,10 +212,67 @@ func _hero_attack(hero_id: String, alive_enemies: Array) -> void:
 		_on_enemy_defeated(target_idx)
 
 
+#region 이펙트
+func _play_hit_effect(enemy: Dictionary) -> void:
+	## 피격 이펙트: 흰색 플래시 + 깜빡임 (클래식 RPG 스타일)
+	if enemy["ui"] == null:
+		return
+	
+	var sprite: TextureRect = enemy["ui"]["sprite"]
+	if sprite == null or not is_instance_valid(sprite):
+		return
+	
+	var tween = create_tween()
+	var original_modulate = sprite.modulate
+	
+	# 흰색 플래시 + 깜빡임 3회
+	for i in range(3):
+		# 흰색으로 (피격 순간)
+		tween.tween_property(sprite, "modulate", Color.WHITE * 2.0, 0.03)
+		# 투명하게 (깜빡)
+		tween.tween_property(sprite, "modulate", Color(1, 1, 1, 0.3), 0.03)
+		# 원래대로
+		tween.tween_property(sprite, "modulate", original_modulate, 0.03)
+	
+	# 최종 원래 색으로 복귀 보장
+	tween.tween_property(sprite, "modulate", original_modulate, 0.01)
+
+
+func _play_attack_effect(enemy: Dictionary) -> void:
+	## 공격 이펙트: 앞으로 튀어나왔다 돌아오기
+	if enemy["ui"] == null:
+		return
+	
+	var container: VBoxContainer = enemy["ui"]["container"]
+	if container == null or not is_instance_valid(container):
+		return
+	
+	var original_pos = container.position
+	var attack_offset = Vector2(0, 8)  # 아래로 튀어나옴 (플레이어 쪽)
+	
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_BACK)
+	
+	# 빠르게 앞으로
+	tween.tween_property(container, "position", original_pos + attack_offset, 0.1)
+	# 잠깐 대기
+	tween.tween_interval(0.05)
+	# 부드럽게 돌아오기
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(container, "position", original_pos, 0.15)
+#endregion
+
+
 func _on_enemy_defeated(idx: int) -> void:
 	var enemy = enemies[idx]
 	if enemy["ui"] != null:
-		enemy["ui"]["container"].queue_free()
+		# 사망 이펙트: 페이드아웃
+		var container = enemy["ui"]["container"]
+		var tween = create_tween()
+		tween.tween_property(container, "modulate:a", 0.0, 0.3)
+		tween.tween_callback(container.queue_free)
 		enemy["ui"] = null
 
 

@@ -17,7 +17,10 @@
 	  "field": {
 		"sprite": "res://sprites/monsters/aqua_slime.png",
 		"wander_range": 48,
-		"move_speed": 20
+		"move_speed": 20,
+		"detect_range": 150,
+		"chase_speed": 50,
+		"lose_range": 160
 	  },
 	  "battle": {
 		"sprite": "res://sprites/monsters/aqua_slime.png",
@@ -47,7 +50,10 @@
 	  "field": {
 		"sprite": "res://sprites/monsters/blue_bat.png",
 		"wander_range": 48,
-		"move_speed": 35
+		"move_speed": 20,
+		"detect_range": 150,
+		"chase_speed": 50,
+		"lose_range": 160
 	  },
 	  "battle": {
 		"sprite": "res://sprites/monsters/blue_bat.png",
@@ -76,8 +82,11 @@
 	  },
 	  "field": {
 		"sprite": "res://sprites/monsters/golem.png",
-		"wander_range": 32,
-		"move_speed": 10
+		"wander_range": 48,
+		"move_speed": 20,
+		"detect_range": 150,
+		"chase_speed": 50,
+		"lose_range": 160
 	  },
 	  "battle": {
 		"sprite": "res://sprites/monsters/golem.png",
@@ -107,7 +116,10 @@
 	  "field": {
 		"sprite": "res://sprites/monsters/skeleton.png",
 		"wander_range": 48,
-		"move_speed": 25
+		"move_speed": 20,
+		"detect_range": 150,
+		"chase_speed": 50,
+		"lose_range": 160
 	  },
 	  "battle": {
 		"sprite": "res://sprites/monsters/skeleton.png",
@@ -136,8 +148,11 @@
 	  },
 	  "field": {
 		"sprite": "res://sprites/monsters/blaze_dragon.png",
-		"wander_range": 64,
-		"move_speed": 30
+		"wander_range": 48,
+		"move_speed": 20,
+		"detect_range": 200,
+		"chase_speed": 50,
+		"lose_range": 160
 	  },
 	  "battle": {
 		"sprite": "res://sprites/monsters/blaze_dragon.png",

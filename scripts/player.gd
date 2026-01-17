@@ -16,6 +16,8 @@ var encountered_enemies: Array = []  # 이미 만난 적 추적
 
 
 func _ready() -> void:
+	
+	add_to_group("player")
 	# 적과 충돌 감지 연결
 	hitbox.area_entered.connect(_on_hitbox_area_entered)
 	
