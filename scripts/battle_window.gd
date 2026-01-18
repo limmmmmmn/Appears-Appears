@@ -16,8 +16,7 @@ var is_battle_active: bool = false
 
 func _ready() -> void:
 	visible = false
-	# GameManager의 공격 준비 시그널 연결
-	GameManager.hero_ready_to_attack.connect(_on_hero_ready_to_attack)
+	# 시그널 연결 제거됨 - 이제 GameManager가 직접 호출
 
 
 func start_battle(enemy_id: String) -> void:
@@ -29,7 +28,6 @@ func start_battle(enemy_id: String) -> void:
 	visible = true
 	is_battle_active = true
 	
-	# 출현 로그
 	if enemies.size() == 1:
 		log_message.emit("[ %s 출현! ]" % str(enemies[0]["data"].get("name", enemy_id)))
 	else:
@@ -37,7 +35,6 @@ func start_battle(enemy_id: String) -> void:
 
 
 func _create_enemies(base_enemy_id: String) -> void:
-	# 1~3마리 랜덤
 	var count = randi_range(1, 3)
 	
 	for i in range(count):
@@ -66,7 +63,6 @@ func _create_enemy_ui(enemy: Dictionary) -> void:
 	var container = VBoxContainer.new()
 	container.alignment = BoxContainer.ALIGNMENT_CENTER
 	
-	# 스프라이트
 	var sprite = TextureRect.new()
 	sprite.expand_mode = TextureRect.EXPAND_KEEP_SIZE
 	sprite.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
@@ -77,14 +73,12 @@ func _create_enemy_ui(enemy: Dictionary) -> void:
 	
 	container.add_child(sprite)
 	
-	# 이름
 	var name_label = Label.new()
 	name_label.text = str(enemy["data"].get("name", "???"))
 	name_label.add_theme_font_size_override("font_size", 6)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	container.add_child(name_label)
 	
-	# HP 바
 	var hp_bar = ProgressBar.new()
 	hp_bar.custom_minimum_size = Vector2(40, 5)
 	hp_bar.max_value = enemy["max_hp"]
@@ -92,7 +86,6 @@ func _create_enemy_ui(enemy: Dictionary) -> void:
 	hp_bar.show_percentage = false
 	container.add_child(hp_bar)
 	
-	# 쿨다운 바
 	var cd_bar = ProgressBar.new()
 	cd_bar.custom_minimum_size = Vector2(40, 3)
 	cd_bar.max_value = 100
@@ -131,21 +124,82 @@ func _process_enemy_cooldowns(delta: float) -> void:
 			enemy["cooldown"] = float(enemy["max_cooldown"])
 
 
-func _on_hero_ready_to_attack(hero_id: String) -> void:
-	# 이 전투창이 활성화 상태일 때만 공격
+func receive_hero_attack(hero_id: String, skill_data: Dictionary, attack_type: String) -> void:
+	## GameManager가 직접 호출하는 공격 수신 함수
 	if not is_battle_active:
 		return
 	
-	# 살아있는 적이 있는지 확인
-	var alive_enemies = []
-	for i in range(enemies.size()):
-		if int(enemies[i]["hp"]) > 0:
-			alive_enemies.append(i)
-	
+	var alive_enemies = _get_alive_enemy_indices()
 	if alive_enemies.is_empty():
 		return
 	
-	_hero_attack(hero_id, alive_enemies)
+	match attack_type:
+		"single":
+			_hero_attack_single(hero_id, skill_data, alive_enemies)
+		"multi":
+			_hero_attack_multi(hero_id, skill_data, alive_enemies)
+
+
+func _get_alive_enemy_indices() -> Array:
+	var alive = []
+	for i in range(enemies.size()):
+		if int(enemies[i]["hp"]) > 0:
+			alive.append(i)
+	return alive
+
+
+func _hero_attack_single(hero_id: String, skill_data: Dictionary, alive_enemies: Array) -> void:
+	## 단일 공격: 적 하나만
+	var hero_data = DataManager.get_hero(hero_id)
+	
+	var target_idx = alive_enemies[randi() % alive_enemies.size()]
+	var target = enemies[target_idx]
+	
+	var damage = _calculate_damage(skill_data)
+	target["hp"] = maxi(0, int(target["hp"]) - damage)
+	
+	_play_hit_effect(target)
+	
+	log_message.emit("%s → %s %d!" % [
+		str(hero_data.get("name", hero_id)),
+		str(target["data"].get("name", "적")),
+		damage
+	])
+	
+	if int(target["hp"]) <= 0:
+		log_message.emit("[ %s 격파! ]" % str(target["data"].get("name", "적")))
+		_on_enemy_defeated(target_idx)
+
+
+func _hero_attack_multi(hero_id: String, skill_data: Dictionary, alive_enemies: Array) -> void:
+	## 범위 공격: 모든 살아있는 적
+	var hero_data = DataManager.get_hero(hero_id)
+	var damage = _calculate_damage(skill_data)
+	
+	log_message.emit("%s의 전체 공격!" % str(hero_data.get("name", hero_id)))
+	
+	for idx in alive_enemies:
+		var target = enemies[idx]
+		target["hp"] = maxi(0, int(target["hp"]) - damage)
+		
+		_play_hit_effect(target)
+		
+		log_message.emit("→ %s %d!" % [
+			str(target["data"].get("name", "적")),
+			damage
+		])
+		
+		if int(target["hp"]) <= 0:
+			log_message.emit("[ %s 격파! ]" % str(target["data"].get("name", "적")))
+			_on_enemy_defeated(idx)
+
+
+func _calculate_damage(skill_data: Dictionary) -> int:
+	var effects = skill_data.get("effects", [])
+	var damage = 10
+	if effects.size() > 0:
+		damage = int(effects[0].get("base_value", 10))
+	return damage
 
 
 func _enemy_attack(enemy: Dictionary) -> void:
@@ -168,7 +222,6 @@ func _enemy_attack(enemy: Dictionary) -> void:
 	if effects.size() > 0:
 		damage = int(effects[0].get("base_value", 10))
 	
-	# 공격 이펙트 재생
 	_play_attack_effect(enemy)
 	
 	GameManager.damage_hero(target_id, damage)
@@ -180,41 +233,8 @@ func _enemy_attack(enemy: Dictionary) -> void:
 	])
 
 
-func _hero_attack(hero_id: String, alive_enemies: Array) -> void:
-	var hero_data = DataManager.get_hero(hero_id)
-	
-	var target_idx = alive_enemies[randi() % alive_enemies.size()]
-	var target = enemies[target_idx]
-	
-	var skill_ids = hero_data.get("combat", {}).get("skills", [])
-	if skill_ids.is_empty():
-		return
-	
-	var skill_data = DataManager.get_skill(skill_ids[0])
-	var effects = skill_data.get("effects", [])
-	var damage = 10
-	if effects.size() > 0:
-		damage = int(effects[0].get("base_value", 10))
-	
-	target["hp"] = maxi(0, int(target["hp"]) - damage)
-	
-	# 피격 이펙트 재생
-	_play_hit_effect(target)
-	
-	log_message.emit("%s → %s %d!" % [
-		str(hero_data.get("name", hero_id)),
-		str(target["data"].get("name", "적")),
-		damage
-	])
-	
-	if int(target["hp"]) <= 0:
-		log_message.emit("[ %s 격파! ]" % str(target["data"].get("name", "적")))
-		_on_enemy_defeated(target_idx)
-
-
 #region 이펙트
 func _play_hit_effect(enemy: Dictionary) -> void:
-	## 피격 이펙트: 흰색 플래시 + 깜빡임 (클래식 RPG 스타일)
 	if enemy["ui"] == null:
 		return
 	
@@ -225,21 +245,15 @@ func _play_hit_effect(enemy: Dictionary) -> void:
 	var tween = create_tween()
 	var original_modulate = sprite.modulate
 	
-	# 흰색 플래시 + 깜빡임 3회
 	for i in range(3):
-		# 흰색으로 (피격 순간)
 		tween.tween_property(sprite, "modulate", Color.WHITE * 2.0, 0.03)
-		# 투명하게 (깜빡)
 		tween.tween_property(sprite, "modulate", Color(1, 1, 1, 0.3), 0.03)
-		# 원래대로
 		tween.tween_property(sprite, "modulate", original_modulate, 0.03)
 	
-	# 최종 원래 색으로 복귀 보장
 	tween.tween_property(sprite, "modulate", original_modulate, 0.01)
 
 
 func _play_attack_effect(enemy: Dictionary) -> void:
-	## 공격 이펙트: 앞으로 튀어나왔다 돌아오기
 	if enemy["ui"] == null:
 		return
 	
@@ -248,17 +262,14 @@ func _play_attack_effect(enemy: Dictionary) -> void:
 		return
 	
 	var original_pos = container.position
-	var attack_offset = Vector2(0, 8)  # 아래로 튀어나옴 (플레이어 쪽)
+	var attack_offset = Vector2(0, 8)
 	
 	var tween = create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_BACK)
 	
-	# 빠르게 앞으로
 	tween.tween_property(container, "position", original_pos + attack_offset, 0.1)
-	# 잠깐 대기
 	tween.tween_interval(0.05)
-	# 부드럽게 돌아오기
 	tween.set_ease(Tween.EASE_IN_OUT)
 	tween.set_trans(Tween.TRANS_QUAD)
 	tween.tween_property(container, "position", original_pos, 0.15)
@@ -268,7 +279,6 @@ func _play_attack_effect(enemy: Dictionary) -> void:
 func _on_enemy_defeated(idx: int) -> void:
 	var enemy = enemies[idx]
 	if enemy["ui"] != null:
-		# 사망 이펙트: 페이드아웃
 		var container = enemy["ui"]["container"]
 		var tween = create_tween()
 		tween.tween_property(container, "modulate:a", 0.0, 0.3)

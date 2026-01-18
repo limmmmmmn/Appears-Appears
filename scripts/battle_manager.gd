@@ -9,14 +9,15 @@ var active_windows: Array = []
 var hud: BattleHUD = null
 
 const WINDOW_SIZE := Vector2(170, 95)
-const SCREEN_SIZE := Vector2(640, 360)     # 변경!
-const CENTER_AVOID := Rect2(270, 130, 100, 100)  # 중앙 재계산
+const SCREEN_SIZE := Vector2(640, 360)
+const CENTER_AVOID := Rect2(270, 130, 100, 100)
 const MARGIN := 8
 const HUD_HEIGHT := 65
 
 
 func _ready() -> void:
 	GameManager.battle_started.connect(_on_battle_started)
+	GameManager.register_battle_manager(self)  # GameManager에 등록!
 	_setup_hud()
 
 
