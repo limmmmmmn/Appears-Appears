@@ -16,10 +16,11 @@ var encountered_enemies: Array = []  # 이미 만난 적 추적
 
 
 func _ready() -> void:
-	
-	add_to_group("player")
 	# 적과 충돌 감지 연결
 	hitbox.area_entered.connect(_on_hitbox_area_entered)
+	
+	# GameManager에 플레이어 등록 (레벨업 연출용)
+	GameManager.register_player(self)
 	
 	# 리더 캐릭터 스프라이트 로드
 	_load_leader_sprite()
@@ -35,7 +36,7 @@ func _spawn_party_members() -> void:
 		return
 	
 	var prev_unit: Node2D = self
-	var base_distance := 22.0 #18
+	var base_distance := 22.0
 	
 	# 1번 인덱스부터 (0번은 플레이어 자신)
 	for i in range(1, party.size()):
@@ -103,6 +104,7 @@ func _on_hitbox_area_entered(area: Area2D) -> void:
 		if enemy and enemy.is_active and not encountered_enemies.has(enemy):
 			encountered_enemies.append(enemy)
 			_encounter_enemy(enemy)
+
 
 func _encounter_enemy(enemy) -> void:
 	if not enemy.is_active:

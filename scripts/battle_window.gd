@@ -305,7 +305,11 @@ func _end_battle(victory: bool) -> void:
 	is_battle_active = false
 	
 	if victory:
+		# 경험치 계산 및 분배
+		var total_exp = _calculate_total_exp()
 		log_message.emit("[ 승리! ]")
+		log_message.emit("+ %d EXP" % total_exp)
+		GameManager.add_exp_to_party(total_exp)
 	else:
 		log_message.emit("[ 전멸... ]")
 	
@@ -314,6 +318,16 @@ func _end_battle(victory: bool) -> void:
 	battle_finished.emit(victory)
 	GameManager.end_battle(enemies[0]["id"], victory)
 	queue_free()
+
+
+func _calculate_total_exp() -> int:
+	## 처치한 모든 적의 경험치 합산
+	var total = 0
+	for enemy in enemies:
+		var rewards = enemy["data"].get("rewards", {})
+		var exp = int(rewards.get("exp", 0))
+		total += exp
+	return total
 
 
 func _update_ui() -> void:

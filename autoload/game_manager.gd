@@ -5,6 +5,8 @@ signal battle_started(enemy_id: String)
 signal battle_ended(enemy_id: String, victory: bool)
 signal party_status_changed()
 signal hero_died(hero_id: String)
+signal hero_leveled_up(hero_id: String, new_level: int, stat_changes: Dictionary, new_skills: Array)
+signal exp_gained(hero_id: String, amount: int, total: int)
 
 # 현재 파티 구성 (영웅 id 배열)
 var party: Array[String] = ["warrior", "mage", "cleric", "thief"]
@@ -15,11 +17,19 @@ var party_max_hp: Dictionary = {}
 var party_cooldowns: Dictionary = {}
 var party_max_cooldowns: Dictionary = {}
 
+# 레벨/경험치 시스템
+var party_level: Dictionary = {}
+var party_exp: Dictionary = {}
+var party_stats: Dictionary = {}  # 현재 스탯 (레벨업으로 증가된 값 포함)
+
 # 활성 전투 목록
 var active_battles: Array = []
 
 # 배틀 매니저 참조 (전투창 직접 관리용)
 var battle_manager: Node = null
+
+# 플레이어 참조 (레벨업 연출용)
+var player_node: Node2D = null
 
 # 게임 상태
 var is_paused: bool = false
@@ -36,13 +46,33 @@ func _init_party_status() -> void:
 		if hero_data.is_empty():
 			continue
 		
-		var max_hp = int(hero_data.get("stats", {}).get("max_hp", 100))
+		var base_stats = hero_data.get("stats", {})
+		var max_hp = int(base_stats.get("max_hp", 100))
 		var base_cd = float(hero_data.get("combat", {}).get("base_cooldown", 2.0))
 		
 		party_hp[hero_id] = max_hp
 		party_max_hp[hero_id] = max_hp
 		party_cooldowns[hero_id] = 0.0
 		party_max_cooldowns[hero_id] = base_cd
+		
+		# 레벨/경험치 초기화
+		party_level[hero_id] = 1
+		party_exp[hero_id] = 0
+		
+		# 스탯 복사
+		party_stats[hero_id] = {
+			"max_hp": max_hp,
+			"attack": int(base_stats.get("attack", 10)),
+			"defense": int(base_stats.get("defense", 5)),
+			"speed": int(base_stats.get("speed", 5)),
+			"luck": int(base_stats.get("luck", 5))
+		}
+
+
+func register_player(player: Node2D) -> void:
+	## Player 노드 등록 (레벨업 연출용)
+	player_node = player
+	print("[GameManager] Player 등록됨")
 
 
 func register_battle_manager(manager: Node) -> void:
@@ -247,3 +277,208 @@ func get_cooldown_percent(hero_id: String) -> float:
 	var current = float(party_cooldowns.get(hero_id, 0))
 	var max_cd = float(party_max_cooldowns.get(hero_id, 1))
 	return (max_cd - current) / max_cd
+
+
+#region 레벨/경험치 시스템
+func get_required_exp(level: int) -> int:
+	## 다음 레벨에 필요한 총 경험치 (공식 방식)
+	return int(100 * pow(level, 1.5))
+
+
+func add_exp_to_party(total_exp: int) -> void:
+	## 살아있는 파티원에게 경험치 분배 (균등 분배, 죽은 멤버 제외)
+	var alive_heroes = get_alive_heroes()
+	if alive_heroes.is_empty():
+		return
+	
+	var exp_per_hero = total_exp  # 각자 전체 경험치 받음 (비율 아님)
+	
+	for hero_id in alive_heroes:
+		_add_exp_to_hero(hero_id, exp_per_hero)
+
+
+func _add_exp_to_hero(hero_id: String, amount: int) -> void:
+	## 개별 영웅에게 경험치 추가
+	if not party_exp.has(hero_id):
+		return
+	
+	party_exp[hero_id] = int(party_exp[hero_id]) + amount
+	exp_gained.emit(hero_id, amount, int(party_exp[hero_id]))
+	
+	# 레벨업 체크
+	_check_level_up(hero_id)
+
+
+func _check_level_up(hero_id: String) -> void:
+	## 레벨업 가능한지 확인하고 처리
+	var current_level = int(party_level[hero_id])
+	var current_exp = int(party_exp[hero_id])
+	var required_exp = get_required_exp(current_level)
+	
+	while current_exp >= required_exp:
+		current_level += 1
+		party_level[hero_id] = current_level
+		
+		var result = _apply_level_up(hero_id, current_level)
+		hero_leveled_up.emit(hero_id, current_level, result["stat_changes"], result["new_skills"])
+		
+		# 연출
+		_show_level_up_effect(hero_id, current_level, result["stat_changes"], result["new_skills"])
+		
+		required_exp = get_required_exp(current_level)
+
+
+func _apply_level_up(hero_id: String, new_level: int) -> Dictionary:
+	## 레벨업 적용: 스탯 증가 + 스킬 해금
+	var hero_data = DataManager.get_hero(hero_id)
+	var growth = hero_data.get("growth", {})
+	var skill_unlocks = hero_data.get("skill_unlocks", {})
+	
+	var stat_changes = {}
+	var new_skills = []
+	
+	# 스탯 증가
+	var stats = party_stats[hero_id]
+	for stat_name in growth.keys():
+		var increase = int(growth[stat_name])
+		var old_value = int(stats.get(stat_name, 0))
+		var new_value = old_value + increase
+		stats[stat_name] = new_value
+		stat_changes[stat_name] = {"old": old_value, "new": new_value, "increase": increase}
+	
+	# max_hp 증가 시 현재 HP도 증가
+	if stat_changes.has("max_hp"):
+		var hp_increase = int(stat_changes["max_hp"]["increase"])
+		party_max_hp[hero_id] = int(stats["max_hp"])
+		party_hp[hero_id] = int(party_hp[hero_id]) + hp_increase
+	
+	# 스킬 해금 확인
+	var level_str = str(new_level)
+	if skill_unlocks.has(level_str):
+		var skills_to_unlock = skill_unlocks[level_str]
+		for skill_id in skills_to_unlock:
+			new_skills.append(skill_id)
+			_unlock_skill(hero_id, skill_id)
+	
+	party_status_changed.emit()
+	
+	return {"stat_changes": stat_changes, "new_skills": new_skills}
+
+
+func _unlock_skill(hero_id: String, skill_id: String) -> void:
+	## 스킬 해금 (combat.skills에 추가)
+	# 현재는 JSON 기반이라 런타임에 추가하려면 별도 관리 필요
+	# 일단 로그만 출력
+	print("[GameManager] %s 스킬 해금: %s" % [hero_id, skill_id])
+
+
+func _show_level_up_effect(hero_id: String, new_level: int, stat_changes: Dictionary, new_skills: Array) -> void:
+	## 레벨업 연출 + 로그
+	var hero_data = DataManager.get_hero(hero_id)
+	var hero_name = str(hero_data.get("name", hero_id))
+	
+	# 로그 출력 (BattleManager의 HUD로)
+	_send_log("[%s] Lv.%d 도달!" % [hero_name, new_level])
+	
+	# 스탯 변화 로그
+	var stat_names = {"max_hp": "HP", "attack": "공격력", "defense": "방어력", "speed": "속도", "luck": "행운"}
+	for stat_key in stat_changes.keys():
+		var change = stat_changes[stat_key]
+		var display_name = stat_names.get(stat_key, stat_key)
+		_send_log("  %s +%d (%d → %d)" % [display_name, change["increase"], change["old"], change["new"]])
+	
+	# 스킬 해금 로그
+	for skill_id in new_skills:
+		var skill_data = DataManager.get_skill(skill_id)
+		var skill_name = str(skill_data.get("name", skill_id))
+		_send_log("[%s] 스킬 해금: %s" % [hero_name, skill_name])
+	
+	# 필드 위 연출
+	_show_floating_text(hero_id, "Lv UP!", Color.YELLOW, new_skills)
+
+
+func _send_log(text: String) -> void:
+	## BattleManager HUD로 로그 전송
+	if battle_manager and battle_manager.hud:
+		battle_manager.hud.add_log(text)
+	else:
+		print(text)
+
+
+func _show_floating_text(hero_id: String, text: String, color: Color, new_skills: Array) -> void:
+	## 캐릭터 머리 위에 떠오르는 텍스트
+	if player_node == null:
+		return
+	
+	var target_node: Node2D = null
+	
+	# 리더인지 파티원인지 확인
+	if GameManager.party[0] == hero_id:
+		target_node = player_node
+	else:
+		# 파티원 찾기
+		var member_index = GameManager.party.find(hero_id) - 1
+		if member_index >= 0 and member_index < player_node.party_members.size():
+			target_node = player_node.party_members[member_index]
+	
+	if target_node == null:
+		return
+	
+	# "Lv UP!" 텍스트 생성
+	_create_floating_label(target_node, text, color, 0.0)
+	
+	# 스킬 해금 시 추가 텍스트
+	if new_skills.size() > 0:
+		_create_floating_label(target_node, "New Skill!", Color.CYAN, 0.5)
+
+
+func _create_floating_label(target: Node2D, text: String, color: Color, delay: float) -> void:
+	## 떠오르는 라벨 생성
+	var label = Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 8)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 2)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.z_index = 100
+	
+	# 위치 설정 (캐릭터 머리 위)
+	label.position = Vector2(-20, -30)
+	label.modulate.a = 0.0
+	
+	target.add_child(label)
+	
+	# 애니메이션
+	var tween = target.create_tween()
+	
+	if delay > 0:
+		tween.tween_interval(delay)
+	
+	# 나타나면서 위로 떠오름
+	tween.tween_property(label, "modulate:a", 1.0, 0.15)
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 15, 0.8).set_ease(Tween.EASE_OUT)
+	tween.set_parallel(false)
+	
+	# 유지
+	tween.tween_interval(0.3)
+	
+	# 페이드아웃
+	tween.tween_property(label, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(label.queue_free)
+
+
+func get_hero_level(hero_id: String) -> int:
+	return int(party_level.get(hero_id, 1))
+
+
+func get_hero_exp(hero_id: String) -> int:
+	return int(party_exp.get(hero_id, 0))
+
+
+func get_hero_stat(hero_id: String, stat_name: String) -> int:
+	if party_stats.has(hero_id):
+		return int(party_stats[hero_id].get(stat_name, 0))
+	return 0
+#endregion

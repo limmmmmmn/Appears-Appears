@@ -6,14 +6,26 @@
 	  "description": "검과 방패를 다루는 전선의 수호자",
 	  "stats": {
 		"max_hp": 100,
-		"attack": 0,
-		"defense": 0,
-		"speed": 0,
-		"luck": 0
+		"attack": 15,
+		"defense": 8,
+		"speed": 5,
+		"luck": 3
+	  },
+	  "growth": {
+		"max_hp": 12,
+		"attack": 3,
+		"defense": 2,
+		"speed": 1,
+		"luck": 1
 	  },
 	  "combat": {
 		"base_cooldown": 2.0,
 		"skills": ["skill_slash"]
+	  },
+	  "skill_unlocks": {
+		"1": ["skill_slash"],
+		"3": ["skill_power_strike"],
+		"5": ["skill_whirlwind"]
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/player1_walk_left_strip1.png",
@@ -28,14 +40,26 @@
 	  "description": "원소의 힘을 다루는 신비술사",
 	  "stats": {
 		"max_hp": 60,
-		"attack": 0,
-		"defense": 0,
-		"speed": 0,
-		"luck": 0
+		"attack": 18,
+		"defense": 3,
+		"speed": 6,
+		"luck": 5
+	  },
+	  "growth": {
+		"max_hp": 6,
+		"attack": 4,
+		"defense": 1,
+		"speed": 1,
+		"luck": 1
 	  },
 	  "combat": {
 		"base_cooldown": 2.5,
 		"skills": ["skill_strike"]
+	  },
+	  "skill_unlocks": {
+		"1": ["skill_strike"],
+		"3": ["skill_fireball"],
+		"5": ["skill_meteor"]
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/black_mage_walk_left_strip1.png",
@@ -50,14 +74,26 @@
 	  "description": "신의 축복으로 동료를 치유하는 사제",
 	  "stats": {
 		"max_hp": 80,
-		"attack": 0,
-		"defense": 0,
-		"speed": 0,
-		"luck": 0
+		"attack": 8,
+		"defense": 5,
+		"speed": 4,
+		"luck": 8
+	  },
+	  "growth": {
+		"max_hp": 8,
+		"attack": 2,
+		"defense": 1,
+		"speed": 1,
+		"luck": 2
 	  },
 	  "combat": {
 		"base_cooldown": 2.2,
 		"skills": ["skill_strike"]
+	  },
+	  "skill_unlocks": {
+		"1": ["skill_strike"],
+		"3": ["skill_heal"],
+		"5": ["skill_holy_light"]
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/white_mage_walk_left_strip1.png",
@@ -72,14 +108,26 @@
 	  "description": "빠른 손놀림과 기민한 움직임의 달인",
 	  "stats": {
 		"max_hp": 70,
-		"attack": 0,
-		"defense": 0,
-		"speed": 0,
-		"luck": 0
+		"attack": 12,
+		"defense": 4,
+		"speed": 12,
+		"luck": 10
+	  },
+	  "growth": {
+		"max_hp": 7,
+		"attack": 3,
+		"defense": 1,
+		"speed": 2,
+		"luck": 2
 	  },
 	  "combat": {
 		"base_cooldown": 1.5,
 		"skills": ["skill_slash"]
+	  },
+	  "skill_unlocks": {
+		"1": ["skill_slash"],
+		"3": ["skill_backstab"],
+		"5": ["skill_shadow_dance"]
 	  },
 	  "visuals": {
 		"sprite": "res://sprites/characters/red_mage_walk_left_strip1.png",
