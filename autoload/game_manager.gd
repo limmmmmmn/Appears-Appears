@@ -7,6 +7,7 @@ signal party_status_changed()
 signal hero_died(hero_id: String)
 signal hero_leveled_up(hero_id: String, new_level: int, stat_changes: Dictionary, new_skills: Array)
 signal exp_gained(hero_id: String, amount: int, total: int)
+signal party_order_changed(new_order: Array)  # 파티 순서 변경 시그널
 
 # 현재 파티 구성 (영웅 id 배열)
 var party: Array[String] = ["warrior", "mage", "cleric", "thief"]
@@ -198,6 +199,8 @@ func damage_hero(hero_id: String, damage: int) -> void:
 		if was_alive and int(party_hp[hero_id]) <= 0:
 			hero_died.emit(hero_id)
 			_show_dead_popup(hero_id)
+			# 파티 재정렬 (죽은 멤버 뒤로)
+			_reorder_party()
 
 
 func _show_dead_popup(hero_id: String) -> void:
@@ -271,6 +274,36 @@ func get_alive_heroes() -> Array:
 
 func is_party_dead() -> bool:
 	return get_alive_heroes().is_empty()
+
+
+func _reorder_party() -> void:
+	## 파티 재정렬: 살아있는 멤버 앞, 죽은 멤버 뒤
+	var alive_members: Array[String] = []
+	var dead_members: Array[String] = []
+	
+	for hero_id in party:
+		if is_hero_alive(hero_id):
+			alive_members.append(hero_id)
+		else:
+			dead_members.append(hero_id)
+	
+	var new_order: Array[String] = []
+	new_order.append_array(alive_members)
+	new_order.append_array(dead_members)
+	
+	# 순서가 바뀌었으면 시그널 발생
+	if new_order != party:
+		party = new_order
+		party_order_changed.emit(party)
+		print("[GameManager] 파티 재정렬: ", party)
+
+
+func get_current_leader() -> String:
+	## 현재 리더 (파티 첫 번째, 살아있는 멤버)
+	for hero_id in party:
+		if is_hero_alive(hero_id):
+			return hero_id
+	return ""
 
 
 func get_cooldown_percent(hero_id: String) -> float:

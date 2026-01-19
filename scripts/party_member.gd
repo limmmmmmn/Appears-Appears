@@ -4,24 +4,32 @@ class_name PartyMember
 ## 이동 시 살짝 벌어지고, 멈추면 다시 붙는 생동감 있는 움직임
 
 @export var hero_id: String = ""
-@export var base_distance: float = 20.0  # 기본 간격 (정지 시)
-@export var max_gap: float = 12.0  # 이동 시 추가로 벌어지는 최대 간격
-@export var move_speed: float = 80.0  # 플레이어보다 살짝 빠르게
-@export var catch_up_speed: float = 50.0  # 붙을 때 더 빠르게
+@export var base_distance: float = 22.0  # 기본 간격 (정지 시)
+@export var max_gap: float = 5.0  # 이동 시 추가로 벌어지는 최대 간격
+@export var move_speed: float = 90.0  # 플레이어보다 살짝 빠르게
+@export var catch_up_speed: float = 120.0  # 붙을 때 더 빠르게
 
 var leader: Node2D = null  # 따라갈 대상
 var is_active: bool = true
+var is_dead: bool = false  # 사망 상태
 
 # 상태 감지용
 var leader_was_moving: bool = false
 var settle_timer: float = 0.0  # 정지 후 붙기 시작까지 딜레이
-const SETTLE_DELAY: float = 0.0  # 멈춘 후 붙기 시작하는 딜레이
+const SETTLE_DELAY: float = 0.08  # 멈춘 후 붙기 시작하는 딜레이
 
 @onready var sprite: Sprite2D = $Sprite2D
 
 
 func _ready() -> void:
 	_load_hero_data()
+	
+	# 사망 시그널 연결
+	GameManager.hero_died.connect(_on_hero_died)
+	
+	# 혹시 이미 죽어있으면 바로 적용
+	if not GameManager.is_hero_alive(hero_id):
+		_apply_dead_visual()
 
 
 func _load_hero_data() -> void:
@@ -43,6 +51,7 @@ func _physics_process(delta: float) -> void:
 	if not is_active or leader == null:
 		return
 	
+	# 죽어도 따라다니긴 함 (드러누운 채로)
 	_follow_leader(delta)
 
 
@@ -85,7 +94,8 @@ func _follow_leader(delta: float) -> void:
 		# 너무 멀면 따라가기
 		var direction := global_position.direction_to(leader.global_position)
 		velocity = direction * current_speed
-		_update_sprite_direction(direction)
+		if not is_dead:  # 죽으면 방향 안 바꿈
+			_update_sprite_direction(direction)
 	elif distance < target_distance - 0.5 and not leader_moving:
 		# 너무 가까우면 살짝 뒤로 (정지 시에만)
 		var direction := leader.global_position.direction_to(global_position)
@@ -105,10 +115,60 @@ func _is_leader_moving() -> bool:
 
 
 func _update_sprite_direction(direction: Vector2) -> void:
+	var old_flip = sprite.flip_h
+	
 	if direction.x > 0.1:
 		sprite.flip_h = true
 	elif direction.x < -0.1:
 		sprite.flip_h = false
+	
+	# 죽은 상태에서 플립이 바뀌면 회전 방향도 바꿔야 함
+	if is_dead and old_flip != sprite.flip_h:
+		var target_rotation = -90.0 if not sprite.flip_h else 90.0
+		sprite.rotation_degrees = target_rotation
+
+
+func _on_hero_died(dead_hero_id: String) -> void:
+	if dead_hero_id == hero_id:
+		_apply_dead_visual()
+
+
+func _apply_dead_visual() -> void:
+	## 사망 비주얼: 흑백 + 90도 회전 (하늘 보고 누움)
+	## 스프라이트가 왼쪽 보고 있으므로 -90도 회전 = 하늘 보기
+	if is_dead:
+		return
+	
+	is_dead = true
+	
+	# 애니메이션으로 쓰러지기
+	var tween = create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_BACK)
+	
+	# 동시에: 흑백 + 회전
+	tween.set_parallel(true)
+	
+	# 흑백 처리 (saturation 0으로)
+	tween.tween_property(sprite, "modulate", Color(0.5, 0.5, 0.5, 1.0), 0.3)
+	
+	# -90도 회전 (반시계 방향 = 하늘 보고 누움)
+	# flip_h 상태에 따라 회전 방향 조정
+	var target_rotation = -90.0 if not sprite.flip_h else 90.0
+	tween.tween_property(sprite, "rotation_degrees", target_rotation, 0.3)
+
+
+func revive() -> void:
+	## 부활 시 원래대로
+	if not is_dead:
+		return
+	
+	is_dead = false
+	
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.3)
+	tween.tween_property(sprite, "rotation_degrees", 0.0, 0.3)
 
 
 func setup(id: String, follow_target: Node2D, distance: float = 22.0) -> void:
