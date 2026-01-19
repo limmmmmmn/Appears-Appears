@@ -21,7 +21,7 @@
 		"luk": 1
 	  },
 	  "combat": {
-		"base_cooldown": 2.0,
+		"base_cooldown": 4.0,
 		"skills": ["skill_slash"]
 	  },
 	  "skill_unlocks": {
@@ -58,7 +58,7 @@
 		"luk": 1
 	  },
 	  "combat": {
-		"base_cooldown": 2.5,
+		"base_cooldown": 4.5,
 		"skills": ["skill_fire"]
 	  },
 	  "skill_unlocks": {
@@ -95,7 +95,7 @@
 		"luk": 2
 	  },
 	  "combat": {
-		"base_cooldown": 2.2,
+		"base_cooldown": 4.2,
 		"skills": ["skill_strike"]
 	  },
 	  "skill_unlocks": {
@@ -132,7 +132,7 @@
 		"luk": 2
 	  },
 	  "combat": {
-		"base_cooldown": 1.5,
+		"base_cooldown": 3.5,
 		"skills": ["skill_slash"]
 	  },
 	  "skill_unlocks": {
@@ -169,7 +169,7 @@
 		"luk": 1
 	  },
 	  "combat": {
-		"base_cooldown": 1.8,
+		"base_cooldown": 3.8,
 		"skills": ["skill_shoot"]
 	  },
 	  "skill_unlocks": {
@@ -206,7 +206,7 @@
 		"luk": 1
 	  },
 	  "combat": {
-		"base_cooldown": 2.5,
+		"base_cooldown": 4.5,
 		"skills": ["skill_strike"]
 	  },
 	  "skill_unlocks": {

@@ -4,7 +4,7 @@ class_name EnemySpawner
 
 @export var spawn_interval: float = 0.5
 @export var max_enemies: int = 100
-@export var spawn_margin: float = 32.0  # 카메라 바깥 여백
+@export var spawn_margin: float = 50.0  # 카메라 바깥 여백
 
 # 스폰 가능한 적 목록 (태그 또는 id 배열)
 @export var enemy_pool: Array[String] = ["slime", "bat", "skeleton"]

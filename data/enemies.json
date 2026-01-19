@@ -13,7 +13,7 @@
 		"luk": 1
 	  },
 	  "combat": {
-		"base_cooldown": 3.0,
+		"base_cooldown": 5.0,
 		"skills": ["skill_strike"]
 	  },
 	  "field": {
@@ -50,7 +50,7 @@
 		"luk": 5
 	  },
 	  "combat": {
-		"base_cooldown": 1.8,
+		"base_cooldown": 3.8,
 		"skills": ["skill_slash"]
 	  },
 	  "field": {
@@ -85,7 +85,7 @@
 		"luk": 1
 	  },
 	  "combat": {
-		"base_cooldown": 4.0,
+		"base_cooldown": 6.0,
 		"skills": ["skill_strike"]
 	  },
 	  "field": {
@@ -122,7 +122,7 @@
 		"luk": 3
 	  },
 	  "combat": {
-		"base_cooldown": 2.5,
+		"base_cooldown": 4.5,
 		"skills": ["skill_slash"]
 	  },
 	  "field": {
@@ -159,7 +159,7 @@
 		"luk": 8
 	  },
 	  "combat": {
-		"base_cooldown": 2.0,
+		"base_cooldown": 4.0,
 		"skills": ["skill_curse"]
 	  },
 	  "field": {
@@ -196,7 +196,7 @@
 		"luk": 4
 	  },
 	  "combat": {
-		"base_cooldown": 2.8,
+		"base_cooldown": 4.8,
 		"skills": ["skill_slash", "skill_strike"]
 	  },
 	  "field": {
@@ -233,7 +233,7 @@
 		"luk": 10
 	  },
 	  "combat": {
-		"base_cooldown": 3.5,
+		"base_cooldown": 5.5,
 		"skills": ["skill_slash", "skill_fire_breath"]
 	  },
 	  "field": {

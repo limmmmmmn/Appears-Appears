@@ -6,9 +6,12 @@ signal battle_finished(victory: bool)
 signal log_message(text: String)
 
 # 전투에 참여한 적들
-var enemies: Array = []  # [{id, data, hp, max_hp, cooldown, max_cooldown, stats, ui}]
+var enemies: Array = []  # [{id, data, hp, max_hp, cooldown, max_cooldown, ui}]
 
 var is_battle_active: bool = false
+
+# 이펙트 텍스처
+var slash_texture: Texture2D = null
 
 @onready var panel: Panel = $Panel
 @onready var enemies_container: HBoxContainer = $Panel/EnemiesContainer
@@ -16,6 +19,16 @@ var is_battle_active: bool = false
 
 func _ready() -> void:
 	visible = false
+	_load_fx_textures()
+
+
+func _load_fx_textures() -> void:
+	var slash_path = "res://assets/FX/slash.png"  # ← 이 경로 확인!
+	if ResourceLoader.exists(slash_path):
+		slash_texture = load(slash_path)
+		print("[BattleWindow] 슬래시 텍스처 로드됨")  # 디버그용
+	else:
+		print("[BattleWindow] 슬래시 텍스처 없음: ", slash_path)  # 디버그용
 
 
 func start_battle(enemy_id: String) -> void:
@@ -41,28 +54,16 @@ func _create_enemies(base_enemy_id: String) -> void:
 		if enemy_data.is_empty():
 			continue
 		
-		var stats = enemy_data.get("stats", {})
-		var max_hp = int(stats.get("max_hp", 30))
+		var max_hp = int(enemy_data.get("stats", {}).get("max_hp", 30))
 		var max_cd = float(enemy_data.get("combat", {}).get("base_cooldown", 3.0))
-		
-		# DEX 기반 쿨다운 계산
-		var dex = int(stats.get("dex", 5))
-		var adjusted_cd = max_cd * (100.0 / (100.0 + float(dex)))
 		
 		var enemy = {
 			"id": base_enemy_id,
 			"data": enemy_data,
 			"hp": max_hp,
 			"max_hp": max_hp,
-			"cooldown": adjusted_cd + randf_range(0, 1.0),
-			"max_cooldown": adjusted_cd,
-			"stats": {
-				"atk": int(stats.get("atk", 10)),
-				"def": int(stats.get("def", 5)),
-				"dex": dex,
-				"int": int(stats.get("int", 5)),
-				"luk": int(stats.get("luk", 5))
-			},
+			"cooldown": max_cd * randf_range(0.25, 1.0) ,
+			"max_cooldown": max_cd,
 			"ui": null
 		}
 		
@@ -74,15 +75,21 @@ func _create_enemy_ui(enemy: Dictionary) -> void:
 	var container = VBoxContainer.new()
 	container.alignment = BoxContainer.ALIGNMENT_CENTER
 	
+	# 스프라이트 컨테이너 (이펙트 표시용)
+	var sprite_container = Control.new()
+	sprite_container.custom_minimum_size = Vector2(48, 48)
+	
 	var sprite = TextureRect.new()
 	sprite.expand_mode = TextureRect.EXPAND_KEEP_SIZE
 	sprite.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	sprite.set_anchors_preset(Control.PRESET_CENTER)
 	
 	var sprite_path = str(enemy["data"].get("battle", {}).get("sprite", ""))
 	if sprite_path != "" and ResourceLoader.exists(sprite_path):
 		sprite.texture = load(sprite_path)
 	
-	container.add_child(sprite)
+	sprite_container.add_child(sprite)
+	container.add_child(sprite_container)
 	
 	var name_label = Label.new()
 	name_label.text = str(enemy["data"].get("name", "???"))
@@ -108,6 +115,7 @@ func _create_enemy_ui(enemy: Dictionary) -> void:
 	
 	enemy["ui"] = {
 		"container": container,
+		"sprite_container": sprite_container,
 		"sprite": sprite,
 		"name": name_label,
 		"hp_bar": hp_bar,
@@ -144,6 +152,10 @@ func receive_hero_attack(hero_id: String, skill_data: Dictionary, attack_type: S
 	if alive_enemies.is_empty():
 		return
 	
+	# 필드 아이콘 이펙트 요청
+	var skill_type = str(skill_data.get("type", "physical"))
+	GameManager.show_attack_icon(hero_id, skill_type)
+	
 	match attack_type:
 		"single":
 			_hero_attack_single(hero_id, skill_data, alive_enemies)
@@ -160,15 +172,17 @@ func _get_alive_enemy_indices() -> Array:
 
 
 func _hero_attack_single(hero_id: String, skill_data: Dictionary, alive_enemies: Array) -> void:
+	## 단일 공격: 적 하나만
 	var hero_data = DataManager.get_hero(hero_id)
 	
 	var target_idx = alive_enemies[randi() % alive_enemies.size()]
 	var target = enemies[target_idx]
 	
-	var damage = _calculate_hero_damage(hero_id, skill_data, target)
+	var damage = _calculate_damage(skill_data)
 	target["hp"] = maxi(0, int(target["hp"]) - damage)
 	
 	_play_hit_effect(target)
+	_play_slash_effect(target)
 	
 	log_message.emit("%s → %s %d!" % [
 		str(hero_data.get("name", hero_id)),
@@ -182,16 +196,18 @@ func _hero_attack_single(hero_id: String, skill_data: Dictionary, alive_enemies:
 
 
 func _hero_attack_multi(hero_id: String, skill_data: Dictionary, alive_enemies: Array) -> void:
+	## 범위 공격: 모든 살아있는 적
 	var hero_data = DataManager.get_hero(hero_id)
+	var damage = _calculate_damage(skill_data)
 	
 	log_message.emit("%s의 전체 공격!" % str(hero_data.get("name", hero_id)))
 	
 	for idx in alive_enemies:
 		var target = enemies[idx]
-		var damage = _calculate_hero_damage(hero_id, skill_data, target)
 		target["hp"] = maxi(0, int(target["hp"]) - damage)
 		
 		_play_hit_effect(target)
+		_play_slash_effect(target)
 		
 		log_message.emit("→ %s %d!" % [
 			str(target["data"].get("name", "적")),
@@ -203,38 +219,12 @@ func _hero_attack_multi(hero_id: String, skill_data: Dictionary, alive_enemies: 
 			_on_enemy_defeated(idx)
 
 
-func _calculate_hero_damage(hero_id: String, skill_data: Dictionary, target: Dictionary) -> int:
-	## 영웅 데미지 계산: base_value + (stat * ratio) - enemy_def
+func _calculate_damage(skill_data: Dictionary) -> int:
 	var effects = skill_data.get("effects", [])
-	if effects.is_empty():
-		return 10
-	
-	var effect = effects[0]
-	var base_value = int(effect.get("base_value", 10))
-	var scaling = effect.get("stat_scaling", {})
-	var stat_name = str(scaling.get("stat", "atk"))
-	var ratio = float(scaling.get("ratio", 1.0))
-	
-	# 영웅 스탯 가져오기
-	var hero_stat = GameManager.get_hero_stat(hero_id, stat_name)
-	
-	# 크리티컬 체크
-	var luk = GameManager.get_hero_stat(hero_id, "luk")
-	var crit_chance = float(luk) * 2.0  # LUK * 2% 크리티컬 확률
-	var crit_bonus = float(effect.get("crit_bonus", 0))  # 스킬별 추가 크리티컬 확률
-	var is_crit = randf() * 100.0 < (crit_chance + crit_bonus)
-	
-	# 데미지 계산
-	var raw_damage = base_value + int(float(hero_stat) * ratio)
-	
-	if is_crit:
-		raw_damage = int(float(raw_damage) * 1.5)  # 크리티컬 1.5배
-	
-	# 적 방어력 적용
-	var enemy_def = int(target["stats"].get("def", 0))
-	var final_damage = maxi(1, raw_damage - enemy_def)
-	
-	return final_damage
+	var damage = 10
+	if effects.size() > 0:
+		damage = int(effects[0].get("base_value", 10))
+	return damage
 
 
 func _enemy_attack(enemy: Dictionary) -> void:
@@ -252,11 +242,13 @@ func _enemy_attack(enemy: Dictionary) -> void:
 		return
 	
 	var skill_data = DataManager.get_skill(skill_ids[0])
-	var damage = _calculate_enemy_damage(enemy, skill_data)
+	var effects = skill_data.get("effects", [])
+	var damage = 10
+	if effects.size() > 0:
+		damage = int(effects[0].get("base_value", 10))
 	
 	_play_attack_effect(enemy)
 	
-	# GameManager.damage_hero가 방어력 처리함
 	GameManager.damage_hero(target_id, damage)
 	
 	log_message.emit("%s → %s %d!" % [
@@ -266,26 +258,9 @@ func _enemy_attack(enemy: Dictionary) -> void:
 	])
 
 
-func _calculate_enemy_damage(enemy: Dictionary, skill_data: Dictionary) -> int:
-	## 적 데미지 계산
-	var effects = skill_data.get("effects", [])
-	if effects.is_empty():
-		return int(enemy["stats"].get("atk", 10))
-	
-	var effect = effects[0]
-	var base_value = int(effect.get("base_value", 10))
-	var scaling = effect.get("stat_scaling", {})
-	var stat_name = str(scaling.get("stat", "atk"))
-	var ratio = float(scaling.get("ratio", 1.0))
-	
-	var enemy_stat = int(enemy["stats"].get(stat_name, 10))
-	var damage = base_value + int(float(enemy_stat) * ratio)
-	
-	return damage
-
-
 #region 이펙트
 func _play_hit_effect(enemy: Dictionary) -> void:
+	## 피격 시 깜빡임 효과
 	if enemy["ui"] == null:
 		return
 	
@@ -304,7 +279,41 @@ func _play_hit_effect(enemy: Dictionary) -> void:
 	tween.tween_property(sprite, "modulate", original_modulate, 0.01)
 
 
+func _play_slash_effect(enemy: Dictionary) -> void:
+	## 슬래시 이펙트 표시
+	if enemy["ui"] == null or slash_texture == null:
+		return
+	
+	var sprite: TextureRect = enemy["ui"]["sprite"]
+	if sprite == null or not is_instance_valid(sprite):
+		return
+	
+	# Sprite2D로 생성
+	var slash = Sprite2D.new()
+	slash.texture = slash_texture
+	slash.z_index = 10
+	slash.modulate.a = 0.0
+	slash.rotation_degrees = randf_range(-30, 30)
+	
+	# 스프라이트 중앙에 위치
+	slash.position = sprite.size / 2
+	
+	sprite.add_child(slash)
+	
+	# 애니메이션
+	var tween = create_tween()
+	slash.scale = Vector2(0.5, 0.5)
+	
+	tween.tween_property(slash, "modulate:a", 1.0, 0.05)
+	tween.set_parallel(true)
+	tween.tween_property(slash, "scale", Vector2(1.2, 1.2), 0.1).set_ease(Tween.EASE_OUT)
+	tween.set_parallel(false)
+	tween.tween_interval(0.1)
+	tween.tween_property(slash, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(slash.queue_free)
+
 func _play_attack_effect(enemy: Dictionary) -> void:
+	## 적 공격 시 앞으로 이동 효과
 	if enemy["ui"] == null:
 		return
 	
@@ -356,12 +365,11 @@ func _end_battle(victory: bool) -> void:
 	is_battle_active = false
 	
 	if victory:
+		# 경험치 계산 및 분배
 		var total_exp = _calculate_total_exp()
-		var total_gold = _calculate_total_gold()
 		log_message.emit("[ 승리! ]")
-		log_message.emit("+ %d EXP, %d Gold" % [total_exp, total_gold])
+		log_message.emit("+ %d EXP" % total_exp)
 		GameManager.add_exp_to_party(total_exp)
-		# TODO: 골드 추가 (인벤토리 시스템 필요)
 	else:
 		log_message.emit("[ 전멸... ]")
 	
@@ -373,20 +381,12 @@ func _end_battle(victory: bool) -> void:
 
 
 func _calculate_total_exp() -> int:
+	## 처치한 모든 적의 경험치 합산
 	var total = 0
 	for enemy in enemies:
 		var rewards = enemy["data"].get("rewards", {})
 		var exp = int(rewards.get("exp", 0))
 		total += exp
-	return total
-
-
-func _calculate_total_gold() -> int:
-	var total = 0
-	for enemy in enemies:
-		var rewards = enemy["data"].get("rewards", {})
-		var gold = int(rewards.get("gold", 0))
-		total += gold
 	return total
 
 

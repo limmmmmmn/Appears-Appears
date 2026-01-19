@@ -206,6 +206,17 @@ func get_party_member_by_id(hero_id: String) -> PartyMember:
 		if is_instance_valid(member) and member.hero_id == hero_id:
 			return member
 	return null
+	
+func get_unit_by_id(hero_id: String) -> Node2D:
+	## hero_id로 유닛 찾기 (리더 포함)
+	if hero_id == current_leader_id:
+		return self
+	
+	for member in party_members:
+		if is_instance_valid(member) and member.hero_id == hero_id:
+			return member
+	
+	return null
 
 
 ## 리더 유닛 반환 (적 추적용)

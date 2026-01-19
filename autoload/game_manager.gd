@@ -41,6 +41,7 @@ var is_paused: bool = false
 
 func _ready() -> void:
 	_init_party_status()
+	_load_attack_icons()  # ← 이거 추가!
 	print("[GameManager] 초기화 완료")
 
 
@@ -778,4 +779,123 @@ func get_hero_level(hero_id: String) -> int:
 
 func get_hero_exp(hero_id: String) -> int:
 	return int(party_exp.get(hero_id, 0))
+#endregion
+
+# ===== 이 코드를 game_manager.gd 하단에 추가하세요 =====
+
+#region 필드 공격 아이콘 이펙트
+var sword_icon_texture: Texture2D = null
+var wand_icon_texture: Texture2D = null
+
+
+func _load_attack_icons() -> void:
+	## 공격 아이콘 텍스처 로드 (_ready에서 호출)
+	var sword_path = "res://assets/icons/sword_icon.png"
+	var wand_path = "res://assets/icons/wand_icon.png"
+	
+	if ResourceLoader.exists(sword_path):
+		sword_icon_texture = load(sword_path)
+	if ResourceLoader.exists(wand_path):
+		wand_icon_texture = load(wand_path)
+
+
+func show_attack_icon(hero_id: String, skill_type: String) -> void:
+	## 필드에서 파티원 머리 위에 공격 아이콘 표시
+	if player_node == null:
+		return
+	
+	var target_node: Node2D = null
+	
+	# 유닛 찾기
+	if player_node.has_method("get_unit_by_id"):
+		target_node = player_node.get_unit_by_id(hero_id)
+	
+	if target_node == null:
+		return
+	
+	# 스킬 타입에 따라 아이콘 선택
+	var icon_texture: Texture2D = null
+	var is_magic = skill_type in ["magic", "magical", "heal", "support"]
+	
+	if is_magic:
+		icon_texture = wand_icon_texture
+	else:
+		icon_texture = sword_icon_texture
+	
+	if icon_texture == null:
+		return
+	
+	# 아이콘 생성
+	var icon = Sprite2D.new()
+	icon.texture = icon_texture
+	icon.position = Vector2(0, -20)  # 머리 위
+	icon.z_index = 100
+	icon.modulate.a = 0.0
+	
+	target_node.add_child(icon)
+	
+	# 애니메이션 분기
+	if is_magic:
+		_animate_wand_icon(icon)
+	else:
+		_animate_sword_icon(icon)
+
+
+func _animate_sword_icon(icon: Sprite2D) -> void:
+	## 검 아이콘: 휘두르는 애니메이션 (45도 회전)
+	var tween = icon.create_tween()
+	
+	# 초기 상태: 왼쪽 위에서 시작, 기울어진 상태
+	icon.rotation_degrees = -45
+	icon.position += Vector2(-5, -5)
+	
+	# 나타남
+	tween.tween_property(icon, "modulate:a", 1.0, 0.05)
+	
+	# 휘두르기: 오른쪽 아래로 회전하며 이동
+	tween.set_parallel(true)
+	tween.tween_property(icon, "rotation_degrees", 45.0, 0.12).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(icon, "position", icon.position + Vector2(10, 5), 0.12).set_ease(Tween.EASE_OUT)
+	tween.set_parallel(false)
+	
+	# 잠깐 유지
+	tween.tween_interval(0.08)
+	
+	# 페이드아웃
+	tween.tween_property(icon, "modulate:a", 0.0, 0.1)
+	tween.tween_callback(icon.queue_free)
+
+
+func _animate_wand_icon(icon: Sprite2D) -> void:
+	## 완드 아이콘: 위로 솟는 애니메이션
+	var tween = icon.create_tween()
+	
+	var start_pos = icon.position
+	
+	# 나타남
+	tween.tween_property(icon, "modulate:a", 1.0, 0.05)
+	
+	# 위로 솟음 + 약간 흔들림
+	tween.set_parallel(true)
+	tween.tween_property(icon, "position:y", start_pos.y - 8, 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(icon, "scale", Vector2(1.2, 1.2), 0.1).set_ease(Tween.EASE_OUT)
+	tween.set_parallel(false)
+	
+	# 반짝임 효과
+	tween.tween_property(icon, "modulate", Color(1.5, 1.5, 2.0, 1.0), 0.05)
+	tween.tween_property(icon, "modulate", Color(1, 1, 1, 1), 0.05)
+	
+	# 원래 크기로
+	tween.tween_property(icon, "scale", Vector2(1.0, 1.0), 0.1)
+	
+	# 잠깐 유지
+	tween.tween_interval(0.05)
+	
+	# 페이드아웃하며 위로
+	tween.set_parallel(true)
+	tween.tween_property(icon, "modulate:a", 0.0, 0.15)
+	tween.tween_property(icon, "position:y", start_pos.y - 15, 0.15)
+	tween.set_parallel(false)
+	
+	tween.tween_callback(icon.queue_free)
 #endregion

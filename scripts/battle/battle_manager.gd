@@ -11,23 +11,34 @@ var hud: GameHUD = null
 const WINDOW_SIZE := Vector2(170, 95)
 const SCREEN_SIZE := Vector2(640, 360)
 const HUD_PANEL_WIDTH := 160
-const INVENTORY_HEIGHT := 60
 const MARGIN := 8
 
 var play_area: Rect2
+var center_point: Vector2  # 가운데 점
 
 
 func _ready() -> void:
 	GameManager.battle_started.connect(_on_battle_started)
 	GameManager.register_battle_manager(self)
 	
-	# 플레이 영역 (우측 HUD, 하단 인벤토리 제외)
+	# 필드 영역 (HUD 제외)
+	var field_width = SCREEN_SIZE.x - HUD_PANEL_WIDTH
+	
 	play_area = Rect2(
 		MARGIN,
 		MARGIN,
-		SCREEN_SIZE.x - HUD_PANEL_WIDTH - MARGIN * 2,
-		SCREEN_SIZE.y - INVENTORY_HEIGHT - MARGIN * 2
+		field_width - WINDOW_SIZE.x - MARGIN * 2,
+		SCREEN_SIZE.y - WINDOW_SIZE.y - MARGIN * 2
 	)
+	
+	# 가운데 점 (창 중심 기준)
+	center_point = Vector2(
+		field_width / 2 - WINDOW_SIZE.x / 2,
+		SCREEN_SIZE.y / 2 - WINDOW_SIZE.y / 2
+	)
+	
+	print("[BattleManager] play_area: ", play_area)
+	print("[BattleManager] center_point: ", center_point)
 	
 	_setup_hud()
 
@@ -59,15 +70,21 @@ func _spawn_battle_window(enemy_id: String) -> void:
 func _get_random_position() -> Vector2:
 	_cleanup_windows()
 	
-	var max_attempts = 50
+	var max_attempts = 100
 	
 	for i in range(max_attempts):
-		var x = randf_range(play_area.position.x, play_area.end.x - WINDOW_SIZE.x)
-		var y = randf_range(play_area.position.y, play_area.end.y - WINDOW_SIZE.y)
+		var x = randf_range(play_area.position.x, play_area.position.x + play_area.size.x)
+		var y = randf_range(play_area.position.y, play_area.position.y + play_area.size.y)
 		var pos = Vector2(x, y)
+		
+		# 가운데 50x50 영역 체크 (창 중심 기준)
+		var dist_to_center = pos.distance_to(center_point)
+		if dist_to_center < 50:
+			continue
 		
 		var window_rect = Rect2(pos, WINDOW_SIZE)
 		
+		# 기존 창과 겹침 체크
 		var overlaps = false
 		for w in active_windows:
 			if is_instance_valid(w):
@@ -79,7 +96,8 @@ func _get_random_position() -> Vector2:
 		if not overlaps:
 			return pos
 	
-	return Vector2(MARGIN, MARGIN)
+	print("[BattleManager] 위치 찾기 실패!")
+	return Vector2(play_area.position.x, play_area.position.y)
 
 
 func _cleanup_windows() -> void:
