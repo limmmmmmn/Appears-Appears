@@ -3,26 +3,37 @@ class_name BattleManager
 ## 다중 전투창 관리 - 랜덤 위치 배치
 
 var battle_window_scene: PackedScene = preload("res://scenes/ui/battle_window.tscn")
-var battle_hud_scene: PackedScene = preload("res://scenes/ui/battle_hud.tscn")
+var game_hud_scene: PackedScene = preload("res://scenes/ui/game_hud.tscn")
 
 var active_windows: Array = []
-var hud: BattleHUD = null
+var hud: GameHUD = null
 
 const WINDOW_SIZE := Vector2(170, 95)
 const SCREEN_SIZE := Vector2(640, 360)
-const CENTER_AVOID := Rect2(270, 130, 100, 100)
+const HUD_PANEL_WIDTH := 160
+const INVENTORY_HEIGHT := 60
 const MARGIN := 8
-const HUD_HEIGHT := 65
+
+var play_area: Rect2
 
 
 func _ready() -> void:
 	GameManager.battle_started.connect(_on_battle_started)
-	GameManager.register_battle_manager(self)  # GameManager에 등록!
+	GameManager.register_battle_manager(self)
+	
+	# 플레이 영역 (우측 HUD, 하단 인벤토리 제외)
+	play_area = Rect2(
+		MARGIN,
+		MARGIN,
+		SCREEN_SIZE.x - HUD_PANEL_WIDTH - MARGIN * 2,
+		SCREEN_SIZE.y - INVENTORY_HEIGHT - MARGIN * 2
+	)
+	
 	_setup_hud()
 
 
 func _setup_hud() -> void:
-	hud = battle_hud_scene.instantiate() as BattleHUD
+	hud = game_hud_scene.instantiate() as GameHUD
 	add_child(hud)
 
 
@@ -49,17 +60,13 @@ func _get_random_position() -> Vector2:
 	_cleanup_windows()
 	
 	var max_attempts = 50
-	var max_y = SCREEN_SIZE.y - WINDOW_SIZE.y - HUD_HEIGHT - MARGIN
 	
 	for i in range(max_attempts):
-		var x = randf_range(MARGIN, SCREEN_SIZE.x - WINDOW_SIZE.x - MARGIN)
-		var y = randf_range(MARGIN, max_y)
+		var x = randf_range(play_area.position.x, play_area.end.x - WINDOW_SIZE.x)
+		var y = randf_range(play_area.position.y, play_area.end.y - WINDOW_SIZE.y)
 		var pos = Vector2(x, y)
 		
 		var window_rect = Rect2(pos, WINDOW_SIZE)
-		
-		if window_rect.intersects(CENTER_AVOID):
-			continue
 		
 		var overlaps = false
 		for w in active_windows:

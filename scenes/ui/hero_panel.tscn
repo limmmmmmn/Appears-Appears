@@ -1,0 +1,115 @@
+[gd_scene load_steps=3 format=3 uid="uid://b5m2k8n4j7p3x"]
+
+[ext_resource type="Script" path="res://scripts/ui/hero_panel.gd" id="1_hero"]
+[ext_resource type="PackedScene" uid="uid://c8xqe5y6h3t2m" path="res://scenes/ui/equipment_slot.tscn" id="2_slot"]
+
+[node name="HeroPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(77, 110)
+script = ExtResource("1_hero")
+
+[node name="MainVBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Header" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="Face" type="TextureRect" parent="MainVBox/Header"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="InfoVBox" type="VBoxContainer" parent="MainVBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 1
+
+[node name="NameLabel" type="Label" parent="MainVBox/Header/InfoVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "---"
+
+[node name="HPBar" type="ProgressBar" parent="MainVBox/Header/InfoVBox"]
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="ATBBar" type="ProgressBar" parent="MainVBox/Header/InfoVBox"]
+custom_minimum_size = Vector2(0, 3)
+layout_mode = 2
+max_value = 100.0
+show_percentage = false
+
+[node name="StatsGrid" type="GridContainer" parent="MainVBox"]
+layout_mode = 2
+columns = 2
+
+[node name="ATK" type="Label" parent="MainVBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.5, 0.5, 1)
+theme_override_font_sizes/font_size = 6
+text = "ATK:--"
+
+[node name="DEF" type="Label" parent="MainVBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 6
+text = "DEF:--"
+
+[node name="DEX" type="Label" parent="MainVBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 1, 0.5, 1)
+theme_override_font_sizes/font_size = 6
+text = "DEX:--"
+
+[node name="INT" type="Label" parent="MainVBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.5, 1, 1)
+theme_override_font_sizes/font_size = 6
+text = "INT:--"
+
+[node name="LUK" type="Label" parent="MainVBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.4, 1)
+theme_override_font_sizes/font_size = 6
+text = "LUK:--"
+
+[node name="EquipmentGrid" type="GridContainer" parent="MainVBox"]
+layout_mode = 2
+columns = 3
+theme_override_constants/h_separation = 1
+theme_override_constants/v_separation = 1
+
+[node name="WeaponLeft" parent="MainVBox/EquipmentGrid" instance=ExtResource("2_slot")]
+layout_mode = 2
+slot_type = "weapon_left"
+slot_label = "L"
+
+[node name="WeaponRight" parent="MainVBox/EquipmentGrid" instance=ExtResource("2_slot")]
+layout_mode = 2
+slot_type = "weapon_right"
+slot_label = "R"
+
+[node name="Helmet" parent="MainVBox/EquipmentGrid" instance=ExtResource("2_slot")]
+layout_mode = 2
+slot_type = "helmet"
+slot_label = "H"
+
+[node name="Armor" parent="MainVBox/EquipmentGrid" instance=ExtResource("2_slot")]
+layout_mode = 2
+slot_type = "armor"
+slot_label = "A"
+
+[node name="Accessory1" parent="MainVBox/EquipmentGrid" instance=ExtResource("2_slot")]
+layout_mode = 2
+slot_type = "accessory1"
+slot_label = "1"
+
+[node name="Accessory2" parent="MainVBox/EquipmentGrid" instance=ExtResource("2_slot")]
+layout_mode = 2
+slot_type = "accessory2"
+slot_label = "2"

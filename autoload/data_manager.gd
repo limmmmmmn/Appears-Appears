@@ -5,6 +5,7 @@ extends Node
 var heroes: Dictionary = {}
 var enemies: Dictionary = {}
 var skills: Dictionary = {}
+var equipment: Dictionary = {}  # 장비 데이터 추가
 
 # 데이터 경로
 const DATA_PATH := "res://data/"
@@ -19,7 +20,13 @@ func _load_all_data() -> void:
 	enemies = _load_json("enemies.json").get("enemies", {})
 	skills = _load_json("skills.json").get("skills", {})
 	
-	print("[DataManager] 로드 완료 - 영웅: %d, 적: %d, 스킬: %d" % [heroes.size(), enemies.size(), skills.size()])
+	# 장비 데이터 로드
+	var eq_data = _load_json("equipment.json")
+	equipment = eq_data.get("equipment", {})
+	
+	print("[DataManager] 로드 완료 - 영웅: %d, 적: %d, 스킬: %d, 장비: %d" % [
+		heroes.size(), enemies.size(), skills.size(), equipment.size()
+	])
 
 
 func _load_json(filename: String) -> Dictionary:
@@ -70,12 +77,24 @@ func get_skill(id: String) -> Dictionary:
 	return skills[id].duplicate(true)
 
 
+func get_equipment(id: String) -> Dictionary:
+	## 장비 데이터 반환
+	if not equipment.has(id):
+		push_warning("[DataManager] 장비 없음: " + id)
+		return {}
+	return equipment[id].duplicate(true)
+
+
 func get_all_hero_ids() -> Array:
 	return heroes.keys()
 
 
 func get_all_enemy_ids() -> Array:
 	return enemies.keys()
+
+
+func get_all_equipment_ids() -> Array:
+	return equipment.keys()
 
 
 func get_enemies_by_tag(tag: String) -> Array:
@@ -85,3 +104,64 @@ func get_enemies_by_tag(tag: String) -> Array:
 		if enemy.get("tags", []).has(tag):
 			result.append(id)
 	return result
+
+
+func get_equipment_by_slot(slot: String) -> Array:
+	## 특정 슬롯의 모든 장비 ID 반환
+	var result := []
+	for id in equipment:
+		var eq: Dictionary = equipment[id]
+		if str(eq.get("slot", "")) == slot:
+			result.append(id)
+	return result
+
+
+func get_equipment_by_type(eq_type: String) -> Array:
+	## 특정 타입의 모든 장비 ID 반환
+	var result := []
+	for id in equipment:
+		var eq: Dictionary = equipment[id]
+		if str(eq.get("type", "")) == eq_type:
+			result.append(id)
+	return result
+
+
+func get_equipment_by_rarity(rarity: String) -> Array:
+	## 특정 등급의 모든 장비 ID 반환
+	var result := []
+	for id in equipment:
+		var eq: Dictionary = equipment[id]
+		if str(eq.get("rarity", "")) == rarity:
+			result.append(id)
+	return result
+
+
+func can_hero_equip(hero_id: String, equipment_id: String) -> bool:
+	## 영웅이 해당 장비를 장착할 수 있는지 확인
+	var hero = get_hero(hero_id)
+	var eq = get_equipment(equipment_id)
+	
+	if hero.is_empty() or eq.is_empty():
+		return false
+	
+	var allowed = hero.get("allowed_equipment", [])
+	var eq_type = str(eq.get("type", ""))
+	
+	return allowed.has(eq_type)
+
+
+func get_rarity_color(rarity: String) -> Color:
+	## 등급별 색상 반환
+	match rarity:
+		"common":
+			return Color("aaaaaa")
+		"uncommon":
+			return Color("44ff44")
+		"rare":
+			return Color("4444ff")
+		"epic":
+			return Color("aa44aa")
+		"legendary":
+			return Color("ffaa00")
+		_:
+			return Color.WHITE

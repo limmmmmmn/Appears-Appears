@@ -1,169 +1,262 @@
 {
   "enemies": {
-    "slime": {
-      "id": "slime",
-      "name": "슬라임",
-      "description": "말랑말랑한 젤리 형태의 몬스터",
-      "stats": {
-        "max_hp": 30,
-        "attack": 5,
-        "defense": 2,
-        "speed": 3
-      },
-      "combat": {
-        "base_cooldown": 3.0,
-        "skills": ["skill_strike"]
-      },
-      "field": {
-        "sprite": "res://sprites/monsters/aqua_slime.png",
-        "wander_range": 48,
-        "move_speed": 20,
-        "detect_range": 150,
-        "chase_speed": 50,
-        "lose_range": 160
-      },
-      "battle": {
-        "sprite": "res://sprites/monsters/aqua_slime.png",
-        "position_type": "ground"
-      },
-      "rewards": {
-        "exp": 15,
-        "gold": 5,
-        "drops": []
-      },
-      "tags": ["normal", "organic"]
-    },
-    "bat": {
-      "id": "bat",
-      "name": "박쥐",
-      "description": "어둠 속을 날아다니는 흡혈 생물",
-      "stats": {
-        "max_hp": 20,
-        "attack": 8,
-        "defense": 1,
-        "speed": 10
-      },
-      "combat": {
-        "base_cooldown": 1.8,
-        "skills": ["skill_slash"]
-      },
-      "field": {
-        "sprite": "res://sprites/monsters/blue_bat.png",
-        "wander_range": 48,
-        "move_speed": 20,
-        "detect_range": 150,
-        "chase_speed": 50,
-        "lose_range": 160
-      },
-      "battle": {
-        "sprite": "res://sprites/monsters/blue_bat.png",
-        "position_type": "flying"
-      },
-      "rewards": {
-        "exp": 12,
-        "gold": 3,
-        "drops": []
-      },
-      "tags": ["normal", "flying"]
-    },
-    "golem": {
-      "id": "golem",
-      "name": "골렘",
-      "description": "마법으로 움직이는 거대한 바위 인형",
-      "stats": {
-        "max_hp": 120,
-        "attack": 15,
-        "defense": 20,
-        "speed": 2
-      },
-      "combat": {
-        "base_cooldown": 4.0,
-        "skills": ["skill_strike"]
-      },
-      "field": {
-        "sprite": "res://sprites/monsters/golem.png",
-        "wander_range": 48,
-        "move_speed": 20,
-        "detect_range": 150,
-        "chase_speed": 50,
-        "lose_range": 160
-      },
-      "battle": {
-        "sprite": "res://sprites/monsters/golem.png",
-        "position_type": "ground"
-      },
-      "rewards": {
-        "exp": 50,
-        "gold": 25,
-        "drops": []
-      },
-      "tags": ["elite", "construct"]
-    },
-    "skeleton": {
-      "id": "skeleton",
-      "name": "스켈레톤",
-      "description": "죽음에서 깨어난 뼈다귀 전사",
-      "stats": {
-        "max_hp": 50,
-        "attack": 12,
-        "defense": 5,
-        "speed": 6
-      },
-      "combat": {
-        "base_cooldown": 2.5,
-        "skills": ["skill_slash"]
-      },
-      "field": {
-        "sprite": "res://sprites/monsters/skeleton.png",
-        "wander_range": 48,
-        "move_speed": 20,
-        "detect_range": 150,
-        "chase_speed": 50,
-        "lose_range": 160
-      },
-      "battle": {
-        "sprite": "res://sprites/monsters/skeleton.png",
-        "position_type": "ground"
-      },
-      "rewards": {
-        "exp": 25,
-        "gold": 10,
-        "drops": []
-      },
-      "tags": ["normal", "undead"]
-    },
-    "dragon": {
-      "id": "dragon",
-      "name": "드래곤",
-      "description": "고대로부터 전해지는 전설의 존재",
-      "stats": {
-        "max_hp": 200,
-        "attack": 30,
-        "defense": 15,
-        "speed": 8
-      },
-      "combat": {
-        "base_cooldown": 3.5,
-        "skills": ["skill_slash"]
-      },
-      "field": {
-        "sprite": "res://sprites/monsters/blaze_dragon.png",
-        "wander_range": 48,
-        "move_speed": 20,
-        "detect_range": 200,
-        "chase_speed": 50,
-        "lose_range": 160
-      },
-      "battle": {
-        "sprite": "res://sprites/monsters/blaze_dragon.png",
-        "position_type": "large"
-      },
-      "rewards": {
-        "exp": 200,
-        "gold": 100,
-        "drops": []
-      },
-      "tags": ["boss", "dragon"]
-    }
+	"slime": {
+	  "id": "slime",
+	  "name": "슬라임",
+	  "description": "말랑말랑한 젤리 형태의 몬스터",
+	  "stats": {
+		"max_hp": 30,
+		"atk": 5,
+		"def": 2,
+		"dex": 3,
+		"int": 1,
+		"luk": 1
+	  },
+	  "combat": {
+		"base_cooldown": 3.0,
+		"skills": ["skill_strike"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/aqua_slime.png",
+		"wander_range": 48,
+		"move_speed": 20,
+		"detect_range": 150,
+		"chase_speed": 50,
+		"lose_range": 160
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/aqua_slime.png",
+		"position_type": "ground"
+	  },
+	  "rewards": {
+		"exp": 15,
+		"gold": 5,
+		"drops": [
+		  {"item_id": "eq_potion_hp_small", "chance": 0.3}
+		]
+	  },
+	  "tags": ["normal", "organic"]
+	},
+	"bat": {
+	  "id": "bat",
+	  "name": "박쥐",
+	  "description": "어둠 속을 날아다니는 흡혈 생물",
+	  "stats": {
+		"max_hp": 20,
+		"atk": 8,
+		"def": 1,
+		"dex": 14,
+		"int": 2,
+		"luk": 5
+	  },
+	  "combat": {
+		"base_cooldown": 1.8,
+		"skills": ["skill_slash"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/blue_bat.png",
+		"wander_range": 48,
+		"move_speed": 20,
+		"detect_range": 150,
+		"chase_speed": 50,
+		"lose_range": 160
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/blue_bat.png",
+		"position_type": "flying"
+	  },
+	  "rewards": {
+		"exp": 12,
+		"gold": 3,
+		"drops": []
+	  },
+	  "tags": ["normal", "flying"]
+	},
+	"golem": {
+	  "id": "golem",
+	  "name": "골렘",
+	  "description": "마법으로 움직이는 거대한 바위 인형",
+	  "stats": {
+		"max_hp": 120,
+		"atk": 15,
+		"def": 20,
+		"dex": 2,
+		"int": 1,
+		"luk": 1
+	  },
+	  "combat": {
+		"base_cooldown": 4.0,
+		"skills": ["skill_strike"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/golem.png",
+		"wander_range": 48,
+		"move_speed": 15,
+		"detect_range": 100,
+		"chase_speed": 35,
+		"lose_range": 120
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/golem.png",
+		"position_type": "ground"
+	  },
+	  "rewards": {
+		"exp": 50,
+		"gold": 25,
+		"drops": [
+		  {"item_id": "eq_stone_shield", "chance": 0.1}
+		]
+	  },
+	  "tags": ["elite", "construct"]
+	},
+	"skeleton": {
+	  "id": "skeleton",
+	  "name": "스켈레톤",
+	  "description": "죽음에서 깨어난 뼈다귀 전사",
+	  "stats": {
+		"max_hp": 50,
+		"atk": 12,
+		"def": 5,
+		"dex": 8,
+		"int": 1,
+		"luk": 3
+	  },
+	  "combat": {
+		"base_cooldown": 2.5,
+		"skills": ["skill_slash"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/skeleton.png",
+		"wander_range": 48,
+		"move_speed": 20,
+		"detect_range": 150,
+		"chase_speed": 50,
+		"lose_range": 160
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/skeleton.png",
+		"position_type": "ground"
+	  },
+	  "rewards": {
+		"exp": 25,
+		"gold": 10,
+		"drops": [
+		  {"item_id": "eq_rusty_sword", "chance": 0.15}
+		]
+	  },
+	  "tags": ["normal", "undead"]
+	},
+	"ghost": {
+	  "id": "ghost",
+	  "name": "유령",
+	  "description": "원한을 품고 떠도는 영혼",
+	  "stats": {
+		"max_hp": 35,
+		"atk": 6,
+		"def": 2,
+		"dex": 10,
+		"int": 12,
+		"luk": 8
+	  },
+	  "combat": {
+		"base_cooldown": 2.0,
+		"skills": ["skill_curse"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/ghost.png",
+		"wander_range": 64,
+		"move_speed": 25,
+		"detect_range": 120,
+		"chase_speed": 45,
+		"lose_range": 140
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/ghost.png",
+		"position_type": "flying"
+	  },
+	  "rewards": {
+		"exp": 30,
+		"gold": 15,
+		"drops": [
+		  {"item_id": "eq_spirit_ring", "chance": 0.08}
+		]
+	  },
+	  "tags": ["normal", "undead", "magic"]
+	},
+	"orc": {
+	  "id": "orc",
+	  "name": "오크",
+	  "description": "호전적인 녹색 피부의 야만족",
+	  "stats": {
+		"max_hp": 80,
+		"atk": 16,
+		"def": 8,
+		"dex": 5,
+		"int": 2,
+		"luk": 4
+	  },
+	  "combat": {
+		"base_cooldown": 2.8,
+		"skills": ["skill_slash", "skill_strike"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/orc.png",
+		"wander_range": 48,
+		"move_speed": 22,
+		"detect_range": 180,
+		"chase_speed": 55,
+		"lose_range": 200
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/orc.png",
+		"position_type": "ground"
+	  },
+	  "rewards": {
+		"exp": 40,
+		"gold": 18,
+		"drops": [
+		  {"item_id": "eq_orc_axe", "chance": 0.12}
+		]
+	  },
+	  "tags": ["normal", "humanoid"]
+	},
+	"dragon": {
+	  "id": "dragon",
+	  "name": "드래곤",
+	  "description": "고대로부터 전해지는 전설의 존재",
+	  "stats": {
+		"max_hp": 200,
+		"atk": 30,
+		"def": 15,
+		"dex": 10,
+		"int": 20,
+		"luk": 10
+	  },
+	  "combat": {
+		"base_cooldown": 3.5,
+		"skills": ["skill_slash", "skill_fire_breath"]
+	  },
+	  "field": {
+		"sprite": "res://sprites/monsters/blaze_dragon.png",
+		"wander_range": 48,
+		"move_speed": 20,
+		"detect_range": 200,
+		"chase_speed": 60,
+		"lose_range": 220
+	  },
+	  "battle": {
+		"sprite": "res://sprites/monsters/blaze_dragon.png",
+		"position_type": "large"
+	  },
+	  "rewards": {
+		"exp": 200,
+		"gold": 100,
+		"drops": [
+		  {"item_id": "eq_dragon_scale", "chance": 0.5},
+		  {"item_id": "eq_dragon_sword", "chance": 0.1}
+		]
+	  },
+	  "tags": ["boss", "dragon"]
+	}
   }
 }
