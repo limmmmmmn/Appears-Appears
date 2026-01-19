@@ -7,7 +7,8 @@ signal party_status_changed()
 signal hero_died(hero_id: String)
 signal hero_leveled_up(hero_id: String, new_level: int, stat_changes: Dictionary, new_skills: Array)
 signal exp_gained(hero_id: String, amount: int, total: int)
-signal party_order_changed(new_order: Array)  # 파티 순서 변경 시그널
+signal party_order_changed(new_order: Array)
+signal game_over()  # 전멸 시그널
 
 # 현재 파티 구성 (영웅 id 배열)
 var party: Array[String] = ["warrior", "mage", "cleric", "thief"]
@@ -199,8 +200,13 @@ func damage_hero(hero_id: String, damage: int) -> void:
 		if was_alive and int(party_hp[hero_id]) <= 0:
 			hero_died.emit(hero_id)
 			_show_dead_popup(hero_id)
-			# 파티 재정렬 (죽은 멤버 뒤로)
-			_reorder_party()
+			
+			# 전멸 체크
+			if is_party_dead():
+				_trigger_game_over()
+			else:
+				# 파티 재정렬 (죽은 멤버 뒤로)
+				_reorder_party()
 
 
 func _show_dead_popup(hero_id: String) -> void:
@@ -274,6 +280,93 @@ func get_alive_heroes() -> Array:
 
 func is_party_dead() -> bool:
 	return get_alive_heroes().is_empty()
+
+
+func _trigger_game_over() -> void:
+	## 게임오버 처리
+	game_over.emit()
+	
+	# 잠시 대기 후 게임오버 화면
+	await get_tree().create_timer(0.8).timeout
+	_show_game_over()
+
+
+func _show_game_over() -> void:
+	## 게임오버 UI 표시
+	get_tree().paused = true
+	is_paused = true
+	
+	var canvas = CanvasLayer.new()
+	canvas.layer = 100
+	canvas.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(canvas)
+	
+	# 어두운 배경
+	var bg = ColorRect.new()
+	bg.color = Color(0, 0, 0, 0.7)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	canvas.add_child(bg)
+	
+	# 중앙 컨테이너
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	canvas.add_child(center)
+	
+	var vbox = VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 20)
+	center.add_child(vbox)
+	
+	# GAME OVER 텍스트
+	var title = Label.new()
+	title.text = "GAME OVER"
+	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_color_override("font_color", Color.RED)
+	title.add_theme_color_override("font_outline_color", Color.BLACK)
+	title.add_theme_constant_override("outline_size", 4)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+	
+	# 다시하기 버튼
+	var retry_btn = Button.new()
+	retry_btn.text = "다시하기"
+	retry_btn.add_theme_font_size_override("font_size", 20)
+	retry_btn.custom_minimum_size = Vector2(150, 50)
+	retry_btn.pressed.connect(_on_retry_pressed.bind(canvas))
+	vbox.add_child(retry_btn)
+	
+	# 등장 애니메이션
+	vbox.modulate.a = 0.0
+	vbox.scale = Vector2(0.5, 0.5)
+	vbox.pivot_offset = vbox.size / 2
+	
+	var tween = canvas.create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.set_parallel(true)
+	tween.tween_property(vbox, "modulate:a", 1.0, 0.3)
+	tween.tween_property(vbox, "scale", Vector2(1.0, 1.0), 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+
+func _on_retry_pressed(canvas: CanvasLayer) -> void:
+	canvas.queue_free()
+	get_tree().paused = false
+	is_paused = false
+	_reset_game_state()
+	get_tree().reload_current_scene()
+
+
+func _reset_game_state() -> void:
+	## 게임 상태 초기화
+	active_battles.clear()
+	party = ["warrior", "mage", "cleric", "thief"]
+	party_hp.clear()
+	party_max_hp.clear()
+	party_cooldowns.clear()
+	party_max_cooldowns.clear()
+	party_level.clear()
+	party_exp.clear()
+	party_stats.clear()
+	_init_party_status()
 
 
 func _reorder_party() -> void:
@@ -445,14 +538,9 @@ func _show_floating_text(hero_id: String, text: String, color: Color, new_skills
 	
 	var target_node: Node2D = null
 	
-	# 리더인지 파티원인지 확인
-	if GameManager.party[0] == hero_id:
-		target_node = player_node
-	else:
-		# 파티원 찾기
-		var member_index = GameManager.party.find(hero_id) - 1
-		if member_index >= 0 and member_index < player_node.party_members.size():
-			target_node = player_node.party_members[member_index]
+	# FieldParty에서 유닛 찾기
+	if player_node.has_method("get_unit_by_id"):
+		target_node = player_node.get_unit_by_id(hero_id)
 	
 	if target_node == null:
 		return
