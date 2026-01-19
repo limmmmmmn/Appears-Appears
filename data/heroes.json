@@ -6,19 +6,17 @@
 	  "description": "검과 방패를 다루는 전선의 수호자",
 	  "stats": {
 		"max_hp": 100,
-		"atk": 15,
-		"def": 8,
-		"dex": 5,
-		"int": 2,
-		"luk": 3
+		"attack": 15,
+		"defense": 8,
+		"speed": 5,
+		"luck": 3
 	  },
 	  "growth": {
 		"max_hp": 12,
-		"atk": 3,
-		"def": 2,
-		"dex": 1,
-		"int": 0,
-		"luk": 1
+		"attack": 3,
+		"defense": 2,
+		"speed": 1,
+		"luck": 1
 	  },
 	  "combat": {
 		"base_cooldown": 4.0,
@@ -34,7 +32,6 @@
 		"portrait": "res://sprites/characters/player1_walk_left_strip1.png",
 		"color": "cc4444"
 	  },
-	  "allowed_equipment": ["sword", "axe", "shield", "heavy_armor", "helmet", "accessory"],
 	  "tags": ["melee", "tank"]
 	},
 	"mage": {
@@ -43,26 +40,29 @@
 	  "description": "원소의 힘을 다루는 신비술사",
 	  "stats": {
 		"max_hp": 60,
-		"atk": 8,
-		"def": 3,
-		"dex": 4,
-		"int": 18,
-		"luk": 5
+		"attack": 18,
+		"defense": 3,
+		"speed": 6,
+		"luck": 5
 	  },
 	  "growth": {
 		"max_hp": 6,
-		"atk": 1,
-		"def": 1,
-		"dex": 1,
-		"int": 4,
-		"luk": 1
+		"attack": 4,
+		"defense": 1,
+		"speed": 1,
+		"luck": 1
 	  },
 	  "combat": {
+<<<<<<< HEAD
 		"base_cooldown": 4.5,
 		"skills": ["skill_fire"]
+=======
+		"base_cooldown": 2.5,
+		"skills": ["skill_strike"]
+>>>>>>> parent of 1e03c52 (HUD)
 	  },
 	  "skill_unlocks": {
-		"1": ["skill_fire"],
+		"1": ["skill_strike"],
 		"3": ["skill_fireball"],
 		"5": ["skill_meteor"]
 	  },
@@ -71,7 +71,6 @@
 		"portrait": "res://sprites/characters/black_mage_walk_left_strip1.png",
 		"color": "4444cc"
 	  },
-	  "allowed_equipment": ["staff", "wand", "robe", "hat", "accessory"],
 	  "tags": ["ranged", "magic"]
 	},
 	"cleric": {
@@ -80,19 +79,17 @@
 	  "description": "신의 축복으로 동료를 치유하는 사제",
 	  "stats": {
 		"max_hp": 80,
-		"atk": 6,
-		"def": 5,
-		"dex": 4,
-		"int": 14,
-		"luk": 8
+		"attack": 8,
+		"defense": 5,
+		"speed": 4,
+		"luck": 8
 	  },
 	  "growth": {
 		"max_hp": 8,
-		"atk": 1,
-		"def": 1,
-		"dex": 1,
-		"int": 3,
-		"luk": 2
+		"attack": 2,
+		"defense": 1,
+		"speed": 1,
+		"luck": 2
 	  },
 	  "combat": {
 		"base_cooldown": 4.2,
@@ -108,7 +105,6 @@
 		"portrait": "res://sprites/characters/white_mage_walk_left_strip1.png",
 		"color": "44cc44"
 	  },
-	  "allowed_equipment": ["staff", "mace", "robe", "hat", "shield", "accessory"],
 	  "tags": ["support", "magic"]
 	},
 	"thief": {
@@ -117,19 +113,17 @@
 	  "description": "빠른 손놀림과 기민한 움직임의 달인",
 	  "stats": {
 		"max_hp": 70,
-		"atk": 12,
-		"def": 4,
-		"dex": 16,
-		"int": 3,
-		"luk": 12
+		"attack": 12,
+		"defense": 4,
+		"speed": 12,
+		"luck": 10
 	  },
 	  "growth": {
 		"max_hp": 7,
-		"atk": 2,
-		"def": 1,
-		"dex": 3,
-		"int": 0,
-		"luk": 2
+		"attack": 3,
+		"defense": 1,
+		"speed": 2,
+		"luck": 2
 	  },
 	  "combat": {
 		"base_cooldown": 3.5,
@@ -145,8 +139,8 @@
 		"portrait": "res://sprites/characters/red_mage_walk_left_strip1.png",
 		"color": "aa44aa"
 	  },
-	  "allowed_equipment": ["dagger", "sword", "light_armor", "hat", "accessory"],
 	  "tags": ["melee", "agile"]
+<<<<<<< HEAD
 	},
 	"archer": {
 	  "id": "archer",
@@ -221,6 +215,8 @@
 	  },
 	  "allowed_equipment": ["sword", "lance", "shield", "heavy_armor", "helmet", "accessory"],
 	  "tags": ["melee", "tank", "defense"]
+=======
+>>>>>>> parent of 1e03c52 (HUD)
 	}
   }
 }

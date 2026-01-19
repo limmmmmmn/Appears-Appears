@@ -3,22 +3,29 @@ class_name BattleManager
 ## 다중 전투창 관리 - 랜덤 위치 배치
 
 var battle_window_scene: PackedScene = preload("res://scenes/ui/battle_window.tscn")
-var game_hud_scene: PackedScene = preload("res://scenes/ui/game_hud.tscn")
+var battle_hud_scene: PackedScene = preload("res://scenes/ui/battle_hud.tscn")
 
 var active_windows: Array = []
-var hud: GameHUD = null
+var hud: BattleHUD = null
 
 const WINDOW_SIZE := Vector2(170, 95)
 const SCREEN_SIZE := Vector2(640, 360)
+<<<<<<< HEAD:scripts/battle/battle_manager.gd
 const HUD_PANEL_WIDTH := 160
 const MARGIN := 8
 
 var play_area: Rect2
 var center_point: Vector2  # 가운데 점
+=======
+const CENTER_AVOID := Rect2(270, 130, 100, 100)
+const MARGIN := 8
+const HUD_HEIGHT := 65
+>>>>>>> parent of 1e03c52 (HUD):scripts/battle_manager.gd
 
 
 func _ready() -> void:
 	GameManager.battle_started.connect(_on_battle_started)
+<<<<<<< HEAD:scripts/battle/battle_manager.gd
 	GameManager.register_battle_manager(self)
 	
 	# 필드 영역 (HUD 제외)
@@ -40,11 +47,14 @@ func _ready() -> void:
 	print("[BattleManager] play_area: ", play_area)
 	print("[BattleManager] center_point: ", center_point)
 	
+=======
+	GameManager.register_battle_manager(self)  # GameManager에 등록!
+>>>>>>> parent of 1e03c52 (HUD):scripts/battle_manager.gd
 	_setup_hud()
 
 
 func _setup_hud() -> void:
-	hud = game_hud_scene.instantiate() as GameHUD
+	hud = battle_hud_scene.instantiate() as BattleHUD
 	add_child(hud)
 
 
@@ -70,11 +80,20 @@ func _spawn_battle_window(enemy_id: String) -> void:
 func _get_random_position() -> Vector2:
 	_cleanup_windows()
 	
+<<<<<<< HEAD:scripts/battle/battle_manager.gd
 	var max_attempts = 100
 	
 	for i in range(max_attempts):
 		var x = randf_range(play_area.position.x, play_area.position.x + play_area.size.x)
 		var y = randf_range(play_area.position.y, play_area.position.y + play_area.size.y)
+=======
+	var max_attempts = 50
+	var max_y = SCREEN_SIZE.y - WINDOW_SIZE.y - HUD_HEIGHT - MARGIN
+	
+	for i in range(max_attempts):
+		var x = randf_range(MARGIN, SCREEN_SIZE.x - WINDOW_SIZE.x - MARGIN)
+		var y = randf_range(MARGIN, max_y)
+>>>>>>> parent of 1e03c52 (HUD):scripts/battle_manager.gd
 		var pos = Vector2(x, y)
 		
 		# 가운데 50x50 영역 체크 (창 중심 기준)
@@ -84,7 +103,13 @@ func _get_random_position() -> Vector2:
 		
 		var window_rect = Rect2(pos, WINDOW_SIZE)
 		
+<<<<<<< HEAD:scripts/battle/battle_manager.gd
 		# 기존 창과 겹침 체크
+=======
+		if window_rect.intersects(CENTER_AVOID):
+			continue
+		
+>>>>>>> parent of 1e03c52 (HUD):scripts/battle_manager.gd
 		var overlaps = false
 		for w in active_windows:
 			if is_instance_valid(w):

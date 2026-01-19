@@ -19,6 +19,7 @@ var slash_texture: Texture2D = null
 
 func _ready() -> void:
 	visible = false
+<<<<<<< HEAD
 	_load_fx_textures()
 
 
@@ -29,6 +30,9 @@ func _load_fx_textures() -> void:
 		print("[BattleWindow] 슬래시 텍스처 로드됨")  # 디버그용
 	else:
 		print("[BattleWindow] 슬래시 텍스처 없음: ", slash_path)  # 디버그용
+=======
+	# 시그널 연결 제거됨 - 이제 GameManager가 직접 호출
+>>>>>>> parent of 1e03c52 (HUD)
 
 
 func start_battle(enemy_id: String) -> void:
@@ -62,7 +66,11 @@ func _create_enemies(base_enemy_id: String) -> void:
 			"data": enemy_data,
 			"hp": max_hp,
 			"max_hp": max_hp,
+<<<<<<< HEAD
 			"cooldown": max_cd * randf_range(0.25, 1.0) ,
+=======
+			"cooldown": max_cd + randf_range(0, 1.0),
+>>>>>>> parent of 1e03c52 (HUD)
 			"max_cooldown": max_cd,
 			"ui": null
 		}

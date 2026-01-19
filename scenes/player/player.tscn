@@ -23,5 +23,8 @@ scale = Vector2(1.2969965, 1.2969965)
 shape = SubResource("CircleShape2D_dovo2")
 
 [node name="Camera2D" type="Camera2D" parent="."]
+<<<<<<< HEAD
 offset = Vector2(80, 0)
+=======
+>>>>>>> parent of 1e03c52 (HUD)
 position_smoothing_enabled = true
