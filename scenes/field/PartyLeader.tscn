@@ -1,17 +1,27 @@
-[gd_scene load_steps=3 format=3 uid="uid://bparty_leader"]
+[gd_scene load_steps=3 format=3 uid="uid://vv1h1nx6bkkr"]
 
-[ext_resource type="Script" path="res://scripts/field/PartyLeader.gd" id="1_leader"]
+[ext_resource type="Script" uid="uid://d20invp85jf3m" path="res://scripts/field/PartyLeader.gd" id="1_script"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(14, 14)
+size = Vector2(12, 12)
 
 [node name="PartyLeader" type="CharacterBody2D"]
 collision_layer = 2
 collision_mask = 5
-script = ExtResource("1_leader")
+script = ExtResource("1_script")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+modulate = Color(0.2, 0.6, 1, 1)
 scale = Vector2(0.5, 0.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_1")
+
+[node name="Label" type="Label" parent="."]
+offset_left = -20.0
+offset_top = -24.0
+offset_right = 20.0
+offset_bottom = -8.0
+text = "P1"
+horizontal_alignment = 1
+vertical_alignment = 1

@@ -5,17 +5,21 @@ class_name PartyLeader
 signal moved(new_position: Vector2)
 signal direction_changed(facing_right: bool)
 
-@export var move_speed: float = 60.0
+@export var move_speed: float = 80.0
 
-var facing_right: bool = false  # 기본 스프라이트가 왼쪽을 봄
-var position_history: Array[Vector2] = []  # 팔로워용 위치 기록
-var history_max_size: int = 100  # 기록 최대 길이
+var facing_right: bool = false
+var position_history: Array[Vector2] = []
+var history_max_size: int = 100
+var hero_id: String = ""
+var hero_data: Dictionary = {}
 
 @onready var sprite: Sprite2D = $Sprite2D
+@onready var collision: CollisionShape2D = $CollisionShape2D
 
 
 func _ready() -> void:
 	add_to_group("party_leader")
+	add_to_group("party")
 	position_history.append(global_position)
 
 
@@ -27,7 +31,7 @@ func _physics_process(_delta: float) -> void:
 		_update_facing(input_dir.x)
 		_record_position()
 	else:
-		velocity = Vector2.ZERO
+		velocity = velocity.move_toward(Vector2.ZERO, move_speed * 0.5)
 	
 	move_and_slide()
 
@@ -44,7 +48,7 @@ func _update_facing(x_direction: float) -> void:
 	
 	if x_direction > 0.1:
 		facing_right = true
-		sprite.flip_h = true  # 기본이 왼쪽이라 오른쪽 볼 때 플립
+		sprite.flip_h = true
 	elif x_direction < -0.1:
 		facing_right = false
 		sprite.flip_h = false
@@ -54,23 +58,44 @@ func _update_facing(x_direction: float) -> void:
 
 
 func _record_position() -> void:
-	# 일정 거리 이동했을 때만 기록
 	if position_history.is_empty() or global_position.distance_to(position_history[-1]) > 4.0:
 		position_history.append(global_position)
 		moved.emit(global_position)
 		
-		# 기록 크기 제한
 		while position_history.size() > history_max_size:
 			position_history.pop_front()
 
 
 func get_position_at_offset(offset: int) -> Vector2:
-	## 팔로워가 따라갈 위치 반환
-	## offset: 몇 프레임 뒤를 따라갈지 (1 = 바로 뒤, 2 = 두 번째 등)
-	var index := position_history.size() - 1 - (offset * 8)  # 8프레임 간격
+	var index := position_history.size() - 1 - (offset * 10)
 	index = clampi(index, 0, position_history.size() - 1)
 	return position_history[index]
 
 
 func get_facing_right() -> bool:
 	return facing_right
+
+
+func setup_hero(hero: RefCounted) -> void:
+	## Hero 객체로부터 정보 설정
+	if hero == null:
+		return
+	
+	hero_id = hero.id
+	hero_data = {
+		"id": hero.id,
+		"name": hero.hero_name,
+		"class_id": hero.class_id
+	}
+	
+	# SpriteManager에서 스프라이트 로드
+	if SpriteManager:
+		var tex: Texture2D = SpriteManager.get_hero_field_sprite(hero_id)
+		if tex:
+			sprite.texture = tex
+			sprite.scale = Vector2(1, 1)  # 스프라이트 크기에 맞게 조절
+	
+	# 이름 라벨 업데이트
+	var label: Label = get_node_or_null("Label")
+	if label:
+		label.text = hero.hero_name.substr(0, 2)  # 이름 앞 2글자

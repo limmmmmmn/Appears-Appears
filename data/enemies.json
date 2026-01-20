@@ -1,152 +1,152 @@
 {
   "slime": {
-	"id": "slime",
-	"name": "슬라임",
-	"type": "normal",
-	"base_stats": {
-	  "hp": 15,
-	  "mp": 0,
-	  "str": 5,
-	  "def": 2,
-	  "int": 1,
-	  "spd": 4,
-	  "luk": 2
-	},
-	"rewards": {
-	  "exp": 5,
-	  "gold_min": 3,
-	  "gold_max": 8
-	},
-	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.1}
-	],
-	"skills": ["basic_attack"],
-	"sprite": "slime_battle",
-	"tags": ["monster", "slime"]
+    "id": "slime",
+    "name": "슬라임",
+    "type": "normal",
+    "base_stats": {
+      "hp": 15,
+      "mp": 0,
+      "str": 5,
+      "def": 2,
+      "int": 1,
+      "spd": 4,
+      "luk": 2
+    },
+    "rewards": {
+      "exp": 5,
+      "gold_min": 3,
+      "gold_max": 8
+    },
+    "drop_table": [
+      {"item_id": "potion_small", "chance": 0.1}
+    ],
+    "skills": ["basic_attack"],
+    "sprite": "slime",
+    "tags": ["monster", "slime"]
   },
   "goblin": {
-	"id": "goblin",
-	"name": "고블린",
-	"type": "normal",
-	"base_stats": {
-	  "hp": 25,
-	  "mp": 0,
-	  "str": 8,
-	  "def": 4,
-	  "int": 2,
-	  "spd": 7,
-	  "luk": 5
-	},
-	"rewards": {
-	  "exp": 10,
-	  "gold_min": 8,
-	  "gold_max": 15
-	},
-	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.15},
-	  {"item_id": "dagger_common", "chance": 0.05}
-	],
-	"skills": ["basic_attack"],
-	"sprite": "goblin_battle",
-	"tags": ["monster", "goblin", "humanoid"]
+    "id": "goblin",
+    "name": "고블린",
+    "type": "normal",
+    "base_stats": {
+      "hp": 25,
+      "mp": 0,
+      "str": 8,
+      "def": 4,
+      "int": 2,
+      "spd": 7,
+      "luk": 5
+    },
+    "rewards": {
+      "exp": 10,
+      "gold_min": 8,
+      "gold_max": 15
+    },
+    "drop_table": [
+      {"item_id": "potion_small", "chance": 0.15},
+      {"item_id": "dagger_common", "chance": 0.05}
+    ],
+    "skills": ["basic_attack"],
+    "sprite": "goblin",
+    "tags": ["monster", "goblin", "humanoid"]
   },
   "bat": {
-	"id": "bat",
-	"name": "박쥐",
-	"type": "normal",
-	"base_stats": {
-	  "hp": 12,
-	  "mp": 0,
-	  "str": 6,
-	  "def": 2,
-	  "int": 1,
-	  "spd": 12,
-	  "luk": 4
-	},
-	"rewards": {
-	  "exp": 6,
-	  "gold_min": 2,
-	  "gold_max": 6
-	},
-	"drop_table": [],
-	"skills": ["basic_attack"],
-	"sprite": "bat_battle",
-	"tags": ["monster", "beast", "flying"]
+    "id": "bat",
+    "name": "박쥐",
+    "type": "normal",
+    "base_stats": {
+      "hp": 12,
+      "mp": 0,
+      "str": 6,
+      "def": 2,
+      "int": 1,
+      "spd": 12,
+      "luk": 4
+    },
+    "rewards": {
+      "exp": 6,
+      "gold_min": 2,
+      "gold_max": 6
+    },
+    "drop_table": [],
+    "skills": ["basic_attack"],
+    "sprite": "bat",
+    "tags": ["monster", "beast", "flying"]
   },
   "skeleton": {
-	"id": "skeleton",
-	"name": "스켈레톤",
-	"type": "normal",
-	"base_stats": {
-	  "hp": 30,
-	  "mp": 0,
-	  "str": 10,
-	  "def": 6,
-	  "int": 1,
-	  "spd": 5,
-	  "luk": 3
-	},
-	"rewards": {
-	  "exp": 15,
-	  "gold_min": 10,
-	  "gold_max": 20
-	},
-	"drop_table": [
-	  {"item_id": "sword_common", "chance": 0.08}
-	],
-	"skills": ["basic_attack"],
-	"sprite": "skeleton_battle",
-	"tags": ["undead", "skeleton"]
+    "id": "skeleton",
+    "name": "스켈레톤",
+    "type": "normal",
+    "base_stats": {
+      "hp": 30,
+      "mp": 0,
+      "str": 10,
+      "def": 6,
+      "int": 1,
+      "spd": 5,
+      "luk": 3
+    },
+    "rewards": {
+      "exp": 15,
+      "gold_min": 10,
+      "gold_max": 20
+    },
+    "drop_table": [
+      {"item_id": "sword_common", "chance": 0.08}
+    ],
+    "skills": ["basic_attack"],
+    "sprite": "skeleton",
+    "tags": ["undead", "skeleton"]
   },
   "orc_warrior": {
-	"id": "orc_warrior",
-	"name": "오크 전사",
-	"type": "elite",
-	"base_stats": {
-	  "hp": 80,
-	  "mp": 0,
-	  "str": 18,
-	  "def": 12,
-	  "int": 3,
-	  "spd": 6,
-	  "luk": 4
-	},
-	"rewards": {
-	  "exp": 50,
-	  "gold_min": 30,
-	  "gold_max": 50
-	},
-	"drop_table": [
-	  {"item_id": "axe_magic", "chance": 0.5},
-	  {"item_id": "heavy_armor_magic", "chance": 0.3}
-	],
-	"skills": ["basic_attack", "power_strike"],
-	"sprite": "orc_warrior_battle",
-	"tags": ["monster", "orc", "humanoid", "elite"]
+    "id": "orc_warrior",
+    "name": "오크 전사",
+    "type": "elite",
+    "base_stats": {
+      "hp": 80,
+      "mp": 0,
+      "str": 18,
+      "def": 12,
+      "int": 3,
+      "spd": 6,
+      "luk": 4
+    },
+    "rewards": {
+      "exp": 50,
+      "gold_min": 30,
+      "gold_max": 50
+    },
+    "drop_table": [
+      {"item_id": "axe_magic", "chance": 0.5},
+      {"item_id": "heavy_armor_magic", "chance": 0.3}
+    ],
+    "skills": ["basic_attack", "power_strike"],
+    "sprite": "orc_warrior",
+    "tags": ["monster", "orc", "humanoid", "elite"]
   },
   "boss_goblin_king": {
-	"id": "boss_goblin_king",
-	"name": "고블린 킹",
-	"type": "boss",
-	"base_stats": {
-	  "hp": 200,
-	  "mp": 30,
-	  "str": 22,
-	  "def": 15,
-	  "int": 8,
-	  "spd": 8,
-	  "luk": 10
-	},
-	"rewards": {
-	  "exp": 200,
-	  "gold_min": 100,
-	  "gold_max": 150
-	},
-	"drop_table": [
-	  {"item_id": "crown_legendary", "chance": 1.0}
-	],
-	"skills": ["basic_attack", "power_strike"],
-	"sprite": "goblin_king_battle",
-	"tags": ["monster", "goblin", "humanoid", "boss"]
+    "id": "boss_goblin_king",
+    "name": "고블린 킹",
+    "type": "boss",
+    "base_stats": {
+      "hp": 200,
+      "mp": 30,
+      "str": 22,
+      "def": 15,
+      "int": 8,
+      "spd": 8,
+      "luk": 10
+    },
+    "rewards": {
+      "exp": 200,
+      "gold_min": 100,
+      "gold_max": 150
+    },
+    "drop_table": [
+      {"item_id": "crown_legendary", "chance": 1.0}
+    ],
+    "skills": ["basic_attack", "power_strike"],
+    "sprite": "boss_goblin_king",
+    "tags": ["monster", "goblin", "humanoid", "boss"]
   }
 }

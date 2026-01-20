@@ -1,16 +1,17 @@
-[gd_scene load_steps=3 format=3 uid="uid://bparty_follower"]
+[gd_scene load_steps=3 format=3 uid="uid://d2xparty_follower"]
 
-[ext_resource type="Script" path="res://scripts/field/PartyFollower.gd" id="1_follower"]
+[ext_resource type="Script" path="res://scripts/field/PartyFollower.gd" id="1_script"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(14, 14)
+size = Vector2(12, 12)
 
 [node name="PartyFollower" type="CharacterBody2D"]
 collision_layer = 2
 collision_mask = 4
-script = ExtResource("1_follower")
+script = ExtResource("1_script")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
+modulate = Color(0.4, 0.8, 0.4, 1)
 scale = Vector2(0.5, 0.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]

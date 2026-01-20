@@ -3,54 +3,54 @@
 	"id": "roland",
 	"name": "롤랜드",
 	"class_id": "warrior",
-	"description": "왕국의 전직 근위대장",
+	"sprite_field": "roland_field",
+	"sprite_face": "roland_face",
 	"tags": ["human", "noble", "leader"],
-	"portrait": "roland_portrait",
-	"field_sprite": "roland_field"
+	"description": "왕국의 젊은 기사. 강인한 체력과 검술로 파티를 이끈다."
   },
   "luna": {
 	"id": "luna",
 	"name": "루나",
 	"class_id": "mage",
-	"description": "마법 아카데미 출신의 천재",
-	"tags": ["human", "scholar", "prodigy"],
-	"portrait": "luna_portrait",
-	"field_sprite": "luna_field"
+	"sprite_field": "luna_field",
+	"sprite_face": "luna_face",
+	"tags": ["human", "scholar", "magic"],
+	"description": "마법 학원 출신의 천재 마법사. 강력한 공격 마법을 구사한다."
   },
   "elena": {
 	"id": "elena",
 	"name": "엘레나",
 	"class_id": "cleric",
-	"description": "빛의 신전 사제",
-	"tags": ["human", "holy", "kind"],
-	"portrait": "elena_portrait",
-	"field_sprite": "elena_field"
+	"sprite_field": "elena_field",
+	"sprite_face": "elena_face",
+	"tags": ["human", "devout", "healer"],
+	"description": "신전의 사제. 신성한 힘으로 동료를 치유한다."
   },
   "shadow": {
 	"id": "shadow",
 	"name": "섀도우",
 	"class_id": "thief",
-	"description": "과거를 숨긴 암살자",
+	"sprite_field": "shadow_field",
+	"sprite_face": "shadow_face",
 	"tags": ["human", "assassin", "loner"],
-	"portrait": "shadow_portrait",
-	"field_sprite": "shadow_field"
+	"description": "과거를 숨긴 도적. 빠른 손과 이도류가 특기."
   },
   "aria": {
 	"id": "aria",
 	"name": "아리아",
 	"class_id": "archer",
-	"description": "숲의 수호자 엘프",
-	"tags": ["elf", "nature", "hunter"],
-	"portrait": "aria_portrait",
-	"field_sprite": "aria_field"
+	"sprite_field": "aria_field",
+	"sprite_face": "aria_face",
+	"tags": ["elf", "hunter", "nature"],
+	"description": "숲에서 온 엘프 궁수. 정확한 사격으로 적을 제압한다."
   },
   "gareth": {
 	"id": "gareth",
 	"name": "가레스",
 	"class_id": "knight",
-	"description": "철벽의 수호기사",
-	"tags": ["human", "noble", "protector"],
-	"portrait": "gareth_portrait",
-	"field_sprite": "gareth_field"
+	"sprite_field": "gareth_field",
+	"sprite_face": "gareth_face",
+	"tags": ["human", "veteran", "shield"],
+	"description": "베테랑 중기사. 두꺼운 갑옷과 방패로 동료를 지킨다."
   }
 }

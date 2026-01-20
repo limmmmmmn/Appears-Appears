@@ -105,10 +105,31 @@ func _on_explore_pressed() -> void:
 
 
 func _on_depart_pressed() -> void:
+	_go_to_field()
+#endregion
+
+
+#region 필드 이동
+func _go_to_field() -> void:
+	# 파티 체크
 	if PartyManager.get_party().is_empty():
-		_show_message("파티에 영웅이 없습니다!")
+		_show_message("파티에 영웅이 없습니다! 선술집에서 영웅을 영입하세요.")
 		return
+	
+	# 생존 영웅 체크
+	var alive_count: int = 0
+	for hero in PartyManager.get_party():
+		if hero.current_hp > 0:
+			alive_count += 1
+	
+	if alive_count == 0:
+		_show_message("모든 영웅이 사망했습니다! 교회에서 부활시키세요.")
+		return
+	
 	go_to_field.emit()
+	
+	# GameManager로 필드 이동
+	GameManager.go_to_field()
 #endregion
 
 
