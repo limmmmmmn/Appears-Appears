@@ -14,7 +14,7 @@ border_width_right = 1
 border_width_bottom = 1
 
 [node name="BattleWindow" type="Control"]
-custom_minimum_size = Vector2(180, 140)
+custom_minimum_size = Vector2(160, 120)
 layout_mode = 3
 anchors_preset = 0
 offset_right = 120.0
