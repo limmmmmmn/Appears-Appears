@@ -1,0 +1,64 @@
+{
+  "events": [
+    {
+      "id": "find_coin",
+      "text": "길가에서 동전 주머니를 발견했다!",
+      "weight": 30,
+      "effect": { "type": "gold", "min": 5, "max": 20 }
+    },
+    {
+      "id": "find_potion",
+      "text": "수상한 상인이 포션을 하나 건네주었다.",
+      "weight": 15,
+      "effect": { "type": "item", "item_id": "potion_small", "count": 1 }
+    },
+    {
+      "id": "rumor_monster",
+      "text": "주민에게서 몬스터 출몰 정보를 들었다.\n\"최근 고블린들이 자주 보인다더군...\"",
+      "weight": 20,
+      "effect": { "type": "info" }
+    },
+    {
+      "id": "rumor_treasure",
+      "text": "늙은 모험가가 말을 걸어왔다.\n\"동쪽 숲에 보물상자가 있다는 소문이 있어...\"",
+      "weight": 15,
+      "effect": { "type": "info" }
+    },
+    {
+      "id": "nothing",
+      "text": "마을을 둘러봤지만 특별한 일은 없었다.",
+      "weight": 25,
+      "effect": { "type": "none" }
+    },
+    {
+      "id": "pickpocket",
+      "text": "소매치기를 당했다! 골드를 조금 잃었다...",
+      "weight": 10,
+      "effect": { "type": "gold", "min": -15, "max": -5 }
+    },
+    {
+      "id": "street_performer",
+      "text": "거리의 악사에게 동전을 던져주었다.\n기분이 좋아진다.",
+      "weight": 10,
+      "effect": { "type": "gold", "min": -3, "max": -1 }
+    },
+    {
+      "id": "find_herb",
+      "text": "마을 외곽에서 약초를 발견했다!",
+      "weight": 8,
+      "effect": { "type": "item", "item_id": "revive_herb", "count": 1 }
+    },
+    {
+      "id": "merchant_deal",
+      "text": "떠돌이 상인이 좋은 거래를 제안했다!\n약간의 골드를 얻었다.",
+      "weight": 12,
+      "effect": { "type": "gold", "min": 10, "max": 30 }
+    },
+    {
+      "id": "cat",
+      "text": "귀여운 고양이가 다가와 비비적거린다.\n...그것뿐이다.",
+      "weight": 15,
+      "effect": { "type": "none" }
+    }
+  ]
+}

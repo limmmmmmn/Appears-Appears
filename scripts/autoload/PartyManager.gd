@@ -142,6 +142,10 @@ func get_item_count(item_id: String) -> int:
 
 func has_item(item_id: String, amount: int = 1) -> bool:
 	return get_item_count(item_id) >= amount
+
+
+func get_all_items() -> Dictionary:
+	return inventory.duplicate()
 #endregion
 
 

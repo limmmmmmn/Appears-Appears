@@ -1,0 +1,14 @@
+=== HyperQuest 스프라이트 플레이스홀더 ===
+
+필요한 스프라이트:
+1. hero_field.png - 파티원 필드 스프라이트 (왼쪽 보는 방향, ~16x16 또는 22x22)
+2. enemy_slime.png - 슬라임 필드 스프라이트
+3. enemy_bat.png - 박쥐 필드 스프라이트
+4. enemy_goblin.png - 고블린 필드 스프라이트
+5. alert_icon.png - 느낌표 아이콘 (적 발견 시)
+
+Godot에서 테스트할 때:
+- Sprite2D 노드에 직접 텍스처 드래그 드롭
+- 또는 스크립트에서 load() 사용
+
+현재는 스프라이트 없이도 실행 가능 (빈 스프라이트)

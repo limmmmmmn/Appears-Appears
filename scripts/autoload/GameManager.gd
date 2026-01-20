@@ -29,7 +29,7 @@ func change_state(new_state: GameState) -> void:
 func start_new_game() -> void:
 	current_stage = 1
 	current_field = 1
-	gold = 100
+	gold = 2000
 	obtained_legendaries.clear()
 	change_state(GameState.FIELD)
 	stage_changed.emit(current_stage, current_field)

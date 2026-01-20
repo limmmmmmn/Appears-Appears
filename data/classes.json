@@ -1,176 +1,176 @@
 {
   "warrior": {
-    "id": "warrior",
-    "name": "전사",
-    "description": "균형 잡힌 근접 전투원",
-    "base_stats": {
-      "hp": 50,
-      "mp": 10,
-      "str": 12,
-      "def": 10,
-      "int": 4,
-      "spd": 8,
-      "luk": 6
-    },
-    "growth": {
-      "hp": 8,
-      "mp": 2,
-      "str": 3,
-      "def": 2,
-      "int": 1,
-      "spd": 1,
-      "luk": 1
-    },
-    "equip_restrictions": {
-      "can_equip": ["sword", "axe", "shield", "heavy_armor", "medium_armor", "helmet"],
-      "dual_wield": false
-    },
-    "tags": ["melee", "physical", "tank"],
-    "skills": ["basic_attack", "power_strike"]
+	"id": "warrior",
+	"name": "전사",
+	"description": "균형 잡힌 근접 전투원",
+	"base_stats": {
+	  "hp": 50,
+	  "mp": 10,
+	  "str": 12,
+	  "def": 10,
+	  "int": 4,
+	  "spd": 8,
+	  "luk": 6
+	},
+	"growth": {
+	  "hp": 8,
+	  "mp": 2,
+	  "str": 3,
+	  "def": 2,
+	  "int": 1,
+	  "spd": 1,
+	  "luk": 1
+	},
+	"equip_restrictions": {
+	  "can_equip": ["sword", "axe", "shield", "heavy_armor", "medium_armor", "helmet"],
+	  "dual_wield": false
+	},
+	"tags": ["melee", "physical", "tank"],
+	"skills": ["basic_attack", "power_strike"]
   },
   "mage": {
-    "id": "mage",
-    "name": "마법사",
-    "description": "강력한 마법 공격 전문가",
-    "base_stats": {
-      "hp": 30,
-      "mp": 40,
-      "str": 4,
-      "def": 4,
-      "int": 14,
-      "spd": 8,
-      "luk": 8
-    },
-    "growth": {
-      "hp": 4,
-      "mp": 6,
-      "str": 1,
-      "def": 1,
-      "int": 4,
-      "spd": 1,
-      "luk": 1
-    },
-    "equip_restrictions": {
-      "can_equip": ["staff", "wand", "robe", "cloth_armor"],
-      "dual_wield": false
-    },
-    "tags": ["magic", "ranged", "aoe"],
-    "skills": ["basic_attack", "fireball", "ice_bolt"]
+	"id": "mage",
+	"name": "마법사",
+	"description": "강력한 마법 공격 전문가",
+	"base_stats": {
+	  "hp": 30,
+	  "mp": 40,
+	  "str": 4,
+	  "def": 4,
+	  "int": 14,
+	  "spd": 8,
+	  "luk": 8
+	},
+	"growth": {
+	  "hp": 4,
+	  "mp": 6,
+	  "str": 1,
+	  "def": 1,
+	  "int": 4,
+	  "spd": 1,
+	  "luk": 1
+	},
+	"equip_restrictions": {
+	  "can_equip": ["staff", "wand", "robe", "cloth_armor"],
+	  "dual_wield": false
+	},
+	"tags": ["magic", "ranged", "aoe"],
+	"skills": ["basic_attack", "fireball", "ice_bolt"]
   },
   "cleric": {
-    "id": "cleric",
-    "name": "성직자",
-    "description": "치유와 지원 전문가",
-    "base_stats": {
-      "hp": 40,
-      "mp": 35,
-      "str": 6,
-      "def": 8,
-      "int": 12,
-      "spd": 6,
-      "luk": 8
-    },
-    "growth": {
-      "hp": 5,
-      "mp": 5,
-      "str": 1,
-      "def": 2,
-      "int": 3,
-      "spd": 1,
-      "luk": 1
-    },
-    "equip_restrictions": {
-      "can_equip": ["staff", "mace", "shield", "robe", "medium_armor"],
-      "dual_wield": false
-    },
-    "tags": ["magic", "support", "healer"],
-    "skills": ["basic_attack", "heal", "smite"]
+	"id": "cleric",
+	"name": "성직자",
+	"description": "치유와 지원 전문가",
+	"base_stats": {
+	  "hp": 40,
+	  "mp": 35,
+	  "str": 6,
+	  "def": 8,
+	  "int": 12,
+	  "spd": 6,
+	  "luk": 8
+	},
+	"growth": {
+	  "hp": 5,
+	  "mp": 5,
+	  "str": 1,
+	  "def": 2,
+	  "int": 3,
+	  "spd": 1,
+	  "luk": 1
+	},
+	"equip_restrictions": {
+	  "can_equip": ["staff", "mace", "shield", "robe", "medium_armor"],
+	  "dual_wield": false
+	},
+	"tags": ["magic", "support", "healer"],
+	"skills": ["basic_attack", "heal", "smite"]
   },
   "thief": {
-    "id": "thief",
-    "name": "도적",
-    "description": "빠른 속도와 이도류 전문가",
-    "base_stats": {
-      "hp": 35,
-      "mp": 15,
-      "str": 8,
-      "def": 6,
-      "int": 6,
-      "spd": 14,
-      "luk": 12
-    },
-    "growth": {
-      "hp": 5,
-      "mp": 2,
-      "str": 2,
-      "def": 1,
-      "int": 1,
-      "spd": 4,
-      "luk": 3
-    },
-    "equip_restrictions": {
-      "can_equip": ["dagger", "sword", "light_armor", "cloth_armor"],
-      "dual_wield": true
-    },
-    "tags": ["melee", "physical", "speed", "dual_wield"],
-    "skills": ["basic_attack", "backstab", "steal"]
+	"id": "thief",
+	"name": "도적",
+	"description": "빠른 속도와 이도류 전문가",
+	"base_stats": {
+	  "hp": 35,
+	  "mp": 15,
+	  "str": 8,
+	  "def": 6,
+	  "int": 6,
+	  "spd": 14,
+	  "luk": 12
+	},
+	"growth": {
+	  "hp": 5,
+	  "mp": 2,
+	  "str": 2,
+	  "def": 1,
+	  "int": 1,
+	  "spd": 4,
+	  "luk": 3
+	},
+	"equip_restrictions": {
+	  "can_equip": ["dagger", "sword", "light_armor", "cloth_armor"],
+	  "dual_wield": true
+	},
+	"tags": ["melee", "physical", "speed", "dual_wield"],
+	"skills": ["basic_attack", "backstab", "steal"]
   },
   "archer": {
-    "id": "archer",
-    "name": "궁수",
-    "description": "원거리 물리 공격 전문가",
-    "base_stats": {
-      "hp": 35,
-      "mp": 15,
-      "str": 10,
-      "def": 6,
-      "int": 6,
-      "spd": 12,
-      "luk": 10
-    },
-    "growth": {
-      "hp": 5,
-      "mp": 2,
-      "str": 3,
-      "def": 1,
-      "int": 1,
-      "spd": 3,
-      "luk": 2
-    },
-    "equip_restrictions": {
-      "can_equip": ["bow", "crossbow", "light_armor", "cloth_armor"],
-      "dual_wield": false
-    },
-    "tags": ["ranged", "physical", "speed"],
-    "skills": ["basic_attack", "aimed_shot", "arrow_rain"]
+	"id": "archer",
+	"name": "궁수",
+	"description": "원거리 물리 공격 전문가",
+	"base_stats": {
+	  "hp": 35,
+	  "mp": 15,
+	  "str": 10,
+	  "def": 6,
+	  "int": 6,
+	  "spd": 12,
+	  "luk": 10
+	},
+	"growth": {
+	  "hp": 5,
+	  "mp": 2,
+	  "str": 3,
+	  "def": 1,
+	  "int": 1,
+	  "spd": 3,
+	  "luk": 2
+	},
+	"equip_restrictions": {
+	  "can_equip": ["bow", "crossbow", "light_armor", "cloth_armor"],
+	  "dual_wield": false
+	},
+	"tags": ["ranged", "physical", "speed"],
+	"skills": ["basic_attack", "aimed_shot", "arrow_rain"]
   },
   "knight": {
-    "id": "knight",
-    "name": "기사",
-    "description": "중장갑 탱커",
-    "base_stats": {
-      "hp": 60,
-      "mp": 10,
-      "str": 10,
-      "def": 14,
-      "int": 4,
-      "spd": 4,
-      "luk": 6
-    },
-    "growth": {
-      "hp": 10,
-      "mp": 1,
-      "str": 2,
-      "def": 4,
-      "int": 1,
-      "spd": 1,
-      "luk": 1
-    },
-    "equip_restrictions": {
-      "can_equip": ["sword", "lance", "shield", "heavy_armor", "helmet"],
-      "dual_wield": false
-    },
-    "tags": ["melee", "physical", "tank", "heavy"],
-    "skills": ["basic_attack", "shield_bash", "provoke"]
+	"id": "knight",
+	"name": "기사",
+	"description": "중장갑 탱커",
+	"base_stats": {
+	  "hp": 60,
+	  "mp": 10,
+	  "str": 10,
+	  "def": 14,
+	  "int": 4,
+	  "spd": 4,
+	  "luk": 6
+	},
+	"growth": {
+	  "hp": 10,
+	  "mp": 1,
+	  "str": 2,
+	  "def": 4,
+	  "int": 1,
+	  "spd": 1,
+	  "luk": 1
+	},
+	"equip_restrictions": {
+	  "can_equip": ["sword", "lance", "shield", "heavy_armor", "helmet"],
+	  "dual_wield": false
+	},
+	"tags": ["melee", "physical", "tank", "heavy"],
+	"skills": ["basic_attack", "shield_bash", "provoke"]
   }
 }

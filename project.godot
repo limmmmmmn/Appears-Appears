@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="HyperQuest"
-run/main_scene="res://scenes/main/Main.tscn"
+run/main_scene="res://scenes/field/FieldTestMain.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 
 [autoload]
@@ -20,6 +20,8 @@ DataManager="*res://scripts/autoload/DataManager.gd"
 GameManager="*res://scripts/autoload/GameManager.gd"
 PartyManager="*res://scripts/autoload/PartyManager.gd"
 BattleManager="*res://scripts/autoload/BattleManager.gd"
+TownManager="*res://scripts/autoload/TownManager.gd"
+FieldManager="*res://scripts/autoload/FieldManager.gd"
 
 [display]
 

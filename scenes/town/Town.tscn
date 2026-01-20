@@ -1,0 +1,176 @@
+[gd_scene load_steps=2 format=3 uid="uid://town_scene"]
+
+[ext_resource type="Script" path="res://scripts/town/Town.gd" id="1_town"]
+
+[node name="Town" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_town")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.12, 0.12, 0.18, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="TopBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="StageLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Stage 1-1"
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBoxContainer/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GoldLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "100 G"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ContentHBox" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 15
+
+[node name="MainMenu" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+custom_minimum_size = Vector2(180, 0)
+theme_override_constants/separation = 4
+
+[node name="Title" type="Label" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+text = "=== 마  을 ==="
+horizontal_alignment = 1
+
+[node name="StatusButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_bottom = NodePath("../TavernButton")
+text = "상태보기"
+
+[node name="TavernButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../StatusButton")
+focus_neighbor_bottom = NodePath("../WeaponShopButton")
+text = "선술집"
+
+[node name="WeaponShopButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../TavernButton")
+focus_neighbor_bottom = NodePath("../ArmorShopButton")
+text = "무기상"
+
+[node name="ArmorShopButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../WeaponShopButton")
+focus_neighbor_bottom = NodePath("../ItemShopButton")
+text = "방어구상"
+
+[node name="ItemShopButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../ArmorShopButton")
+focus_neighbor_bottom = NodePath("../InnButton")
+text = "도구상"
+
+[node name="InnButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../ItemShopButton")
+focus_neighbor_bottom = NodePath("../ChurchButton")
+text = "여관"
+
+[node name="ChurchButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../InnButton")
+focus_neighbor_bottom = NodePath("../ExploreButton")
+text = "교회"
+
+[node name="ExploreButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../ChurchButton")
+focus_neighbor_bottom = NodePath("../DepartButton")
+text = "마을 탐색"
+
+[node name="Spacer2" type="Control" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="DepartButton" type="Button" parent="MarginContainer/VBoxContainer/ContentHBox/MainMenu"]
+layout_mode = 2
+focus_neighbor_top = NodePath("../ExploreButton")
+text = "나가기 (필드로)"
+
+[node name="VSeparator" type="VSeparator" parent="MarginContainer/VBoxContainer/ContentHBox"]
+layout_mode = 2
+
+[node name="SubPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/ContentHBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/ContentHBox/SubPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer/ContentHBox/SubPanel/MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SubContent" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentHBox/SubPanel/MarginContainer/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="MessageLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "마을에 오신 것을 환영합니다."
+horizontal_alignment = 1
+
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/StatusButton" to="." method="_on_status_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/TavernButton" to="." method="_on_tavern_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/WeaponShopButton" to="." method="_on_weapon_shop_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/ArmorShopButton" to="." method="_on_armor_shop_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/ItemShopButton" to="." method="_on_item_shop_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/InnButton" to="." method="_on_inn_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/ChurchButton" to="." method="_on_church_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/ExploreButton" to="." method="_on_explore_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ContentHBox/MainMenu/DepartButton" to="." method="_on_depart_pressed"]

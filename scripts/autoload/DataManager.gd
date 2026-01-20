@@ -7,6 +7,8 @@ var enemies: Dictionary = {}
 var skills: Dictionary = {}
 var equipment: Dictionary = {}
 var items: Dictionary = {}
+var shops: Dictionary = {}
+var town_events: Dictionary = {}
 
 const DATA_PATH := "res://data/"
 
@@ -22,6 +24,8 @@ func _load_all_data() -> void:
 	skills = _load_json("skills.json")
 	equipment = _load_json("equipment.json")
 	items = _load_json("items.json")
+	shops = _load_json("shops.json")
+	town_events = _load_json("town_events.json")
 	
 	print("[DataManager] 데이터 로드 완료")
 	print("  - Classes: ", classes.size())
@@ -30,6 +34,8 @@ func _load_all_data() -> void:
 	print("  - Skills: ", skills.size())
 	print("  - Equipment: ", equipment.size())
 	print("  - Items: ", items.size())
+	print("  - Shops: ", shops.size())
+	print("  - TownEvents: ", town_events.get("events", []).size())
 
 
 func _load_json(filename: String) -> Dictionary:
@@ -116,3 +122,18 @@ func get_item(item_id: String) -> Dictionary:
 	if equipment.has(item_id):
 		return equipment[item_id]
 	return {}
+
+
+# 상점
+func get_shop(shop_id: String) -> Dictionary:
+	return shops.get(shop_id, {})
+
+
+func get_shop_items(shop_id: String) -> Array:
+	var shop: Dictionary = get_shop(shop_id)
+	return shop.get("items", [])
+
+
+# 마을 이벤트
+func get_town_events() -> Array:
+	return town_events.get("events", [])
