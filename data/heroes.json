@@ -1,0 +1,56 @@
+{
+  "roland": {
+    "id": "roland",
+    "name": "롤랜드",
+    "class_id": "warrior",
+    "description": "왕국의 전직 근위대장",
+    "tags": ["human", "noble", "leader"],
+    "portrait": "roland_portrait",
+    "field_sprite": "roland_field"
+  },
+  "luna": {
+    "id": "luna",
+    "name": "루나",
+    "class_id": "mage",
+    "description": "마법 아카데미 출신의 천재",
+    "tags": ["human", "scholar", "prodigy"],
+    "portrait": "luna_portrait",
+    "field_sprite": "luna_field"
+  },
+  "elena": {
+    "id": "elena",
+    "name": "엘레나",
+    "class_id": "cleric",
+    "description": "빛의 신전 사제",
+    "tags": ["human", "holy", "kind"],
+    "portrait": "elena_portrait",
+    "field_sprite": "elena_field"
+  },
+  "shadow": {
+    "id": "shadow",
+    "name": "섀도우",
+    "class_id": "thief",
+    "description": "과거를 숨긴 암살자",
+    "tags": ["human", "assassin", "loner"],
+    "portrait": "shadow_portrait",
+    "field_sprite": "shadow_field"
+  },
+  "aria": {
+    "id": "aria",
+    "name": "아리아",
+    "class_id": "archer",
+    "description": "숲의 수호자 엘프",
+    "tags": ["elf", "nature", "hunter"],
+    "portrait": "aria_portrait",
+    "field_sprite": "aria_field"
+  },
+  "gareth": {
+    "id": "gareth",
+    "name": "가레스",
+    "class_id": "knight",
+    "description": "철벽의 수호기사",
+    "tags": ["human", "noble", "protector"],
+    "portrait": "gareth_portrait",
+    "field_sprite": "gareth_field"
+  }
+}

@@ -1,0 +1,196 @@
+{
+  "basic_attack": {
+    "id": "basic_attack",
+    "name": "기본 공격",
+    "description": "기본적인 물리 공격",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 0,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.0
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "power_strike": {
+    "id": "power_strike",
+    "name": "강타",
+    "description": "강력한 일격을 가한다",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 8,
+    "damage_base": 5,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.5
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "fireball": {
+    "id": "fireball",
+    "name": "파이어볼",
+    "description": "불덩이를 발사한다",
+    "type": "magic",
+    "target": "single_enemy",
+    "mp_cost": 12,
+    "damage_base": 15,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 1.2
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "ice_bolt": {
+    "id": "ice_bolt",
+    "name": "아이스볼트",
+    "description": "얼음 화살을 발사한다",
+    "type": "magic",
+    "target": "single_enemy",
+    "mp_cost": 10,
+    "damage_base": 12,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 1.0
+    },
+    "effects": [
+      {"type": "slow", "chance": 0.2, "duration": 2}
+    ],
+    "default_on": true
+  },
+  "heal": {
+    "id": "heal",
+    "name": "힐",
+    "description": "아군 한 명의 HP를 회복한다",
+    "type": "heal",
+    "target": "single_ally",
+    "mp_cost": 10,
+    "heal_base": 20,
+    "heal_scaling": {
+      "stat": "int",
+      "multiplier": 0.8
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "smite": {
+    "id": "smite",
+    "name": "천벌",
+    "description": "신성한 빛으로 적을 공격한다",
+    "type": "magic",
+    "target": "single_enemy",
+    "mp_cost": 8,
+    "damage_base": 10,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 0.8
+    },
+    "effects": [
+      {"type": "bonus_vs_undead", "multiplier": 1.5}
+    ],
+    "default_on": true
+  },
+  "backstab": {
+    "id": "backstab",
+    "name": "백스탭",
+    "description": "급소를 노린다. 크리티컬 확률 증가",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 6,
+    "damage_base": 3,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.2
+    },
+    "effects": [
+      {"type": "crit_bonus", "value": 30}
+    ],
+    "default_on": true
+  },
+  "steal": {
+    "id": "steal",
+    "name": "훔치기",
+    "description": "적에게서 아이템을 훔친다",
+    "type": "utility",
+    "target": "single_enemy",
+    "mp_cost": 4,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "spd",
+      "multiplier": 0
+    },
+    "effects": [
+      {"type": "steal", "base_chance": 0.3, "luk_scaling": 0.01}
+    ],
+    "default_on": false
+  },
+  "aimed_shot": {
+    "id": "aimed_shot",
+    "name": "조준 사격",
+    "description": "정확히 조준하여 쏜다",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 6,
+    "damage_base": 8,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.3
+    },
+    "effects": [
+      {"type": "ignore_eva", "value": 0.5}
+    ],
+    "default_on": true
+  },
+  "arrow_rain": {
+    "id": "arrow_rain",
+    "name": "화살비",
+    "description": "모든 적에게 화살을 퍼붓는다",
+    "type": "physical",
+    "target": "all_enemies",
+    "mp_cost": 15,
+    "damage_base": 5,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 0.8
+    },
+    "effects": [],
+    "default_on": false
+  },
+  "shield_bash": {
+    "id": "shield_bash",
+    "name": "방패 강타",
+    "description": "방패로 적을 강타하여 기절시킨다",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 8,
+    "damage_base": 5,
+    "damage_scaling": {
+      "stat": "def",
+      "multiplier": 0.8
+    },
+    "effects": [
+      {"type": "stun", "chance": 0.25, "duration": 1}
+    ],
+    "default_on": true
+  },
+  "provoke": {
+    "id": "provoke",
+    "name": "도발",
+    "description": "적의 주의를 끌어 자신을 공격하게 한다",
+    "type": "utility",
+    "target": "all_enemies",
+    "mp_cost": 5,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "def",
+      "multiplier": 0
+    },
+    "effects": [
+      {"type": "taunt", "duration": 2}
+    ],
+    "default_on": false
+  }
+}
