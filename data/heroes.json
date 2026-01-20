@@ -1,226 +1,56 @@
 {
-  "heroes": {
-	"warrior": {
-	  "id": "warrior",
-	  "name": "전사",
-	  "description": "검과 방패를 다루는 전선의 수호자",
-	  "stats": {
-		"max_hp": 100,
-		"atk": 15,
-		"def": 8,
-		"dex": 5,
-		"int": 2,
-		"luk": 3
-	  },
-	  "growth": {
-		"max_hp": 12,
-		"atk": 3,
-		"def": 2,
-		"dex": 1,
-		"int": 0,
-		"luk": 1
-	  },
-	  "combat": {
-		"base_cooldown": 2.0,
-		"skills": ["skill_slash"]
-	  },
-	  "skill_unlocks": {
-		"1": ["skill_slash"],
-		"3": ["skill_power_strike"],
-		"5": ["skill_whirlwind"]
-	  },
-	  "visuals": {
-		"sprite": "res://sprites/characters/player1_walk_left_strip1.png",
-		"portrait": "res://sprites/characters/player1_walk_left_strip1.png",
-		"color": "cc4444"
-	  },
-	  "allowed_equipment": ["sword", "axe", "shield", "heavy_armor", "helmet", "accessory"],
-	  "tags": ["melee", "tank"]
-	},
-	"mage": {
-	  "id": "mage",
-	  "name": "마법사",
-	  "description": "원소의 힘을 다루는 신비술사",
-	  "stats": {
-		"max_hp": 60,
-		"atk": 8,
-		"def": 3,
-		"dex": 4,
-		"int": 18,
-		"luk": 5
-	  },
-	  "growth": {
-		"max_hp": 6,
-		"atk": 1,
-		"def": 1,
-		"dex": 1,
-		"int": 4,
-		"luk": 1
-	  },
-	  "combat": {
-		"base_cooldown": 2.5,
-		"skills": ["skill_fire"]
-	  },
-	  "skill_unlocks": {
-		"1": ["skill_fire"],
-		"3": ["skill_fireball"],
-		"5": ["skill_meteor"]
-	  },
-	  "visuals": {
-		"sprite": "res://sprites/characters/black_mage_walk_left_strip1.png",
-		"portrait": "res://sprites/characters/black_mage_walk_left_strip1.png",
-		"color": "4444cc"
-	  },
-	  "allowed_equipment": ["staff", "wand", "robe", "hat", "accessory"],
-	  "tags": ["ranged", "magic"]
-	},
-	"cleric": {
-	  "id": "cleric",
-	  "name": "성직자",
-	  "description": "신의 축복으로 동료를 치유하는 사제",
-	  "stats": {
-		"max_hp": 80,
-		"atk": 6,
-		"def": 5,
-		"dex": 4,
-		"int": 14,
-		"luk": 8
-	  },
-	  "growth": {
-		"max_hp": 8,
-		"atk": 1,
-		"def": 1,
-		"dex": 1,
-		"int": 3,
-		"luk": 2
-	  },
-	  "combat": {
-		"base_cooldown": 2.2,
-		"skills": ["skill_strike"]
-	  },
-	  "skill_unlocks": {
-		"1": ["skill_strike"],
-		"3": ["skill_heal"],
-		"5": ["skill_holy_light"]
-	  },
-	  "visuals": {
-		"sprite": "res://sprites/characters/white_mage_walk_left_strip1.png",
-		"portrait": "res://sprites/characters/white_mage_walk_left_strip1.png",
-		"color": "44cc44"
-	  },
-	  "allowed_equipment": ["staff", "mace", "robe", "hat", "shield", "accessory"],
-	  "tags": ["support", "magic"]
-	},
-	"thief": {
-	  "id": "thief",
-	  "name": "도적",
-	  "description": "빠른 손놀림과 기민한 움직임의 달인",
-	  "stats": {
-		"max_hp": 70,
-		"atk": 12,
-		"def": 4,
-		"dex": 16,
-		"int": 3,
-		"luk": 12
-	  },
-	  "growth": {
-		"max_hp": 7,
-		"atk": 2,
-		"def": 1,
-		"dex": 3,
-		"int": 0,
-		"luk": 2
-	  },
-	  "combat": {
-		"base_cooldown": 1.5,
-		"skills": ["skill_slash"]
-	  },
-	  "skill_unlocks": {
-		"1": ["skill_slash"],
-		"3": ["skill_backstab"],
-		"5": ["skill_shadow_dance"]
-	  },
-	  "visuals": {
-		"sprite": "res://sprites/characters/red_mage_walk_left_strip1.png",
-		"portrait": "res://sprites/characters/red_mage_walk_left_strip1.png",
-		"color": "aa44aa"
-	  },
-	  "allowed_equipment": ["dagger", "sword", "light_armor", "hat", "accessory"],
-	  "tags": ["melee", "agile"]
-	},
-	"archer": {
-	  "id": "archer",
-	  "name": "궁수",
-	  "description": "멀리서 정확한 화살을 날리는 명사수",
-	  "stats": {
-		"max_hp": 65,
-		"atk": 14,
-		"def": 4,
-		"dex": 14,
-		"int": 4,
-		"luk": 8
-	  },
-	  "growth": {
-		"max_hp": 6,
-		"atk": 3,
-		"def": 1,
-		"dex": 2,
-		"int": 1,
-		"luk": 1
-	  },
-	  "combat": {
-		"base_cooldown": 1.8,
-		"skills": ["skill_shoot"]
-	  },
-	  "skill_unlocks": {
-		"1": ["skill_shoot"],
-		"3": ["skill_rapid_shot"],
-		"5": ["skill_arrow_rain"]
-	  },
-	  "visuals": {
-		"sprite": "res://sprites/characters/archer_walk_left_strip1.png",
-		"portrait": "res://sprites/characters/archer_walk_left_strip1.png",
-		"color": "44aaaa"
-	  },
-	  "allowed_equipment": ["bow", "crossbow", "light_armor", "hat", "accessory"],
-	  "tags": ["ranged", "physical"]
-	},
-	"knight": {
-	  "id": "knight",
-	  "name": "기사",
-	  "description": "중갑으로 무장한 철벽의 수호자",
-	  "stats": {
-		"max_hp": 120,
-		"atk": 12,
-		"def": 14,
-		"dex": 3,
-		"int": 2,
-		"luk": 4
-	  },
-	  "growth": {
-		"max_hp": 15,
-		"atk": 2,
-		"def": 3,
-		"dex": 1,
-		"int": 0,
-		"luk": 1
-	  },
-	  "combat": {
-		"base_cooldown": 2.5,
-		"skills": ["skill_strike"]
-	  },
-	  "skill_unlocks": {
-		"1": ["skill_strike"],
-		"3": ["skill_shield_bash"],
-		"5": ["skill_taunt"]
-	  },
-	  "visuals": {
-		"sprite": "res://sprites/characters/knight_walk_left_strip1.png",
-		"portrait": "res://sprites/characters/knight_walk_left_strip1.png",
-		"color": "888888"
-	  },
-	  "allowed_equipment": ["sword", "lance", "shield", "heavy_armor", "helmet", "accessory"],
-	  "tags": ["melee", "tank", "defense"]
-	}
+  "roland": {
+    "id": "roland",
+    "name": "롤랜드",
+    "class_id": "warrior",
+    "description": "왕국의 전직 근위대장",
+    "tags": ["human", "noble", "leader"],
+    "portrait": "roland_portrait",
+    "field_sprite": "roland_field"
+  },
+  "luna": {
+    "id": "luna",
+    "name": "루나",
+    "class_id": "mage",
+    "description": "마법 아카데미 출신의 천재",
+    "tags": ["human", "scholar", "prodigy"],
+    "portrait": "luna_portrait",
+    "field_sprite": "luna_field"
+  },
+  "elena": {
+    "id": "elena",
+    "name": "엘레나",
+    "class_id": "cleric",
+    "description": "빛의 신전 사제",
+    "tags": ["human", "holy", "kind"],
+    "portrait": "elena_portrait",
+    "field_sprite": "elena_field"
+  },
+  "shadow": {
+    "id": "shadow",
+    "name": "섀도우",
+    "class_id": "thief",
+    "description": "과거를 숨긴 암살자",
+    "tags": ["human", "assassin", "loner"],
+    "portrait": "shadow_portrait",
+    "field_sprite": "shadow_field"
+  },
+  "aria": {
+    "id": "aria",
+    "name": "아리아",
+    "class_id": "archer",
+    "description": "숲의 수호자 엘프",
+    "tags": ["elf", "nature", "hunter"],
+    "portrait": "aria_portrait",
+    "field_sprite": "aria_field"
+  },
+  "gareth": {
+    "id": "gareth",
+    "name": "가레스",
+    "class_id": "knight",
+    "description": "철벽의 수호기사",
+    "tags": ["human", "noble", "protector"],
+    "portrait": "gareth_portrait",
+    "field_sprite": "gareth_field"
   }
 }

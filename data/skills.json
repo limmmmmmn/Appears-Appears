@@ -1,457 +1,196 @@
 {
-  "skills": {
-    "skill_slash": {
-      "id": "skill_slash",
-      "name": "베기",
-      "description": "날카로운 일격을 가한다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 10,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 1.0
-          }
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "slash",
-        "sound": "slash",
-        "color": "ffffff"
-      },
-      "tags": ["physical", "melee"]
+  "basic_attack": {
+    "id": "basic_attack",
+    "name": "기본 공격",
+    "description": "기본적인 물리 공격",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 0,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.0
     },
-    "skill_strike": {
-      "id": "skill_strike",
-      "name": "타격",
-      "description": "단단하게 내리친다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 8,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 0.8
-          }
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "strike",
-        "sound": "hit",
-        "color": "ffffff"
-      },
-      "tags": ["physical", "melee"]
-    },
-    "skill_power_strike": {
-      "id": "skill_power_strike",
-      "name": "강타",
-      "description": "힘을 모아 강력하게 내려친다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 20,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 1.5
-          }
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "power_strike",
-        "sound": "heavy_hit",
-        "color": "ff4444"
-      },
-      "tags": ["physical", "melee"]
-    },
-    "skill_whirlwind": {
-      "id": "skill_whirlwind",
-      "name": "회오리 베기",
-      "description": "주변의 모든 적을 휩쓴다",
-      "type": "attack",
-      "target": "all_enemies",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 12,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 0.8
-          }
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "whirlwind",
-        "sound": "whoosh",
-        "color": "aaaaff"
-      },
-      "tags": ["physical", "melee", "aoe"]
-    },
-    "skill_backstab": {
-      "id": "skill_backstab",
-      "name": "급소 찌르기",
-      "description": "적의 약점을 노린다 (높은 크리티컬)",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 15,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 1.2
-          },
-          "crit_bonus": 50
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "backstab",
-        "sound": "stab",
-        "color": "aa44aa"
-      },
-      "tags": ["physical", "melee", "critical"]
-    },
-    "skill_shadow_dance": {
-      "id": "skill_shadow_dance",
-      "name": "그림자 춤",
-      "description": "연속으로 3회 공격한다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 8,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 0.6
-          },
-          "hits": 3
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "shadow_dance",
-        "sound": "multi_hit",
-        "color": "440044"
-      },
-      "tags": ["physical", "melee", "multi_hit"]
-    },
-    "skill_shoot": {
-      "id": "skill_shoot",
-      "name": "사격",
-      "description": "화살을 발사한다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 12,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 1.0
-          }
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "arrow",
-        "sound": "bow_shot",
-        "color": "88ff88"
-      },
-      "tags": ["physical", "ranged"]
-    },
-    "skill_rapid_shot": {
-      "id": "skill_rapid_shot",
-      "name": "속사",
-      "description": "빠르게 2발을 연속 발사한다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 8,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 0.7
-          },
-          "hits": 2
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "rapid_arrow",
-        "sound": "bow_rapid",
-        "color": "88ffaa"
-      },
-      "tags": ["physical", "ranged", "multi_hit"]
-    },
-    "skill_arrow_rain": {
-      "id": "skill_arrow_rain",
-      "name": "화살비",
-      "description": "하늘에서 화살비를 내린다",
-      "type": "attack",
-      "target": "all_enemies",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 10,
-          "stat_scaling": {
-            "stat": "atk",
-            "ratio": 0.6
-          }
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "arrow_rain",
-        "sound": "rain",
-        "color": "aaffaa"
-      },
-      "tags": ["physical", "ranged", "aoe"]
-    },
-    "skill_shield_bash": {
-      "id": "skill_shield_bash",
-      "name": "방패 강타",
-      "description": "방패로 적을 밀쳐낸다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 10,
-          "stat_scaling": {
-            "stat": "def",
-            "ratio": 0.8
-          }
-        },
-        {
-          "type": "stun",
-          "duration": 1.0,
-          "chance": 30
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "bash",
-        "sound": "metal_hit",
-        "color": "888888"
-      },
-      "tags": ["physical", "melee", "utility"]
-    },
-    "skill_taunt": {
-      "id": "skill_taunt",
-      "name": "도발",
-      "description": "적의 관심을 끌어 자신에게 집중시킨다",
-      "type": "utility",
-      "target": "all_enemies",
-      "effects": [
-        {
-          "type": "taunt",
-          "duration": 5.0
-        },
-        {
-          "type": "buff",
-          "stat": "def",
-          "value": 5,
-          "duration": 5.0
-        }
-      ],
-      "cooldown_stat": "dex",
-      "visuals": {
-        "animation": "taunt",
-        "sound": "shout",
-        "color": "ffaa00"
-      },
-      "tags": ["utility", "tank"]
-    },
-    "skill_fire": {
-      "id": "skill_fire",
-      "name": "파이어",
-      "description": "불꽃을 발사한다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 15,
-          "stat_scaling": {
-            "stat": "int",
-            "ratio": 1.0
-          }
-        }
-      ],
-      "cooldown_stat": "int",
-      "visuals": {
-        "animation": "fire",
-        "sound": "fire",
-        "color": "ff4400"
-      },
-      "tags": ["magic", "fire", "ranged"]
-    },
-    "skill_fireball": {
-      "id": "skill_fireball",
-      "name": "파이어볼",
-      "description": "거대한 화염구를 발사한다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 25,
-          "stat_scaling": {
-            "stat": "int",
-            "ratio": 1.3
-          }
-        }
-      ],
-      "cooldown_stat": "int",
-      "visuals": {
-        "animation": "fireball",
-        "sound": "explosion",
-        "color": "ff6600"
-      },
-      "tags": ["magic", "fire", "ranged"]
-    },
-    "skill_meteor": {
-      "id": "skill_meteor",
-      "name": "메테오",
-      "description": "하늘에서 운석을 소환한다",
-      "type": "attack",
-      "target": "all_enemies",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 35,
-          "stat_scaling": {
-            "stat": "int",
-            "ratio": 1.5
-          }
-        }
-      ],
-      "cooldown_stat": "int",
-      "visuals": {
-        "animation": "meteor",
-        "sound": "meteor",
-        "color": "ff0000"
-      },
-      "tags": ["magic", "fire", "ranged", "aoe"]
-    },
-    "skill_curse": {
-      "id": "skill_curse",
-      "name": "저주",
-      "description": "적에게 저주를 건다",
-      "type": "attack",
-      "target": "single_enemy",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 10,
-          "stat_scaling": {
-            "stat": "int",
-            "ratio": 0.8
-          }
-        },
-        {
-          "type": "debuff",
-          "stat": "def",
-          "value": -3,
-          "duration": 5.0
-        }
-      ],
-      "cooldown_stat": "int",
-      "visuals": {
-        "animation": "curse",
-        "sound": "dark",
-        "color": "660066"
-      },
-      "tags": ["magic", "dark", "ranged", "debuff"]
-    },
-    "skill_heal": {
-      "id": "skill_heal",
-      "name": "힐",
-      "description": "아군 한 명의 HP를 회복한다",
-      "type": "heal",
-      "target": "single_ally",
-      "effects": [
-        {
-          "type": "heal",
-          "base_value": 20,
-          "stat_scaling": {
-            "stat": "int",
-            "ratio": 1.0
-          }
-        }
-      ],
-      "cooldown_stat": "int",
-      "visuals": {
-        "animation": "heal",
-        "sound": "heal",
-        "color": "44ff44"
-      },
-      "tags": ["magic", "holy", "support"]
-    },
-    "skill_holy_light": {
-      "id": "skill_holy_light",
-      "name": "홀리 라이트",
-      "description": "신성한 빛으로 모든 아군을 치유한다",
-      "type": "heal",
-      "target": "all_allies",
-      "effects": [
-        {
-          "type": "heal",
-          "base_value": 15,
-          "stat_scaling": {
-            "stat": "int",
-            "ratio": 0.8
-          }
-        }
-      ],
-      "cooldown_stat": "int",
-      "visuals": {
-        "animation": "holy_light",
-        "sound": "holy",
-        "color": "ffffaa"
-      },
-      "tags": ["magic", "holy", "support", "aoe"]
-    },
-    "skill_fire_breath": {
-      "id": "skill_fire_breath",
-      "name": "화염 브레스",
-      "description": "드래곤의 불꽃 숨결",
-      "type": "attack",
-      "target": "all_enemies",
-      "effects": [
-        {
-          "type": "damage",
-          "base_value": 30,
-          "stat_scaling": {
-            "stat": "int",
-            "ratio": 1.2
-          }
-        }
-      ],
-      "cooldown_stat": "int",
-      "visuals": {
-        "animation": "fire_breath",
-        "sound": "dragon_roar",
-        "color": "ff2200"
-      },
-      "tags": ["magic", "fire", "dragon", "aoe"]
-    }
+    "effects": [],
+    "default_on": true
   },
-  "cooldown_formula": {
-    "description": "ATB 쿨다운 계산식: base_cooldown * (100 / (100 + stat_value))",
-    "dex_skills": ["physical", "melee", "ranged"],
-    "int_skills": ["magic", "holy", "dark", "fire"]
+  "power_strike": {
+    "id": "power_strike",
+    "name": "강타",
+    "description": "강력한 일격을 가한다",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 8,
+    "damage_base": 5,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.5
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "fireball": {
+    "id": "fireball",
+    "name": "파이어볼",
+    "description": "불덩이를 발사한다",
+    "type": "magic",
+    "target": "single_enemy",
+    "mp_cost": 12,
+    "damage_base": 15,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 1.2
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "ice_bolt": {
+    "id": "ice_bolt",
+    "name": "아이스볼트",
+    "description": "얼음 화살을 발사한다",
+    "type": "magic",
+    "target": "single_enemy",
+    "mp_cost": 10,
+    "damage_base": 12,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 1.0
+    },
+    "effects": [
+      {"type": "slow", "chance": 0.2, "duration": 2}
+    ],
+    "default_on": true
+  },
+  "heal": {
+    "id": "heal",
+    "name": "힐",
+    "description": "아군 한 명의 HP를 회복한다",
+    "type": "heal",
+    "target": "single_ally",
+    "mp_cost": 10,
+    "heal_base": 20,
+    "heal_scaling": {
+      "stat": "int",
+      "multiplier": 0.8
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "smite": {
+    "id": "smite",
+    "name": "천벌",
+    "description": "신성한 빛으로 적을 공격한다",
+    "type": "magic",
+    "target": "single_enemy",
+    "mp_cost": 8,
+    "damage_base": 10,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 0.8
+    },
+    "effects": [
+      {"type": "bonus_vs_undead", "multiplier": 1.5}
+    ],
+    "default_on": true
+  },
+  "backstab": {
+    "id": "backstab",
+    "name": "백스탭",
+    "description": "급소를 노린다. 크리티컬 확률 증가",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 6,
+    "damage_base": 3,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.2
+    },
+    "effects": [
+      {"type": "crit_bonus", "value": 30}
+    ],
+    "default_on": true
+  },
+  "steal": {
+    "id": "steal",
+    "name": "훔치기",
+    "description": "적에게서 아이템을 훔친다",
+    "type": "utility",
+    "target": "single_enemy",
+    "mp_cost": 4,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "spd",
+      "multiplier": 0
+    },
+    "effects": [
+      {"type": "steal", "base_chance": 0.3, "luk_scaling": 0.01}
+    ],
+    "default_on": false
+  },
+  "aimed_shot": {
+    "id": "aimed_shot",
+    "name": "조준 사격",
+    "description": "정확히 조준하여 쏜다",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 6,
+    "damage_base": 8,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.3
+    },
+    "effects": [
+      {"type": "ignore_eva", "value": 0.5}
+    ],
+    "default_on": true
+  },
+  "arrow_rain": {
+    "id": "arrow_rain",
+    "name": "화살비",
+    "description": "모든 적에게 화살을 퍼붓는다",
+    "type": "physical",
+    "target": "all_enemies",
+    "mp_cost": 15,
+    "damage_base": 5,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 0.8
+    },
+    "effects": [],
+    "default_on": false
+  },
+  "shield_bash": {
+    "id": "shield_bash",
+    "name": "방패 강타",
+    "description": "방패로 적을 강타하여 기절시킨다",
+    "type": "physical",
+    "target": "single_enemy",
+    "mp_cost": 8,
+    "damage_base": 5,
+    "damage_scaling": {
+      "stat": "def",
+      "multiplier": 0.8
+    },
+    "effects": [
+      {"type": "stun", "chance": 0.25, "duration": 1}
+    ],
+    "default_on": true
+  },
+  "provoke": {
+    "id": "provoke",
+    "name": "도발",
+    "description": "적의 주의를 끌어 자신을 공격하게 한다",
+    "type": "utility",
+    "target": "all_enemies",
+    "mp_cost": 5,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "def",
+      "multiplier": 0
+    },
+    "effects": [
+      {"type": "taunt", "duration": 2}
+    ],
+    "default_on": false
   }
 }

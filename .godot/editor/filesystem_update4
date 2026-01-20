@@ -1,0 +1,9 @@
+res://scripts/autoload/DataManager.gd
+res://scripts/entities/Hero.gd
+res://scenes/main/Main.tscn
+res://scripts/autoload/BattleManager.gd
+res://scripts/autoload/GameManager.gd
+res://scripts/autoload/PartyManager.gd
+res://scripts/entities/Enemy.gd
+res://scripts/main/Main.gd
+res://scripts/systems/CombatCalculator.gd

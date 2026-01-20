@@ -1,405 +1,193 @@
 {
-  "equipment": {
-    "eq_rusty_sword": {
-      "id": "eq_rusty_sword",
-      "name": "녹슨 검",
-      "description": "세월의 흔적이 남은 낡은 검",
-      "slot": "weapon_right",
-      "type": "sword",
-      "stats": {
-        "atk": 3
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/rusty_sword.png"
-    },
-    "eq_iron_sword": {
-      "id": "eq_iron_sword",
-      "name": "철검",
-      "description": "무난하게 쓸 수 있는 기본 검",
-      "slot": "weapon_right",
-      "type": "sword",
-      "stats": {
-        "atk": 8
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/iron_sword.png"
-    },
-    "eq_steel_sword": {
-      "id": "eq_steel_sword",
-      "name": "강철검",
-      "description": "단단한 강철로 만든 검",
-      "slot": "weapon_right",
-      "type": "sword",
-      "stats": {
-        "atk": 15,
-        "dex": 2
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/steel_sword.png"
-    },
-    "eq_dragon_sword": {
-      "id": "eq_dragon_sword",
-      "name": "용의 검",
-      "description": "드래곤의 이빨로 만든 전설의 검",
-      "slot": "weapon_right",
-      "type": "sword",
-      "stats": {
-        "atk": 30,
-        "dex": 5,
-        "luk": 3
-      },
-      "rarity": "legendary",
-      "icon": "res://sprites/items/dragon_sword.png"
-    },
-    "eq_orc_axe": {
-      "id": "eq_orc_axe",
-      "name": "오크 도끼",
-      "description": "오크 전사가 쓰던 무거운 도끼",
-      "slot": "weapon_right",
-      "type": "axe",
-      "stats": {
-        "atk": 18,
-        "dex": -2
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/orc_axe.png"
-    },
-    "eq_dagger": {
-      "id": "eq_dagger",
-      "name": "단검",
-      "description": "빠르게 휘두를 수 있는 작은 칼",
-      "slot": "weapon_right",
-      "type": "dagger",
-      "stats": {
-        "atk": 5,
-        "dex": 5
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/dagger.png"
-    },
-    "eq_assassin_dagger": {
-      "id": "eq_assassin_dagger",
-      "name": "암살자의 단검",
-      "description": "암살에 특화된 날카로운 단검",
-      "slot": "weapon_right",
-      "type": "dagger",
-      "stats": {
-        "atk": 12,
-        "dex": 10,
-        "luk": 5
-      },
-      "rarity": "rare",
-      "icon": "res://sprites/items/assassin_dagger.png"
-    },
-    "eq_wooden_staff": {
-      "id": "eq_wooden_staff",
-      "name": "나무 지팡이",
-      "description": "마력을 담은 기본 지팡이",
-      "slot": "weapon_right",
-      "type": "staff",
-      "stats": {
-        "int": 5,
-        "atk": 2
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/wooden_staff.png"
-    },
-    "eq_magic_staff": {
-      "id": "eq_magic_staff",
-      "name": "마법 지팡이",
-      "description": "강력한 마력이 깃든 지팡이",
-      "slot": "weapon_right",
-      "type": "staff",
-      "stats": {
-        "int": 15,
-        "atk": 5
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/magic_staff.png"
-    },
-    "eq_archmage_staff": {
-      "id": "eq_archmage_staff",
-      "name": "대마법사의 지팡이",
-      "description": "전설의 대마법사가 사용하던 지팡이",
-      "slot": "weapon_right",
-      "type": "staff",
-      "stats": {
-        "int": 28,
-        "atk": 8,
-        "max_hp": 20
-      },
-      "rarity": "legendary",
-      "icon": "res://sprites/items/archmage_staff.png"
-    },
-    "eq_short_bow": {
-      "id": "eq_short_bow",
-      "name": "단궁",
-      "description": "가볍고 다루기 쉬운 활",
-      "slot": "weapon_right",
-      "type": "bow",
-      "stats": {
-        "atk": 7,
-        "dex": 3
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/short_bow.png"
-    },
-    "eq_long_bow": {
-      "id": "eq_long_bow",
-      "name": "장궁",
-      "description": "사정거리가 긴 강력한 활",
-      "slot": "weapon_right",
-      "type": "bow",
-      "stats": {
-        "atk": 14,
-        "dex": 6
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/long_bow.png"
-    },
-    "eq_wooden_shield": {
-      "id": "eq_wooden_shield",
-      "name": "나무 방패",
-      "description": "기본적인 나무 방패",
-      "slot": "weapon_left",
-      "type": "shield",
-      "stats": {
-        "def": 3
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/wooden_shield.png"
-    },
-    "eq_iron_shield": {
-      "id": "eq_iron_shield",
-      "name": "철 방패",
-      "description": "단단한 철로 만든 방패",
-      "slot": "weapon_left",
-      "type": "shield",
-      "stats": {
-        "def": 8
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/iron_shield.png"
-    },
-    "eq_stone_shield": {
-      "id": "eq_stone_shield",
-      "name": "돌 방패",
-      "description": "골렘의 조각으로 만든 무거운 방패",
-      "slot": "weapon_left",
-      "type": "shield",
-      "stats": {
-        "def": 15,
-        "dex": -3
-      },
-      "rarity": "rare",
-      "icon": "res://sprites/items/stone_shield.png"
-    },
-    "eq_dragon_scale": {
-      "id": "eq_dragon_scale",
-      "name": "용의 비늘 방패",
-      "description": "드래곤의 비늘로 만든 전설의 방패",
-      "slot": "weapon_left",
-      "type": "shield",
-      "stats": {
-        "def": 25,
-        "max_hp": 30
-      },
-      "rarity": "legendary",
-      "icon": "res://sprites/items/dragon_scale.png"
-    },
-    "eq_leather_armor": {
-      "id": "eq_leather_armor",
-      "name": "가죽 갑옷",
-      "description": "가볍고 움직이기 편한 갑옷",
-      "slot": "armor",
-      "type": "light_armor",
-      "stats": {
-        "def": 4,
-        "dex": 2
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/leather_armor.png"
-    },
-    "eq_chain_mail": {
-      "id": "eq_chain_mail",
-      "name": "사슬 갑옷",
-      "description": "철 고리로 엮은 갑옷",
-      "slot": "armor",
-      "type": "heavy_armor",
-      "stats": {
-        "def": 10,
-        "max_hp": 10
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/chain_mail.png"
-    },
-    "eq_plate_armor": {
-      "id": "eq_plate_armor",
-      "name": "판금 갑옷",
-      "description": "철판으로 만든 무거운 갑옷",
-      "slot": "armor",
-      "type": "heavy_armor",
-      "stats": {
-        "def": 18,
-        "max_hp": 25,
-        "dex": -3
-      },
-      "rarity": "rare",
-      "icon": "res://sprites/items/plate_armor.png"
-    },
-    "eq_mage_robe": {
-      "id": "eq_mage_robe",
-      "name": "마법사의 로브",
-      "description": "마력을 증폭시키는 로브",
-      "slot": "armor",
-      "type": "robe",
-      "stats": {
-        "def": 3,
-        "int": 8
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/mage_robe.png"
-    },
-    "eq_archmage_robe": {
-      "id": "eq_archmage_robe",
-      "name": "대마법사의 로브",
-      "description": "엄청난 마력이 깃든 전설의 로브",
-      "slot": "armor",
-      "type": "robe",
-      "stats": {
-        "def": 8,
-        "int": 20,
-        "max_hp": 30
-      },
-      "rarity": "legendary",
-      "icon": "res://sprites/items/archmage_robe.png"
-    },
-    "eq_leather_cap": {
-      "id": "eq_leather_cap",
-      "name": "가죽 모자",
-      "description": "가벼운 가죽 모자",
-      "slot": "helmet",
-      "type": "hat",
-      "stats": {
-        "def": 2
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/leather_cap.png"
-    },
-    "eq_iron_helmet": {
-      "id": "eq_iron_helmet",
-      "name": "철 투구",
-      "description": "머리를 보호하는 철 투구",
-      "slot": "helmet",
-      "type": "helmet",
-      "stats": {
-        "def": 5,
-        "max_hp": 10
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/iron_helmet.png"
-    },
-    "eq_wizard_hat": {
-      "id": "eq_wizard_hat",
-      "name": "마법사의 모자",
-      "description": "뾰족한 마법사 모자",
-      "slot": "helmet",
-      "type": "hat",
-      "stats": {
-        "def": 2,
-        "int": 6
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/wizard_hat.png"
-    },
-    "eq_power_ring": {
-      "id": "eq_power_ring",
-      "name": "힘의 반지",
-      "description": "착용자의 힘을 증가시키는 반지",
-      "slot": "accessory1",
-      "type": "accessory",
-      "stats": {
-        "atk": 5
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/power_ring.png"
-    },
-    "eq_spirit_ring": {
-      "id": "eq_spirit_ring",
-      "name": "정령의 반지",
-      "description": "정령의 힘이 깃든 반지",
-      "slot": "accessory1",
-      "type": "accessory",
-      "stats": {
-        "int": 6,
-        "luk": 3
-      },
-      "rarity": "rare",
-      "icon": "res://sprites/items/spirit_ring.png"
-    },
-    "eq_speed_boots": {
-      "id": "eq_speed_boots",
-      "name": "신속의 장화",
-      "description": "빠르게 움직일 수 있는 마법 장화",
-      "slot": "accessory2",
-      "type": "accessory",
-      "stats": {
-        "dex": 8
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/speed_boots.png"
-    },
-    "eq_lucky_charm": {
-      "id": "eq_lucky_charm",
-      "name": "행운의 부적",
-      "description": "행운을 가져다주는 부적",
-      "slot": "accessory2",
-      "type": "accessory",
-      "stats": {
-        "luk": 10
-      },
-      "rarity": "rare",
-      "icon": "res://sprites/items/lucky_charm.png"
-    },
-    "eq_hp_amulet": {
-      "id": "eq_hp_amulet",
-      "name": "생명의 목걸이",
-      "description": "생명력을 증가시키는 목걸이",
-      "slot": "accessory1",
-      "type": "accessory",
-      "stats": {
-        "max_hp": 30
-      },
-      "rarity": "uncommon",
-      "icon": "res://sprites/items/hp_amulet.png"
-    },
-    "eq_potion_hp_small": {
-      "id": "eq_potion_hp_small",
-      "name": "작은 HP 포션",
-      "description": "HP를 30 회복한다",
-      "slot": "consumable",
-      "type": "potion",
-      "effect": {
-        "type": "heal_hp",
-        "value": 30
-      },
-      "rarity": "common",
-      "icon": "res://sprites/items/potion_hp_small.png"
-    }
+  "sword_common": {
+    "id": "sword_common",
+    "name": "철검",
+    "slot": "main_hand",
+    "type": "sword",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "atk": 8 },
+    "gear_score": 8
   },
-  "slot_names": {
-    "weapon_left": "왼손",
-    "weapon_right": "오른손",
-    "helmet": "머리",
-    "armor": "갑옷",
-    "accessory1": "악세서리1",
-    "accessory2": "악세서리2"
+  "sword_magic": {
+    "id": "sword_magic",
+    "name": "마법검",
+    "slot": "main_hand",
+    "type": "sword",
+    "rarity": "magic",
+    "two_handed": false,
+    "stats": { "atk": 12, "int": 3 },
+    "gear_score": 18
   },
-  "rarity_colors": {
-    "common": "aaaaaa",
-    "uncommon": "44ff44",
-    "rare": "4444ff",
-    "epic": "aa44aa",
-    "legendary": "ffaa00"
+  "greatsword_common": {
+    "id": "greatsword_common",
+    "name": "대검",
+    "slot": "main_hand",
+    "type": "sword",
+    "rarity": "common",
+    "two_handed": true,
+    "stats": { "atk": 15 },
+    "gear_score": 15
+  },
+  "dagger_common": {
+    "id": "dagger_common",
+    "name": "단검",
+    "slot": "main_hand",
+    "type": "dagger",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "atk": 5, "spd": 2 },
+    "gear_score": 7
+  },
+  "staff_common": {
+    "id": "staff_common",
+    "name": "나무 지팡이",
+    "slot": "main_hand",
+    "type": "staff",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "atk": 3, "int": 5 },
+    "gear_score": 8
+  },
+  "bow_common": {
+    "id": "bow_common",
+    "name": "사냥꾼의 활",
+    "slot": "main_hand",
+    "type": "bow",
+    "rarity": "common",
+    "two_handed": true,
+    "stats": { "atk": 10 },
+    "gear_score": 10
+  },
+  "shield_common": {
+    "id": "shield_common",
+    "name": "나무 방패",
+    "slot": "off_hand",
+    "type": "shield",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "def": 5 },
+    "gear_score": 5
+  },
+  "shield_magic": {
+    "id": "shield_magic",
+    "name": "강철 방패",
+    "slot": "off_hand",
+    "type": "shield",
+    "rarity": "magic",
+    "two_handed": false,
+    "stats": { "def": 10, "hp": 15 },
+    "gear_score": 18
+  },
+  "leather_helmet": {
+    "id": "leather_helmet",
+    "name": "가죽 모자",
+    "slot": "head",
+    "type": "helmet",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "def": 2 },
+    "gear_score": 2
+  },
+  "iron_helmet": {
+    "id": "iron_helmet",
+    "name": "철 투구",
+    "slot": "head",
+    "type": "helmet",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "def": 5 },
+    "gear_score": 5
+  },
+  "leather_armor": {
+    "id": "leather_armor",
+    "name": "가죽 갑옷",
+    "slot": "body",
+    "type": "light_armor",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "def": 5 },
+    "gear_score": 5
+  },
+  "chainmail": {
+    "id": "chainmail",
+    "name": "사슬 갑옷",
+    "slot": "body",
+    "type": "medium_armor",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "def": 10 },
+    "gear_score": 10
+  },
+  "plate_armor": {
+    "id": "plate_armor",
+    "name": "판금 갑옷",
+    "slot": "body",
+    "type": "heavy_armor",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "def": 15, "spd": -2 },
+    "gear_score": 13
+  },
+  "robe_common": {
+    "id": "robe_common",
+    "name": "마법사 로브",
+    "slot": "body",
+    "type": "robe",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "def": 2, "int": 3 },
+    "gear_score": 5
+  },
+  "ring_hp": {
+    "id": "ring_hp",
+    "name": "생명의 반지",
+    "slot": "accessory",
+    "type": "ring",
+    "rarity": "common",
+    "two_handed": false,
+    "stats": { "hp": 20 },
+    "gear_score": 5
+  },
+  "ring_luck": {
+    "id": "ring_luck",
+    "name": "행운의 반지",
+    "slot": "accessory",
+    "type": "ring",
+    "rarity": "magic",
+    "two_handed": false,
+    "stats": { "luk": 5 },
+    "gear_score": 8
+  },
+  "axe_magic": {
+    "id": "axe_magic",
+    "name": "오크의 전투도끼",
+    "slot": "main_hand",
+    "type": "axe",
+    "rarity": "magic",
+    "two_handed": false,
+    "stats": { "atk": 14, "str": 3 },
+    "gear_score": 22
+  },
+  "heavy_armor_magic": {
+    "id": "heavy_armor_magic",
+    "name": "오크 대장의 갑옷",
+    "slot": "body",
+    "type": "heavy_armor",
+    "rarity": "magic",
+    "two_handed": false,
+    "stats": { "def": 18, "hp": 25 },
+    "gear_score": 30
+  },
+  "crown_legendary": {
+    "id": "crown_legendary",
+    "name": "고블린 왕의 왕관",
+    "slot": "head",
+    "type": "helmet",
+    "rarity": "legendary",
+    "two_handed": false,
+    "stats": { "def": 8, "luk": 10, "hp": 30 },
+    "special_effect": { "type": "gold_bonus", "value": 0.2 },
+    "gear_score": 50
   }
 }
