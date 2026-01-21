@@ -1,5 +1,4 @@
 extends Node2D
-class_name Field
 ## 필드 씬 컨트롤러
 
 signal battle_triggered(battle_enemies: Array)
@@ -13,10 +12,12 @@ signal field_cleared
 var party_leader: PartyLeader
 var party_followers: Array[PartyFollower] = []
 var field_enemies: Array[FieldEnemy] = []
+var hud: FieldHUD
 
 var party_leader_scene: PackedScene
 var party_follower_scene: PackedScene
 var field_enemy_scene: PackedScene
+var hud_scene: PackedScene
 
 @export var tile_type_map: Dictionary = {
 	0: "grass",
@@ -29,16 +30,29 @@ var field_enemy_scene: PackedScene
 
 func _ready() -> void:
 	_load_scenes()
+	_setup_hud()
 	_spawn_party()
 	_spawn_field_enemies()
 	_setup_exit()
-	_update_hud()
+	hud.add_system_log("필드에 입장했다.")
 
 
 func _load_scenes() -> void:
 	party_leader_scene = load("res://scenes/field/PartyLeader.tscn")
 	party_follower_scene = load("res://scenes/field/PartyFollower.tscn")
 	field_enemy_scene = load("res://scenes/field/FieldEnemy.tscn")
+	hud_scene = load("res://scenes/ui/FieldHUD.tscn")
+
+
+func _setup_hud() -> void:
+	# 기존 HUD 제거 (씬에 미리 있으면)
+	var old_hud = get_node_or_null("CanvasLayer")
+	if old_hud:
+		old_hud.queue_free()
+	
+	hud = hud_scene.instantiate() as FieldHUD
+	add_child(hud)
+	hud.menu_pressed.connect(_on_menu_pressed)
 
 
 func _spawn_party() -> void:
@@ -141,6 +155,9 @@ func _update_hud() -> void:
 func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	print("[Field] 적 접촉: ", field_enemy.enemy_id)
 	
+	var enemy_data: Dictionary = DataManager.get_enemy(field_enemy.enemy_id)
+	var enemy_name: String = str(enemy_data.get("name", field_enemy.enemy_id))
+	
 	var battle_enemies: Array = FieldManager.generate_battle_enemies(
 		field_enemy.enemy_id,
 		field_enemy.tile_type
@@ -148,9 +165,15 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	
 	print("[Field] 전투 구성: ", battle_enemies)
 	
+	# 로그 추가
+	if hud:
+		var log_msg: String = "%s이(가) 나타났다!" % enemy_name
+		if battle_enemies.size() > 1:
+			log_msg = "%s 외 %d마리가 나타났다!" % [enemy_name, battle_enemies.size() - 1]
+		hud.add_battle_log(log_msg)
+	
 	field_enemies.erase(field_enemy)
 	field_enemy.despawn()
-	_update_hud()
 	
 	if BattleManager:
 		var battle_id: int = BattleManager.start_battle(battle_enemies)
@@ -164,19 +187,31 @@ func _on_exit_body_entered(body: Node2D) -> void:
 		return
 	
 	if BattleManager and BattleManager.get_active_battle_count() > 0:
-		print("[Field] 전투 중 - 출구 불가")
+		if hud:
+			hud.add_system_log("전투 중에는 출구를 사용할 수 없다!")
 		return
 	
 	if FieldManager.is_boss_field() and field_enemies.size() > 0:
-		print("[Field] 보스 필드 - 적 처치 필요")
+		if hud:
+			hud.add_system_log("보스를 처치해야 진행할 수 있다!")
 		return
 	
 	var next: String = FieldManager.get_next_destination()
 	print("[Field] 출구! 다음: ", next)
+	
+	if hud:
+		hud.add_system_log("다음 구역으로 이동한다...")
+	
 	exit_reached.emit(next)
 	
 	if GameManager:
 		GameManager.go_to_next_from_field()
+
+
+func _on_menu_pressed() -> void:
+	# TODO: 메뉴 열기
+	if hud:
+		hud.add_system_log("메뉴 (미구현)")
 
 
 func get_remaining_enemies() -> int:
@@ -185,3 +220,7 @@ func get_remaining_enemies() -> int:
 
 func get_party_leader() -> PartyLeader:
 	return party_leader
+
+
+func get_hud() -> FieldHUD:
+	return hud
