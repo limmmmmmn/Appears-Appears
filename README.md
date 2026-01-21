@@ -20,11 +20,11 @@ hyperquest_full/
 │       └── Town_Extension.gd    # Town.gd에 추가할 코드
 │
 └── scenes/
-    └── field/
-        ├── PartyLeader.tscn
-        ├── PartyFollower.tscn
-        ├── FieldEnemy.tscn
-        └── Field_1_1.tscn       # 테스트 필드
+	└── field/
+		├── PartyLeader.tscn
+		├── PartyFollower.tscn
+		├── FieldEnemy.tscn
+		└── Field_1_1.tscn       # 테스트 필드
 ```
 
 ## ⚙️ 설치 방법
@@ -64,8 +64,8 @@ FieldManager → res://scripts/autoload/FieldManager.gd
 ```gdscript
 # Main.gd 또는 테스트 스크립트에서
 func _ready():
-    FieldManager.set_current_stage("stage_1")
-    FieldManager.set_current_field("field_1_1")
+	FieldManager.set_current_stage("stage_1")
+	FieldManager.set_current_field("field_1_1")
 ```
 
 ## 📋 핵심 로직

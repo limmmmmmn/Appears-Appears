@@ -23,6 +23,7 @@ BattleManager="*res://scripts/autoload/BattleManager.gd"
 TownManager="*res://scripts/autoload/TownManager.gd"
 FieldManager="*res://scripts/autoload/FieldManager.gd"
 SpriteManager="*res://scripts/autoload/SpriteManager.gd"
+InventoryManager="*res://scripts/autoload/InventoryManager.gd"
 
 [display]
 

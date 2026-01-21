@@ -34,6 +34,14 @@ func _ready() -> void:
 	_spawn_party()
 	_spawn_field_enemies()
 	_setup_exit()
+	
+	# 테스트: 인벤토리에 아이템 추가
+	if InventoryManager:
+		InventoryManager.add_item("sword_common", 2)
+		InventoryManager.add_item("potion_small", 5)
+		InventoryManager.add_item("leather_armor", 1)
+		print("[Field] 테스트 아이템 추가됨")
+	
 	hud.add_system_log("필드에 입장했다.")
 
 

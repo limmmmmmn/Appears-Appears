@@ -227,17 +227,24 @@ func _build_buy_list() -> void:
 
 
 func _build_sell_list() -> void:
-	var inventory := PartyManager.get_all_items()
+	# InventoryManager 사용
+	var items: Array = []
+	if InventoryManager:
+		items = InventoryManager.get_all_items()
 	
-	if inventory.is_empty():
+	if items.is_empty():
 		var empty := Label.new()
 		empty.text = "판매할 아이템이 없습니다."
 		item_list_container.add_child(empty)
 		return
 	
-	for item_id in inventory:
-		var count: int = inventory[item_id]
-		var item_data: Dictionary = DataManager.get_item(item_id)
+	for item_info in items:
+		var item_id: String = str(item_info.get("id", ""))
+		var count: int = int(item_info.get("quantity", 1))
+		var item_data: Dictionary = item_info.get("data", {})
+		
+		if item_data.is_empty():
+			item_data = DataManager.get_item(item_id)
 		if item_data.is_empty():
 			continue
 		
@@ -250,57 +257,75 @@ func _build_sell_list() -> void:
 		
 		var item_btn := Button.new()
 		item_btn.text = "%s x%d" % [item_data.get("name", "???"), count]
-		item_btn.custom_minimum_size.x = 140
+		item_btn.custom_minimum_size.x = 150
+		item_btn.focus_entered.connect(_on_item_focused.bind(item_id))
+		item_btn.mouse_entered.connect(_on_item_focused.bind(item_id))
 		item_btn.pressed.connect(_on_sell_pressed.bind(item_id, sell_price))
 		hbox.add_child(item_btn)
 		item_buttons.append(item_btn)
 		
 		var price_lbl := Label.new()
 		price_lbl.text = "+%d G" % sell_price
-		price_lbl.add_theme_color_override("font_color", Color.GREEN)
+		price_lbl.custom_minimum_size.x = 60
+		price_lbl.add_theme_color_override("font_color", Color.GOLD)
 		hbox.add_child(price_lbl)
 		
 		item_list_container.add_child(hbox)
+	
+	# 첫 버튼에 포커스
+	await get_tree().process_frame
+	if item_buttons.size() > 0:
+		item_buttons[0].grab_focus()
 
 
 func _on_item_focused(item_id: String) -> void:
 	selected_item_id = item_id
-	_update_compare_panel(item_id)
+	_show_equipment_comparison(item_id)
 
 
-func _update_compare_panel(item_id: String) -> void:
-	# 기존 내용 제거
+func _show_equipment_comparison(item_id: String) -> void:
+	# 기존 비교 패널 내용 제거
 	for child in compare_container.get_children():
 		child.queue_free()
 	
-	await get_tree().process_frame
-	
 	var equip_data: Dictionary = DataManager.get_equipment(item_id)
 	if equip_data.is_empty():
-		# 장비가 아니면 비교 패널 숨김
-		compare_panel.visible = false
+		# 장비가 아닌 일반 아이템
+		var item_data: Dictionary = DataManager.get_item(item_id)
+		if item_data.is_empty():
+			compare_panel.visible = false
+			return
+		
+		compare_panel.visible = true
+		
+		var item_name := Label.new()
+		item_name.text = item_data.get("name", "???")
+		compare_container.add_child(item_name)
+		
+		var item_desc := Label.new()
+		item_desc.text = item_data.get("description", "")
+		item_desc.autowrap_mode = TextServer.AUTOWRAP_WORD
+		compare_container.add_child(item_desc)
+		
 		message_label.text = "소비 아이템입니다."
 		return
 	
 	compare_panel.visible = true
 	
-	# 장비 정보
-	var equip_title := Label.new()
-	equip_title.text = "[ %s ]" % equip_data.get("name", "???")
-	compare_container.add_child(equip_title)
+	# 장비 이름
+	var equip_name := Label.new()
+	equip_name.text = equip_data.get("name", "???")
+	compare_container.add_child(equip_name)
 	
-	# stats 딕셔너리에서 스탯 가져오기
+	# 장비 스탯
 	var stats: Dictionary = equip_data.get("stats", {})
 	var equip_stats := Label.new()
 	var stat_text := ""
 	if stats.has("atk"):
 		stat_text += "ATK +%d  " % int(stats["atk"])
-	if stats.has("p_def"):
-		stat_text += "DEF +%d  " % int(stats["p_def"])
-	if stats.has("def"):
-		stat_text += "DEF +%d  " % int(stats["def"])
-	if stats.has("m_def"):
-		stat_text += "M.DEF +%d  " % int(stats["m_def"])
+	if stats.has("p_def") or stats.has("def"):
+		var def_val: int = int(stats.get("p_def", stats.get("def", 0)))
+		stat_text += "DEF +%d  " % def_val
 	if stats.has("int"):
 		stat_text += "INT +%d  " % int(stats["int"])
 	if stats.has("spd"):
@@ -359,7 +384,7 @@ func _update_compare_panel(item_id: String) -> void:
 			
 			var compare_text := ""
 			
-			# ATK 비교 (새 장비나 기존 장비에 atk가 있을 때만)
+			# ATK 비교
 			if new_stats.has("atk") or current_stats.has("atk"):
 				var current_atk := hero.get_atk()
 				var old_atk_bonus: int = int(current_stats.get("atk", 0))
@@ -374,7 +399,7 @@ func _update_compare_panel(item_id: String) -> void:
 				else:
 					compare_text += "ATK: %d → %d  " % [current_atk, new_atk]
 			
-			# DEF 비교 (새 장비나 기존 장비에 p_def 또는 def가 있을 때만)
+			# DEF 비교
 			if new_stats.has("p_def") or new_stats.has("def") or current_stats.has("p_def") or current_stats.has("def"):
 				var current_def := hero.get_p_def()
 				var old_def_bonus: int = int(current_stats.get("p_def", current_stats.get("def", 0)))
@@ -519,7 +544,9 @@ func _on_buy_pressed(item_id: String, price: int) -> void:
 		return
 	
 	if GameManager.spend_gold(price):
-		PartyManager.add_item(item_id)
+		# InventoryManager에 추가!
+		if InventoryManager:
+			InventoryManager.add_item(item_id, 1)
 		var item_data: Dictionary = DataManager.get_item(item_id)
 		message_label.text = "%s 구매 완료!" % item_data.get("name", "")
 		item_purchased.emit(item_id)
@@ -532,8 +559,10 @@ func _on_buy_and_equip(item_id: String, price: int, hero: Hero, slot: String) ->
 		return
 	
 	if GameManager.spend_gold(price):
-		PartyManager.add_item(item_id)
-		PartyManager.equip_to_hero(hero, item_id, slot)
+		# InventoryManager에 추가 후 장착
+		if InventoryManager:
+			InventoryManager.add_item(item_id, 1)
+			InventoryManager.equip_item(hero, item_id, slot)
 		var item_data: Dictionary = DataManager.get_item(item_id)
 		message_label.text = "%s → %s 장착!" % [item_data.get("name", ""), hero.hero_name]
 		item_purchased.emit(item_id)
@@ -541,7 +570,8 @@ func _on_buy_and_equip(item_id: String, price: int, hero: Hero, slot: String) ->
 
 
 func _on_sell_pressed(item_id: String, price: int) -> void:
-	if PartyManager.remove_item(item_id):
+	# InventoryManager에서 제거
+	if InventoryManager and InventoryManager.remove_item(item_id, 1):
 		GameManager.add_gold(price)
 		var item_data: Dictionary = DataManager.get_item(item_id)
 		message_label.text = "%s 판매 완료! (+%d G)" % [item_data.get("name", ""), price]

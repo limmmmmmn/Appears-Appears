@@ -1,61 +1,61 @@
 {
   "weapon_shop": {
-    "name": "무기상",
-    "greeting": "어서오게, 용사여. 좋은 무기가 많이 있다네.",
-    "items": [
-      "sword_common",
-      "greatsword_common",
-      "dagger_common",
-      "staff_common",
-      "bow_common",
+	"name": "무기상",
+	"greeting": "어서오게, 용사여. 좋은 무기가 많이 있다네.",
+	"items": [
+	  "sword_common",
+	  "greatsword_common",
+	  "dagger_common",
+	  "staff_common",
+	  "bow_common",
       "excalibur"
-    ]
+	]
   },
   "armor_shop": {
-    "name": "방어구상",
-    "greeting": "튼튼한 방어구를 갖춰야 오래 살아남지.",
-    "items": [
-      "shield_common",
-      "leather_helmet",
-      "iron_helmet",
-      "leather_armor",
-      "chainmail",
-      "plate_armor",
+	"name": "방어구상",
+	"greeting": "튼튼한 방어구를 갖춰야 오래 살아남지.",
+	"items": [
+	  "shield_common",
+	  "leather_helmet",
+	  "iron_helmet",
+	  "leather_armor",
+	  "chainmail",
+	  "plate_armor",
       "robe_common"
-    ]
+	]
   },
   "item_shop": {
-    "name": "도구상",
-    "greeting": "여행에 필요한 물건들이 다 있어요~",
-    "items": [
-      "potion_small",
-      "potion_medium",
-      "potion_large",
-      "mana_potion",
-      "revive_herb",
-      "tent",
-      "flash_bomb",
-      "smoke_bomb",
-      "seed_str",
-      "seed_def",
-      "seed_int",
-      "seed_spd",
-      "seed_luk",
-      "seed_hp",
+	"name": "도구상",
+	"greeting": "여행에 필요한 물건들이 다 있어요~",
+	"items": [
+	  "potion_small",
+	  "potion_medium",
+	  "potion_large",
+	  "mana_potion",
+	  "revive_herb",
+	  "tent",
+	  "flash_bomb",
+	  "smoke_bomb",
+	  "seed_str",
+	  "seed_def",
+	  "seed_int",
+	  "seed_spd",
+	  "seed_luk",
+	  "seed_hp",
       "seed_mp"
-    ]
+	]
   },
   "inn": {
-    "name": "여관",
-    "greeting": "피곤하시죠? 푹 쉬어가세요.",
-    "rest_cost_per_person": 10,
-    "full_rest_discount": 0.8
+	"name": "여관",
+	"greeting": "피곤하시죠? 푹 쉬어가세요.",
+	"rest_cost_per_person": 10,
+	"full_rest_discount": 0.8
   },
   "church": {
-    "name": "교회",
-    "greeting": "신의 가호가 함께하기를...",
-    "revive_cost_base": 50,
-    "revive_cost_per_level": 10,
-    "cure_cost": 20
+	"name": "교회",
+	"greeting": "신의 가호가 함께하기를...",
+	"revive_cost_base": 50,
+	"revive_cost_per_level": 10,
+	"cure_cost": 20
   }
 }
