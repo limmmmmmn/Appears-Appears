@@ -36,11 +36,12 @@ func _create_layout() -> void:
 
 
 func add_log(message: String, color: Color = Color.WHITE) -> void:
-	# 아직 초기화 안됐으면 대기
-	if not log_container:
-		await ready
+	# 아직 초기화 안됐으면 무시
+	if not log_container or not is_instance_valid(log_container):
+		return
 	
-	if not log_container:
+	# 노드가 트리에 없으면 무시
+	if not is_inside_tree():
 		return
 	
 	var label := Label.new()
@@ -51,18 +52,18 @@ func add_log(message: String, color: Color = Color.WHITE) -> void:
 	
 	log_container.add_child(label)
 	
-	# 최대 라인 제한
-	while log_container.get_child_count() > MAX_LOG_LINES:
+	# 최대 라인 제한 - 한 번에 하나만 제거
+	if log_container.get_child_count() > MAX_LOG_LINES:
 		var old: Node = log_container.get_child(0)
+		log_container.remove_child(old)
 		old.queue_free()
 	
-	# 스크롤 맨 아래로
-	_scroll_to_bottom()
+	# 스크롤은 다음 프레임에 처리
+	call_deferred("_scroll_to_bottom")
 
 
 func _scroll_to_bottom() -> void:
-	await get_tree().process_frame
-	if scroll_container:
+	if scroll_container and is_instance_valid(scroll_container):
 		scroll_container.scroll_vertical = int(scroll_container.get_v_scroll_bar().max_value)
 
 

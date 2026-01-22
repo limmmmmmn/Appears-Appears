@@ -291,6 +291,7 @@ func _create_stat_label(stat_name: String, value_name: String, color: Color = Co
 
 #region 업데이트
 func update_display(new_hero: Hero) -> void:
+	print("[PartySlotUI] update_display 시작 - hero:", new_hero.hero_name if new_hero else "null")
 	hero = new_hero
 	if not hero:
 		visible = false
@@ -299,24 +300,33 @@ func update_display(new_hero: Hero) -> void:
 	visible = true
 	
 	# 이름
+	print("[PartySlotUI] 이름 업데이트")
 	name_label.text = hero.hero_name
 	
 	# 페이스칩
+	print("[PartySlotUI] 페이스칩 업데이트")
 	if SpriteManager:
 		face_texture.texture = SpriteManager.get_hero_face_sprite(hero.id)
+	print("[PartySlotUI] 페이스칩 완료")
 	
 	# HP/MP
+	print("[PartySlotUI] 바 업데이트")
 	_update_bars()
 	
 	# 장비
+	print("[PartySlotUI] 장비 업데이트")
 	_update_equipment()
 	
 	# 스킬 토글
+	print("[PartySlotUI] 스킬 업데이트")
 	_update_skills()
+	print("[PartySlotUI] 스킬 완료")
 	
 	# 스탯 패널 (열려있으면)
 	if stat_panel.visible:
 		_update_stat_values()
+	
+	print("[PartySlotUI] update_display 끝")
 
 
 func _update_bars() -> void:
@@ -362,19 +372,46 @@ func _update_skills() -> void:
 	if not hero:
 		return
 	
-	# 기존 토글 제거
-	for child in skill_container.get_children():
-		child.queue_free()
-	
 	# 스킬 목록
 	var class_data: Dictionary = DataManager.get_class_data(hero.class_id)
 	var skill_ids: Array = class_data.get("skills", ["basic_attack"])
 	
+	# 이미 올바른 스킬 토글이 있으면 값만 업데이트
+	var existing_count := skill_container.get_child_count()
+	if existing_count == skill_ids.size():
+		# 기존 토글들의 상태만 업데이트
+		for i in range(skill_ids.size()):
+			var skill_id: String = str(skill_ids[i])
+			var skill_data: Dictionary = DataManager.get_skill(skill_id)
+			var default_on: bool = skill_data.get("default_on", true)
+			var is_on: bool = hero.skill_toggles.get(skill_id, default_on)
+			
+			var toggle: CheckBox = skill_container.get_child(i) as CheckBox
+			if toggle and toggle.get_meta("skill_id", "") == skill_id:
+				# 시그널 일시 차단하고 값만 업데이트
+				toggle.set_block_signals(true)
+				toggle.button_pressed = is_on
+				toggle.set_block_signals(false)
+		return
+	
+	# 개수가 다르면 전체 재생성 (처음 한 번만)
+	for child in skill_container.get_children():
+		child.queue_free()
+	
+	# 다음 프레임에 생성 (queue_free 완료 후)
+	call_deferred("_create_skill_toggles", skill_ids)
+
+
+func _create_skill_toggles(skill_ids: Array) -> void:
+	if not hero:
+		return
+	
 	for skill_id in skill_ids:
-		var skill_data: Dictionary = DataManager.get_skill(skill_id)
-		var skill_name: String = str(skill_data.get("name", skill_id))
+		var sid: String = str(skill_id)
+		var skill_data: Dictionary = DataManager.get_skill(sid)
+		var skill_name: String = str(skill_data.get("name", sid))
 		var default_on: bool = skill_data.get("default_on", true)
-		var is_on: bool = hero.skill_toggles.get(skill_id, default_on)
+		var is_on: bool = hero.skill_toggles.get(sid, default_on)
 		
 		var toggle := CheckBox.new()
 		toggle.text = skill_name.substr(0, 3)
@@ -382,7 +419,8 @@ func _update_skills() -> void:
 		toggle.add_theme_font_size_override("font_size", 8)
 		toggle.custom_minimum_size = Vector2(0, 12)
 		toggle.tooltip_text = skill_name
-		toggle.toggled.connect(_on_skill_toggled.bind(skill_id))
+		toggle.set_meta("skill_id", sid)
+		toggle.toggled.connect(_on_skill_toggled.bind(sid))
 		skill_container.add_child(toggle)
 
 

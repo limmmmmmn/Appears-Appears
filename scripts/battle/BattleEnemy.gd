@@ -238,12 +238,12 @@ func play_evade_effect() -> void:
 
 
 func play_death_effect() -> void:
-	# 페이드아웃 + 아래로 떨어짐
+	# 페이드아웃 + 아래로 떨어짐 (fire and forget)
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(self, "modulate:a", 0.0, 0.5)
 	tween.tween_property(self, "position:y", position.y + 30, 0.5)
 	
-	await tween.finished
-	visible = false
+	# tween 완료 후 숨김 처리 (await 대신 콜백 사용)
+	tween.finished.connect(func(): visible = false)
 #endregion

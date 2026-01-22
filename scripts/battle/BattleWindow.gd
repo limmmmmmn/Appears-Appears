@@ -143,11 +143,81 @@ func _get_enemy_name(enemy_id: String) -> String:
 
 
 #region 라운드 진행
+var _battle_timer: Timer
+
+
 func _start_round() -> void:
 	current_round += 1
 	_calculate_turn_order()
 	current_turn_index = 0
-	_process_next_turn()
+	_schedule_next_turn()
+
+
+func _schedule_next_turn() -> void:
+	# Timer를 사용하여 다음 턴 예약 (while+await 대신)
+	if _battle_timer == null:
+		_battle_timer = Timer.new()
+		_battle_timer.one_shot = true
+		_battle_timer.timeout.connect(_process_scheduled_turn)
+		add_child(_battle_timer)
+	
+	_battle_timer.start(ACTION_DELAY)
+
+
+func _stop_battle_timer() -> void:
+	# 타이머 정지 및 정리
+	if _battle_timer != null and is_instance_valid(_battle_timer):
+		_battle_timer.stop()
+
+
+func _process_scheduled_turn() -> void:
+	print("[BattleWindow] _process_scheduled_turn 시작 - state:", current_state, " turn:", current_turn_index)
+	
+	# 이미 종료된 전투면 무시
+	if current_state == BattleState.VICTORY or current_state == BattleState.DEFEAT or current_state == BattleState.ENDED:
+		print("[BattleWindow] 이미 종료됨, 리턴")
+		return
+	
+	# 전투 종료 체크
+	if _check_battle_end():
+		print("[BattleWindow] 전투 종료됨")
+		return
+	
+	# 라운드 끝 체크 - 새 라운드 시작
+	if current_turn_index >= turn_order.size():
+		print("[BattleWindow] 새 라운드 시작")
+		current_round += 1
+		_calculate_turn_order()
+		current_turn_index = 0
+	
+	# 참가자가 없으면 종료
+	if turn_order.is_empty():
+		print("[BattleWindow] turn_order 비어있음")
+		_check_battle_end()  # 강제로 종료 체크
+		return
+	
+	# 인덱스 범위 체크
+	if current_turn_index >= turn_order.size():
+		print("[BattleWindow] 인덱스 초과")
+		return
+	
+	# 현재 턴 처리
+	var turn_data: Dictionary = turn_order[current_turn_index]
+	current_turn_index += 1
+	print("[BattleWindow] 턴 처리:", turn_data["type"])
+	
+	if turn_data["type"] == "hero":
+		_process_hero_turn(turn_data["ref"])
+	else:
+		_process_enemy_turn(turn_data["ref"])
+	
+	print("[BattleWindow] 턴 처리 완료, 다음 턴 예약")
+	
+	# 다음 턴 예약 (아직 전투 중일 때만)
+	if current_state != BattleState.VICTORY and current_state != BattleState.DEFEAT:
+		_schedule_next_turn()
+	
+	print("[BattleWindow] _process_scheduled_turn 끝")
 
 
 func _calculate_turn_order() -> void:
@@ -155,52 +225,59 @@ func _calculate_turn_order() -> void:
 	
 	var party := PartyManager.get_alive_heroes()
 	for hero in party:
-		turn_order.append({"type": "hero", "ref": hero, "spd": hero.get_spd()})
+		turn_order.append({
+			"type": "hero", 
+			"ref": hero, 
+			"spd": hero.get_spd(),
+			"sort_key": hero.get_spd() * 10000 + randi() % 10000  # 정수 정렬키
+		})
 	
 	for enemy in enemies:
 		if enemy.is_alive():
-			turn_order.append({"type": "enemy", "ref": enemy, "spd": enemy.get_spd()})
+			turn_order.append({
+				"type": "enemy", 
+				"ref": enemy, 
+				"spd": enemy.get_spd(),
+				"sort_key": enemy.get_spd() * 10000 + randi() % 10000
+			})
 	
-	turn_order.sort_custom(func(a, b):
-		if a["spd"] != b["spd"]:
-			return a["spd"] > b["spd"]
-		return randf() > 0.5
-	)
-
-
-func _process_next_turn() -> void:
-	if _check_battle_end():
+	# 빈 배열이면 정렬 스킵
+	if turn_order.size() <= 1:
 		return
 	
-	if current_turn_index >= turn_order.size():
-		await get_tree().create_timer(ACTION_DELAY).timeout
-		_start_round()
-		return
-	
-	var turn_data: Dictionary = turn_order[current_turn_index]
-	current_turn_index += 1
-	
-	if turn_data["type"] == "hero":
-		await _process_hero_turn(turn_data["ref"])
-	else:
-		await _process_enemy_turn(turn_data["ref"])
-	
-	await get_tree().create_timer(ACTION_DELAY).timeout
-	_process_next_turn()
+	# 정수 키로 정렬 (내림차순)
+	turn_order.sort_custom(_compare_turn_order)
+
+
+func _compare_turn_order(a: Dictionary, b: Dictionary) -> bool:
+	# 정수 비교만 사용 (부동소수점 문제 방지)
+	return a["sort_key"] > b["sort_key"]
 
 
 func _process_hero_turn(hero: Hero) -> void:
-	if hero.is_dead:
+	print("[BattleWindow] _process_hero_turn 시작 - hero:", hero.hero_name if hero else "null")
+	if hero == null or hero.is_dead:
+		print("[BattleWindow] hero가 null이거나 사망함, 리턴")
 		return
 	
 	current_state = BattleState.PLAYER_PHASE
 	
-	var alive_enemies := enemies.filter(func(e): return e.is_alive())
+	print("[BattleWindow] 살아있는 적 필터링...")
+	var alive_enemies: Array = []
+	for e in enemies:
+		if e != null and e.is_alive():
+			alive_enemies.append(e)
+	print("[BattleWindow] 살아있는 적 수:", alive_enemies.size())
+	
 	if alive_enemies.is_empty():
+		print("[BattleWindow] 적이 없음, 리턴")
 		return
 	
+	print("[BattleWindow] 타겟 선택...")
 	var target: BattleEnemy = _select_smart_target(hero, alive_enemies)
-	await _execute_hero_action(hero, target)
+	print("[BattleWindow] 타겟:", target.enemy_name if target else "null")
+	_execute_hero_action(hero, target)
+	print("[BattleWindow] _process_hero_turn 끝")
 
 
 func _process_enemy_turn(enemy: BattleEnemy) -> void:
@@ -214,65 +291,110 @@ func _process_enemy_turn(enemy: BattleEnemy) -> void:
 		return
 	
 	var target: Hero = alive_heroes[randi() % alive_heroes.size()]
-	await _execute_enemy_action(enemy, target)
+	_execute_enemy_action(enemy, target)
 #endregion
 
 
 #region 전투 행동
 func _select_smart_target(hero: Hero, alive_enemies: Array) -> BattleEnemy:
+	print("[BattleWindow] _select_smart_target 시작")
 	var atk := hero.get_atk()
+	print("[BattleWindow] hero atk:", atk)
 	
 	for enemy in alive_enemies:
+		if enemy == null:
+			continue
 		var expected_damage := _calculate_damage(atk, enemy.get_p_def())
+		print("[BattleWindow] 적:", enemy.enemy_name, "예상 데미지:", expected_damage, "적 HP:", enemy.current_hp)
 		if expected_damage >= enemy.current_hp:
+			print("[BattleWindow] 처치 가능한 적 발견")
 			return enemy
 	
-	return alive_enemies[randi() % alive_enemies.size()]
+	var idx := randi() % alive_enemies.size()
+	print("[BattleWindow] 랜덤 타겟 선택, idx:", idx)
+	return alive_enemies[idx]
 
 
 func _execute_hero_action(hero: Hero, target: BattleEnemy) -> void:
+	print("[BattleWindow] _execute_hero_action 시작")
+	if hero == null or target == null:
+		print("[BattleWindow] hero 또는 target이 null!")
+		return
+	
 	var atk := hero.get_atk()
+	print("[BattleWindow] hero atk:", atk)
 	var is_crit := randf() * 100 < hero.get_crit()
+	print("[BattleWindow] is_crit:", is_crit)
 	var is_evaded := randf() * 100 < target.get_eva()
+	print("[BattleWindow] is_evaded:", is_evaded)
 	
 	if is_evaded:
+		print("[BattleWindow] 회피 처리")
 		_send_log("%s → %s 회피!" % [hero.hero_name, target.enemy_name], Color.GRAY)
+		print("[BattleWindow] play_evade_effect 호출")
 		target.play_evade_effect()
+		print("[BattleWindow] play_evade_effect 완료")
 	else:
+		print("[BattleWindow] 데미지 계산")
 		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
+		print("[BattleWindow] damage:", damage)
 		target.take_damage(damage)
+		print("[BattleWindow] take_damage 완료")
 		
 		if is_crit:
 			_send_log("%s → %s에게 %d! (크리티컬)" % [hero.hero_name, target.enemy_name, damage], Color.ORANGE)
+			print("[BattleWindow] play_hit_effect(crit) 호출")
 			target.play_hit_effect(true)
 		else:
 			_send_log("%s → %s에게 %d" % [hero.hero_name, target.enemy_name, damage], Color.WHITE)
+			print("[BattleWindow] play_hit_effect 호출")
 			target.play_hit_effect(false)
+		print("[BattleWindow] play_hit_effect 완료")
 		
 		if not target.is_alive():
-			await _on_enemy_defeated(target)
+			print("[BattleWindow] 적 처치!")
+			_on_enemy_defeated(target)
+	
+	print("[BattleWindow] _execute_hero_action 끝")
 
 
 func _execute_enemy_action(enemy: BattleEnemy, target: Hero) -> void:
+	print("[BattleWindow] _execute_enemy_action 시작")
 	var atk := enemy.get_atk()
+	print("[BattleWindow] atk:", atk)
 	var is_crit := randf() * 100 < enemy.get_crit()
+	print("[BattleWindow] is_crit:", is_crit)
 	var is_evaded := randf() * 100 < target.get_eva()
+	print("[BattleWindow] is_evaded:", is_evaded)
 	
 	if is_evaded:
+		print("[BattleWindow] 회피 처리")
 		_send_log("%s → %s 회피!" % [enemy.enemy_name, target.hero_name], Color.GRAY)
 	else:
+		print("[BattleWindow] 데미지 계산")
 		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
+		print("[BattleWindow] damage:", damage)
 		target.take_damage(damage)
-		party_updated.emit()  # HP 변경 알림
+		print("[BattleWindow] take_damage 완료")
+		# 직접 emit 대신 deferred로 호출
+		call_deferred("_emit_party_updated")
+		print("[BattleWindow] party_updated deferred 예약")
 		
 		if is_crit:
 			_send_log("%s → %s에게 %d! (강타)" % [enemy.enemy_name, target.hero_name, damage], Color.RED)
 		else:
 			_send_log("%s → %s에게 %d" % [enemy.enemy_name, target.hero_name, damage], Color.YELLOW)
+		print("[BattleWindow] _send_log 완료")
 		
 		if target.is_dead:
 			_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
-			party_updated.emit()
+			call_deferred("_emit_party_updated")
+	
+	print("[BattleWindow] _execute_enemy_action 끝")
+
+
+func _emit_party_updated() -> void:
+	party_updated.emit()
 
 
 func _calculate_damage(atk: int, p_def: int, is_crit: bool = false) -> int:
@@ -290,11 +412,17 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	total_gold += enemy.get_gold_reward()
 	drop_items.append_array(enemy.roll_drops())
 	
+	# play_death_effect()는 await을 사용하므로 호출만 하고 기다리지 않음
+	# (대기하면 전투 흐름이 너무 느려짐)
 	enemy.play_death_effect()
 
 
 func _check_battle_end() -> bool:
-	var alive_enemies := enemies.filter(func(e): return e.is_alive())
+	var alive_enemies: Array = []
+	for e in enemies:
+		if e != null and e.is_alive():
+			alive_enemies.append(e)
+	
 	var alive_heroes := PartyManager.get_alive_heroes()
 	
 	if alive_enemies.is_empty():
@@ -310,6 +438,7 @@ func _check_battle_end() -> bool:
 
 func _end_battle_victory() -> void:
 	current_state = BattleState.VICTORY
+	_stop_battle_timer()  # 타이머 정지!
 	
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
 	
@@ -323,7 +452,7 @@ func _end_battle_victory() -> void:
 	for item_id in drop_items:
 		InventoryManager.add_item(item_id)
 	
-	party_updated.emit()
+	call_deferred("_emit_party_updated")
 	
 	run_button.visible = false
 	close_button.visible = true
@@ -333,6 +462,7 @@ func _end_battle_victory() -> void:
 
 func _end_battle_defeat() -> void:
 	current_state = BattleState.DEFEAT
+	_stop_battle_timer()  # 타이머 정지!
 	
 	_send_log("전멸...", Color.DARK_RED)
 	
@@ -355,6 +485,7 @@ func _on_run_pressed() -> void:
 	
 	if roll < escape_chance:
 		current_state = BattleState.ESCAPED
+		_stop_battle_timer()  # 타이머 정지!
 		_send_log("도주 성공!", Color.CYAN)
 		run_button.visible = false
 		close_button.visible = true
@@ -382,6 +513,7 @@ func _calculate_escape_chance() -> float:
 
 #region 로그/이벤트
 func _send_log(msg: String, color: Color = Color.WHITE) -> void:
+	# 직접 emit (deferred 제거)
 	battle_log.emit(msg, color)
 
 

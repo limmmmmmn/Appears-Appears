@@ -45,9 +45,11 @@ func get_hero_field_sprite(hero_id: String) -> Texture2D:
 		_hero_sprites[cache_key] = texture
 		return texture
 	
-	# 플레이스홀더 반환
+	# 플레이스홀더 생성 및 캐시
 	var class_id: String = str(hero_data.get("class_id", "warrior"))
-	return _create_placeholder(class_id, 24)
+	var placeholder: Texture2D = _create_placeholder(class_id, 24)
+	_hero_sprites[cache_key] = placeholder
+	return placeholder
 
 
 func get_hero_face_sprite(hero_id: String) -> Texture2D:
@@ -65,9 +67,11 @@ func get_hero_face_sprite(hero_id: String) -> Texture2D:
 		_hero_sprites[cache_key] = texture
 		return texture
 	
-	# 플레이스홀더 반환
+	# 플레이스홀더 생성 및 캐시
 	var class_id: String = str(hero_data.get("class_id", "warrior"))
-	return _create_placeholder(class_id, 32)
+	var placeholder: Texture2D = _create_placeholder(class_id, 32)
+	_hero_sprites[cache_key] = placeholder
+	return placeholder
 #endregion
 
 
@@ -86,7 +90,7 @@ func get_enemy_sprite(enemy_id: String) -> Texture2D:
 		_enemy_sprites[enemy_id] = texture
 		return texture
 	
-	# 플레이스홀더 반환
+	# 플레이스홀더 생성 및 캐시
 	var enemy_type: String = str(enemy_data.get("type", "normal"))
 	var placeholder_key: String = "enemy"
 	if enemy_type == "elite":
@@ -94,7 +98,9 @@ func get_enemy_sprite(enemy_id: String) -> Texture2D:
 	elif enemy_type == "boss":
 		placeholder_key = "boss"
 	
-	return _create_placeholder(placeholder_key, 32)
+	var placeholder: Texture2D = _create_placeholder(placeholder_key, 32)
+	_enemy_sprites[enemy_id] = placeholder
+	return placeholder
 #endregion
 
 
@@ -111,7 +117,10 @@ func get_effect_sprite(effect_name: String) -> Texture2D:
 		_effect_sprites[effect_name] = texture
 		return texture
 	
-	return _create_placeholder("enemy", 16)
+	# 플레이스홀더 생성 및 캐시
+	var placeholder: Texture2D = _create_placeholder("enemy", 16)
+	_effect_sprites[effect_name] = placeholder
+	return placeholder
 
 
 func get_alert_icon() -> Texture2D:
@@ -119,18 +128,27 @@ func get_alert_icon() -> Texture2D:
 #endregion
 
 
+# 이미 경고한 경로 추적
+var _warned_paths: Dictionary = {}
+
+
 #region 유틸리티
 func _load_texture(path: String) -> Texture2D:
 	## 텍스처 안전하게 로드
 	if not ResourceLoader.exists(path):
-		push_warning("[SpriteManager] 스프라이트 없음: " + path)
+		# 같은 경로에 대해 한 번만 경고
+		if not _warned_paths.has(path):
+			_warned_paths[path] = true
+			push_warning("[SpriteManager] 스프라이트 없음: " + path)
 		return null
 	
 	var resource = load(path)
 	if resource is Texture2D:
 		return resource
 	
-	push_warning("[SpriteManager] 유효하지 않은 텍스처: " + path)
+	if not _warned_paths.has(path):
+		_warned_paths[path] = true
+		push_warning("[SpriteManager] 유효하지 않은 텍스처: " + path)
 	return null
 
 

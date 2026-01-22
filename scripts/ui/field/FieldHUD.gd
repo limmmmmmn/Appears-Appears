@@ -85,12 +85,15 @@ func _connect_signals() -> void:
 	if menu_button: menu_button.pressed.connect(func(): menu_pressed.emit())
 	if GameManager: GameManager.gold_changed.connect(func(_g): update_top_bar())
 	if PartyManager and PartyManager.has_signal("party_changed"):
-		PartyManager.party_changed.connect(update_party_display)
+		if not PartyManager.party_changed.is_connected(update_party_display):
+			PartyManager.party_changed.connect(update_party_display)
 	
-	# BattleManager 신호 연결 - 전투 로그와 파티 HP 업데이트
+	# BattleManager 신호 연결 - 중복 연결 방지
 	if BattleManager:
-		BattleManager.battle_log_received.connect(_on_battle_log_received)
-		BattleManager.party_hp_changed.connect(update_party_display)
+		if not BattleManager.battle_log_received.is_connected(_on_battle_log_received):
+			BattleManager.battle_log_received.connect(_on_battle_log_received)
+		if not BattleManager.party_hp_changed.is_connected(update_party_display):
+			BattleManager.party_hp_changed.connect(update_party_display)
 
 
 func _on_battle_log_received(message: String, color: Color) -> void:
@@ -112,10 +115,17 @@ func update_top_bar() -> void:
 
 
 func update_party_display() -> void:
+	print("[FieldHUD] update_party_display 시작")
 	var party = PartyManager.get_party() if PartyManager else []
+	print("[FieldHUD] 파티 수:", party.size())
 	for i in range(4):
-		if i < party.size(): party_slots[i].update_display(party[i])
-		else: party_slots[i].visible = false
+		if i < party.size():
+			print("[FieldHUD] 슬롯", i, "업데이트")
+			party_slots[i].update_display(party[i])
+			print("[FieldHUD] 슬롯", i, "완료")
+		else:
+			party_slots[i].visible = false
+	print("[FieldHUD] update_party_display 끝")
 
 
 func refresh_inventory() -> void:
