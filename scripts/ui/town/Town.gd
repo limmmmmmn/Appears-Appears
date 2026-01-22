@@ -135,9 +135,8 @@ func _go_to_field() -> void:
 
 #region 상태창
 func _open_status() -> void:
-	var status_panel_script := load("res://scripts/ui/PartyStatusPanel.gd")
-	var status_panel := Control.new()
-	status_panel.set_script(status_panel_script)
+	# class_name 사용 - load() 필요 없음!
+	var status_panel := PartyStatusPanel.new()
 	status_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	status_panel.closed.connect(_on_status_closed)
 	add_child(status_panel)
@@ -232,9 +231,8 @@ func _on_recruit_hero(hero_id: String) -> void:
 
 #region 상점 (무기/방어구/도구)
 func _open_shop(shop_id: String) -> void:
-	var shop_panel_script := load("res://scripts/ui/ShopPanel.gd")
-	var shop_panel := Control.new()
-	shop_panel.set_script(shop_panel_script)
+	# class_name 사용 - load() 필요 없음!
+	var shop_panel := ShopPanel.new()
 	shop_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shop_panel.setup(shop_id)
 	shop_panel.closed.connect(_on_shop_closed)

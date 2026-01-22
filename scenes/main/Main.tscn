@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://main_scene"]
+[gd_scene load_steps=2 format=3 uid="uid://maxobt452dhw"]
 
-[ext_resource type="Script" path="res://scripts/main/Main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://c06iobaufxlo" path="res://scripts/scenes/Main.gd" id="1_main"]
 
 [node name="Main" type="Control"]
 layout_mode = 3

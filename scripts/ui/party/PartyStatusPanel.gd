@@ -1,4 +1,6 @@
 extends Control
+class_name PartyStatusPanel  # ← 2번째 줄에 추가!
+## PartyStatusPanel: ...
 ## PartyStatusPanel: 파티 상태창 (스탯, 장비 장착, 인벤토리) + 장비 프리뷰
 
 signal closed

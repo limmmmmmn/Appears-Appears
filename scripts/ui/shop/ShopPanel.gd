@@ -1,4 +1,6 @@
 extends Control
+class_name ShopPanel  # ← 2번째 줄에 추가!
+## ShopPanel: ...
 ## ShopPanel: 장비 구매 시 능력치 비교 가능한 상점
 
 signal closed
