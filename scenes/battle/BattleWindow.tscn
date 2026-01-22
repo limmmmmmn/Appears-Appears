@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://battle_window"]
+
+[ext_resource type="Script" path="res://scripts/battle/BattleWindow.gd" id="1_battle"]
+
+[node name="BattleWindow" type="PanelContainer"]
+custom_minimum_size = Vector2(280, 200)
+script = ExtResource("1_battle")

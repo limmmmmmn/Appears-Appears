@@ -6,8 +6,6 @@ extends Node
 signal battle_started(battle_id: int)
 signal battle_ended(battle_id: int, victory: bool)
 signal all_battles_ended
-signal battle_log_received(message: String, color: Color)  # FieldHUD 연결용
-signal party_hp_changed  # 파티 HP 변경 알림
 
 var active_battles: Dictionary = {}  # battle_id -> {window: BattleWindow, is_boss: bool}
 var _battle_id_counter: int = 0
@@ -53,8 +51,7 @@ func start_battle(enemy_ids: Array, parent_node: Node = null) -> int:
 	# 전투 초기화
 	window.setup(battle_id, enemy_ids)
 	window.battle_ended.connect(_on_battle_window_ended)
-	window.battle_log.connect(_on_battle_log)
-	window.party_updated.connect(_on_party_updated)
+	window.battle_rewards.connect(_on_battle_rewards)
 	
 	# 등록
 	active_battles[battle_id] = {
@@ -94,12 +91,8 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 		GameManager.trigger_game_over()
 
 
-func _on_battle_log(message: String, color: Color) -> void:
-	battle_log_received.emit(message, color)
-
-
-func _on_party_updated() -> void:
-	party_hp_changed.emit()
+func _on_battle_rewards(_battle_id: int, exp: int, gold: int, drops: Array) -> void:
+	print("[BattleManager] 보상 - EXP:%d, Gold:%d, Drops:%s" % [exp, gold, str(drops)])
 #endregion
 
 

@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://battle_enemy"]
+
+[ext_resource type="Script" path="res://scripts/battle/BattleEnemy.gd" id="1_enemy"]
+
+[node name="BattleEnemy" type="VBoxContainer"]
+custom_minimum_size = Vector2(64, 100)
+script = ExtResource("1_enemy")

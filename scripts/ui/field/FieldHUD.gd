@@ -86,6 +86,15 @@ func _connect_signals() -> void:
 	if GameManager: GameManager.gold_changed.connect(func(_g): update_top_bar())
 	if PartyManager and PartyManager.has_signal("party_changed"):
 		PartyManager.party_changed.connect(update_party_display)
+	
+	# BattleManager 신호 연결 - 전투 로그와 파티 HP 업데이트
+	if BattleManager:
+		BattleManager.battle_log_received.connect(_on_battle_log_received)
+		BattleManager.party_hp_changed.connect(update_party_display)
+
+
+func _on_battle_log_received(message: String, color: Color) -> void:
+	add_log(message, color)
 
 
 func update_all() -> void:
