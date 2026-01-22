@@ -1,6 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://c8xparty_leader"]
+[gd_scene load_steps=3 format=3 uid="uid://vv1h1nx6bkkr"]
 
-[ext_resource type="Script" path="res://scripts/field/PartyLeader.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://d20invp85jf3m" path="res://scripts/field/PartyLeader.gd" id="1_script"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(12, 12)
