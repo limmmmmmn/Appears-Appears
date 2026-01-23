@@ -6,16 +6,13 @@ var id: String = ""
 var enemy_name: String = ""
 var enemy_type: String = ""  # normal, elite, boss
 
+# 간소화된 스탯 (atk/def 직접 사용)
 var max_hp: int = 0
-var max_mp: int = 0
-var str_stat: int = 0
+var atk_stat: int = 0
 var def_stat: int = 0
-var int_stat: int = 0
 var spd_stat: int = 0
-var luk_stat: int = 0
 
 var current_hp: int = 0
-var current_mp: int = 0
 var is_dead: bool = false
 
 var exp_reward: int = 0
@@ -25,6 +22,7 @@ var drop_table: Array = []
 var skills: Array = []
 var sprite: String = ""
 var tags: Array = []
+var damage_type: String = "physical"  # physical, magic
 
 var battle_uid: int = 0
 static var _uid_counter: int = 0
@@ -50,18 +48,16 @@ func _initialize(enemy_id: String) -> void:
 	sprite = data.get("sprite", "")
 	tags = data.get("tags", [])
 	skills = data.get("skills", ["basic_attack"])
+	damage_type = data.get("damage_type", "physical")
 	
-	var stats: Dictionary = data.get("base_stats", {})
+	# 새 스탯 구조: stats.hp, stats.atk, stats.def, stats.spd
+	var stats: Dictionary = data.get("stats", {})
 	max_hp = int(stats.get("hp", 10))
-	max_mp = int(stats.get("mp", 0))
-	str_stat = int(stats.get("str", 5))
+	atk_stat = int(stats.get("atk", 5))
 	def_stat = int(stats.get("def", 5))
-	int_stat = int(stats.get("int", 5))
 	spd_stat = int(stats.get("spd", 5))
-	luk_stat = int(stats.get("luk", 5))
 	
 	current_hp = max_hp
-	current_mp = max_mp
 	
 	var rewards: Dictionary = data.get("rewards", {})
 	exp_reward = int(rewards.get("exp", 0))
@@ -71,19 +67,26 @@ func _initialize(enemy_id: String) -> void:
 
 
 func get_atk() -> int:
-	return str_stat
+	return atk_stat
 
+func get_def() -> int:
+	return def_stat
+
+func get_spd() -> int:
+	return spd_stat
+
+# 하위 호환용 (기존 코드에서 사용 중일 수 있음)
 func get_p_def() -> int:
 	return def_stat
 
 func get_m_def() -> int:
-	return int_stat
+	return def_stat
 
 func get_eva() -> float:
-	return spd_stat * 0.5 + luk_stat * 0.2
+	return spd_stat * 0.5
 
 func get_crit() -> float:
-	return luk_stat * 0.5 + 5.0
+	return 5.0  # 적은 기본 5% 크리티컬
 
 
 func take_damage(amount: int) -> int:

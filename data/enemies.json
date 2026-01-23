@@ -3,14 +3,11 @@
 	"id": "slime",
 	"name": "슬라임",
 	"type": "normal",
-	"base_stats": {
+	"stats": {
 	  "hp": 15,
-	  "mp": 0,
-	  "str": 5,
+	  "atk": 5,
 	  "def": 2,
-	  "int": 1,
-	  "spd": 4,
-	  "luk": 2
+	  "spd": 4
 	},
 	"rewards": {
 	  "exp": 5,
@@ -28,14 +25,11 @@
 	"id": "goblin",
 	"name": "고블린",
 	"type": "normal",
-	"base_stats": {
+	"stats": {
 	  "hp": 25,
-	  "mp": 0,
-	  "str": 8,
+	  "atk": 8,
 	  "def": 4,
-	  "int": 2,
-	  "spd": 7,
-	  "luk": 5
+	  "spd": 7
 	},
 	"rewards": {
 	  "exp": 10,
@@ -54,14 +48,11 @@
 	"id": "bat",
 	"name": "박쥐",
 	"type": "normal",
-	"base_stats": {
+	"stats": {
 	  "hp": 12,
-	  "mp": 0,
-	  "str": 6,
+	  "atk": 6,
 	  "def": 2,
-	  "int": 1,
-	  "spd": 12,
-	  "luk": 4
+	  "spd": 12
 	},
 	"rewards": {
 	  "exp": 6,
@@ -77,14 +68,11 @@
 	"id": "skeleton",
 	"name": "스켈레톤",
 	"type": "normal",
-	"base_stats": {
+	"stats": {
 	  "hp": 30,
-	  "mp": 0,
-	  "str": 10,
+	  "atk": 10,
 	  "def": 6,
-	  "int": 1,
-	  "spd": 5,
-	  "luk": 3
+	  "spd": 5
 	},
 	"rewards": {
 	  "exp": 15,
@@ -98,18 +86,57 @@
 	"sprite": "skeleton",
 	"tags": ["undead", "skeleton"]
   },
+  "wolf": {
+	"id": "wolf",
+	"name": "늑대",
+	"type": "normal",
+	"stats": {
+	  "hp": 20,
+	  "atk": 9,
+	  "def": 3,
+	  "spd": 10
+	},
+	"rewards": {
+	  "exp": 12,
+	  "gold_min": 5,
+	  "gold_max": 12
+	},
+	"drop_table": [
+	  {"item_id": "potion_small", "chance": 0.1}
+	],
+	"skills": ["basic_attack"],
+	"sprite": "wolf",
+	"tags": ["beast", "wolf"]
+  },
+  "spider": {
+	"id": "spider",
+	"name": "거미",
+	"type": "normal",
+	"stats": {
+	  "hp": 18,
+	  "atk": 7,
+	  "def": 2,
+	  "spd": 8
+	},
+	"rewards": {
+	  "exp": 8,
+	  "gold_min": 4,
+	  "gold_max": 10
+	},
+	"drop_table": [],
+	"skills": ["basic_attack"],
+	"sprite": "spider",
+	"tags": ["monster", "insect"]
+  },
   "orc_warrior": {
 	"id": "orc_warrior",
 	"name": "오크 전사",
 	"type": "elite",
-	"base_stats": {
+	"stats": {
 	  "hp": 80,
-	  "mp": 0,
-	  "str": 18,
+	  "atk": 18,
 	  "def": 12,
-	  "int": 3,
-	  "spd": 6,
-	  "luk": 4
+	  "spd": 6
 	},
 	"rewards": {
 	  "exp": 50,
@@ -124,18 +151,39 @@
 	"sprite": "orc_warrior",
 	"tags": ["monster", "orc", "humanoid", "elite"]
   },
+  "dark_mage": {
+	"id": "dark_mage",
+	"name": "다크 메이지",
+	"type": "elite",
+	"stats": {
+	  "hp": 50,
+	  "atk": 22,
+	  "def": 5,
+	  "spd": 9
+	},
+	"rewards": {
+	  "exp": 60,
+	  "gold_min": 40,
+	  "gold_max": 70
+	},
+	"drop_table": [
+	  {"item_id": "staff_magic", "chance": 0.4},
+	  {"item_id": "robe_magic", "chance": 0.3}
+	],
+	"skills": ["basic_attack", "fireball"],
+	"sprite": "dark_mage",
+	"tags": ["humanoid", "mage", "elite"],
+	"damage_type": "magic"
+  },
   "boss_goblin_king": {
 	"id": "boss_goblin_king",
 	"name": "고블린 킹",
 	"type": "boss",
-	"base_stats": {
+	"stats": {
 	  "hp": 200,
-	  "mp": 30,
-	  "str": 22,
+	  "atk": 22,
 	  "def": 15,
-	  "int": 8,
-	  "spd": 8,
-	  "luk": 10
+	  "spd": 8
 	},
 	"rewards": {
 	  "exp": 200,
@@ -145,7 +193,7 @@
 	"drop_table": [
 	  {"item_id": "crown_legendary", "chance": 1.0}
 	],
-	"skills": ["basic_attack", "power_strike"],
+	"skills": ["basic_attack", "power_strike", "war_cry"],
 	"sprite": "boss_goblin_king",
 	"tags": ["monster", "goblin", "humanoid", "boss"]
   }

@@ -1,5 +1,5 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1769142940
+::res://::1769143795
 README.md::TextFile::-1::1769001013::0::1::::<><><>0<>0<><>::
 ::res://assets/::1768920925
 ::res://assets/audio/::1768850588
@@ -33,9 +33,9 @@ stages.json::JSON::-1::1769133044::0::1::::<><><>0<>0<><>::
 town_events.json::JSON::-1::1769133044::0::1::::<><><>0<>0<><>::
 ::res://resources/::1768850588
 ::res://scenes/::1769094041
-::res://scenes/battle/::1769142725
+::res://scenes/battle/::1769142982
 BattleEnemy.tscn::PackedScene::-1::1769133044::0::1::::<><><>0<>0<><>::res://scripts/battle/BattleEnemy.gd
-BattleWindow.tscn::PackedScene::2548488172865281846::1769142725::0::1::::<><><>0<>0<><>::uid://bm5a1dk1qc713::::res://scripts/battle/BattleWindow.gd
+BattleWindow.tscn::PackedScene::2548488172865281846::1769142982::0::1::::<><><>0<>0<><>::uid://bm5a1dk1qc713::::res://scripts/battle/BattleWindow.gd
 ::res://scenes/field/::1769133044
 FieldEnemy.tscn::PackedScene::-1::1769133044::0::1::::<><><>0<>0<><>::uid://btd66hunk6n8p::::res://scripts/entities/FieldEnemy.gd
 Field_1_1.tscn::PackedScene::-1::1769133044::0::1::::<><><>0<>0<><>::uid://b0p1xuvfcfn0q::::res://scripts/scenes/Field.gd
@@ -69,8 +69,8 @@ FieldEnemy.gd::GDScript::8134500071119810657::1769133044::0::1::::FieldEnemy<>Ch
 Hero.gd::GDScript::542152457901027149::1769134136::0::1::::Hero<>RefCounted<><>0<>0<><>::
 PartyFollower.gd::GDScript::7490982603958711565::1769133044::0::1::::PartyFollower<>CharacterBody2D<><>0<>0<><>::
 PartyLeader.gd::GDScript::746073853835473904::1769133044::0::1::::PartyLeader<>CharacterBody2D<><>0<>0<><>::
-::res://scripts/scenes/::1769142562
-Field.gd::GDScript::5326509881383753413::1769142562::0::1::::<>Node2D<><>0<>0<><>::
+::res://scripts/scenes/::1769142948
+Field.gd::GDScript::5326509881383753413::1769142948::0::1::::<>Node2D<><>0<>0<><>::
 Main.gd::GDScript::1918271683898057466::1769141973::0::1::::<>Control<><>0<>0<><>::
 Title.gd::GDScript::9154244069735462193::1769141661::0::1::::<>Control<><>0<>0<><>::
 ::res://scripts/systems/::1769133044
@@ -80,11 +80,11 @@ StatCompareUtil.gd::GDScript::262750695674730953::1769133044::0::1::::StatCompar
 ::res://scripts/ui/common/::1769134124
 EquipmentTooltip.gd::GDScript::3727627402679788799::1769134124::0::1::::EquipmentTooltip<>PanelContainer<><>0<>0<><>::
 InventoryPanel.gd::GDScript::7072777707611082392::1769133044::0::1::::InventoryPanel<>PanelContainer<><>0<>0<><>::
-::res://scripts/ui/field/::1769135020
+::res://scripts/ui/field/::1769142982
 BattleLogUI.gd::GDScript::1257179483102947293::1769133044::0::1::::BattleLogUI<>PanelContainer<><>0<>0<><>::
 DragDropManager.gd::GDScript::1292534121707577199::1769134112::0::1::::DragDropManager<>RefCounted<><>0<>0<><>::
 FieldHUD.gd::GDScript::4338105677325398555::1769134997::0::1::::FieldHUD<>CanvasLayer<><>0<>0<><>::
-GameOverUI.gd::GDScript::4142093473995064509::1769133044::0::1::::GameOverUI<>CanvasLayer<><>0<>0<><>::
+GameOverUI.gd::GDScript::4142093473995064509::1769142982::0::1::::GameOverUI<>CanvasLayer<><>0<>0<><>::
 InventoryGridUI.gd::GDScript::6779009213454308188::1769135020::0::1::::InventoryGridUI<>PanelContainer<><>0<>0<><>::
 LootSelectUI.gd::GDScript::6163295701026340121::1769133044::0::1::::LootSelectUI<>CanvasLayer<><>0<>0<><>::
 PartySlotUI.gd::GDScript::7607775541129254957::1769133044::0::1::::PartySlotUI<>PanelContainer<><>0<>0<><>::
@@ -96,5 +96,5 @@ StatusInventoryList.gd::GDScript::893450086036778067::1769133044::0::1::::Status
 ShopComparePanel.gd::GDScript::1603081524710445869::1769133044::0::1::::ShopComparePanel<>PanelContainer<><>0<>0<><>::
 ShopItemList.gd::GDScript::5497683655413617082::1769133044::0::1::::ShopItemList<>PanelContainer<><>0<>0<><>::
 ShopPanel.gd::GDScript::415811544607188053::1769133044::0::1::::ShopPanel<>Control<><>0<>0<><>::
-::res://scripts/ui/town/::1769142580
-Town.gd::GDScript::8376899040624568744::1769142580::0::1::::<>Control<><>0<>0<><>::
+::res://scripts/ui/town/::1769142957
+Town.gd::GDScript::8376899040624568744::1769142957::0::1::::<>Control<><>0<>0<><>::

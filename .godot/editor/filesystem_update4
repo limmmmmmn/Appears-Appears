@@ -1,4 +1,4 @@
 res://scenes/battle/BattleWindow.tscn
-res://scripts/scenes/Field.gd
-res://scripts/ui/town/Town.gd
-res://scripts/ui/field/GameOverUI.gd
+res://data/enemies.json
+res://data/items.json
+res://scripts/entities/Enemy.gd
