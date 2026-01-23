@@ -14,6 +14,7 @@ var party_followers: Array[PartyFollower] = []
 var field_enemies: Array[FieldEnemy] = []
 var hud: FieldHUD
 var game_over_ui: GameOverUI
+var loot_select_ui: LootSelectUI  # 3지선다 UI
 
 var party_leader_scene: PackedScene
 var party_follower_scene: PackedScene
@@ -40,6 +41,10 @@ const MAX_ENEMIES: int = 15
 # 플레이어로부터 최소 스폰 거리 (픽셀)
 # 너무 가까이 스폰되지 않도록 함
 const MIN_SPAWN_DISTANCE: float = 150.0
+
+# 엘리트 스폰 확률 (0.0 ~ 1.0)
+# 0.15 = 15% 확률로 엘리트 스폰
+const ELITE_SPAWN_CHANCE: float = 0.15
 
 # 초기 스폰 수는 stages.json의 enemy_count에서 설정
 # "enemy_count": { "min": 8, "max": 12 }
@@ -81,6 +86,12 @@ func _ready() -> void:
 			GameManager.game_over.connect(_on_party_wiped)
 			print("[Field] GameManager.game_over 연결됨")
 	
+	# 엘리트 전투 승리 시그널 연결
+	if BattleManager:
+		if not BattleManager.elite_victory.is_connected(_on_elite_victory):
+			BattleManager.elite_victory.connect(_on_elite_victory)
+			print("[Field] BattleManager.elite_victory 연결됨")
+	
 	# 테스트: 인벤토리에 아이템 추가
 	if InventoryManager:
 		InventoryManager.add_item("sword_common", 2)
@@ -114,6 +125,11 @@ func _setup_game_over_ui() -> void:
 	add_child(game_over_ui)
 	game_over_ui.restart_pressed.connect(_on_restart_game)
 	game_over_ui.quit_pressed.connect(_on_quit_game)
+	
+	# 3지선다 루트 UI
+	loot_select_ui = LootSelectUI.new()
+	add_child(loot_select_ui)
+	loot_select_ui.item_selected.connect(_on_loot_item_selected)
 
 
 func _spawn_party() -> void:
@@ -158,16 +174,24 @@ func _spawn_field_enemies() -> void:
 	print("[Field] 적 스폰: ", field_enemies.size())
 
 
-func _spawn_single_enemy(data: Dictionary) -> void:
+func _spawn_single_enemy(data: Dictionary, force_elite: bool = false) -> void:
 	var enemy: FieldEnemy = field_enemy_scene.instantiate() as FieldEnemy
 	add_child(enemy)
+	
+	# 엘리트 여부 결정
+	var is_elite: bool = force_elite or (randf() < ELITE_SPAWN_CHANCE)
+	
 	enemy.setup(
 		str(data.get("enemy_id", "slime")),
 		str(data.get("tile_type", "grass")),
-		data.get("position", Vector2.ZERO) as Vector2
+		data.get("position", Vector2.ZERO) as Vector2,
+		is_elite
 	)
 	enemy.player_contacted.connect(_on_field_enemy_contacted)
 	field_enemies.append(enemy)
+	
+	if is_elite:
+		print("[Field] 엘리트 스폰: ", data.get("enemy_id", "slime"))
 
 
 func _setup_respawn_timer() -> void:
@@ -280,7 +304,7 @@ func _update_hud() -> void:
 
 
 func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
-	print("[Field] 적 접촉: ", field_enemy.enemy_id)
+	print("[Field] 적 접촉: ", field_enemy.enemy_id, " (엘리트:", field_enemy.is_elite, ")")
 	
 	var enemy_data: Dictionary = DataManager.get_enemy(field_enemy.enemy_id)
 	var enemy_name: String = str(enemy_data.get("name", field_enemy.enemy_id))
@@ -294,18 +318,23 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	
 	# 로그 추가
 	if hud:
-		var log_msg: String = "%s이(가) 나타났다!" % enemy_name
-		if battle_enemies.size() > 1:
+		var log_msg: String = ""
+		if field_enemy.is_elite:
+			log_msg = "⭐ 엘리트 %s이(가) 나타났다!" % enemy_name
+		elif battle_enemies.size() > 1:
 			log_msg = "%s 외 %d마리가 나타났다!" % [enemy_name, battle_enemies.size() - 1]
+		else:
+			log_msg = "%s이(가) 나타났다!" % enemy_name
 		hud.add_battle_log(log_msg)
 	
 	field_enemies.erase(field_enemy)
+	var was_elite: bool = field_enemy.is_elite
 	field_enemy.despawn()
 	
 	if BattleManager:
-		# self를 전달하여 전투창이 이 씬에 생성되도록 함
-		var battle_id: int = BattleManager.start_battle(battle_enemies, self)
-		print("[Field] 전투 ID: ", battle_id)
+		# 엘리트 정보를 BattleManager에 전달
+		var battle_id: int = BattleManager.start_battle(battle_enemies, self, was_elite)
+		print("[Field] 전투 ID: ", battle_id, " 엘리트전투:", was_elite)
 	
 	battle_triggered.emit(battle_enemies)
 
@@ -395,3 +424,61 @@ func _on_quit_game() -> void:
 	# 메인 메뉴로 이동 (또는 게임 종료)
 	# get_tree().change_scene_to_file("res://scenes/main/MainMenu.tscn")
 	get_tree().quit()
+
+
+func _on_loot_item_selected(item_id: String) -> void:
+	print("[Field] 루트 선택: ", item_id)
+	
+	# 아이템 지급
+	InventoryManager.add_item(item_id)
+	
+	# 로그 표시
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	if item_data.is_empty():
+		item_data = DataManager.get_item(item_id)
+	var item_name: String = str(item_data.get("name", item_id))
+	
+	if hud:
+		hud.add_log("🎁 %s 획득!" % item_name, Color.GOLD)
+
+
+func show_elite_loot() -> void:
+	## 엘리트 전투 승리 시 3지선다 표시
+	var loot_pool: Array[String] = _generate_elite_loot_pool()
+	if loot_pool.size() >= 3 and loot_select_ui:
+		loot_select_ui.show_loot_selection(loot_pool)
+
+
+func _on_elite_victory(_battle_id: int) -> void:
+	print("[Field] 엘리트 전투 승리! 3지선다 표시")
+	show_elite_loot()
+
+
+func _generate_elite_loot_pool() -> Array[String]:
+	## 매직 이상 등급 아이템 3개 생성
+	var pool: Array[String] = []
+	var magic_items: Array[String] = [
+		"sword_magic", "axe_magic", "staff_magic",
+		"leather_armor_magic", "heavy_armor_magic", "robe_magic",
+		"shield_magic", "iron_helm_magic"
+	]
+	var legendary_items: Array[String] = [
+		"excalibur", "crown_legendary"
+	]
+	
+	# 셔플
+	magic_items.shuffle()
+	legendary_items.shuffle()
+	
+	# 20% 확률로 레전더리 포함
+	if randf() < 0.2 and not legendary_items.is_empty():
+		pool.append(legendary_items[0])
+	
+	# 나머지는 매직 아이템으로 채움
+	for item_id in magic_items:
+		if pool.size() >= 3:
+			break
+		if not pool.has(item_id):
+			pool.append(item_id)
+	
+	return pool

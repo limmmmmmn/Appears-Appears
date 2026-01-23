@@ -96,17 +96,28 @@ func _build_ui() -> void:
 
 
 #region 전투 초기화
-func setup(p_battle_id: int, enemy_ids: Array) -> void:
+var is_elite_battle: bool = false
+
+func setup(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false) -> void:
 	if not _ui_built:
 		_build_ui()
 	
 	battle_id = p_battle_id
 	enemy_data_list = enemy_ids.duplicate()
+	is_elite_battle = p_is_elite
 	
 	is_boss_battle = _check_is_boss_battle(enemy_ids)
 	run_button.disabled = is_boss_battle
 	
 	_spawn_enemies(enemy_ids)
+	
+	# 엘리트 전투면 배경색 변경
+	if is_elite_battle:
+		var bg: Panel = get_node_or_null("Panel")
+		if bg:
+			var style: StyleBoxFlat = StyleBoxFlat.new()
+			style.bg_color = Color(0.2, 0.1, 0.3, 0.95)  # 보라색 배경
+			bg.add_theme_stylebox_override("panel", style)
 	
 	visible = true
 	current_state = BattleState.STARTING
@@ -129,9 +140,18 @@ func _spawn_enemies(enemy_ids: Array) -> void:
 		child.queue_free()
 	enemies.clear()
 	
+	var spawned_elite: bool = false
+	
 	for enemy_id in enemy_ids:
 		var battle_enemy := BattleEnemy.new()
-		battle_enemy.setup(str(enemy_id))
+		
+		# 엘리트 전투에서 첫 번째 적은 엘리트 버전으로
+		if is_elite_battle and not spawned_elite:
+			battle_enemy.setup(str(enemy_id), true)  # 엘리트로 스폰
+			spawned_elite = true
+		else:
+			battle_enemy.setup(str(enemy_id), false)
+		
 		enemy_container.add_child(battle_enemy)
 		enemies.append(battle_enemy)
 

@@ -8,6 +8,7 @@ enum State { IDLE, WANDER, ALERT, CHASE }
 
 @export var enemy_id: String = "slime"
 @export var tile_type: String = "grass"
+@export var is_elite: bool = false  # 엘리트 몹 여부
 
 @export_group("Movement")
 @export var wander_speed: float = 25.0
@@ -66,7 +67,14 @@ func _setup_from_data() -> void:
 	
 	# 이름 라벨
 	if name_label:
-		name_label.text = str(data.get("name", enemy_id))
+		var enemy_name: String = str(data.get("name", enemy_id))
+		if is_elite:
+			name_label.text = "⭐ " + enemy_name
+			name_label.add_theme_color_override("font_color", Color.PURPLE)
+			# 엘리트는 크기 약간 크게
+			sprite.scale = Vector2(1.3, 1.3)
+		else:
+			name_label.text = enemy_name
 	
 	# 느낌표 아이콘
 	if alert_icon and SpriteManager:
@@ -177,9 +185,10 @@ func _update_sprite_direction(x_direction: float) -> void:
 		sprite.flip_h = false
 
 
-func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2) -> void:
+func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2, p_is_elite: bool = false) -> void:
 	enemy_id = p_enemy_id
 	tile_type = p_tile_type
+	is_elite = p_is_elite
 	global_position = pos
 	call_deferred("_setup_from_data")
 

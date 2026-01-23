@@ -76,12 +76,15 @@ func _build_ui() -> void:
 	add_child(hp_label)
 
 
-func setup(p_enemy_id: String) -> void:
+var is_elite_version: bool = false  # 엘리트 버전 여부
+
+func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	# UI가 아직 생성되지 않았으면 먼저 생성
 	if not _ui_built:
 		_build_ui()
 	
 	enemy_id = p_enemy_id
+	is_elite_version = p_is_elite
 	
 	var data: Dictionary = DataManager.get_enemy(enemy_id)
 	if data.is_empty():
@@ -94,18 +97,28 @@ func setup(p_enemy_id: String) -> void:
 	# 기본 스탯
 	var stats: Dictionary = data.get("base_stats", {})
 	max_hp = int(stats.get("hp", 10))
-	current_hp = max_hp
 	base_str = int(stats.get("str", 5))
 	base_def = int(stats.get("def", 2))
 	base_int = int(stats.get("int", 1))
 	base_spd = int(stats.get("spd", 5))
 	base_luk = int(stats.get("luk", 2))
 	
-	# 보상
+	# 엘리트 버전이면 스탯 강화!
+	if is_elite_version:
+		enemy_name = "⭐ " + enemy_name
+		enemy_type = "elite"
+		max_hp = int(max_hp * 2.0)  # HP 2배
+		base_str = int(base_str * 1.5)  # 공격력 1.5배
+		base_def = int(base_def * 1.5)  # 방어력 1.5배
+	
+	current_hp = max_hp
+	
+	# 보상 (엘리트는 2배)
 	var rewards: Dictionary = data.get("rewards", {})
-	exp_reward = int(rewards.get("exp", 5))
-	gold_min = int(rewards.get("gold_min", 1))
-	gold_max = int(rewards.get("gold_max", 5))
+	var reward_mult: float = 2.0 if is_elite_version else 1.0
+	exp_reward = int(int(rewards.get("exp", 5)) * reward_mult)
+	gold_min = int(int(rewards.get("gold_min", 1)) * reward_mult)
+	gold_max = int(int(rewards.get("gold_max", 5)) * reward_mult)
 	
 	# 드랍 테이블
 	drop_table = data.get("drop_table", [])
@@ -120,12 +133,15 @@ func setup(p_enemy_id: String) -> void:
 		if tex:
 			sprite.texture = tex
 	
-	# 보스/엘리트 표시
-	match enemy_type:
-		"boss":
-			name_label.add_theme_color_override("font_color", Color.ORANGE)
-		"elite":
-			name_label.add_theme_color_override("font_color", Color.PURPLE)
+	# 엘리트 버전 시각적 표시
+	if is_elite_version:
+		name_label.add_theme_color_override("font_color", Color.PURPLE)
+		sprite.scale = Vector2(1.3, 1.3)  # 크기 증가
+		modulate = Color(1.2, 0.9, 1.3)  # 보라빛 틴트
+	elif enemy_type == "boss":
+		name_label.add_theme_color_override("font_color", Color.ORANGE)
+	elif enemy_type == "elite":
+		name_label.add_theme_color_override("font_color", Color.PURPLE)
 
 
 #region 스탯 계산

@@ -263,6 +263,25 @@ func _create_stat_panel() -> PanelContainer:
 	row3.add_child(_create_stat_label("P.DEF", "PDEFValue", Color(0.6, 0.8, 1.0)))
 	row3.add_child(_create_stat_label("M.DEF", "MDEFValue", Color(0.8, 0.6, 1.0)))
 	
+	# 경험치 바
+	var exp_row := HBoxContainer.new()
+	exp_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(exp_row)
+	
+	var exp_label := Label.new()
+	exp_label.text = "EXP"
+	exp_label.custom_minimum_size.x = 28
+	exp_label.add_theme_font_size_override("font_size", 8)
+	exp_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	exp_row.add_child(exp_label)
+	
+	var exp_value := Label.new()
+	exp_value.name = "EXPValue"
+	exp_value.text = "0/100"
+	exp_value.add_theme_font_size_override("font_size", 8)
+	exp_value.add_theme_color_override("font_color", Color.GOLD)
+	exp_row.add_child(exp_value)
+	
 	return panel
 
 
@@ -299,9 +318,9 @@ func update_display(new_hero: Hero) -> void:
 	
 	visible = true
 	
-	# 이름
+	# 이름 + 레벨
 	print("[PartySlotUI] 이름 업데이트")
-	name_label.text = hero.hero_name
+	name_label.text = "Lv.%d %s" % [hero.level, hero.hero_name]
 	
 	# 페이스칩
 	print("[PartySlotUI] 페이스칩 업데이트")
@@ -436,6 +455,11 @@ func _update_stat_values() -> void:
 	_set_stat_value("ATKValue", hero.get_atk())
 	_set_stat_value("PDEFValue", hero.get_p_def())
 	_set_stat_value("MDEFValue", hero.get_m_def())
+	
+	# EXP 표시
+	var exp_label: Label = stat_panel.find_child("EXPValue", true, false)
+	if exp_label:
+		exp_label.text = "%d/%d" % [hero.exp, hero.exp_to_next]
 
 
 func _set_stat_value(label_name: String, value: int) -> void:
