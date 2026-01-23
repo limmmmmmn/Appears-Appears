@@ -13,11 +13,39 @@ var party_leader: PartyLeader
 var party_followers: Array[PartyFollower] = []
 var field_enemies: Array[FieldEnemy] = []
 var hud: FieldHUD
+var game_over_ui: GameOverUI
 
 var party_leader_scene: PackedScene
 var party_follower_scene: PackedScene
 var field_enemy_scene: PackedScene
 var hud_scene: PackedScene
+
+#=============================================================================
+# 🎮 에너미 스포너 설정 (여기서 조절하세요!)
+#=============================================================================
+var respawn_timer: Timer
+
+# 리스폰 간격 (초) - 낮출수록 더 자주 스폰됨
+# 예: 1.0 = 1초마다, 5.0 = 5초마다
+const RESPAWN_INTERVAL: float = 3.0
+
+# 필드에 존재할 수 있는 최대 적 수
+# 예: 10 = 최대 10마리, 30 = 최대 30마리
+const MAX_ENEMIES: int = 15
+
+# 한 번에 스폰되는 적 수 (최소, 최대)
+# _on_respawn_timer() 함수에서 randi_range(1, 2)로 설정됨
+# 더 많이 스폰하려면 randi_range(2, 4) 등으로 변경
+
+# 플레이어로부터 최소 스폰 거리 (픽셀)
+# 너무 가까이 스폰되지 않도록 함
+const MIN_SPAWN_DISTANCE: float = 150.0
+
+# 초기 스폰 수는 stages.json의 enemy_count에서 설정
+# "enemy_count": { "min": 8, "max": 12 }
+#=============================================================================
+
+var spawnable_tiles: Array = []
 
 @export var tile_type_map: Dictionary = {
 	0: "grass",
@@ -31,9 +59,27 @@ var hud_scene: PackedScene
 func _ready() -> void:
 	_load_scenes()
 	_setup_hud()
+	_setup_game_over_ui()
 	_spawn_party()
+	
+	# 스폰 가능한 타일 캐싱
+	spawnable_tiles = _collect_spawnable_tiles()
+	
 	_spawn_field_enemies()
 	_setup_exit()
+	_setup_respawn_timer()
+	
+	# 파티 전멸 시그널 연결
+	if PartyManager:
+		if not PartyManager.party_wiped.is_connected(_on_party_wiped):
+			PartyManager.party_wiped.connect(_on_party_wiped)
+			print("[Field] PartyManager.party_wiped 연결됨")
+	
+	# GameManager 게임오버 시그널도 연결
+	if GameManager:
+		if not GameManager.game_over.is_connected(_on_party_wiped):
+			GameManager.game_over.connect(_on_party_wiped)
+			print("[Field] GameManager.game_over 연결됨")
 	
 	# 테스트: 인벤토리에 아이템 추가
 	if InventoryManager:
@@ -61,6 +107,13 @@ func _setup_hud() -> void:
 	hud = hud_scene.instantiate() as FieldHUD
 	add_child(hud)
 	hud.menu_pressed.connect(_on_menu_pressed)
+
+
+func _setup_game_over_ui() -> void:
+	game_over_ui = GameOverUI.new()
+	add_child(game_over_ui)
+	game_over_ui.restart_pressed.connect(_on_restart_game)
+	game_over_ui.quit_pressed.connect(_on_quit_game)
 
 
 func _spawn_party() -> void:
@@ -97,22 +150,88 @@ func _spawn_party() -> void:
 
 
 func _spawn_field_enemies() -> void:
-	var spawn_tiles: Array = _collect_spawnable_tiles()
-	var spawn_data: Array = FieldManager.spawn_field_enemies(spawn_tiles)
+	var spawn_data: Array = FieldManager.spawn_field_enemies(spawnable_tiles)
 	
 	for data in spawn_data:
-		var data_dict: Dictionary = data as Dictionary
-		var enemy: FieldEnemy = field_enemy_scene.instantiate() as FieldEnemy
-		add_child(enemy)
-		enemy.setup(
-			str(data_dict.get("enemy_id", "slime")),
-			str(data_dict.get("tile_type", "grass")),
-			data_dict.get("position", Vector2.ZERO) as Vector2
-		)
-		enemy.player_contacted.connect(_on_field_enemy_contacted)
-		field_enemies.append(enemy)
+		_spawn_single_enemy(data)
 	
 	print("[Field] 적 스폰: ", field_enemies.size())
+
+
+func _spawn_single_enemy(data: Dictionary) -> void:
+	var enemy: FieldEnemy = field_enemy_scene.instantiate() as FieldEnemy
+	add_child(enemy)
+	enemy.setup(
+		str(data.get("enemy_id", "slime")),
+		str(data.get("tile_type", "grass")),
+		data.get("position", Vector2.ZERO) as Vector2
+	)
+	enemy.player_contacted.connect(_on_field_enemy_contacted)
+	field_enemies.append(enemy)
+
+
+func _setup_respawn_timer() -> void:
+	respawn_timer = Timer.new()
+	respawn_timer.wait_time = RESPAWN_INTERVAL
+	respawn_timer.one_shot = false
+	respawn_timer.timeout.connect(_on_respawn_timer)
+	add_child(respawn_timer)
+	respawn_timer.start()
+	print("[Field] 리스폰 타이머 시작")
+
+
+func _on_respawn_timer() -> void:
+	# 최대 적 수 미만이면 리스폰
+	if field_enemies.size() >= MAX_ENEMIES:
+		return
+	
+	# 플레이어 위치에서 멀리 스폰
+	var safe_tiles: Array = _get_safe_spawn_tiles()
+	if safe_tiles.is_empty():
+		return
+	
+	#=============================================================================
+	# 🎮 한 번에 스폰되는 적 수 조절
+	# randi_range(최소, 최대) - 예: (1, 2) = 1~2마리, (3, 5) = 3~5마리
+	#=============================================================================
+	var spawn_count: int = randi_range(1, 2)
+	
+	for i in range(spawn_count):
+		if field_enemies.size() >= MAX_ENEMIES:
+			break
+		if safe_tiles.is_empty():
+			break
+		
+		var tile_idx: int = randi() % safe_tiles.size()
+		var tile_data: Dictionary = safe_tiles[tile_idx]
+		safe_tiles.remove_at(tile_idx)
+		
+		var tile_type: String = str(tile_data.get("tile_type", "grass"))
+		var enemy_id: String = FieldManager.select_field_enemy_for_tile(tile_type)
+		
+		var spawn_data: Dictionary = {
+			"enemy_id": enemy_id,
+			"position": tile_data.get("position", Vector2.ZERO),
+			"tile_type": tile_type
+		}
+		_spawn_single_enemy(spawn_data)
+	
+	print("[Field] 리스폰! 현재 적: ", field_enemies.size())
+
+
+func _get_safe_spawn_tiles() -> Array:
+	## 플레이어에서 일정 거리 이상 떨어진 타일만 반환
+	var safe_tiles: Array = []
+	var player_pos: Vector2 = party_leader.global_position if party_leader else Vector2.ZERO
+	
+	for tile_data in spawnable_tiles:
+		var tile_dict: Dictionary = tile_data as Dictionary
+		var tile_pos: Vector2 = tile_dict.get("position", Vector2.ZERO) as Vector2
+		
+		if tile_pos.distance_to(player_pos) > MIN_SPAWN_DISTANCE:
+			safe_tiles.append(tile_dict)
+	
+	return safe_tiles
 
 
 func _collect_spawnable_tiles() -> Array:
@@ -233,3 +352,46 @@ func get_party_leader() -> PartyLeader:
 
 func get_hud() -> FieldHUD:
 	return hud
+
+
+#=============================================================================
+# 🎮 게임오버 & 다시하기
+#=============================================================================
+func _on_party_wiped() -> void:
+	print("[Field] ====== 파티 전멸! 게임오버 ======")
+	
+	# 리스폰 타이머 정지
+	if respawn_timer:
+		respawn_timer.stop()
+		print("[Field] 리스폰 타이머 정지")
+	
+	# 모든 전투창 닫기
+	if BattleManager:
+		BattleManager.close_all_battles()
+		print("[Field] 모든 전투창 닫음")
+	
+	# 게임오버 UI 표시
+	if game_over_ui:
+		print("[Field] 게임오버 UI 표시")
+		game_over_ui.show_game_over("파티가 전멸했습니다...")
+	else:
+		print("[Field] ERROR: game_over_ui가 없음!")
+
+
+func _on_restart_game() -> void:
+	print("[Field] 게임 재시작!")
+	
+	# 파티 완전 회복
+	if PartyManager:
+		PartyManager.full_restore_party()
+	
+	# 현재 씬 다시 로드
+	get_tree().reload_current_scene()
+
+
+func _on_quit_game() -> void:
+	print("[Field] 게임 종료")
+	
+	# 메인 메뉴로 이동 (또는 게임 종료)
+	# get_tree().change_scene_to_file("res://scenes/main/MainMenu.tscn")
+	get_tree().quit()

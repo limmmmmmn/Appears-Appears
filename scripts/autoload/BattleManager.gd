@@ -208,4 +208,16 @@ func force_end_all_non_boss() -> void:
 			window.queue_free()
 		active_battles.erase(battle_id)
 		battle_ended.emit(battle_id, false)
+
+
+func close_all_battles() -> void:
+	## 모든 전투창 강제 종료 (게임오버 시 사용)
+	var to_remove: Array = active_battles.keys().duplicate()
+	
+	for battle_id in to_remove:
+		print("[BattleManager] 강제 종료 ID:%d (게임오버)" % battle_id)
+		var window: BattleWindow = active_battles[battle_id].get("window")
+		if window and is_instance_valid(window):
+			window.queue_free()
+		active_battles.erase(battle_id)
 #endregion

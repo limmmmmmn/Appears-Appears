@@ -1,3 +1,5 @@
+res://scenes/field/Field_1_1.tscn
+res://data/enemies.json
 res://scenes/town/Town.tscn
 res://scripts/autoload/BattleManager.gd
 res://scripts/autoload/DataManager.gd
@@ -23,6 +25,7 @@ res://scripts/ui/common/InventoryPanel.gd
 res://scripts/ui/field/BattleLogUI.gd
 res://scripts/ui/field/DragDropManager.gd
 res://scripts/ui/field/FieldHUD.gd
+res://scripts/ui/field/GameOverUI.gd
 res://scripts/ui/field/InventoryGridUI.gd
 res://scripts/ui/field/PartySlotUI.gd
 res://scripts/ui/party/HeroStatsDisplay.gd

@@ -374,8 +374,11 @@ func _execute_enemy_action(enemy: BattleEnemy, target: Hero) -> void:
 		print("[BattleWindow] 데미지 계산")
 		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
 		print("[BattleWindow] damage:", damage)
-		target.take_damage(damage)
-		print("[BattleWindow] take_damage 완료")
+		
+		# PartyManager를 통해 데미지 처리 (party_wiped 시그널 발생)
+		PartyManager.on_hero_damaged(target, damage)
+		print("[BattleWindow] on_hero_damaged 완료")
+		
 		# 직접 emit 대신 deferred로 호출
 		call_deferred("_emit_party_updated")
 		print("[BattleWindow] party_updated deferred 예약")
@@ -388,6 +391,7 @@ func _execute_enemy_action(enemy: BattleEnemy, target: Hero) -> void:
 		
 		if target.is_dead:
 			_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
+			print("[BattleWindow] 영웅 사망: ", target.hero_name)
 			call_deferred("_emit_party_updated")
 	
 	print("[BattleWindow] _execute_enemy_action 끝")
