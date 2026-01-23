@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" uid="uid://b0p1xuvfcfn0q" path="res://scripts/scenes/Field.gd" id="1_script"]
 
@@ -8,20 +8,16 @@ size = Vector2(32, 64)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
 size = Vector2(480, 16)
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_town"]
-size = Vector2(48, 48)
-
-[node name="Field_1_1" type="Node2D"]
+[node name="Field_1_3" type="Node2D"]
 script = ExtResource("1_script")
 spawn_point = NodePath("SpawnPoint")
 exit_area = NodePath("ExitArea")
-town_area = NodePath("TownArea")
 tilemap = NodePath("TileMapLayer")
 
 [node name="Background" type="ColorRect" parent="."]
 offset_right = 480.0
 offset_bottom = 270.0
-color = Color(0.2, 0.35, 0.2, 1)
+color = Color(0.1, 0.15, 0.1, 1)
 
 [node name="TileMapLayer" type="TileMapLayer" parent="."]
 
@@ -37,41 +33,23 @@ monitorable = false
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ExitArea"]
 shape = SubResource("RectangleShape2D_exit")
-debug_color = Color(0.2, 0.8, 0.2, 0.3)
+debug_color = Color(0.8, 0.2, 0.2, 0.3)
 
 [node name="ExitLabel" type="Label" parent="ExitArea"]
-offset_left = -24.0
+offset_left = -50.0
 offset_top = -40.0
-offset_right = 24.0
+offset_right = 50.0
 offset_bottom = -24.0
-text = "EXIT"
+text = "🌟 CLEAR 🌟"
 horizontal_alignment = 1
 
-[node name="TownArea" type="Area2D" parent="."]
-position = Vector2(420, 50)
-collision_layer = 0
-collision_mask = 2
-monitoring = true
-monitorable = false
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="TownArea"]
-shape = SubResource("RectangleShape2D_town")
-debug_color = Color(0.4, 0.4, 0.9, 0.4)
-
-[node name="TownLabel" type="Label" parent="TownArea"]
-offset_left = -24.0
-offset_top = -36.0
-offset_right = 24.0
-offset_bottom = -20.0
-text = "🏠 마을"
+[node name="BossWarning" type="Label" parent="."]
+offset_left = 160.0
+offset_top = 20.0
+offset_right = 320.0
+offset_bottom = 50.0
+text = "⚠ BOSS FIELD ⚠"
 horizontal_alignment = 1
-
-[node name="TownIcon" type="ColorRect" parent="TownArea"]
-offset_left = -20.0
-offset_top = -20.0
-offset_right = 20.0
-offset_bottom = 20.0
-color = Color(0.6, 0.4, 0.2, 0.8)
 
 [node name="Walls" type="StaticBody2D" parent="."]
 collision_layer = 8
@@ -101,19 +79,19 @@ anchors_preset = 10
 anchor_right = 1.0
 offset_bottom = 28.0
 grow_horizontal = 2
-color = Color(0, 0, 0, 0.6)
+color = Color(0.3, 0, 0, 0.7)
 
 [node name="StageLabel" type="Label" parent="CanvasLayer/HUD"]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -80.0
+offset_left = -100.0
 offset_top = 4.0
-offset_right = 80.0
+offset_right = 100.0
 offset_bottom = 24.0
 grow_horizontal = 2
-text = "Stage 1-1: 평화로운 초원"
+text = "Stage 1-BOSS: 고블린 소굴"
 horizontal_alignment = 1
 
 [node name="EnemyCount" type="Label" parent="CanvasLayer/HUD"]
@@ -149,5 +127,5 @@ offset_top = -24.0
 offset_right = 150.0
 grow_horizontal = 2
 grow_vertical = 0
-text = "방향키: 이동 | 마을: 🏠 | 출구: EXIT"
+text = "⚔ 보스를 처치하고 다음 스테이지로!"
 horizontal_alignment = 1

@@ -9,6 +9,7 @@ signal all_battles_ended
 signal battle_log_received(message: String, color: Color)  # FieldHUD 연결용
 signal party_hp_changed  # 파티 HP 변경 알림
 signal elite_victory(battle_id: int)  # 엘리트 전투 승리 시
+signal boss_victory(battle_id: int)   # 보스 전투 승리 시
 
 var active_battles: Dictionary = {}  # battle_id -> {window: BattleWindow, is_boss: bool}
 var _battle_id_counter: int = 0
@@ -89,15 +90,21 @@ func end_battle(battle_id: int, victory: bool) -> void:
 
 
 func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
-	# 엘리트 전투 승리 체크 (end_battle 전에)
+	# 엘리트/보스 전투 승리 체크 (end_battle 전에)
 	var was_elite: bool = false
+	var was_boss: bool = false
 	if active_battles.has(battle_id):
 		was_elite = active_battles[battle_id].get("is_elite", false)
+		was_boss = active_battles[battle_id].get("is_boss", false)
 	
 	end_battle(battle_id, victory)
 	
+	# 보스 전투 승리 시 시그널
+	if victory and was_boss:
+		print("[BattleManager] 🎉 보스 전투 승리!")
+		boss_victory.emit(battle_id)
 	# 엘리트 전투 승리 시 시그널
-	if victory and was_elite:
+	elif victory and was_elite:
 		print("[BattleManager] 엘리트 전투 승리!")
 		elite_victory.emit(battle_id)
 	

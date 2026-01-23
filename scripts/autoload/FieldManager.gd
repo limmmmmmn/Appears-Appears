@@ -132,6 +132,22 @@ func is_tile_walkable(tile_type: String) -> bool:
 	return tile_data.get("walkable", true) as bool
 
 
+func is_exit_tile(tile_type: String) -> bool:
+	## 출구 타일인지 확인 (마을 타일 등)
+	if not tile_types.has(tile_type):
+		return false
+	var tile_data: Dictionary = tile_types[tile_type] as Dictionary
+	return tile_data.get("is_exit", false) as bool
+
+
+func get_exit_type(tile_type: String) -> String:
+	## 출구 타일의 목적지 타입 반환 (town, stage, etc)
+	if not tile_types.has(tile_type):
+		return ""
+	var tile_data: Dictionary = tile_types[tile_type] as Dictionary
+	return str(tile_data.get("exit_type", ""))
+
+
 func get_enemy_pool_for_tile(tile_type: String) -> Dictionary:
 	var terrain_enemies: Dictionary = current_stage_data.get("terrain_enemies", {}) as Dictionary
 	if not terrain_enemies.has(tile_type):

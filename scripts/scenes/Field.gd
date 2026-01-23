@@ -3,10 +3,12 @@ extends Node2D
 
 signal battle_triggered(battle_enemies: Array)
 signal exit_reached(next_destination: String)
+signal town_entered
 signal field_cleared
 
 @export var spawn_point: Marker2D
 @export var exit_area: Area2D
+@export var town_area: Area2D  ## 마을 진입 영역
 @export var tilemap: TileMapLayer
 
 var party_leader: PartyLeader
@@ -20,6 +22,15 @@ var party_leader_scene: PackedScene
 var party_follower_scene: PackedScene
 var field_enemy_scene: PackedScene
 var hud_scene: PackedScene
+
+#=============================================================================
+# 🏠 마을 결계 시스템
+#=============================================================================
+var town_barrier: StaticBody2D = null  # 결계 충돌체
+var town_barrier_visual: ColorRect = null  # 결계 시각 효과
+var town_speech_bubble: Control = null  # 말풍선
+var speech_bubble_timer: Timer = null
+var barrier_tween: Tween = null  # 결계 애니메이션용
 
 #=============================================================================
 # 🎮 에너미 스포너 설정 (여기서 조절하세요!)
@@ -91,6 +102,9 @@ func _ready() -> void:
 		if not BattleManager.elite_victory.is_connected(_on_elite_victory):
 			BattleManager.elite_victory.connect(_on_elite_victory)
 			print("[Field] BattleManager.elite_victory 연결됨")
+		if not BattleManager.boss_victory.is_connected(_on_boss_victory):
+			BattleManager.boss_victory.connect(_on_boss_victory)
+			print("[Field] BattleManager.boss_victory 연결됨")
 	
 	hud.add_system_log("필드에 입장했다.")
 
@@ -168,12 +182,42 @@ func _spawn_party() -> void:
 
 
 func _spawn_field_enemies() -> void:
+	# 보스 필드인 경우 보스만 스폰
+	if FieldManager.is_boss_field():
+		_spawn_boss()
+		return
+	
 	var spawn_data: Array = FieldManager.spawn_field_enemies(spawnable_tiles)
 	
 	for data in spawn_data:
 		_spawn_single_enemy(data)
 	
 	print("[Field] 적 스폰: ", field_enemies.size())
+
+
+func _spawn_boss() -> void:
+	## 보스 필드에서 보스 스폰
+	var boss_id: String = FieldManager.get_boss_enemy()
+	if boss_id.is_empty():
+		push_error("[Field] 보스 ID가 없음!")
+		return
+	
+	var boss_pos: Vector2 = Vector2(350, 135)  # 필드 오른쪽에 배치
+	
+	var enemy: FieldEnemy = field_enemy_scene.instantiate() as FieldEnemy
+	add_child(enemy)
+	
+	enemy.setup(boss_id, "grass", boss_pos, false)  # 보스는 elite가 아닌 boss 타입
+	enemy.is_boss = true  # 보스 플래그
+	enemy.player_contacted.connect(_on_field_enemy_contacted)
+	field_enemies.append(enemy)
+	
+	print("[Field] 🔥 보스 스폰: ", boss_id)
+	
+	if hud:
+		var boss_data: Dictionary = DataManager.get_enemy(boss_id)
+		var boss_name: String = str(boss_data.get("name", boss_id))
+		hud.add_system_log("⚠ %s이(가) 앞을 막아서고 있다!" % boss_name)
 
 
 func _spawn_single_enemy(data: Dictionary, force_elite: bool = false) -> void:
@@ -197,6 +241,11 @@ func _spawn_single_enemy(data: Dictionary, force_elite: bool = false) -> void:
 
 
 func _setup_respawn_timer() -> void:
+	# 보스 필드에서는 리스폰 안 함
+	if FieldManager.is_boss_field():
+		print("[Field] 보스 필드 - 리스폰 비활성화")
+		return
+	
 	respawn_timer = Timer.new()
 	respawn_timer.wait_time = RESPAWN_INTERVAL
 	respawn_timer.one_shot = false
@@ -287,8 +336,39 @@ func _collect_spawnable_tiles() -> Array:
 
 
 func _setup_exit() -> void:
+	print("[Field] _setup_exit 호출")
+	print("[Field] exit_area: ", exit_area)
+	print("[Field] town_area: ", town_area)
+	
+	# exit_area가 null이면 직접 찾기
+	if not exit_area:
+		exit_area = get_node_or_null("ExitArea")
+		print("[Field] exit_area 수동 탐색: ", exit_area)
+	
 	if exit_area:
-		exit_area.body_entered.connect(_on_exit_body_entered)
+		if not exit_area.body_entered.is_connected(_on_exit_body_entered):
+			exit_area.body_entered.connect(_on_exit_body_entered)
+			print("[Field] ✅ exit_area 시그널 연결됨")
+	else:
+		print("[Field] ❌ WARNING: exit_area가 null!")
+	
+	# town_area가 null이면 직접 찾기
+	if not town_area:
+		town_area = get_node_or_null("TownArea")
+		print("[Field] town_area 수동 탐색: ", town_area)
+	
+	if town_area:
+		if not town_area.body_entered.is_connected(_on_town_body_entered):
+			town_area.body_entered.connect(_on_town_body_entered)
+			print("[Field] ✅ town_area 시그널 연결됨")
+		# 결계 시스템 초기화
+		_setup_town_barrier()
+	else:
+		# 보스 필드는 town_area가 없을 수 있음
+		if not FieldManager.is_boss_field():
+			print("[Field] ⚠ WARNING: town_area가 null! (보스필드 아님)")
+		else:
+			print("[Field] 보스 필드 - town_area 없음 (정상)")
 	
 	# 위치 저장 타이머 (3초마다)
 	var save_timer := Timer.new()
@@ -297,6 +377,222 @@ func _setup_exit() -> void:
 	save_timer.timeout.connect(_save_field_position)
 	add_child(save_timer)
 	save_timer.start()
+
+
+#=============================================================================
+# 🏠 마을 결계 시스템
+#=============================================================================
+func _setup_town_barrier() -> void:
+	## 마을 결계 초기화 - 전투 시작/종료에 따라 활성화/비활성화
+	if not town_area:
+		return
+	
+	# 결계 충돌체 생성 (StaticBody2D)
+	town_barrier = StaticBody2D.new()
+	town_barrier.name = "TownBarrier"
+	town_barrier.collision_layer = 4  # 벽 레이어
+	town_barrier.collision_mask = 0
+	town_area.add_child(town_barrier)
+	
+	# 충돌 shape 복사
+	var barrier_shape := CollisionShape2D.new()
+	var rect_shape := RectangleShape2D.new()
+	rect_shape.size = Vector2(60, 60)  # 마을 영역보다 약간 크게
+	barrier_shape.shape = rect_shape
+	town_barrier.add_child(barrier_shape)
+	
+	# 결계 시각 효과 (반투명 보라색 사각형)
+	town_barrier_visual = ColorRect.new()
+	town_barrier_visual.size = Vector2(64, 64)
+	town_barrier_visual.position = Vector2(-32, -32)
+	town_barrier_visual.color = Color(0.6, 0.3, 0.8, 0.5)  # 보라색 반투명
+	town_barrier.add_child(town_barrier_visual)
+	
+	# 결계 테두리 효과
+	var border := ColorRect.new()
+	border.size = Vector2(68, 68)
+	border.position = Vector2(-34, -34)
+	border.color = Color(0.8, 0.4, 1.0, 0.3)
+	town_barrier.add_child(border)
+	border.z_index = -1
+	
+	# 말풍선 생성
+	_create_speech_bubble()
+	
+	# 결계 충돌 감지용 Area2D
+	var barrier_area := Area2D.new()
+	barrier_area.collision_layer = 0
+	barrier_area.collision_mask = 2  # 플레이어 감지
+	barrier_area.monitoring = true
+	town_barrier.add_child(barrier_area)
+	
+	var area_shape := CollisionShape2D.new()
+	var area_rect := RectangleShape2D.new()
+	area_rect.size = Vector2(70, 70)
+	area_shape.shape = area_rect
+	barrier_area.add_child(area_shape)
+	barrier_area.body_entered.connect(_on_barrier_touched)
+	
+	# BattleManager 시그널 연결
+	if BattleManager:
+		BattleManager.battle_started.connect(_on_battle_started_barrier)
+		BattleManager.all_battles_ended.connect(_on_all_battles_ended_barrier)
+	
+	# 초기 상태: 전투 없으면 결계 비활성화
+	if BattleManager and BattleManager.get_active_battle_count() == 0:
+		_deactivate_barrier()
+	else:
+		_activate_barrier()
+	
+	print("[Field] 마을 결계 시스템 초기화 완료")
+
+
+func _create_speech_bubble() -> void:
+	## 말풍선 UI 생성
+	town_speech_bubble = Control.new()
+	town_speech_bubble.z_index = 100
+	town_area.add_child(town_speech_bubble)
+	
+	# 말풍선 배경
+	var bubble_bg := NinePatchRect.new()
+	bubble_bg.size = Vector2(180, 60)
+	bubble_bg.position = Vector2(-90, -90)
+	
+	# NinePatchRect 대신 Panel 사용 (더 간단)
+	var panel := PanelContainer.new()
+	panel.size = Vector2(180, 70)
+	panel.position = Vector2(-90, -100)
+	town_speech_bubble.add_child(panel)
+	
+	# 스타일 설정
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.1, 0.15, 0.95)
+	style.border_color = Color(0.6, 0.4, 0.8, 1.0)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", style)
+	
+	# 말풍선 텍스트
+	var label := Label.new()
+	label.text = "몬스터를 데려올 셈인가?\n먼저 처치하고 오게나."
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_color_override("font_color", Color(0.9, 0.8, 1.0))
+	label.add_theme_font_size_override("font_size", 11)
+	panel.add_child(label)
+	
+	# 말풍선 꼬리 (삼각형)
+	var tail := Polygon2D.new()
+	tail.polygon = PackedVector2Array([
+		Vector2(-8, 0),
+		Vector2(8, 0),
+		Vector2(0, 12)
+	])
+	tail.position = Vector2(0, -30)
+	tail.color = Color(0.1, 0.1, 0.15, 0.95)
+	town_speech_bubble.add_child(tail)
+	
+	# 초기에는 숨김
+	town_speech_bubble.visible = false
+
+
+func _on_barrier_touched(body: Node2D) -> void:
+	## 결계에 부딪혔을 때
+	if not body.is_in_group("party_leader"):
+		return
+	
+	if not town_barrier or not town_barrier.visible:
+		return
+	
+	# 말풍선 표시
+	_show_speech_bubble()
+
+
+func _show_speech_bubble() -> void:
+	## 말풍선 표시 (2초 후 자동 숨김)
+	if not town_speech_bubble:
+		return
+	
+	town_speech_bubble.visible = true
+	
+	# 이전 타이머 정리
+	if speech_bubble_timer and is_instance_valid(speech_bubble_timer):
+		speech_bubble_timer.queue_free()
+	
+	# 새 타이머
+	speech_bubble_timer = Timer.new()
+	speech_bubble_timer.wait_time = 2.5
+	speech_bubble_timer.one_shot = true
+	speech_bubble_timer.timeout.connect(_hide_speech_bubble)
+	add_child(speech_bubble_timer)
+	speech_bubble_timer.start()
+
+
+func _hide_speech_bubble() -> void:
+	if town_speech_bubble:
+		town_speech_bubble.visible = false
+
+
+func _activate_barrier() -> void:
+	## 결계 활성화 (전투 시작 시)
+	if not town_barrier:
+		return
+	
+	town_barrier.visible = true
+	town_barrier.process_mode = Node.PROCESS_MODE_INHERIT
+	
+	# 등장 애니메이션
+	if town_barrier_visual:
+		town_barrier_visual.modulate.a = 0
+		if barrier_tween and barrier_tween.is_valid():
+			barrier_tween.kill()
+		barrier_tween = create_tween()
+		barrier_tween.tween_property(town_barrier_visual, "modulate:a", 1.0, 0.3)
+		
+		# 펄스 애니메이션 (반복)
+		barrier_tween.tween_property(town_barrier_visual, "modulate:a", 0.6, 0.8)
+		barrier_tween.tween_property(town_barrier_visual, "modulate:a", 1.0, 0.8)
+		barrier_tween.set_loops()
+	
+	print("[Field] 🛡️ 마을 결계 활성화!")
+
+
+func _deactivate_barrier() -> void:
+	## 결계 비활성화 (전투 종료 시)
+	if not town_barrier:
+		return
+	
+	# 말풍선 숨기기
+	_hide_speech_bubble()
+	
+	# 사라지는 애니메이션
+	if barrier_tween and barrier_tween.is_valid():
+		barrier_tween.kill()
+	
+	if town_barrier_visual:
+		barrier_tween = create_tween()
+		barrier_tween.tween_property(town_barrier_visual, "modulate:a", 0.0, 0.5)
+		barrier_tween.tween_callback(_finish_deactivate_barrier)
+	else:
+		_finish_deactivate_barrier()
+	
+	print("[Field] ✨ 마을 결계 해제!")
+
+
+func _finish_deactivate_barrier() -> void:
+	if town_barrier:
+		town_barrier.visible = false
+		town_barrier.process_mode = Node.PROCESS_MODE_DISABLED
+
+
+func _on_battle_started_barrier(_battle_id: int) -> void:
+	## 전투 시작 시 결계 활성화
+	_activate_barrier()
+
+
+func _on_all_battles_ended_barrier() -> void:
+	## 모든 전투 종료 시 결계 해제
+	_deactivate_barrier()
 
 
 func _save_field_position() -> void:
@@ -361,8 +657,15 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 
 
 func _on_exit_body_entered(body: Node2D) -> void:
+	print("[Field] _on_exit_body_entered 호출! body: ", body.name)
+	
 	if not body.is_in_group("party_leader"):
+		print("[Field] party_leader 아님, 무시")
 		return
+	
+	print("[Field] 전투 수: ", BattleManager.get_active_battle_count() if BattleManager else "BM없음")
+	print("[Field] 보스필드: ", FieldManager.is_boss_field())
+	print("[Field] 필드적 수: ", field_enemies.size())
 	
 	if BattleManager and BattleManager.get_active_battle_count() > 0:
 		if hud:
@@ -375,7 +678,7 @@ func _on_exit_body_entered(body: Node2D) -> void:
 		return
 	
 	var next: String = FieldManager.get_next_destination()
-	print("[Field] 출구! 다음: ", next)
+	print("[Field] 출구! 다음 목적지: ", next)
 	
 	if hud:
 		hud.add_system_log("다음 구역으로 이동한다...")
@@ -384,6 +687,35 @@ func _on_exit_body_entered(body: Node2D) -> void:
 	
 	if GameManager:
 		GameManager.go_to_next_from_field()
+
+
+func _on_town_body_entered(body: Node2D) -> void:
+	## 마을 타일 진입 시 호출
+	print("[Field] _on_town_body_entered 호출됨! body: ", body.name)
+	
+	if not body.is_in_group("party_leader"):
+		print("[Field] party_leader 그룹이 아님, 무시")
+		return
+	
+	# 전투 중이면 결계가 물리적으로 막아줌 - 여기까지 오면 전투 없음
+	# (안전을 위한 더블 체크)
+	if BattleManager and BattleManager.get_active_battle_count() > 0:
+		print("[Field] 전투 중 - 결계가 막아야 하는데?")
+		return
+	
+	print("[Field] 🏠 마을 진입!")
+	
+	if hud:
+		hud.add_system_log("마을로 향한다...")
+	
+	town_entered.emit()
+	
+	# 마을 다녀온 후 다음 필드로 진행하도록 설정
+	# (Town.gd에서 출발 시 current_field를 사용)
+	GameManager.advance_to_next_field()
+	
+	if GameManager:
+		GameManager.go_to_town()
 
 
 func _on_menu_pressed() -> void:
@@ -572,6 +904,56 @@ func show_elite_loot() -> void:
 func _on_elite_victory(_battle_id: int) -> void:
 	print("[Field] 엘리트 전투 승리! 3지선다 표시")
 	show_elite_loot()
+
+
+func _on_boss_victory(_battle_id: int) -> void:
+	## 보스 전투 승리 시 호출
+	print("[Field] 🎉 보스 전투 승리! 다음 스테이지로 진행 가능")
+	
+	if hud:
+		hud.add_system_log("🎉 보스를 처치했다!")
+		hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
+	
+	# 리스폰 타이머 정지
+	if respawn_timer:
+		respawn_timer.stop()
+	
+	# 보스 루트 표시 (3지선다)
+	show_boss_loot()
+
+
+func show_boss_loot() -> void:
+	## 보스 전투 승리 시 레전더리 포함 3지선다 표시
+	var loot_pool: Array[String] = _generate_boss_loot_pool()
+	if loot_pool.size() >= 3 and loot_select_ui:
+		loot_select_ui.show_loot_selection(loot_pool)
+
+
+func _generate_boss_loot_pool() -> Array[String]:
+	## 보스 3지선다 - 레전더리 1개 + 매직 2개 보장
+	var pool: Array[String] = []
+	
+	var magic_items: Array[String] = DataManager.get_equipment_by_rarity("magic")
+	var legendary_items: Array[String] = DataManager.get_equipment_by_rarity("legendary")
+	
+	magic_items.shuffle()
+	legendary_items.shuffle()
+	
+	# 1. 레전더리 1개 확정
+	if not legendary_items.is_empty():
+		pool.append(legendary_items[0])
+	elif not magic_items.is_empty():
+		pool.append(magic_items[0])
+	
+	# 2. 매직 2개 추가
+	for item_id in magic_items:
+		if pool.size() >= 3:
+			break
+		if not pool.has(item_id):
+			pool.append(item_id)
+	
+	pool.shuffle()
+	return pool
 
 
 func _generate_elite_loot_pool() -> Array[String]:

@@ -6,7 +6,8 @@
     "stone": { "can_spawn": true, "walkable": true },
     "water": { "can_spawn": false, "walkable": false },
     "road": { "can_spawn": false, "walkable": true },
-    "wall": { "can_spawn": false, "walkable": false }
+    "wall": { "can_spawn": false, "walkable": false },
+    "town": { "can_spawn": false, "walkable": true, "is_exit": true, "exit_type": "town" }
   },
   
   "battle_config": {
@@ -55,7 +56,7 @@
           "elite_chance": 0.35,
           "chest_count": { "min": 1, "max": 2 },
           "is_boss_field": true,
-          "next": "stage_2"
+          "next": "ending"
         }
       ]
     },

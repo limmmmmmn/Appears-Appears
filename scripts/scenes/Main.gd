@@ -108,8 +108,8 @@ func _start_new_game() -> void:
 	# 선술집 초기화 (영웅 5명 배치)
 	TownManager.init_new_game()
 	
-	# 마을로 이동
-	_go_to_town()
+	# 필드에서 시작! (Stage 1-1)
+	GameManager.go_to_field()
 	
 	# 새 게임 시작 후 자동 저장
 	SaveManager.auto_save("새 게임 시작")

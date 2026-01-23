@@ -107,16 +107,21 @@ func go_to_field(stage_id: String = "", field_id: String = "") -> void:
 	if stage_id.is_empty():
 		stage_id = "stage_" + str(current_stage)
 	if field_id.is_empty():
-		field_id = FieldManager.get_first_field_id(stage_id)
+		# 현재 필드 ID 사용 (마을에서 출발 시)
+		field_id = "field_%d_%d" % [current_stage, current_field]
 	
+	# 필드 존재 확인
 	FieldManager.set_current_stage(stage_id)
-	FieldManager.set_current_field(field_id)
+	if not FieldManager.set_current_field(field_id):
+		# 필드가 없으면 첫 번째 필드로
+		field_id = FieldManager.get_first_field_id(stage_id)
+		FieldManager.set_current_field(field_id)
 	
 	var scene_path: String = FieldManager.get_current_field_scene()
 	if scene_path.is_empty():
 		scene_path = "res://scenes/field/Field_1_1.tscn"
 	
-	print("[GameManager] 필드 이동: ", scene_path)
+	print("[GameManager] 필드 이동: Stage %d-%d -> %s" % [current_stage, current_field, scene_path])
 	change_state(GameState.FIELD)
 	
 	# 자동 저장
@@ -141,22 +146,34 @@ func go_to_town() -> void:
 func go_to_next_from_field() -> void:
 	## 필드 출구 도달 시 호출
 	var next: String = FieldManager.get_next_destination()
+	print("[GameManager] go_to_next_from_field() 호출됨")
+	print("[GameManager] next destination: '", next, "'")
 	
 	if next == "town":
+		print("[GameManager] -> 마을로")
 		go_to_town()
 	elif next.begins_with("stage_"):
+		print("[GameManager] -> 다음 스테이지: ", next)
 		# 다음 스테이지
 		current_stage += 1
 		current_field = 1
 		go_to_field(next)
 	elif next == "ending":
-		print("[GameManager] 게임 클리어!")
+		print("[GameManager] 🎉 게임 클리어! 엔딩으로!")
 		game_clear.emit()
-		# TODO: 엔딩 씬
+		go_to_ending()
 	else:
+		print("[GameManager] -> 다음 필드")
 		# 같은 스테이지 다음 필드
 		current_field += 1
 		var new_stage_id: String = "stage_" + str(current_stage)
 		var new_field_id: String = "field_%d_%d" % [current_stage, current_field]
 		go_to_field(new_stage_id, new_field_id)
+
+
+func go_to_ending() -> void:
+	## 엔딩 화면으로 이동
+	print("[GameManager] 엔딩 화면으로 이동")
+	change_state(GameState.GAME_OVER)  # 게임 종료 상태
+	get_tree().change_scene_to_file("res://scenes/main/Ending.tscn")
 #endregion
