@@ -201,8 +201,14 @@ func _on_inv_drag(item_id: String, _btn: Button) -> void:
 
 
 func _on_inv_right_click(item_id: String, pos: Vector2) -> void:
-	if not DataManager.get_equipment(item_id).is_empty():
-		_show_context_menu(item_id, pos)
+	# 장비 또는 소비 아이템 모두 컨텍스트 메뉴 표시
+	var equip_data = DataManager.get_equipment(item_id)
+	var item_data = DataManager.get_item(item_id)
+	
+	if not equip_data.is_empty():
+		_show_context_menu(item_id, pos, "equip")
+	elif not item_data.is_empty() and item_data.get("type", "") == "consumable":
+		_show_context_menu(item_id, pos, "consumable")
 
 
 # === 장비 슬롯 이벤트 ===
@@ -235,27 +241,68 @@ func _on_skill_toggled(skill_id: String, enabled: bool, hero_idx: int) -> void:
 
 
 # === 컨텍스트 메뉴 ===
-func _show_context_menu(item_id: String, pos: Vector2) -> void:
+var context_menu_type: String = ""  # "equip" or "consumable"
+
+func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equip") -> void:
 	_hide_context_menu()
 	_hide_tooltip()
 	context_menu_item_id = item_id
+	context_menu_type = item_type
 	
-	var data = DataManager.get_equipment(item_id)
+	var item_name: String = ""
+	var usable_in_field: bool = true
+	
+	if item_type == "equip":
+		var data = DataManager.get_equipment(item_id)
+		item_name = str(data.get("name", item_id))
+	else:
+		var data = DataManager.get_item(item_id)
+		item_name = str(data.get("name", item_id))
+		usable_in_field = data.get("usable_in_field", false)
+	
 	context_menu = PopupMenu.new()
 	context_menu.add_theme_font_size_override("font_size", 10)
-	context_menu.add_item("[ %s ]" % str(data.get("name", item_id)), -1)
+	context_menu.add_item("[ %s ]" % item_name, -1)
 	context_menu.set_item_disabled(0, true)
 	context_menu.add_separator()
 	
 	var party = PartyManager.get_party() if PartyManager else []
 	for i in range(party.size()):
-		context_menu.add_item(party[i].hero_name, i)
-		if party[i].is_dead: context_menu.set_item_disabled(context_menu.item_count - 1, true)
+		var hero_name: String = party[i].hero_name
+		var is_disabled: bool = false
+		
+		if item_type == "consumable":
+			# 소비 아이템 - 필드 사용 가능 여부와 대상 상태 체크
+			var data = DataManager.get_item(item_id)
+			var effect = data.get("effect", {})
+			var effect_type = str(effect.get("type", ""))
+			
+			if not usable_in_field:
+				is_disabled = true
+			elif effect_type == "revive":
+				# 부활은 사망한 대상만
+				is_disabled = not party[i].is_dead
+				if party[i].is_dead:
+					hero_name += " (사망)"
+			else:
+				# 일반 회복/씨앗은 살아있는 대상만
+				is_disabled = party[i].is_dead
+				if party[i].is_dead:
+					hero_name += " (사망)"
+		else:
+			# 장비 - 사망한 대상 불가
+			if party[i].is_dead:
+				is_disabled = true
+				hero_name += " (사망)"
+		
+		context_menu.add_item(hero_name, i)
+		if is_disabled:
+			context_menu.set_item_disabled(context_menu.item_count - 1, true)
 	
 	context_menu.add_separator()
 	context_menu.add_item("취소", -2)
 	context_menu.id_pressed.connect(_on_ctx_selected)
-	context_menu.popup_hide.connect(_hide_context_menu)
+	# popup_hide 연결 제거 - id_pressed보다 먼저 호출되어 데이터가 사라지는 문제
 	
 	var ctrl = get_node_or_null("Control")
 	(ctrl if ctrl else self).add_child(context_menu)
@@ -264,6 +311,9 @@ func _show_context_menu(item_id: String, pos: Vector2) -> void:
 
 
 func _on_ctx_selected(id: int) -> void:
+	var saved_item_id: String = context_menu_item_id
+	var saved_type: String = context_menu_type
+	
 	if id < 0:
 		_hide_context_menu()
 		return
@@ -274,15 +324,137 @@ func _on_ctx_selected(id: int) -> void:
 		return
 	
 	var hero = party[id]
-	var data = DataManager.get_equipment(context_menu_item_id)
-	var slot = str(data.get("slot", "main_hand"))
-	if slot == "accessory":
-		slot = "acc1" if hero.equipment.get("acc1", "").is_empty() else "acc2"
 	
-	if InventoryManager.equip_item(hero, context_menu_item_id, slot):
-		add_system_log("%s: %s 장착!" % [hero.hero_name, str(data.get("name", context_menu_item_id))])
-		update_party_display()
+	if saved_type == "consumable":
+		_use_consumable_on_hero(saved_item_id, hero)
+	else:
+		var data = DataManager.get_equipment(saved_item_id)
+		if data.is_empty():
+			_hide_context_menu()
+			return
+		
+		var slot = str(data.get("slot", "main_hand"))
+		if slot == "accessory":
+			slot = "acc1" if hero.equipment.get("acc1", "").is_empty() else "acc2"
+		
+		if InventoryManager.equip_item(hero, saved_item_id, slot):
+			add_system_log("%s: %s 장착!" % [hero.hero_name, str(data.get("name", saved_item_id))])
+			update_party_display()
+			if inventory_grid:
+				inventory_grid.refresh()
+	
 	_hide_context_menu()
+
+
+func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
+	## 소비 아이템을 영웅에게 사용
+	print("[FieldHUD] _use_consumable_on_hero 호출, item_id:", item_id, ", hero:", hero.hero_name)
+	
+	var item_data: Dictionary = DataManager.get_item(item_id)
+	print("[FieldHUD] item_data:", item_data)
+	if item_data.is_empty():
+		print("[FieldHUD] item_data가 비어있음!")
+		return
+	
+	var item_name: String = str(item_data.get("name", item_id))
+	var effect: Dictionary = item_data.get("effect", {})
+	var effect_type: String = str(effect.get("type", ""))
+	var usable_in_field: bool = item_data.get("usable_in_field", false)
+	
+	if not usable_in_field:
+		add_system_log("%s: 전투 중에만 사용 가능" % item_name)
+		return
+	
+	var success: bool = false
+	
+	match effect_type:
+		"heal_percent":
+			if hero.is_dead:
+				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
+				return
+			var heal_percent: float = float(effect.get("value", 0.3))
+			var heal_amount: int = int(hero.get_max_hp() * heal_percent)
+			var actual_heal: int = hero.heal(heal_amount)
+			if actual_heal > 0:
+				add_system_log("%s: %s HP +%d" % [hero.hero_name, item_name, actual_heal])
+				success = true
+			else:
+				add_system_log("%s: HP가 이미 가득 참" % hero.hero_name)
+		
+		"restore_mp_percent":
+			if hero.is_dead:
+				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
+				return
+			var mp_percent: float = float(effect.get("value", 0.5))
+			var mp_amount: int = int(hero.get_max_mp() * mp_percent)
+			var actual_mp: int = hero.restore_mp(mp_amount)
+			if actual_mp > 0:
+				add_system_log("%s: %s MP +%d" % [hero.hero_name, item_name, actual_mp])
+				success = true
+			else:
+				add_system_log("%s: MP가 이미 가득 참" % hero.hero_name)
+		
+		"full_restore":
+			if hero.is_dead:
+				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
+				return
+			hero.heal(hero.get_max_hp())
+			hero.restore_mp(hero.get_max_mp())
+			add_system_log("%s: %s 사용 - 완전 회복!" % [hero.hero_name, item_name])
+			success = true
+		
+		"revive":
+			if not hero.is_dead:
+				add_system_log("%s: 살아있는 대상에게 사용 불가" % item_name)
+				return
+			var hp_percent: float = float(effect.get("hp_percent", 0.3))
+			hero.revive(hp_percent)
+			add_system_log("%s: %s 부활!" % [hero.hero_name, item_name])
+			success = true
+		
+		"permanent_stat":
+			if hero.is_dead:
+				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
+				return
+			var stat: String = str(effect.get("stat", ""))
+			var value: int = int(effect.get("value", 1))
+			hero.apply_seed_bonus(stat, value)
+			add_system_log("%s: %s 사용 - %s +%d!" % [hero.hero_name, item_name, stat.to_upper(), value])
+			success = true
+		
+		"full_restore_party":
+			var all_party = PartyManager.get_party() if PartyManager else []
+			for member in all_party:
+				if not member.is_dead:
+					member.heal(member.get_max_hp())
+					member.restore_mp(member.get_max_mp())
+			add_system_log("%s 사용 - 파티 전원 완전 회복!" % item_name)
+			success = true
+		
+		"revive_all":
+			var all_party = PartyManager.get_party() if PartyManager else []
+			var hp_percent: float = float(effect.get("hp_percent", 0.5))
+			var revived_count: int = 0
+			for member in all_party:
+				if member.is_dead:
+					member.revive(hp_percent)
+					revived_count += 1
+			if revived_count > 0:
+				add_system_log("%s 사용 - %d명 부활!" % [item_name, revived_count])
+				success = true
+			else:
+				add_system_log("부활시킬 대상이 없음")
+		
+		_:
+			add_system_log("%s: 알 수 없는 효과" % item_name)
+	
+	if success:
+		print("[FieldHUD] 아이템 사용 성공! 제거 시도:", item_id)
+		var removed = InventoryManager.remove_item(item_id, 1)
+		print("[FieldHUD] remove_item 결과:", removed)
+		update_party_display()
+		if inventory_grid:
+			inventory_grid.refresh()
 
 
 func _hide_context_menu() -> void:
@@ -290,12 +462,19 @@ func _hide_context_menu() -> void:
 		context_menu.queue_free()
 		context_menu = null
 	context_menu_item_id = ""
+	context_menu_type = ""
 
 
 # === 툴팁 ===
 func _show_tooltip(item_id: String) -> void:
 	_hide_tooltip()
-	if DataManager.get_equipment(item_id).is_empty(): return
+	
+	# 장비 또는 소비 아이템 모두 툴팁 표시
+	var equip_data = DataManager.get_equipment(item_id)
+	var item_data = DataManager.get_item(item_id)
+	
+	if equip_data.is_empty() and (item_data.is_empty() or item_data.get("type", "") != "consumable"):
+		return
 	
 	tooltip = EquipmentTooltip.new()
 	var ctrl = get_node_or_null("Control")

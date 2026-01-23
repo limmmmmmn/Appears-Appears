@@ -455,30 +455,43 @@ func _on_elite_victory(_battle_id: int) -> void:
 
 
 func _generate_elite_loot_pool() -> Array[String]:
-	## 매직 이상 등급 아이템 3개 생성
+	## 3지선다 아이템 풀 생성 - 매직 이상 아이템 최소 1개 보장
 	var pool: Array[String] = []
-	var magic_items: Array[String] = [
-		"sword_magic", "axe_magic", "staff_magic",
-		"leather_armor_magic", "heavy_armor_magic", "robe_magic",
-		"shield_magic", "iron_helm_magic"
-	]
-	var legendary_items: Array[String] = [
-		"excalibur", "crown_legendary"
-	]
+	
+	# DataManager에서 실제 존재하는 장비 가져오기
+	var common_items: Array[String] = DataManager.get_equipment_by_rarity("common")
+	var magic_items: Array[String] = DataManager.get_equipment_by_rarity("magic")
+	var legendary_items: Array[String] = DataManager.get_equipment_by_rarity("legendary")
 	
 	# 셔플
+	common_items.shuffle()
 	magic_items.shuffle()
 	legendary_items.shuffle()
 	
-	# 20% 확률로 레전더리 포함
+	# 1. 먼저 매직 이상 아이템 최소 1개 확정
+	# 20% 확률로 레전더리, 아니면 매직
 	if randf() < 0.2 and not legendary_items.is_empty():
 		pool.append(legendary_items[0])
+	elif not magic_items.is_empty():
+		pool.append(magic_items[0])
+	elif not legendary_items.is_empty():
+		# 매직이 없으면 레전더리라도
+		pool.append(legendary_items[0])
 	
-	# 나머지는 매직 아이템으로 채움
-	for item_id in magic_items:
+	# 2. 나머지 2개는 전체 장비에서 랜덤 (common 포함)
+	var all_items: Array[String] = []
+	all_items.append_array(common_items)
+	all_items.append_array(magic_items)
+	all_items.append_array(legendary_items)
+	all_items.shuffle()
+	
+	for item_id in all_items:
 		if pool.size() >= 3:
 			break
 		if not pool.has(item_id):
 			pool.append(item_id)
+	
+	# 최종 셔플 (매직이 항상 첫 번째에 안 오도록)
+	pool.shuffle()
 	
 	return pool

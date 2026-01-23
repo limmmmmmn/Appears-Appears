@@ -18,20 +18,35 @@ var pending_drag_item: String = ""
 const DRAG_THRESHOLD: float = 5.0
 const MIN_SLOTS: int = 8
 
-const ITEM_ICONS: Dictionary = {
-	"weapon": "⚔️",
+const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️",
-	"shield": "🛡️",
 	"off_hand": "🛡️",
 	"head": "👑",
-	"helmet": "👑",
 	"body": "👕",
-	"armor": "👕",
-	"accessory": "💍",
-	"acc1": "💍",
-	"acc2": "💎",
+	"accessory": "💍"
+}
+
+const TYPE_ICONS: Dictionary = {
+	# 무기류
+	"sword": "🗡️",
+	"dagger": "🔪",
+	"axe": "🪓",
+	"staff": "🪄",
+	"bow": "🏹",
+	# 방어구류
+	"shield": "🛡️",
+	"helmet": "⛑️",
+	"light_armor": "👘",
+	"medium_armor": "🦺",
+	"heavy_armor": "🛡️",
+	"robe": "👗",
+	# 악세서리
+	"ring": "💍",
+	"amulet": "📿",
+	# 소비 아이템
 	"potion": "🧪",
-	"seed": "🌱"
+	"seed": "🌱",
+	"consumable": "📦"
 }
 
 const RARITY_COLORS: Dictionary = {
@@ -91,20 +106,33 @@ func refresh() -> void:
 
 func _create_item_button(item_info: Dictionary) -> Button:
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(18, 18)
+	btn.custom_minimum_size = Vector2(22, 22)
 	
 	var item_id: String = str(item_info.get("id", ""))
+	var quantity: int = int(item_info.get("quantity", 1))
 	var data: Dictionary = item_info.get("data", {})
 	var rarity: String = str(data.get("rarity", "common"))
-	var item_type: String = str(data.get("type", str(data.get("slot", ""))))
+	var item_type: String = str(data.get("type", ""))
+	var item_slot: String = str(data.get("slot", ""))
 	
-	btn.text = ITEM_ICONS.get(item_type, "📦")
+	# 아이콘 결정: type > slot > 기본
+	var icon: String = TYPE_ICONS.get(item_type, "")
+	if icon.is_empty():
+		icon = SLOT_ICONS.get(item_slot, "📦")
+	
+	# 수량이 2개 이상이면 숫자 표시
+	if quantity > 1:
+		btn.text = icon + str(quantity)
+	else:
+		btn.text = icon
+	
 	btn.add_theme_font_size_override("font_size", 10)
 	btn.modulate = RARITY_COLORS.get(rarity, Color.WHITE)
 	
 	btn.set_meta("item_id", item_id)
 	btn.set_meta("item_type", item_type)
 	btn.set_meta("rarity", rarity)
+	btn.set_meta("quantity", quantity)
 	
 	btn.gui_input.connect(_on_button_gui_input.bind(btn, item_id))
 	btn.mouse_entered.connect(_on_item_hover.bind(item_id))
@@ -158,7 +186,11 @@ func _on_item_hover_end() -> void:
 func show_tooltip(item_id: String) -> void:
 	hide_tooltip()
 	
+	# 장비 또는 소비 아이템 데이터 확인
 	var data: Dictionary = DataManager.get_equipment(item_id)
+	if data.is_empty():
+		data = DataManager.get_item(item_id)
+	
 	if data.is_empty():
 		return
 	

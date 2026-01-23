@@ -35,3 +35,5 @@ res://scripts/ui/shop/ShopComparePanel.gd
 res://scripts/ui/shop/ShopItemList.gd
 res://scripts/ui/shop/ShopPanel.gd
 res://scripts/ui/town/Town.gd
+res://scripts/ui/field/LootSelectUI.gd
+res://scenes/battle/BattleWindow.tscn

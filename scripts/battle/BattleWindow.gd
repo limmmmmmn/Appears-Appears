@@ -36,7 +36,7 @@ var close_button: Button
 
 # === 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
-const ACTION_DELAY: float = 0.35
+const ACTION_DELAY: float = 0.5  # 0.35 → 0.5 (모션 보이게)
 
 var _ui_built: bool = false
 
@@ -361,6 +361,9 @@ func _execute_hero_action(hero: Hero, target: BattleEnemy) -> void:
 		target.take_damage(damage)
 		print("[BattleWindow] take_damage 완료")
 		
+		# 데미지 숫자 표시
+		target.show_damage_number(damage, is_crit)
+		
 		if is_crit:
 			_send_log("%s → %s에게 %d! (크리티컬)" % [hero.hero_name, target.enemy_name, damage], Color.ORANGE)
 			print("[BattleWindow] play_hit_effect(crit) 호출")
@@ -380,6 +383,10 @@ func _execute_hero_action(hero: Hero, target: BattleEnemy) -> void:
 
 func _execute_enemy_action(enemy: BattleEnemy, target: Hero) -> void:
 	print("[BattleWindow] _execute_enemy_action 시작")
+	
+	# 적 공격 모션
+	enemy.play_attack_effect()
+	
 	var atk := enemy.get_atk()
 	print("[BattleWindow] atk:", atk)
 	var is_crit := randf() * 100 < enemy.get_crit()
@@ -467,8 +474,19 @@ func _end_battle_victory() -> void:
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
 	
 	for item_id in drop_items:
-		var item_data: Dictionary = DataManager.get_item(item_id)
-		_send_log("%s 획득!" % str(item_data.get("name", item_id)), Color.YELLOW)
+		# 장비인지 소비 아이템인지 구분
+		var equip_data: Dictionary = DataManager.get_equipment(item_id)
+		if not equip_data.is_empty():
+			var rarity: String = str(equip_data.get("rarity", "common"))
+			var item_name: String = str(equip_data.get("name", item_id))
+			var color: Color = Color.WHITE
+			match rarity:
+				"magic": color = Color(0.4, 0.6, 1.0)
+				"legendary": color = Color(1.0, 0.7, 0.2)
+			_send_log("⚔️ %s 획득!" % item_name, color)
+		else:
+			var item_data: Dictionary = DataManager.get_item(item_id)
+			_send_log("%s 획득!" % str(item_data.get("name", item_id)), Color.YELLOW)
 	
 	# 보상 지급
 	PartyManager.distribute_exp(total_exp)

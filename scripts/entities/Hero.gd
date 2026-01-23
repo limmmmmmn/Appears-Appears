@@ -192,6 +192,25 @@ func revive(hp_percent: float = 0.3) -> void:
 	current_hp = int(get_max_hp() * hp_percent)
 
 
+func restore_mp(amount: int) -> int:
+	## MP 회복 - 회복된 양 반환
+	var actual := mini(amount, get_max_mp() - current_mp)
+	current_mp += actual
+	return actual
+
+
+func apply_seed_bonus(stat: String, value: int) -> void:
+	## 씨앗으로 영구 스탯 증가
+	if seed_bonus.has(stat):
+		seed_bonus[stat] += value
+	
+	# HP/MP 증가 시 현재 값도 증가
+	if stat == "hp":
+		current_hp = mini(current_hp + value, get_max_hp())
+	elif stat == "mp":
+		current_mp = mini(current_mp + value, get_max_mp())
+
+
 func full_restore() -> void:
 	current_hp = get_max_hp()
 	current_mp = get_max_mp()

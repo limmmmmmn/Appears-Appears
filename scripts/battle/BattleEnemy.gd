@@ -210,6 +210,7 @@ func roll_drops() -> Array:
 	var party_luk := PartyManager.get_party_average_luk()
 	var luk_multiplier := 1.0 + (party_luk / 100.0)
 	
+	# 1. 기존 드랍 테이블 판정
 	for drop in drop_table:
 		var drop_dict: Dictionary = drop as Dictionary
 		var item_id: String = str(drop_dict.get("item_id", ""))
@@ -219,47 +220,122 @@ func roll_drops() -> Array:
 		if randf() < final_chance:
 			drops.append(item_id)
 	
+	# 2. 일반몹 추가 장비 드랍 (common 등급만)
+	if enemy_type == "normal" and not is_elite_version:
+		var equip_drop_chance: float = 0.05 * luk_multiplier  # 기본 5% 확률
+		if randf() < equip_drop_chance:
+			var common_equip: String = _roll_random_common_equipment()
+			if not common_equip.is_empty():
+				drops.append(common_equip)
+	
 	return drops
+
+
+func _roll_random_common_equipment() -> String:
+	## 랜덤 커먼 장비 선택
+	var common_equipment: Array[String] = [
+		"sword_common", "dagger_common", "staff_common",
+		"shield_common", "leather_helmet", "iron_helmet",
+		"leather_armor", "chainmail", "robe_common",
+		"ring_hp"
+	]
+	
+	if common_equipment.is_empty():
+		return ""
+	
+	return common_equipment[randi() % common_equipment.size()]
 #endregion
 
 
 #region 이펙트
+var _hit_tween: Tween = null
+
+
 func play_hit_effect(is_crit: bool = false) -> void:
-	original_modulate = modulate
+	## 피격 이펙트 - 깜빡임만
+	if not sprite:
+		return
 	
-	# 깜빡임 + 흔들림
-	var tween := create_tween()
+	if _hit_tween and _hit_tween.is_valid():
+		_hit_tween.kill()
+	
+	_hit_tween = create_tween()
 	
 	if is_crit:
-		modulate = Color.ORANGE
-		tween.tween_property(self, "position:x", position.x + 8, 0.05)
-		tween.tween_property(self, "position:x", position.x - 8, 0.05)
-		tween.tween_property(self, "position:x", position.x + 4, 0.05)
-		tween.tween_property(self, "position:x", position.x, 0.05)
+		# 크리티컬: 여러번 깜빡임
+		_hit_tween.tween_property(sprite, "modulate", Color(3, 3, 3), 0.04)
+		_hit_tween.tween_property(sprite, "modulate", Color.WHITE, 0.04)
+		_hit_tween.tween_property(sprite, "modulate", Color(3, 3, 3), 0.04)
+		_hit_tween.tween_property(sprite, "modulate", Color.WHITE, 0.04)
 	else:
-		modulate = Color.RED
-		tween.tween_property(self, "position:x", position.x + 4, 0.05)
-		tween.tween_property(self, "position:x", position.x - 4, 0.05)
-		tween.tween_property(self, "position:x", position.x, 0.05)
+		# 일반: 1번 깜빡임
+		_hit_tween.tween_property(sprite, "modulate", Color(2, 2, 2), 0.05)
+		_hit_tween.tween_property(sprite, "modulate", Color.WHITE, 0.05)
+
+
+func play_attack_effect() -> void:
+	## 공격 이펙트 - 스프라이트만 앞으로
+	if not sprite:
+		return
 	
-	tween.tween_property(self, "modulate", original_modulate, 0.1)
+	var tween := create_tween()
+	tween.tween_property(sprite, "position:y", 15, 0.08)
+	tween.tween_property(sprite, "position:y", 0, 0.1)
 
 
 func play_evade_effect() -> void:
-	# 옆으로 슬쩍 이동
+	## 회피 이펙트 - 스프라이트만 옆으로
+	if not sprite:
+		return
+	
 	var tween := create_tween()
-	var orig_pos := position.x
-	tween.tween_property(self, "position:x", orig_pos + 20, 0.1)
-	tween.tween_property(self, "position:x", orig_pos, 0.15)
+	tween.tween_property(sprite, "position:x", 15, 0.08)
+	tween.tween_property(sprite, "position:x", 0, 0.12)
 
 
 func play_death_effect() -> void:
-	# 페이드아웃 + 아래로 떨어짐 (fire and forget)
+	## 사망 이펙트 - 스프라이트 페이드아웃
+	if not sprite:
+		return
+	
+	var tween := create_tween()
+	
+	# 깜빡임 3회
+	for i in range(3):
+		tween.tween_property(sprite, "modulate:a", 0.3, 0.06)
+		tween.tween_property(sprite, "modulate:a", 1.0, 0.06)
+	
+	# 페이드아웃
+	tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	tween.finished.connect(func(): visible = false)
+
+
+func show_damage_number(damage: int, is_crit: bool = false) -> void:
+	## 데미지 숫자 표시 - 스프라이트 위에 표시
+	if not sprite:
+		return
+	
+	var label := Label.new()
+	label.text = str(damage)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	
+	if is_crit:
+		label.add_theme_font_size_override("font_size", 18)
+		label.add_theme_color_override("font_color", Color.YELLOW)
+		label.text = str(damage) + "!"
+	else:
+		label.add_theme_font_size_override("font_size", 14)
+		label.add_theme_color_override("font_color", Color.WHITE)
+	
+	# 스프라이트에 추가 (레이아웃 영향 X)
+	sprite.add_child(label)
+	label.position = Vector2(10, 15)
+	
+	# 살짝 위로 올라가며 페이드아웃
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(self, "modulate:a", 0.0, 0.5)
-	tween.tween_property(self, "position:y", position.y + 30, 0.5)
+	tween.tween_property(label, "position:y", label.position.y - 15, 0.4)
+	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.15)
 	
-	# tween 완료 후 숨김 처리 (await 대신 콜백 사용)
-	tween.finished.connect(func(): visible = false)
+	tween.finished.connect(func(): label.queue_free())
 #endregion

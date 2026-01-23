@@ -114,6 +114,23 @@ func get_equipment_by_slot(slot: String) -> Array:
 			result.append(equipment[id])
 	return result
 
+func get_equipment_by_rarity(rarity: String) -> Array[String]:
+	## 특정 등급의 장비 ID 목록 반환
+	var result: Array[String] = []
+	for id in equipment:
+		if str(equipment[id].get("rarity", "")) == rarity:
+			result.append(str(id))
+	return result
+
+func get_equipment_by_rarities(rarities: Array[String]) -> Array[String]:
+	## 여러 등급의 장비 ID 목록 반환 (magic, legendary 등)
+	var result: Array[String] = []
+	for id in equipment:
+		var item_rarity: String = str(equipment[id].get("rarity", ""))
+		if item_rarity in rarities:
+			result.append(str(id))
+	return result
+
 
 # 아이템
 func get_item(item_id: String) -> Dictionary:
