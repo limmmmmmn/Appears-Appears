@@ -19,7 +19,7 @@ var is_paused: bool = false
 
 
 func _ready() -> void:
-	print("[GameManager] 초기화 완료")
+	pass
 
 
 func change_state(new_state: GameState) -> void:
@@ -31,6 +31,12 @@ func start_new_game() -> void:
 	current_field = 1
 	gold = 2000
 	obtained_legendaries.clear()
+	
+	# 파티 및 인벤토리 초기화
+	PartyManager.party.clear()
+	PartyManager.inventory.clear()
+	InventoryManager.clear()
+	
 	change_state(GameState.FIELD)
 	stage_changed.emit(current_stage, current_field)
 	gold_changed.emit(gold)
@@ -121,7 +127,6 @@ func go_to_field(stage_id: String = "", field_id: String = "") -> void:
 	if scene_path.is_empty():
 		scene_path = "res://scenes/field/Field_1_1.tscn"
 	
-	print("[GameManager] 필드 이동: Stage %d-%d -> %s" % [current_stage, current_field, scene_path])
 	change_state(GameState.FIELD)
 	
 	# 자동 저장
@@ -133,7 +138,6 @@ func go_to_field(stage_id: String = "", field_id: String = "") -> void:
 
 func go_to_town() -> void:
 	## 마을로 이동
-	print("[GameManager] 마을 이동")
 	change_state(GameState.TOWN)
 	
 	# 자동 저장
@@ -146,24 +150,18 @@ func go_to_town() -> void:
 func go_to_next_from_field() -> void:
 	## 필드 출구 도달 시 호출
 	var next: String = FieldManager.get_next_destination()
-	print("[GameManager] go_to_next_from_field() 호출됨")
-	print("[GameManager] next destination: '", next, "'")
 	
 	if next == "town":
-		print("[GameManager] -> 마을로")
 		go_to_town()
 	elif next.begins_with("stage_"):
-		print("[GameManager] -> 다음 스테이지: ", next)
 		# 다음 스테이지
 		current_stage += 1
 		current_field = 1
 		go_to_field(next)
 	elif next == "ending":
-		print("[GameManager] 🎉 게임 클리어! 엔딩으로!")
 		game_clear.emit()
 		go_to_ending()
 	else:
-		print("[GameManager] -> 다음 필드")
 		# 같은 스테이지 다음 필드
 		current_field += 1
 		var new_stage_id: String = "stage_" + str(current_stage)
@@ -173,7 +171,6 @@ func go_to_next_from_field() -> void:
 
 func go_to_ending() -> void:
 	## 엔딩 화면으로 이동
-	print("[GameManager] 엔딩 화면으로 이동")
 	change_state(GameState.GAME_OVER)  # 게임 종료 상태
 	get_tree().change_scene_to_file("res://scenes/main/Ending.tscn")
 #endregion

@@ -8,7 +8,6 @@ var current_scene: Node = null
 
 
 func _ready() -> void:
-	print("========== HyperQuest 시작 ==========")
 	_show_title()
 
 
@@ -23,16 +22,11 @@ func _show_title() -> void:
 	add_child(title)
 	current_scene = title
 	
-	print("[Main] 타이틀 화면")
 
 
 func _continue_game() -> void:
 	## 저장된 게임 불러오기
-	print("[Main] 저장 데이터 로드 중...")
-	
 	if SaveManager.load_game():
-		print("[Main] 로드 성공! 상태: ", GameManager.current_state)
-		
 		# 저장된 상태에 따라 분기
 		match GameManager.current_state:
 			GameManager.GameState.FIELD:
@@ -58,7 +52,6 @@ func _go_to_field_from_save() -> void:
 	if field_id.is_empty():
 		field_id = "field_%d_%d" % [GameManager.current_stage, GameManager.current_field]
 	
-	print("[Main] 필드 복귀: stage=%s, field=%s" % [stage_id, field_id])
 	
 	# FieldManager 설정
 	FieldManager.set_current_stage(stage_id)
@@ -66,11 +59,9 @@ func _go_to_field_from_save() -> void:
 	
 	# 필드 씬 로드
 	var scene_path: String = FieldManager.get_current_field_scene()
-	print("[Main] 씬 경로: ", scene_path)
 	
 	if scene_path.is_empty():
 		scene_path = "res://scenes/field/Field_1_1.tscn"
-		print("[Main] 기본 씬 사용: ", scene_path)
 	
 	var field_scene: PackedScene = load(scene_path) as PackedScene
 	if field_scene:
@@ -80,7 +71,6 @@ func _go_to_field_from_save() -> void:
 		
 		# 저장된 위치로 파티 이동 (Field.gd에서 처리)
 		GameManager.change_state(GameManager.GameState.FIELD)
-		print("[Main] 필드 입장 성공!")
 	else:
 		push_error("[Main] 필드 씬 로드 실패: ", scene_path)
 		_go_to_town()
@@ -128,14 +118,12 @@ func _go_to_town() -> void:
 	current_scene = town
 	
 	GameManager.change_state(GameManager.GameState.TOWN)
-	print("[Main] 마을 입장")
 
 
 func _go_to_field() -> void:
 	_clear_current_scene()
 	
 	# TODO: 필드 씬 구현 후 연결
-	print("[Main] 필드로 출발! (아직 미구현)")
 	
 	# 임시: 다시 마을로
 	# _go_to_town()

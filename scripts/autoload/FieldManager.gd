@@ -19,7 +19,6 @@ const DATA_PATH := "res://data/"
 
 func _ready() -> void:
 	_load_stage_data()
-	print("[FieldManager] 초기화 완료")
 
 
 func _load_stage_data() -> void:
@@ -47,7 +46,6 @@ func _load_stage_data() -> void:
 		var stage_id: String = str(stage_dict.get("id", ""))
 		stages[stage_id] = stage_dict
 	
-	print("[FieldManager] 스테이지 로드: ", stages.size())
 
 
 #region 스테이지/필드 설정
@@ -58,7 +56,6 @@ func set_current_stage(stage_id: String) -> bool:
 	
 	current_stage_id = stage_id
 	current_stage_data = stages[stage_id] as Dictionary
-	print("[FieldManager] 스테이지 설정: ", str(current_stage_data.get("name", stage_id)))
 	return true
 
 
@@ -73,7 +70,6 @@ func set_current_field(field_id: String) -> bool:
 		if str(field_dict.get("id", "")) == field_id:
 			current_field_id = field_id
 			current_field_data = field_dict
-			print("[FieldManager] 필드 설정: ", str(field_dict.get("name", field_id)))
 			field_loaded.emit(field_id)
 			return true
 	
@@ -297,7 +293,6 @@ func spawn_field_enemies(spawn_tiles: Array) -> Array:
 		spawned.append(spawn_data)
 		field_enemy_spawned.emit(enemy_id, spawn_data["position"])
 	
-	print("[FieldManager] 필드 에너미 스폰: ", spawned.size(), "마리")
 	return spawned
 
 

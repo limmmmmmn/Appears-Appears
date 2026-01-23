@@ -115,17 +115,12 @@ func update_top_bar() -> void:
 
 
 func update_party_display() -> void:
-	print("[FieldHUD] update_party_display 시작")
 	var party = PartyManager.get_party() if PartyManager else []
-	print("[FieldHUD] 파티 수:", party.size())
 	for i in range(4):
 		if i < party.size():
-			print("[FieldHUD] 슬롯", i, "업데이트")
 			party_slots[i].update_display(party[i])
-			print("[FieldHUD] 슬롯", i, "완료")
 		else:
 			party_slots[i].visible = false
-	print("[FieldHUD] update_party_display 끝")
 
 
 func refresh_inventory() -> void:
@@ -348,12 +343,9 @@ func _on_ctx_selected(id: int) -> void:
 
 func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 	## 소비 아이템을 영웅에게 사용
-	print("[FieldHUD] _use_consumable_on_hero 호출, item_id:", item_id, ", hero:", hero.hero_name)
 	
 	var item_data: Dictionary = DataManager.get_item(item_id)
-	print("[FieldHUD] item_data:", item_data)
 	if item_data.is_empty():
-		print("[FieldHUD] item_data가 비어있음!")
 		return
 	
 	var item_name: String = str(item_data.get("name", item_id))
@@ -449,9 +441,7 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 			add_system_log("%s: 알 수 없는 효과" % item_name)
 	
 	if success:
-		print("[FieldHUD] 아이템 사용 성공! 제거 시도:", item_id)
 		var removed = InventoryManager.remove_item(item_id, 1)
-		print("[FieldHUD] remove_item 결과:", removed)
 		update_party_display()
 		if inventory_grid:
 			inventory_grid.refresh()

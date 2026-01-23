@@ -153,7 +153,6 @@ func _get_rarity_text(rarity: String) -> String:
 func _on_item_selected(index: int) -> void:
 	if index < item_ids.size():
 		var selected_id: String = item_ids[index]
-		print("[LootSelectUI] 선택: ", selected_id)
 		item_selected.emit(selected_id)
 	
 	get_tree().paused = false

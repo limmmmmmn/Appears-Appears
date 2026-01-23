@@ -89,22 +89,18 @@ func _ready() -> void:
 	if PartyManager:
 		if not PartyManager.party_wiped.is_connected(_on_party_wiped):
 			PartyManager.party_wiped.connect(_on_party_wiped)
-			print("[Field] PartyManager.party_wiped 연결됨")
 	
 	# GameManager 게임오버 시그널도 연결
 	if GameManager:
 		if not GameManager.game_over.is_connected(_on_party_wiped):
 			GameManager.game_over.connect(_on_party_wiped)
-			print("[Field] GameManager.game_over 연결됨")
 	
 	# 엘리트 전투 승리 시그널 연결
 	if BattleManager:
 		if not BattleManager.elite_victory.is_connected(_on_elite_victory):
 			BattleManager.elite_victory.connect(_on_elite_victory)
-			print("[Field] BattleManager.elite_victory 연결됨")
 		if not BattleManager.boss_victory.is_connected(_on_boss_victory):
 			BattleManager.boss_victory.connect(_on_boss_victory)
-			print("[Field] BattleManager.boss_victory 연결됨")
 	
 	hud.add_system_log("필드에 입장했다.")
 
@@ -146,7 +142,6 @@ func _spawn_party() -> void:
 	var saved_pos: Vector2 = SaveManager.get_saved_field_position()
 	if saved_pos != Vector2.ZERO:
 		start_pos = saved_pos
-		print("[Field] 저장된 위치로 복귀: ", start_pos)
 	elif spawn_point:
 		start_pos = spawn_point.global_position
 	
@@ -163,7 +158,6 @@ func _spawn_party() -> void:
 	if party_members.size() > 0:
 		party_leader.setup_hero(party_members[0])
 	
-	print("[Field] 리더 생성 at ", start_pos)
 	
 	# 팔로워 생성
 	if party_members.size() > 1:
@@ -175,7 +169,6 @@ func _spawn_party() -> void:
 			follower.setup(party_leader, i, party_members[i])
 			party_followers.append(follower)
 		
-		print("[Field] 팔로워: ", party_followers.size())
 	
 	# 로드 후 위치 초기화 (중복 사용 방지)
 	SaveManager.last_field_position = Vector2.ZERO
@@ -192,7 +185,6 @@ func _spawn_field_enemies() -> void:
 	for data in spawn_data:
 		_spawn_single_enemy(data)
 	
-	print("[Field] 적 스폰: ", field_enemies.size())
 
 
 func _spawn_boss() -> void:
@@ -212,7 +204,6 @@ func _spawn_boss() -> void:
 	enemy.player_contacted.connect(_on_field_enemy_contacted)
 	field_enemies.append(enemy)
 	
-	print("[Field] 🔥 보스 스폰: ", boss_id)
 	
 	if hud:
 		var boss_data: Dictionary = DataManager.get_enemy(boss_id)
@@ -235,15 +226,11 @@ func _spawn_single_enemy(data: Dictionary, force_elite: bool = false) -> void:
 	)
 	enemy.player_contacted.connect(_on_field_enemy_contacted)
 	field_enemies.append(enemy)
-	
-	if is_elite:
-		print("[Field] 엘리트 스폰: ", data.get("enemy_id", "slime"))
 
 
 func _setup_respawn_timer() -> void:
 	# 보스 필드에서는 리스폰 안 함
 	if FieldManager.is_boss_field():
-		print("[Field] 보스 필드 - 리스폰 비활성화")
 		return
 	
 	respawn_timer = Timer.new()
@@ -252,7 +239,6 @@ func _setup_respawn_timer() -> void:
 	respawn_timer.timeout.connect(_on_respawn_timer)
 	add_child(respawn_timer)
 	respawn_timer.start()
-	print("[Field] 리스폰 타이머 시작")
 
 
 func _on_respawn_timer() -> void:
@@ -291,7 +277,6 @@ func _on_respawn_timer() -> void:
 		}
 		_spawn_single_enemy(spawn_data)
 	
-	print("[Field] 리스폰! 현재 적: ", field_enemies.size())
 
 
 func _get_safe_spawn_tiles() -> Array:
@@ -336,39 +321,23 @@ func _collect_spawnable_tiles() -> Array:
 
 
 func _setup_exit() -> void:
-	print("[Field] _setup_exit 호출")
-	print("[Field] exit_area: ", exit_area)
-	print("[Field] town_area: ", town_area)
-	
 	# exit_area가 null이면 직접 찾기
 	if not exit_area:
 		exit_area = get_node_or_null("ExitArea")
-		print("[Field] exit_area 수동 탐색: ", exit_area)
 	
 	if exit_area:
 		if not exit_area.body_entered.is_connected(_on_exit_body_entered):
 			exit_area.body_entered.connect(_on_exit_body_entered)
-			print("[Field] ✅ exit_area 시그널 연결됨")
-	else:
-		print("[Field] ❌ WARNING: exit_area가 null!")
 	
 	# town_area가 null이면 직접 찾기
 	if not town_area:
 		town_area = get_node_or_null("TownArea")
-		print("[Field] town_area 수동 탐색: ", town_area)
 	
 	if town_area:
 		if not town_area.body_entered.is_connected(_on_town_body_entered):
 			town_area.body_entered.connect(_on_town_body_entered)
-			print("[Field] ✅ town_area 시그널 연결됨")
 		# 결계 시스템 초기화
 		_setup_town_barrier()
-	else:
-		# 보스 필드는 town_area가 없을 수 있음
-		if not FieldManager.is_boss_field():
-			print("[Field] ⚠ WARNING: town_area가 null! (보스필드 아님)")
-		else:
-			print("[Field] 보스 필드 - town_area 없음 (정상)")
 	
 	# 위치 저장 타이머 (3초마다)
 	var save_timer := Timer.new()
@@ -444,7 +413,6 @@ func _setup_town_barrier() -> void:
 	else:
 		_activate_barrier()
 	
-	print("[Field] 마을 결계 시스템 초기화 완료")
 
 
 func _create_speech_bubble() -> void:
@@ -554,7 +522,6 @@ func _activate_barrier() -> void:
 		barrier_tween.tween_property(town_barrier_visual, "modulate:a", 1.0, 0.8)
 		barrier_tween.set_loops()
 	
-	print("[Field] 🛡️ 마을 결계 활성화!")
 
 
 func _deactivate_barrier() -> void:
@@ -576,7 +543,6 @@ func _deactivate_barrier() -> void:
 	else:
 		_finish_deactivate_barrier()
 	
-	print("[Field] ✨ 마을 결계 해제!")
 
 
 func _finish_deactivate_barrier() -> void:
@@ -621,8 +587,6 @@ func _update_hud() -> void:
 
 
 func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
-	print("[Field] 적 접촉: ", field_enemy.enemy_id, " (엘리트:", field_enemy.is_elite, ")")
-	
 	var enemy_data: Dictionary = DataManager.get_enemy(field_enemy.enemy_id)
 	var enemy_name: String = str(enemy_data.get("name", field_enemy.enemy_id))
 	
@@ -631,7 +595,6 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 		field_enemy.tile_type
 	)
 	
-	print("[Field] 전투 구성: ", battle_enemies)
 	
 	# 로그 추가
 	if hud:
@@ -651,21 +614,14 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	if BattleManager:
 		# 엘리트 정보를 BattleManager에 전달
 		var battle_id: int = BattleManager.start_battle(battle_enemies, self, was_elite)
-		print("[Field] 전투 ID: ", battle_id, " 엘리트전투:", was_elite)
 	
 	battle_triggered.emit(battle_enemies)
 
 
 func _on_exit_body_entered(body: Node2D) -> void:
-	print("[Field] _on_exit_body_entered 호출! body: ", body.name)
-	
 	if not body.is_in_group("party_leader"):
-		print("[Field] party_leader 아님, 무시")
 		return
 	
-	print("[Field] 전투 수: ", BattleManager.get_active_battle_count() if BattleManager else "BM없음")
-	print("[Field] 보스필드: ", FieldManager.is_boss_field())
-	print("[Field] 필드적 수: ", field_enemies.size())
 	
 	if BattleManager and BattleManager.get_active_battle_count() > 0:
 		if hud:
@@ -678,7 +634,6 @@ func _on_exit_body_entered(body: Node2D) -> void:
 		return
 	
 	var next: String = FieldManager.get_next_destination()
-	print("[Field] 출구! 다음 목적지: ", next)
 	
 	if hud:
 		hud.add_system_log("다음 구역으로 이동한다...")
@@ -691,19 +646,15 @@ func _on_exit_body_entered(body: Node2D) -> void:
 
 func _on_town_body_entered(body: Node2D) -> void:
 	## 마을 타일 진입 시 호출
-	print("[Field] _on_town_body_entered 호출됨! body: ", body.name)
 	
 	if not body.is_in_group("party_leader"):
-		print("[Field] party_leader 그룹이 아님, 무시")
 		return
 	
 	# 전투 중이면 결계가 물리적으로 막아줌 - 여기까지 오면 전투 없음
 	# (안전을 위한 더블 체크)
 	if BattleManager and BattleManager.get_active_battle_count() > 0:
-		print("[Field] 전투 중 - 결계가 막아야 하는데?")
 		return
 	
-	print("[Field] 🏠 마을 진입!")
 	
 	if hud:
 		hud.add_system_log("마을로 향한다...")
@@ -843,44 +794,32 @@ func get_hud() -> FieldHUD:
 # 🎮 게임오버 & 다시하기
 #=============================================================================
 func _on_party_wiped() -> void:
-	print("[Field] ====== 파티 전멸! 게임오버 ======")
-	
 	# 리스폰 타이머 정지
 	if respawn_timer:
 		respawn_timer.stop()
-		print("[Field] 리스폰 타이머 정지")
 	
 	# 모든 전투창 닫기
 	if BattleManager:
 		BattleManager.close_all_battles()
-		print("[Field] 모든 전투창 닫음")
 	
 	# 세이브 데이터 삭제 (게임오버 = 로그라이크 사망)
 	SaveManager.delete_save()
-	print("[Field] 세이브 데이터 삭제됨")
 	
 	# 게임오버 UI 표시
 	if game_over_ui:
-		print("[Field] 게임오버 UI 표시")
 		game_over_ui.show_game_over("파티가 전멸했습니다...")
-	else:
-		print("[Field] ERROR: game_over_ui가 없음!")
 
 
 func _on_restart_game() -> void:
 	# 타이틀 화면으로 이동
-	print("[Field] 타이틀로 이동")
 	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
 
 
 func _on_quit_game() -> void:
-	print("[Field] 게임 종료")
 	get_tree().quit()
 
 
 func _on_loot_item_selected(item_id: String) -> void:
-	print("[Field] 루트 선택: ", item_id)
-	
 	# 아이템 지급
 	InventoryManager.add_item(item_id)
 	
@@ -902,13 +841,11 @@ func show_elite_loot() -> void:
 
 
 func _on_elite_victory(_battle_id: int) -> void:
-	print("[Field] 엘리트 전투 승리! 3지선다 표시")
 	show_elite_loot()
 
 
 func _on_boss_victory(_battle_id: int) -> void:
 	## 보스 전투 승리 시 호출
-	print("[Field] 🎉 보스 전투 승리! 다음 스테이지로 진행 가능")
 	
 	if hud:
 		hud.add_system_log("🎉 보스를 처치했다!")

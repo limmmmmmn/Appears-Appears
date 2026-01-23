@@ -27,15 +27,6 @@ func _load_all_data() -> void:
 	shops = _load_json("shops.json")
 	town_events = _load_json("town_events.json")
 	
-	print("[DataManager] 데이터 로드 완료")
-	print("  - Classes: ", classes.size())
-	print("  - Heroes: ", heroes.size())
-	print("  - Enemies: ", enemies.size())
-	print("  - Skills: ", skills.size())
-	print("  - Equipment: ", equipment.size())
-	print("  - Items: ", items.size())
-	print("  - Shops: ", shops.size())
-	print("  - TownEvents: ", town_events.get("events", []).size())
 
 
 func _load_json(filename: String) -> Dictionary:

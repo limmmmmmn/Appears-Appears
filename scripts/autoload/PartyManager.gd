@@ -14,7 +14,7 @@ const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "ac
 
 
 func _ready() -> void:
-	print("[PartyManager] 초기화 완료")
+	pass
 
 
 #region 파티 관리
@@ -206,6 +206,4 @@ func auto_equip_to_party(equip_id: String) -> bool:
 
 
 func print_party_status() -> void:
-	print("===== 파티 상태 =====")
-	for hero in party:
-		print(hero.get_stat_summary())
+	pass

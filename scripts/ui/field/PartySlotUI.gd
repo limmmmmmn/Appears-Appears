@@ -310,7 +310,6 @@ func _create_stat_label(stat_name: String, value_name: String, color: Color = Co
 
 #region 업데이트
 func update_display(new_hero: Hero) -> void:
-	print("[PartySlotUI] update_display 시작 - hero:", new_hero.hero_name if new_hero else "null")
 	hero = new_hero
 	if not hero:
 		visible = false
@@ -319,33 +318,25 @@ func update_display(new_hero: Hero) -> void:
 	visible = true
 	
 	# 이름 + 레벨
-	print("[PartySlotUI] 이름 업데이트")
 	name_label.text = "Lv.%d %s" % [hero.level, hero.hero_name]
 	
 	# 페이스칩
-	print("[PartySlotUI] 페이스칩 업데이트")
 	if SpriteManager:
 		face_texture.texture = SpriteManager.get_hero_face_sprite(hero.id)
-	print("[PartySlotUI] 페이스칩 완료")
 	
 	# HP/MP
-	print("[PartySlotUI] 바 업데이트")
 	_update_bars()
 	
 	# 장비
-	print("[PartySlotUI] 장비 업데이트")
 	_update_equipment()
 	
 	# 스킬 토글
-	print("[PartySlotUI] 스킬 업데이트")
 	_update_skills()
-	print("[PartySlotUI] 스킬 완료")
 	
 	# 스탯 패널 (열려있으면)
 	if stat_panel.visible:
 		_update_stat_values()
 	
-	print("[PartySlotUI] update_display 끝")
 
 
 func _update_bars() -> void:

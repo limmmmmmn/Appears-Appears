@@ -43,7 +43,6 @@ func _update_ui() -> void:
 
 
 func _on_continue_pressed() -> void:
-	print("[Title] 이어하기 선택")
 	continue_game.emit()
 
 
@@ -63,5 +62,4 @@ func _on_confirm_new_game() -> void:
 
 
 func _start_new_game() -> void:
-	print("[Title] 새 게임 시작")
 	start_new_game.emit()

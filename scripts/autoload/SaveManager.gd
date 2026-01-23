@@ -19,15 +19,12 @@ var last_field_id: String = ""
 
 
 func _ready() -> void:
-	print("[SaveManager] 초기화 완료")
-	
 	# 게임 종료 시 자동 저장
 	get_tree().auto_accept_quit = false
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		print("[SaveManager] 게임 종료 감지 - 자동 저장")
 		save_game()
 		get_tree().quit()
 
@@ -47,9 +44,6 @@ func auto_save(reason: String = "") -> void:
 		return
 	
 	_save_cooldown = SAVE_COOLDOWN_TIME
-	
-	if not reason.is_empty():
-		print("[SaveManager] 자동 저장: ", reason)
 	
 	save_game()
 
@@ -155,7 +149,6 @@ func load_game() -> bool:
 	_deserialize_inventory(save_data.get("inventory", {}))
 	_deserialize_field_position(save_data.get("field_position", {}))
 	
-	print("[SaveManager] 게임 로드 완료")
 	load_completed.emit(true)
 	return true
 
@@ -173,9 +166,6 @@ func _deserialize_game_state(data: Dictionary) -> void:
 	GameManager.current_state = saved_state as GameManager.GameState
 	
 	GameManager.gold_changed.emit(GameManager.gold)
-	print("[SaveManager] 게임 상태 복원: state=%d, stage=%d, field=%d" % [
-		saved_state, GameManager.current_stage, GameManager.current_field
-	])
 
 
 func _deserialize_party(data: Array) -> void:

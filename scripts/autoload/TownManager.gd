@@ -16,7 +16,7 @@ const MAX_EXPLORE_PER_VISIT: int = 3
 
 
 func _ready() -> void:
-	print("[TownManager] 초기화 완료")
+	pass
 
 
 func init_new_game() -> void:
@@ -42,7 +42,6 @@ func _populate_tavern() -> void:
 	for i in range(mini(5, available.size())):
 		tavern_heroes.append(available[i])
 	
-	print("[TownManager] 선술집 영웅: ", tavern_heroes)
 	tavern_updated.emit()
 
 

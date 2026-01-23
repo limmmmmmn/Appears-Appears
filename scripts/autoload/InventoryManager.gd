@@ -13,7 +13,7 @@ const MAX_SLOTS: int = 99
 
 
 func _ready() -> void:
-	print("[InventoryManager] 초기화 완료")
+	pass
 
 
 #region 아이템 추가/제거
@@ -30,7 +30,6 @@ func add_item(item_id: String, quantity: int = 1) -> bool:
 			return false
 		items[item_id] = quantity
 	
-	print("[InventoryManager] 추가: %s x%d (총 %d)" % [item_id, quantity, items[item_id]])
 	item_added.emit(item_id, quantity)
 	inventory_changed.emit()
 	
@@ -54,7 +53,6 @@ func remove_item(item_id: String, quantity: int = 1) -> bool:
 	if items[item_id] <= 0:
 		items.erase(item_id)
 	
-	print("[InventoryManager] 제거: %s x%d" % [item_id, quantity])
 	item_removed.emit(item_id, quantity)
 	inventory_changed.emit()
 	
@@ -101,7 +99,6 @@ func equip_item(hero: RefCounted, item_id: String, slot: String) -> bool:
 	remove_item(item_id, 1)
 	hero.equipment[slot] = item_id
 	
-	print("[InventoryManager] 장착: %s → %s의 %s" % [item_id, hero.hero_name, slot])
 	PartyManager.party_changed.emit()
 	
 	# 자동 저장
@@ -124,7 +121,6 @@ func unequip_item(hero: RefCounted, slot: String) -> bool:
 	
 	hero.equipment[slot] = ""
 	
-	print("[InventoryManager] 해제: %s ← %s의 %s" % [equip_id, hero.hero_name, slot])
 	PartyManager.party_changed.emit()
 	
 	# 자동 저장

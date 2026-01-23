@@ -25,7 +25,7 @@ var battle_container: CanvasLayer = null
 
 
 func _ready() -> void:
-	print("[BattleManager] 초기화 완료")
+	pass
 
 
 #region 전투 시작/종료
@@ -66,7 +66,6 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 		"is_elite": is_elite
 	}
 	
-	print("[BattleManager] 전투 시작 ID:%d, 적:%s, 엘리트:%s" % [battle_id, str(enemy_ids), str(is_elite)])
 	battle_started.emit(battle_id)
 	return battle_id
 
@@ -82,7 +81,6 @@ func end_battle(battle_id: int, victory: bool) -> void:
 		window.queue_free()
 	
 	active_battles.erase(battle_id)
-	print("[BattleManager] 전투 종료 ID:%d, 승리:%s" % [battle_id, str(victory)])
 	battle_ended.emit(battle_id, victory)
 	
 	if active_battles.is_empty():
@@ -101,11 +99,9 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	
 	# 보스 전투 승리 시 시그널
 	if victory and was_boss:
-		print("[BattleManager] 🎉 보스 전투 승리!")
 		boss_victory.emit(battle_id)
 	# 엘리트 전투 승리 시 시그널
 	elif victory and was_elite:
-		print("[BattleManager] 엘리트 전투 승리!")
 		elite_victory.emit(battle_id)
 	
 	# 전투 승리 시 자동 저장
@@ -227,7 +223,6 @@ func force_end_all_non_boss() -> void:
 			to_remove.append(battle_id)
 	
 	for battle_id in to_remove:
-		print("[BattleManager] 강제 종료 ID:%d (보스전 진입)" % battle_id)
 		var battle_data: Dictionary = active_battles.get(battle_id, {})
 		var window = battle_data.get("window")
 		if is_instance_valid(window):
@@ -241,7 +236,6 @@ func close_all_battles() -> void:
 	var to_remove: Array = active_battles.keys().duplicate()
 	
 	for battle_id in to_remove:
-		print("[BattleManager] 강제 종료 ID:%d (게임오버)" % battle_id)
 		var battle_data: Dictionary = active_battles.get(battle_id, {})
 		var window = battle_data.get("window")
 		if is_instance_valid(window):

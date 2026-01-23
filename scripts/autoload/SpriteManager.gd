@@ -26,7 +26,7 @@ var _placeholder_colors: Dictionary = {
 
 
 func _ready() -> void:
-	print("[SpriteManager] 초기화 완료")
+	pass
 
 
 #region 영웅 스프라이트
