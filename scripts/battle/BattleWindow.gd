@@ -36,7 +36,7 @@ var close_button: Button
 
 # === 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
-const ACTION_DELAY: float = 0.5  # 0.35 → 0.5 (모션 보이게)
+const ACTION_DELAY: float = 1.0  # 0.35 → 0.5 (모션 보이게)
 
 var _ui_built: bool = false
 
@@ -353,6 +353,7 @@ func _execute_hero_action(hero: Hero, target: BattleEnemy) -> void:
 		_send_log("%s → %s 회피!" % [hero.hero_name, target.enemy_name], Color.GRAY)
 		print("[BattleWindow] play_evade_effect 호출")
 		target.play_evade_effect()
+		target.show_miss_text()
 		print("[BattleWindow] play_evade_effect 완료")
 	else:
 		print("[BattleWindow] 데미지 계산")

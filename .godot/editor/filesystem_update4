@@ -21,7 +21,10 @@ res://scripts/entities/PartyLeader.gd
 res://scripts/scenes/Field.gd
 res://scripts/scenes/Main.gd
 res://scripts/scenes/Title.gd
+res://scripts/systems/CombatCalculator.gd
+res://scripts/systems/StatCompareUtil.gd
 res://scripts/ui/common/EquipmentTooltip.gd
+res://scripts/ui/common/InventoryPanel.gd
 res://scripts/ui/field/BattleLogUI.gd
 res://scripts/ui/field/DragDropManager.gd
 res://scripts/ui/field/FieldHUD.gd
@@ -29,7 +32,13 @@ res://scripts/ui/field/GameOverUI.gd
 res://scripts/ui/field/InventoryGridUI.gd
 res://scripts/ui/field/LootSelectUI.gd
 res://scripts/ui/field/PartySlotUI.gd
+res://scripts/ui/party/HeroStatsDisplay.gd
 res://scripts/ui/party/PartyStatusPanel.gd
+res://scripts/ui/party/StatusInventoryList.gd
+res://scripts/ui/shop/ShopComparePanel.gd
+res://scripts/ui/shop/ShopItemList.gd
 res://scripts/ui/shop/ShopPanel.gd
 res://scripts/ui/town/Town.gd
-res://scripts/scenes/Ending.gd
+res://scenes/battle/BattleEnemy.tscn
+res://scenes/battle/BattleWindow.tscn
+res://scenes/field/Field_1_1.tscn

@@ -4,18 +4,20 @@
 	"name": "슬라임",
 	"type": "normal",
 	"stats": {
-	  "hp": 15,
-	  "atk": 5,
-	  "def": 2,
-	  "spd": 4
+	  "hp": 22,
+	  "atk": 8,
+	  "def": 3,
+	  "spd": 5
 	},
 	"rewards": {
-	  "exp": 5,
-	  "gold_min": 3,
-	  "gold_max": 8
+	  "exp": 6,
+	  "gold_min": 4,
+	  "gold_max": 10
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.1}
+	  {"item_id": "potion_small", "chance": 0.30},
+	  {"item_id": "ring_hp", "chance": 0.15},
+	  {"item_id": "leather_helmet", "chance": 0.12}
 	],
 	"skills": ["basic_attack"],
 	"sprite": "slime",
@@ -26,19 +28,22 @@
 	"name": "고블린",
 	"type": "normal",
 	"stats": {
-	  "hp": 25,
-	  "atk": 8,
-	  "def": 4,
-	  "spd": 7
+	  "hp": 35,
+	  "atk": 12,
+	  "def": 5,
+	  "spd": 8
 	},
 	"rewards": {
-	  "exp": 10,
-	  "gold_min": 8,
-	  "gold_max": 15
+	  "exp": 12,
+	  "gold_min": 10,
+	  "gold_max": 18
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.15},
-	  {"item_id": "dagger_common", "chance": 0.05}
+	  {"item_id": "potion_small", "chance": 0.25},
+	  {"item_id": "dagger_common", "chance": 0.20},
+	  {"item_id": "leather_armor", "chance": 0.15},
+	  {"item_id": "sword_common", "chance": 0.10},
+	  {"item_id": "dagger_magic", "chance": 0.03}
 	],
 	"skills": ["basic_attack"],
 	"sprite": "goblin",
@@ -49,17 +54,21 @@
 	"name": "박쥐",
 	"type": "normal",
 	"stats": {
-	  "hp": 12,
-	  "atk": 6,
+	  "hp": 18,
+	  "atk": 10,
 	  "def": 2,
-	  "spd": 12
+	  "spd": 14
 	},
 	"rewards": {
-	  "exp": 6,
-	  "gold_min": 2,
-	  "gold_max": 6
+	  "exp": 8,
+	  "gold_min": 3,
+	  "gold_max": 8
 	},
-	"drop_table": [],
+	"drop_table": [
+	  {"item_id": "potion_small", "chance": 0.20},
+	  {"item_id": "ring_luck", "chance": 0.08},
+	  {"item_id": "boots_speed", "chance": 0.10}
+	],
 	"skills": ["basic_attack"],
 	"sprite": "bat",
 	"tags": ["monster", "beast", "flying"]
@@ -80,7 +89,11 @@
 	  "gold_max": 20
 	},
 	"drop_table": [
-	  {"item_id": "sword_common", "chance": 0.08}
+	  {"item_id": "potion_small", "chance": 0.25},
+	  {"item_id": "sword_common", "chance": 0.18},
+	  {"item_id": "iron_helmet", "chance": 0.15},
+	  {"item_id": "shield_common", "chance": 0.12},
+	  {"item_id": "sword_magic", "chance": 0.04}
 	],
 	"skills": ["basic_attack"],
 	"sprite": "skeleton",
@@ -102,7 +115,10 @@
 	  "gold_max": 12
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.1}
+	  {"item_id": "potion_small", "chance": 0.25},
+	  {"item_id": "leather_armor", "chance": 0.15},
+	  {"item_id": "boots_speed", "chance": 0.12},
+	  {"item_id": "amulet_crit", "chance": 0.05}
 	],
 	"skills": ["basic_attack"],
 	"sprite": "wolf",
@@ -123,7 +139,11 @@
 	  "gold_min": 4,
 	  "gold_max": 10
 	},
-	"drop_table": [],
+	"drop_table": [
+	  {"item_id": "potion_small", "chance": 0.25},
+	  {"item_id": "robe_common", "chance": 0.12},
+	  {"item_id": "ring_hp", "chance": 0.10}
+	],
 	"skills": ["basic_attack"],
 	"sprite": "spider",
 	"tags": ["monster", "insect"]
@@ -144,8 +164,10 @@
 	  "gold_max": 50
 	},
 	"drop_table": [
-	  {"item_id": "axe_magic", "chance": 0.5},
-	  {"item_id": "heavy_armor_magic", "chance": 0.3}
+	  {"item_id": "potion_medium", "chance": 1.0},
+	  {"item_id": "axe_magic", "chance": 0.60},
+	  {"item_id": "heavy_armor_magic", "chance": 0.40},
+	  {"item_id": "shield_magic", "chance": 0.30}
 	],
 	"skills": ["basic_attack", "power_strike"],
 	"sprite": "orc_warrior",
@@ -167,8 +189,10 @@
 	  "gold_max": 70
 	},
 	"drop_table": [
-	  {"item_id": "staff_magic", "chance": 0.4},
-	  {"item_id": "robe_magic", "chance": 0.3}
+	  {"item_id": "potion_medium", "chance": 1.0},
+	  {"item_id": "staff_magic", "chance": 0.50},
+	  {"item_id": "robe_magic", "chance": 0.40},
+	  {"item_id": "ring_int", "chance": 0.30}
 	],
 	"skills": ["basic_attack", "fireball"],
 	"sprite": "dark_mage",
@@ -180,18 +204,21 @@
 	"name": "고블린 킹",
 	"type": "boss",
 	"stats": {
-	  "hp": 200,
-	  "atk": 22,
-	  "def": 15,
-	  "spd": 8
+	  "hp": 280,
+	  "atk": 28,
+	  "def": 18,
+	  "spd": 10
 	},
 	"rewards": {
-	  "exp": 200,
-	  "gold_min": 100,
-	  "gold_max": 150
+	  "exp": 250,
+	  "gold_min": 120,
+	  "gold_max": 180
 	},
 	"drop_table": [
-	  {"item_id": "crown_legendary", "chance": 1.0}
+	  {"item_id": "crown_legendary", "chance": 1.0},
+	  {"item_id": "potion_large", "chance": 1.0},
+	  {"item_id": "sword_magic", "chance": 0.5},
+	  {"item_id": "shield_magic", "chance": 0.5}
 	],
 	"skills": ["basic_attack", "power_strike", "war_cry"],
 	"sprite": "boss_goblin_king",

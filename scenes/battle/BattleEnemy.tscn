@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://battle_enemy"]
+[gd_scene load_steps=2 format=3 uid="uid://c8t6jagorydns"]
 
-[ext_resource type="Script" path="res://scripts/battle/BattleEnemy.gd" id="1_enemy"]
+[ext_resource type="Script" uid="uid://buyis0no4ixyb" path="res://scripts/battle/BattleEnemy.gd" id="1_enemy"]
 
 [node name="BattleEnemy" type="VBoxContainer"]
 custom_minimum_size = Vector2(64, 100)

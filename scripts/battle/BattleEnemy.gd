@@ -95,9 +95,9 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	enemy_type = str(data.get("type", "normal"))
 	
 	# 기본 스탯
-	var stats: Dictionary = data.get("base_stats", {})
+	var stats: Dictionary = data.get("stats", {})
 	max_hp = int(stats.get("hp", 10))
-	base_str = int(stats.get("str", 5))
+	base_str = int(stats.get("atk", 5))  # enemies.json uses "atk" not "str"
 	base_def = int(stats.get("def", 2))
 	base_int = int(stats.get("int", 1))
 	base_spd = int(stats.get("spd", 5))
@@ -234,10 +234,10 @@ func roll_drops() -> Array:
 func _roll_random_common_equipment() -> String:
 	## 랜덤 커먼 장비 선택
 	var common_equipment: Array[String] = [
-		"sword_common", "dagger_common", "staff_common",
+		"sword_common", "dagger_common", "staff_common", "bow_common",
 		"shield_common", "leather_helmet", "iron_helmet",
 		"leather_armor", "chainmail", "robe_common",
-		"ring_hp"
+		"ring_hp", "boots_speed"
 	]
 	
 	if common_equipment.is_empty():
@@ -252,25 +252,46 @@ var _hit_tween: Tween = null
 
 
 func play_hit_effect(is_crit: bool = false) -> void:
-	## 피격 이펙트 - 깜빡임만
+	## 피격 이펙트 - 깜빡임 + 흔들림
 	if not sprite:
 		return
 	
 	if _hit_tween and _hit_tween.is_valid():
 		_hit_tween.kill()
 	
+	var original_pos: Vector2 = sprite.position
 	_hit_tween = create_tween()
 	
 	if is_crit:
-		# 크리티컬: 여러번 깜빡임
-		_hit_tween.tween_property(sprite, "modulate", Color(3, 3, 3), 0.04)
-		_hit_tween.tween_property(sprite, "modulate", Color.WHITE, 0.04)
-		_hit_tween.tween_property(sprite, "modulate", Color(3, 3, 3), 0.04)
-		_hit_tween.tween_property(sprite, "modulate", Color.WHITE, 0.04)
+		# 크리티컬: 강한 깜빡임 + 강한 흔들림 + 빨간 틴트
+		_hit_tween.set_parallel(true)
+		
+		# 빨간색 플래시
+		_hit_tween.tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.03)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 3, 3), 0.03)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.03)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.05)
+		
+		# 강한 흔들림
+		var shake_tween := create_tween()
+		for i in range(4):
+			var offset := Vector2(randf_range(-6, 6), randf_range(-4, 4))
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.03)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.04)
 	else:
-		# 일반: 1번 깜빡임
-		_hit_tween.tween_property(sprite, "modulate", Color(2, 2, 2), 0.05)
-		_hit_tween.tween_property(sprite, "modulate", Color.WHITE, 0.05)
+		# 일반: 깜빡임 + 약한 흔들림
+		_hit_tween.set_parallel(true)
+		
+		# 흰색 플래시
+		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.04)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.06)
+		
+		# 약한 흔들림
+		var shake_tween := create_tween()
+		for i in range(2):
+			var offset := Vector2(randf_range(-3, 3), randf_range(-2, 2))
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.03)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.04)
 
 
 func play_attack_effect() -> void:
@@ -311,31 +332,164 @@ func play_death_effect() -> void:
 
 
 func show_damage_number(damage: int, is_crit: bool = false) -> void:
-	## 데미지 숫자 표시 - 스프라이트 위에 표시
+	## 발라트로 스타일 데미지 숫자 표시
+	if not sprite:
+		return
+	
+	# 데미지 규모에 따른 설정
+	var font_size: int
+	var color: Color
+	var duration: float
+	var bounce_scale: float
+	var text_suffix: String = ""
+	
+	if damage >= 100:
+		font_size = 42
+		color = Color(1.0, 0.3, 0.3)  # 빨간색
+		duration = 1.5
+		bounce_scale = 1.8
+		text_suffix = "!!"
+	elif damage >= 61:
+		font_size = 34
+		color = Color(1.0, 0.6, 0.2)  # 주황색
+		duration = 1.2
+		bounce_scale = 1.6
+		text_suffix = "!"
+	elif damage >= 36:
+		font_size = 28
+		color = Color(1.0, 0.9, 0.3)  # 노란색
+		duration = 1.0
+		bounce_scale = 1.4
+		text_suffix = "!"
+	elif damage >= 16:
+		font_size = 22
+		color = Color.WHITE
+		duration = 0.8
+		bounce_scale = 1.2
+	else:
+		font_size = 16
+		color = Color(0.9, 0.9, 0.9)
+		duration = 0.6
+		bounce_scale = 1.1
+	
+	# 크리티컬 보너스
+	if is_crit:
+		font_size = int(font_size * 1.3)
+		color = Color(1.0, 1.0, 0.4)  # 밝은 노란색
+		duration += 0.3
+		bounce_scale += 0.3
+		text_suffix = " CRIT!"
+	
+	# 라벨 생성
+	var label := Label.new()
+	label.text = str(damage) + text_suffix
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	
+	# 테두리 효과 (큰 데미지용)
+	if damage >= 36 or is_crit:
+		label.add_theme_constant_override("outline_size", 3)
+		label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	
+	# 스프라이트 중앙 위에 배치
+	sprite.add_child(label)
+	label.position = Vector2(-10, -20)
+	label.z_index = 100
+	label.pivot_offset = label.size / 2
+	
+	# 시작 시 크게 (bounce_scale), 투명
+	label.scale = Vector2(bounce_scale, bounce_scale)
+	label.modulate.a = 0.0
+	
+	# 애니메이션
+	var tween := create_tween()
+	
+	# Phase 1: 펑! 하고 나타남 (0.1초)
+	tween.set_parallel(true)
+	tween.tween_property(label, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 1.0, 0.08)
+	tween.tween_property(label, "position:y", label.position.y - 8, 0.12)
+	
+	# Phase 2: 잠깐 머무름 + 살짝 위로
+	tween.set_parallel(false)
+	tween.tween_interval(duration * 0.5)
+	
+	# Phase 3: 천천히 위로 올라가며 페이드아웃
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 30, duration * 0.4)
+	tween.tween_property(label, "modulate:a", 0.0, duration * 0.35)
+	
+	# 큰 데미지면 살짝 흔들림 추가
+	if damage >= 61 or is_crit:
+		_shake_label(label, 0.15)
+	
+	tween.finished.connect(func(): label.queue_free())
+
+
+func _shake_label(label: Label, duration: float) -> void:
+	## 라벨 흔들림 효과
+	var shake_tween := create_tween()
+	var original_x: float = label.position.x
+	var shake_amount := 3.0
+	
+	for i in range(4):
+		shake_tween.tween_property(label, "position:x", original_x + randf_range(-shake_amount, shake_amount), duration / 4)
+	shake_tween.tween_property(label, "position:x", original_x, 0.05)
+
+
+func show_heal_number(amount: int) -> void:
+	## 회복 숫자 표시 (녹색)
 	if not sprite:
 		return
 	
 	var label := Label.new()
-	label.text = str(damage)
+	label.text = "+" + str(amount)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 18)
+	label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.4))
+	label.add_theme_constant_override("outline_size", 2)
+	label.add_theme_color_override("font_outline_color", Color(0, 0.3, 0, 0.8))
 	
-	if is_crit:
-		label.add_theme_font_size_override("font_size", 18)
-		label.add_theme_color_override("font_color", Color.YELLOW)
-		label.text = str(damage) + "!"
-	else:
-		label.add_theme_font_size_override("font_size", 14)
-		label.add_theme_color_override("font_color", Color.WHITE)
-	
-	# 스프라이트에 추가 (레이아웃 영향 X)
 	sprite.add_child(label)
-	label.position = Vector2(10, 15)
+	label.position = Vector2(-5, -15)
+	label.z_index = 100
+	label.scale = Vector2(1.3, 1.3)
+	label.modulate.a = 0.0
 	
-	# 살짝 위로 올라가며 페이드아웃
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(label, "position:y", label.position.y - 15, 0.4)
-	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.15)
+	tween.tween_property(label, "scale", Vector2(1.0, 1.0), 0.1)
+	tween.tween_property(label, "modulate:a", 1.0, 0.08)
+	tween.tween_property(label, "position:y", label.position.y - 20, 0.8)
+	tween.set_parallel(false)
+	tween.tween_interval(0.4)
+	tween.tween_property(label, "modulate:a", 0.0, 0.3)
+	
+	tween.finished.connect(func(): label.queue_free())
+
+
+func show_miss_text() -> void:
+	## MISS 표시
+	if not sprite:
+		return
+	
+	var label := Label.new()
+	label.text = "MISS"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	
+	sprite.add_child(label)
+	label.position = Vector2(0, -10)
+	label.z_index = 100
+	label.modulate.a = 0.0
+	
+	var tween := create_tween()
+	tween.tween_property(label, "modulate:a", 1.0, 0.1)
+	tween.tween_property(label, "position:x", label.position.x + 15, 0.3)
+	tween.tween_property(label, "modulate:a", 0.0, 0.2)
 	
 	tween.finished.connect(func(): label.queue_free())
 #endregion
