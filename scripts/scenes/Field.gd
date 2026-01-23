@@ -92,13 +92,6 @@ func _ready() -> void:
 			BattleManager.elite_victory.connect(_on_elite_victory)
 			print("[Field] BattleManager.elite_victory 연결됨")
 	
-	# 테스트: 인벤토리에 아이템 추가
-	if InventoryManager:
-		InventoryManager.add_item("sword_common", 2)
-		InventoryManager.add_item("potion_small", 5)
-		InventoryManager.add_item("leather_armor", 1)
-		print("[Field] 테스트 아이템 추가됨")
-	
 	hud.add_system_log("필드에 입장했다.")
 
 
@@ -134,7 +127,13 @@ func _setup_game_over_ui() -> void:
 
 func _spawn_party() -> void:
 	var start_pos: Vector2 = Vector2(100, 100)
-	if spawn_point:
+	
+	# 저장된 위치가 있으면 사용
+	var saved_pos: Vector2 = SaveManager.get_saved_field_position()
+	if saved_pos != Vector2.ZERO:
+		start_pos = saved_pos
+		print("[Field] 저장된 위치로 복귀: ", start_pos)
+	elif spawn_point:
 		start_pos = spawn_point.global_position
 	
 	# PartyManager.get_party() 사용
@@ -163,6 +162,9 @@ func _spawn_party() -> void:
 			party_followers.append(follower)
 		
 		print("[Field] 팔로워: ", party_followers.size())
+	
+	# 로드 후 위치 초기화 (중복 사용 방지)
+	SaveManager.last_field_position = Vector2.ZERO
 
 
 func _spawn_field_enemies() -> void:
@@ -287,6 +289,25 @@ func _collect_spawnable_tiles() -> Array:
 func _setup_exit() -> void:
 	if exit_area:
 		exit_area.body_entered.connect(_on_exit_body_entered)
+	
+	# 위치 저장 타이머 (3초마다)
+	var save_timer := Timer.new()
+	save_timer.wait_time = 3.0
+	save_timer.one_shot = false
+	save_timer.timeout.connect(_save_field_position)
+	add_child(save_timer)
+	save_timer.start()
+
+
+func _save_field_position() -> void:
+	## 현재 위치를 SaveManager에 저장
+	if party_leader and SaveManager:
+		SaveManager.save_field_position(
+			party_leader.global_position,
+			FieldManager.current_stage_id,
+			FieldManager.current_field_id
+		)
+		SaveManager.auto_save("필드 위치 저장")
 
 
 func _update_hud() -> void:
@@ -366,9 +387,112 @@ func _on_exit_body_entered(body: Node2D) -> void:
 
 
 func _on_menu_pressed() -> void:
-	# TODO: 메뉴 열기
-	if hud:
-		hud.add_system_log("메뉴 (미구현)")
+	_show_pause_menu()
+
+
+#=============================================================================
+# 🎮 일시정지 메뉴
+#=============================================================================
+var pause_menu: Control = null
+
+func _show_pause_menu() -> void:
+	if pause_menu:
+		pause_menu.queue_free()
+	
+	# 게임 일시정지
+	get_tree().paused = true
+	
+	# 메뉴 UI 생성
+	pause_menu = Control.new()
+	pause_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS  # 일시정지 중에도 동작
+	
+	# 어두운 배경
+	var bg := ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0, 0, 0, 0.7)
+	pause_menu.add_child(bg)
+	
+	# 중앙 패널
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_menu.add_child(center)
+	
+	var panel := PanelContainer.new()
+	center.add_child(panel)
+	
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	margin.add_child(vbox)
+	
+	# 타이틀
+	var title := Label.new()
+	title.text = "일시정지"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+	
+	# 버튼들
+	var resume_btn := Button.new()
+	resume_btn.text = "게임 계속"
+	resume_btn.custom_minimum_size = Vector2(150, 35)
+	resume_btn.pressed.connect(_on_resume_pressed)
+	vbox.add_child(resume_btn)
+	
+	var title_btn := Button.new()
+	title_btn.text = "타이틀로"
+	title_btn.custom_minimum_size = Vector2(150, 35)
+	title_btn.pressed.connect(_on_title_pressed)
+	vbox.add_child(title_btn)
+	
+	var quit_btn := Button.new()
+	quit_btn.text = "게임 종료"
+	quit_btn.custom_minimum_size = Vector2(150, 35)
+	quit_btn.pressed.connect(_on_quit_game)
+	vbox.add_child(quit_btn)
+	
+	add_child(pause_menu)
+	resume_btn.grab_focus()
+
+
+func _on_resume_pressed() -> void:
+	_close_pause_menu()
+
+
+func _on_title_pressed() -> void:
+	# 저장 후 타이틀로
+	if party_leader:
+		SaveManager.save_field_position(
+			party_leader.global_position,
+			FieldManager.current_stage_id,
+			FieldManager.current_field_id
+		)
+	SaveManager.save_game()
+	
+	_close_pause_menu()
+	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+
+
+func _close_pause_menu() -> void:
+	get_tree().paused = false
+	if pause_menu:
+		pause_menu.queue_free()
+		pause_menu = null
+
+
+func _input(event: InputEvent) -> void:
+	# ESC 키로 일시정지 토글
+	if event.is_action_pressed("ui_cancel"):
+		if pause_menu:
+			_close_pause_menu()
+		else:
+			_show_pause_menu()
 
 
 func get_remaining_enemies() -> int:
@@ -399,6 +523,10 @@ func _on_party_wiped() -> void:
 		BattleManager.close_all_battles()
 		print("[Field] 모든 전투창 닫음")
 	
+	# 세이브 데이터 삭제 (게임오버 = 로그라이크 사망)
+	SaveManager.delete_save()
+	print("[Field] 세이브 데이터 삭제됨")
+	
 	# 게임오버 UI 표시
 	if game_over_ui:
 		print("[Field] 게임오버 UI 표시")
@@ -408,21 +536,13 @@ func _on_party_wiped() -> void:
 
 
 func _on_restart_game() -> void:
-	print("[Field] 게임 재시작!")
-	
-	# 파티 완전 회복
-	if PartyManager:
-		PartyManager.full_restore_party()
-	
-	# 현재 씬 다시 로드
-	get_tree().reload_current_scene()
+	# 타이틀 화면으로 이동
+	print("[Field] 타이틀로 이동")
+	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
 
 
 func _on_quit_game() -> void:
 	print("[Field] 게임 종료")
-	
-	# 메인 메뉴로 이동 (또는 게임 종료)
-	# get_tree().change_scene_to_file("res://scenes/main/MainMenu.tscn")
 	get_tree().quit()
 
 

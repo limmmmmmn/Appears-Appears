@@ -1,0 +1,111 @@
+[gd_scene load_steps=2 format=3 uid="uid://title_scene_hq"]
+
+[ext_resource type="Script" uid="uid://title_script_hq" path="res://scripts/scenes/Title.gd" id="1_title"]
+
+[node name="Title" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_title")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.08, 0.12, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 30
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "HYPER QUEST"
+horizontal_alignment = 1
+
+[node name="SubtitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1)
+text = "A Roguelike RPG Adventure"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="ButtonContainer" type="VBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="ContinueButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "이어하기"
+
+[node name="NewGameButton" type="Button" parent="CenterContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "새 게임"
+
+[node name="Spacer2" type="Control" parent="CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="SaveInfoLabel" type="Label" parent="CenterContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.5, 0.5, 0.6, 1)
+text = ""
+horizontal_alignment = 1
+
+[node name="VersionLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -100.0
+offset_top = -30.0
+offset_right = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.4, 0.4, 0.5, 1)
+text = "v0.1.0"
+horizontal_alignment = 2
+
+[node name="ConfirmDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "새 게임"
+size = Vector2i(300, 100)
+ok_button_text = "예"
+cancel_button_text = "아니오"
+dialog_text = "저장된 데이터가 삭제됩니다.
+새 게임을 시작하시겠습니까?"
+
+[connection signal="pressed" from="CenterContainer/VBoxContainer/ButtonContainer/ContinueButton" to="." method="_on_continue_pressed"]
+[connection signal="pressed" from="CenterContainer/VBoxContainer/ButtonContainer/NewGameButton" to="." method="_on_new_game_pressed"]
+[connection signal="confirmed" from="ConfirmDialog" to="." method="_on_confirm_new_game"]

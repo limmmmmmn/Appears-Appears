@@ -101,6 +101,10 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 		print("[BattleManager] 엘리트 전투 승리!")
 		elite_victory.emit(battle_id)
 	
+	# 전투 승리 시 자동 저장
+	if victory and SaveManager:
+		SaveManager.auto_save("전투 승리")
+	
 	# 패배 시 게임오버 체크
 	if not victory and PartyManager.is_party_wiped():
 		GameManager.trigger_game_over()
@@ -167,11 +171,13 @@ func _calculate_window_position() -> Vector2:
 		if window_center.distance_to(leader_pos) > LEADER_SAFE_RADIUS:
 			var overlaps := false
 			for bid in active_battles:
-				var other_window: BattleWindow = active_battles[bid].get("window")
-				if other_window and is_instance_valid(other_window):
-					if candidate.distance_to(other_window.position) < 50:
-						overlaps = true
-						break
+				var battle_data: Dictionary = active_battles[bid]
+				if battle_data.has("window"):
+					var other_window = battle_data.get("window")
+					if is_instance_valid(other_window):
+						if candidate.distance_to(other_window.position) < 50:
+							overlaps = true
+							break
 			if not overlaps:
 				return candidate
 	
@@ -215,8 +221,9 @@ func force_end_all_non_boss() -> void:
 	
 	for battle_id in to_remove:
 		print("[BattleManager] 강제 종료 ID:%d (보스전 진입)" % battle_id)
-		var window: BattleWindow = active_battles[battle_id].get("window")
-		if window and is_instance_valid(window):
+		var battle_data: Dictionary = active_battles.get(battle_id, {})
+		var window = battle_data.get("window")
+		if is_instance_valid(window):
 			window.queue_free()
 		active_battles.erase(battle_id)
 		battle_ended.emit(battle_id, false)
@@ -228,8 +235,9 @@ func close_all_battles() -> void:
 	
 	for battle_id in to_remove:
 		print("[BattleManager] 강제 종료 ID:%d (게임오버)" % battle_id)
-		var window: BattleWindow = active_battles[battle_id].get("window")
-		if window and is_instance_valid(window):
+		var battle_data: Dictionary = active_battles.get(battle_id, {})
+		var window = battle_data.get("window")
+		if is_instance_valid(window):
 			window.queue_free()
 		active_battles.erase(battle_id)
 #endregion

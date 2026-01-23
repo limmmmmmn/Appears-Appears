@@ -33,6 +33,11 @@ func add_item(item_id: String, quantity: int = 1) -> bool:
 	print("[InventoryManager] 추가: %s x%d (총 %d)" % [item_id, quantity, items[item_id]])
 	item_added.emit(item_id, quantity)
 	inventory_changed.emit()
+	
+	# 마을에서만 자동 저장 (필드에서는 전투 중 드랍이 많으니 제외)
+	if SaveManager and GameManager and GameManager.current_state == GameManager.GameState.TOWN:
+		SaveManager.auto_save("아이템 획득")
+	
 	return true
 
 
@@ -52,6 +57,11 @@ func remove_item(item_id: String, quantity: int = 1) -> bool:
 	print("[InventoryManager] 제거: %s x%d" % [item_id, quantity])
 	item_removed.emit(item_id, quantity)
 	inventory_changed.emit()
+	
+	# 마을에서만 자동 저장
+	if SaveManager and GameManager and GameManager.current_state == GameManager.GameState.TOWN:
+		SaveManager.auto_save("아이템 사용/판매")
+	
 	return true
 
 
@@ -93,6 +103,11 @@ func equip_item(hero: RefCounted, item_id: String, slot: String) -> bool:
 	
 	print("[InventoryManager] 장착: %s → %s의 %s" % [item_id, hero.hero_name, slot])
 	PartyManager.party_changed.emit()
+	
+	# 자동 저장
+	if SaveManager:
+		SaveManager.auto_save("장비 장착")
+	
 	return true
 
 
@@ -111,6 +126,11 @@ func unequip_item(hero: RefCounted, slot: String) -> bool:
 	
 	print("[InventoryManager] 해제: %s ← %s의 %s" % [equip_id, hero.hero_name, slot])
 	PartyManager.party_changed.emit()
+	
+	# 자동 저장
+	if SaveManager:
+		SaveManager.auto_save("장비 해제")
+	
 	return true
 #endregion
 

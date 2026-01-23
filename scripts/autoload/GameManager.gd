@@ -39,6 +39,10 @@ func start_new_game() -> void:
 func add_gold(amount: int) -> void:
 	gold += amount
 	gold_changed.emit(gold)
+	
+	# 마을에서만 자동 저장
+	if SaveManager and current_state == GameState.TOWN:
+		SaveManager.auto_save("골드 획득")
 
 
 func spend_gold(amount: int) -> bool:
@@ -46,6 +50,11 @@ func spend_gold(amount: int) -> bool:
 		return false
 	gold -= amount
 	gold_changed.emit(gold)
+	
+	# 마을에서만 자동 저장
+	if SaveManager and current_state == GameState.TOWN:
+		SaveManager.auto_save("골드 사용")
+	
 	return true
 
 
@@ -109,6 +118,11 @@ func go_to_field(stage_id: String = "", field_id: String = "") -> void:
 	
 	print("[GameManager] 필드 이동: ", scene_path)
 	change_state(GameState.FIELD)
+	
+	# 자동 저장
+	if SaveManager:
+		SaveManager.auto_save("필드 진입")
+	
 	get_tree().change_scene_to_file(scene_path)
 
 
@@ -116,6 +130,11 @@ func go_to_town() -> void:
 	## 마을로 이동
 	print("[GameManager] 마을 이동")
 	change_state(GameState.TOWN)
+	
+	# 자동 저장
+	if SaveManager:
+		SaveManager.auto_save("마을 진입")
+	
 	get_tree().change_scene_to_file("res://scenes/town/Town.tscn")
 
 

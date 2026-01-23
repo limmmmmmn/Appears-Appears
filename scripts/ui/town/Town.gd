@@ -36,9 +36,15 @@ func _focus_first_menu_button() -> void:
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		# ESC로 뒤로가기
+		# ESC로 뒤로가기 또는 메뉴
 		if sub_panel.visible:
 			_show_main_menu()
+			get_viewport().set_input_as_handled()
+		elif not pause_menu:
+			_show_pause_menu()
+			get_viewport().set_input_as_handled()
+		else:
+			_close_pause_menu()
 			get_viewport().set_input_as_handled()
 
 
@@ -433,4 +439,87 @@ func _setup_sub_button_navigation() -> void:
 			btn.focus_neighbor_top = sub_buttons[i - 1].get_path()
 		if i < sub_buttons.size() - 1:
 			btn.focus_neighbor_bottom = sub_buttons[i + 1].get_path()
+#endregion
+
+
+#region 일시정지 메뉴
+var pause_menu: Control = null
+
+func _show_pause_menu() -> void:
+	if pause_menu:
+		pause_menu.queue_free()
+	
+	# 메뉴 UI 생성
+	pause_menu = Control.new()
+	pause_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	
+	# 어두운 배경
+	var bg := ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0, 0, 0, 0.7)
+	pause_menu.add_child(bg)
+	
+	# 중앙 패널
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_menu.add_child(center)
+	
+	var panel := PanelContainer.new()
+	center.add_child(panel)
+	
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 30)
+	margin.add_theme_constant_override("margin_right", 30)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	panel.add_child(margin)
+	
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 15)
+	margin.add_child(vbox)
+	
+	# 타이틀
+	var title := Label.new()
+	title.text = "메뉴"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+	
+	# 버튼들
+	var resume_btn := Button.new()
+	resume_btn.text = "닫기"
+	resume_btn.custom_minimum_size = Vector2(150, 35)
+	resume_btn.pressed.connect(_close_pause_menu)
+	vbox.add_child(resume_btn)
+	
+	var title_btn := Button.new()
+	title_btn.text = "타이틀로"
+	title_btn.custom_minimum_size = Vector2(150, 35)
+	title_btn.pressed.connect(_on_title_pressed)
+	vbox.add_child(title_btn)
+	
+	var quit_btn := Button.new()
+	quit_btn.text = "게임 종료"
+	quit_btn.custom_minimum_size = Vector2(150, 35)
+	quit_btn.pressed.connect(_on_quit_pressed)
+	vbox.add_child(quit_btn)
+	
+	add_child(pause_menu)
+	resume_btn.grab_focus()
+
+
+func _close_pause_menu() -> void:
+	if pause_menu:
+		pause_menu.queue_free()
+		pause_menu = null
+	_focus_first_menu_button()
+
+
+func _on_title_pressed() -> void:
+	SaveManager.save_game()
+	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+
+
+func _on_quit_pressed() -> void:
+	SaveManager.save_game()
+	get_tree().quit()
 #endregion

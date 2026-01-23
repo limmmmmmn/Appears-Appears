@@ -77,9 +77,9 @@ func _build_ui() -> void:
 	button_container.add_theme_constant_override("separation", 20)
 	inner_vbox.add_child(button_container)
 	
-	# 다시하기 버튼
+	# 타이틀로 버튼
 	restart_button = Button.new()
-	restart_button.text = "다시하기"
+	restart_button.text = "타이틀로"
 	restart_button.custom_minimum_size = Vector2(100, 40)
 	restart_button.pressed.connect(_on_restart_pressed)
 	button_container.add_child(restart_button)

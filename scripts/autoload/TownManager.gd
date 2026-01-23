@@ -70,6 +70,11 @@ func recruit_hero(hero_id: String) -> bool:
 		tavern_heroes.erase(hero_id)
 		recruit_remaining -= 1
 		tavern_updated.emit()
+		
+		# 자동 저장
+		if SaveManager:
+			SaveManager.auto_save("영웅 영입")
+		
 		return true
 	
 	return false
@@ -78,6 +83,10 @@ func recruit_hero(hero_id: String) -> bool:
 func on_enter_town() -> void:
 	## 마을 입장 시 (필드에서 돌아올 때)
 	explore_count = 0
+	
+	# 자동 저장
+	if SaveManager:
+		SaveManager.auto_save("마을 진입")
 
 
 func can_explore() -> bool:
