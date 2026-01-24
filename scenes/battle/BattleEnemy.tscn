@@ -3,5 +3,29 @@
 [ext_resource type="Script" uid="uid://buyis0no4ixyb" path="res://scripts/battle/BattleEnemy.gd" id="1_enemy"]
 
 [node name="BattleEnemy" type="VBoxContainer"]
-custom_minimum_size = Vector2(64, 100)
+alignment = 1
 script = ExtResource("1_enemy")
+
+[node name="Sprite" type="TextureRect" parent="."]
+layout_mode = 2
+size_flags_horizontal = 4
+stretch_mode = 2
+
+[node name="NameLabel" type="Label" parent="."]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "Enemy"
+horizontal_alignment = 1
+
+[node name="HPBar" type="ProgressBar" parent="."]
+custom_minimum_size = Vector2(50, 6)
+layout_mode = 2
+size_flags_horizontal = 4
+value = 100.0
+show_percentage = false
+
+[node name="ATBBar" type="ProgressBar" parent="."]
+custom_minimum_size = Vector2(50, 4)
+layout_mode = 2
+size_flags_horizontal = 4
+show_percentage = false

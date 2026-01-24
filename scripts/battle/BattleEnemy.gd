@@ -1,6 +1,7 @@
 extends VBoxContainer
 class_name BattleEnemy
 ## BattleEnemy: 전투창 내 적 표시 및 상태 관리
+## 씬 구조: Sprite, NameLabel, HPBar, ATBBar (인스펙터에서 visible 토글)
 
 signal defeated(enemy: BattleEnemy)
 
@@ -23,66 +24,19 @@ var gold_min: int = 0
 var gold_max: int = 0
 var drop_table: Array = []
 
-# UI
-var sprite: TextureRect
-var name_label: Label
-var hp_bar: ProgressBar
-var hp_label: Label
+# UI 노드 참조 (씬에서 가져옴)
+@onready var sprite: TextureRect = $Sprite
+@onready var name_label: Label = $NameLabel
+@onready var hp_bar: ProgressBar = $HPBar
+@onready var atb_bar: ProgressBar = $ATBBar
 
 # 이펙트
 var original_modulate: Color = Color.WHITE
 
 
-var _ui_built: bool = false
-
-
-func _ready() -> void:
-	if not _ui_built:
-		_build_ui()
-
-
-func _build_ui() -> void:
-	if _ui_built:
-		return
-	_ui_built = true
-	# 세로 정렬
-	alignment = BoxContainer.ALIGNMENT_CENTER
-	custom_minimum_size = Vector2(64, 100)
-	
-	# 스프라이트
-	sprite = TextureRect.new()
-	sprite.custom_minimum_size = Vector2(48, 48)
-	sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	sprite.expand_mode = TextureRect.EXPAND_FIT_WIDTH
-	add_child(sprite)
-	
-	# 이름
-	name_label = Label.new()
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 10)
-	add_child(name_label)
-	
-	# HP 바
-	hp_bar = ProgressBar.new()
-	hp_bar.custom_minimum_size = Vector2(50, 8)
-	hp_bar.show_percentage = false
-	hp_bar.value = 100
-	add_child(hp_bar)
-	
-	# HP 수치
-	hp_label = Label.new()
-	hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hp_label.add_theme_font_size_override("font_size", 9)
-	add_child(hp_label)
-
-
 var is_elite_version: bool = false  # 엘리트 버전 여부
 
 func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
-	# UI가 아직 생성되지 않았으면 먼저 생성
-	if not _ui_built:
-		_build_ui()
-	
 	enemy_id = p_enemy_id
 	is_elite_version = p_is_elite
 	
@@ -124,24 +78,29 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	drop_table = data.get("drop_table", [])
 	
 	# UI 업데이트
-	name_label.text = enemy_name
+	if name_label:
+		name_label.text = enemy_name
 	_update_hp_display()
 	
 	# 스프라이트 로드
-	if SpriteManager:
+	if SpriteManager and sprite:
 		var tex: Texture2D = SpriteManager.get_enemy_sprite(enemy_id)
 		if tex:
 			sprite.texture = tex
 	
 	# 엘리트 버전 시각적 표시
 	if is_elite_version:
-		name_label.add_theme_color_override("font_color", Color.PURPLE)
-		sprite.scale = Vector2(1.3, 1.3)  # 크기 증가
+		if name_label:
+			name_label.add_theme_color_override("font_color", Color.PURPLE)
+		if sprite:
+			sprite.scale = Vector2(1.3, 1.3)  # 크기 증가
 		modulate = Color(1.2, 0.9, 1.3)  # 보라빛 틴트
 	elif enemy_type == "boss":
-		name_label.add_theme_color_override("font_color", Color.ORANGE)
+		if name_label:
+			name_label.add_theme_color_override("font_color", Color.ORANGE)
 	elif enemy_type == "elite":
-		name_label.add_theme_color_override("font_color", Color.PURPLE)
+		if name_label:
+			name_label.add_theme_color_override("font_color", Color.PURPLE)
 
 
 #region 스탯 계산
@@ -192,10 +151,9 @@ func heal(amount: int) -> int:
 
 
 func _update_hp_display() -> void:
-	if hp_bar:
+	# HP바가 visible일 때만 업데이트
+	if hp_bar and hp_bar.visible:
 		hp_bar.value = (float(current_hp) / float(max_hp)) * 100.0
-	if hp_label:
-		hp_label.text = "%d/%d" % [current_hp, max_hp]
 #endregion
 
 
@@ -259,7 +217,7 @@ func play_hit_effect(is_crit: bool = false) -> void:
 	if _hit_tween and _hit_tween.is_valid():
 		_hit_tween.kill()
 	
-	var original_pos: Vector2 = sprite.position
+	var original_pos: Vector2 = position
 	_hit_tween = create_tween()
 	
 	if is_crit:
@@ -272,12 +230,12 @@ func play_hit_effect(is_crit: bool = false) -> void:
 		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.03)
 		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.05)
 		
-		# 강한 흔들림
+		# 강한 흔들림 (전체 노드)
 		var shake_tween := create_tween()
 		for i in range(4):
 			var offset := Vector2(randf_range(-6, 6), randf_range(-4, 4))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.03)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.04)
+			shake_tween.tween_property(self, "position", original_pos + offset, 0.03)
+		shake_tween.tween_property(self, "position", original_pos, 0.04)
 	else:
 		# 일반: 깜빡임 + 약한 흔들림
 		_hit_tween.set_parallel(true)
@@ -286,32 +244,28 @@ func play_hit_effect(is_crit: bool = false) -> void:
 		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.04)
 		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.06)
 		
-		# 약한 흔들림
+		# 약한 흔들림 (전체 노드)
 		var shake_tween := create_tween()
 		for i in range(2):
 			var offset := Vector2(randf_range(-3, 3), randf_range(-2, 2))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.03)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.04)
+			shake_tween.tween_property(self, "position", original_pos + offset, 0.03)
+		shake_tween.tween_property(self, "position", original_pos, 0.04)
 
 
 func play_attack_effect() -> void:
-	## 공격 이펙트 - 스프라이트만 앞으로
-	if not sprite:
-		return
-	
+	## 공격 이펙트 - 전체 노드를 앞으로 (아래로)
+	var original_pos := position
 	var tween := create_tween()
-	tween.tween_property(sprite, "position:y", 15, 0.08)
-	tween.tween_property(sprite, "position:y", 0, 0.1)
+	tween.tween_property(self, "position:y", position.y + 10, 0.08)
+	tween.tween_property(self, "position:y", original_pos.y, 0.1)
 
 
 func play_evade_effect() -> void:
-	## 회피 이펙트 - 스프라이트만 옆으로
-	if not sprite:
-		return
-	
+	## 회피 이펙트 - 전체 노드를 옆으로
+	var original_pos := position
 	var tween := create_tween()
-	tween.tween_property(sprite, "position:x", 15, 0.08)
-	tween.tween_property(sprite, "position:x", 0, 0.12)
+	tween.tween_property(self, "position:x", position.x + 12, 0.08)
+	tween.tween_property(self, "position:x", original_pos.x, 0.12)
 
 
 func play_death_effect() -> void:

@@ -3,5 +3,37 @@
 [ext_resource type="Script" uid="uid://bm5a1dk1qc713" path="res://scripts/battle/BattleWindow.gd" id="1_battle"]
 
 [node name="BattleWindow" type="PanelContainer"]
-custom_minimum_size = Vector2(280, 200)
+custom_minimum_size = Vector2(300, 200)
 script = ExtResource("1_battle")
+
+[node name="MainVBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TopBar" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+alignment = 2
+
+[node name="CloseButton" type="Button" parent="MainVBox/TopBar"]
+visible = false
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+text = "×"
+
+[node name="BattleArea" type="PanelContainer" parent="MainVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="BottomBar" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+alignment = 2
+
+[node name="RunButton" type="Button" parent="MainVBox/BottomBar"]
+custom_minimum_size = Vector2(50, 24)
+layout_mode = 2
+text = "도주"

@@ -29,79 +29,29 @@ var total_exp: int = 0
 var total_gold: int = 0
 var drop_items: Array = []
 
-# === UI 참조 ===
-var enemy_container: HBoxContainer
-var run_button: Button
-var close_button: Button
+# === UI 참조 (씬에서 가져옴) ===
+@onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
+@onready var run_button: Button = $MainVBox/BottomBar/RunButton
+@onready var close_button: Button = $MainVBox/TopBar/CloseButton
 
 # === 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
 const ACTION_DELAY: float = 1.0  # 0.35 → 0.5 (모션 보이게)
 
-var _ui_built: bool = false
-
 
 func _ready() -> void:
-	if not _ui_built:
-		_build_ui()
 	visible = false
-
-
-#region UI 구성
-func _build_ui() -> void:
-	if _ui_built:
-		return
-	_ui_built = true
-	
-	custom_minimum_size = Vector2(240, 140)
-	
-	var main_vbox := VBoxContainer.new()
-	main_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_vbox.add_theme_constant_override("separation", 4)
-	add_child(main_vbox)
-	
-	# 상단: 닫기 버튼만
-	var top_bar := HBoxContainer.new()
-	top_bar.alignment = BoxContainer.ALIGNMENT_END
-	main_vbox.add_child(top_bar)
-	
-	close_button = Button.new()
-	close_button.text = "×"
-	close_button.custom_minimum_size = Vector2(24, 24)
-	close_button.visible = false
-	close_button.pressed.connect(_on_close_pressed)
-	top_bar.add_child(close_button)
-	
-	# 전투 영역 (적 표시)
-	var battle_area := PanelContainer.new()
-	battle_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_vbox.add_child(battle_area)
-	
-	enemy_container = HBoxContainer.new()
-	enemy_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	enemy_container.add_theme_constant_override("separation", 12)
-	battle_area.add_child(enemy_container)
-	
-	# 하단: 도주 버튼
-	var bottom_bar := HBoxContainer.new()
-	bottom_bar.alignment = BoxContainer.ALIGNMENT_END
-	main_vbox.add_child(bottom_bar)
-	
-	run_button = Button.new()
-	run_button.text = "도주"
-	run_button.custom_minimum_size = Vector2(50, 24)
-	run_button.pressed.connect(_on_run_pressed)
-	bottom_bar.add_child(run_button)
-#endregion
+	# 버튼 시그널 연결
+	if run_button:
+		run_button.pressed.connect(_on_run_pressed)
+	if close_button:
+		close_button.pressed.connect(_on_close_pressed)
 
 
 #region 전투 초기화
 var is_elite_battle: bool = false
 
 func setup(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false) -> void:
-	if not _ui_built:
-		_build_ui()
-	
 	battle_id = p_battle_id
 	enemy_data_list = enemy_ids.duplicate()
 	is_elite_battle = p_is_elite
@@ -135,6 +85,8 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 	return false
 
 
+const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
+
 func _spawn_enemies(enemy_ids: Array) -> void:
 	for child in enemy_container.get_children():
 		child.queue_free()
@@ -143,7 +95,8 @@ func _spawn_enemies(enemy_ids: Array) -> void:
 	var spawned_elite: bool = false
 	
 	for enemy_id in enemy_ids:
-		var battle_enemy := BattleEnemy.new()
+		var battle_enemy: BattleEnemy = BATTLE_ENEMY_SCENE.instantiate()
+		enemy_container.add_child(battle_enemy)
 		
 		# 엘리트 전투에서 첫 번째 적은 엘리트 버전으로
 		if is_elite_battle and not spawned_elite:
@@ -152,7 +105,6 @@ func _spawn_enemies(enemy_ids: Array) -> void:
 		else:
 			battle_enemy.setup(str(enemy_id), false)
 		
-		enemy_container.add_child(battle_enemy)
 		enemies.append(battle_enemy)
 
 

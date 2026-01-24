@@ -3,6 +3,8 @@ extends Node
 ## - 여러 전투창을 동시에 관리
 ## - 전투창 위치 배정 (HUD/리더 영역 제외)
 
+const BATTLE_WINDOW_SCENE = preload("res://scenes/battle/BattleWindow.tscn")
+
 signal battle_started(battle_id: int)
 signal battle_ended(battle_id: int, victory: bool)
 signal all_battles_ended
@@ -39,8 +41,8 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 	if is_boss:
 		force_end_all_non_boss()
 	
-	# BattleWindow 생성
-	var window := BattleWindow.new()
+	# BattleWindow 씬 인스턴스 생성
+	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
 	
 	# 컨테이너 설정
 	if battle_container == null:
