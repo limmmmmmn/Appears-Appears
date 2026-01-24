@@ -1,6 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=3 format=3 uid="uid://bb5xaxnatwvjk"]
 
-[ext_resource type="Script" uid="uid://c80mhfj36k255" path="res://scripts/entities/PartyFollower.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://deyxnhy4ojeqv" path="res://scripts/entities/PartyFollower.gd" id="1_script"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(12, 12)
@@ -11,7 +11,6 @@ collision_mask = 4
 script = ExtResource("1_script")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-modulate = Color(0.4, 0.8, 0.4, 1)
 scale = Vector2(0.5, 0.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
