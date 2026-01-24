@@ -1,5 +1,5 @@
-res://scripts/battle/BattleWindow.gd
+res://scenes/battle/BattleEnemy.tscn
 res://scenes/battle/BattleWindow.tscn
 res://scripts/battle/BattleEnemy.gd
-res://scenes/battle/BattleEnemy.tscn
-res://scripts/autoload/BattleManager.gd
+res://scenes/field/FieldEnemy.tscn
+res://scripts/entities/FieldEnemy.gd

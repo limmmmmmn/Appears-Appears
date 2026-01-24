@@ -2,30 +2,57 @@
 
 [ext_resource type="Script" uid="uid://buyis0no4ixyb" path="res://scripts/battle/BattleEnemy.gd" id="1_enemy"]
 
-[node name="BattleEnemy" type="VBoxContainer"]
-alignment = 1
+[node name="BattleEnemy" type="Control"]
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 3
+anchors_preset = 0
 script = ExtResource("1_enemy")
 
-[node name="Sprite" type="TextureRect" parent="."]
-layout_mode = 2
-size_flags_horizontal = 4
-stretch_mode = 2
+[node name="Sprite" type="Sprite2D" parent="."]
+position = Vector2(40, 50)
+scale = Vector2(2, 2)
 
 [node name="NameLabel" type="Label" parent="."]
-layout_mode = 2
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -32.0
+offset_top = -14.0
+offset_right = 32.0
+grow_horizontal = 2
+grow_vertical = 0
 theme_override_font_sizes/font_size = 10
 text = "Enemy"
 horizontal_alignment = 1
 
 [node name="HPBar" type="ProgressBar" parent="."]
-custom_minimum_size = Vector2(50, 6)
-layout_mode = 2
-size_flags_horizontal = 4
+visible = false
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -25.0
+offset_top = -6.0
+offset_right = 25.0
+grow_horizontal = 2
+grow_vertical = 0
 value = 100.0
 show_percentage = false
 
 [node name="ATBBar" type="ProgressBar" parent="."]
-custom_minimum_size = Vector2(50, 4)
-layout_mode = 2
-size_flags_horizontal = 4
+visible = false
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -25.0
+offset_top = 2.0
+offset_right = 25.0
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 0
 show_percentage = false

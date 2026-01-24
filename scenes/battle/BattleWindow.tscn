@@ -3,7 +3,11 @@
 [ext_resource type="Script" uid="uid://bm5a1dk1qc713" path="res://scripts/battle/BattleWindow.gd" id="1_battle"]
 
 [node name="BattleWindow" type="PanelContainer"]
-custom_minimum_size = Vector2(300, 200)
+custom_minimum_size = Vector2(280, 190)
+offset_left = 3.0
+offset_top = 1.0
+offset_right = 283.0
+offset_bottom = 181.0
 script = ExtResource("1_battle")
 
 [node name="MainVBox" type="VBoxContainer" parent="."]
@@ -11,6 +15,7 @@ layout_mode = 2
 theme_override_constants/separation = 4
 
 [node name="TopBar" type="HBoxContainer" parent="MainVBox"]
+visible = false
 layout_mode = 2
 alignment = 2
 
@@ -26,10 +31,12 @@ size_flags_vertical = 3
 
 [node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea"]
 layout_mode = 2
-theme_override_constants/separation = 12
+size_flags_vertical = 4
+theme_override_constants/separation = 5
 alignment = 1
 
 [node name="BottomBar" type="HBoxContainer" parent="MainVBox"]
+visible = false
 layout_mode = 2
 alignment = 2
 

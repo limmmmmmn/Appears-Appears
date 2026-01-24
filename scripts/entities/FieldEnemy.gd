@@ -66,19 +66,15 @@ func _setup_from_data() -> void:
 			sprite.texture = tex
 			sprite.scale = Vector2(1, 1)
 	
-	# 이름 라벨
+	# 이름 라벨 (크기는 동일, 색상만 변경)
 	if name_label:
 		var enemy_name: String = str(data.get("name", enemy_id))
 		if is_boss:
 			name_label.text = "👑 " + enemy_name
 			name_label.add_theme_color_override("font_color", Color.ORANGE_RED)
-			# 보스는 더 크게
-			sprite.scale = Vector2(1.8, 1.8)
 		elif is_elite:
 			name_label.text = "⭐ " + enemy_name
 			name_label.add_theme_color_override("font_color", Color.PURPLE)
-			# 엘리트는 크기 약간 크게
-			sprite.scale = Vector2(1.3, 1.3)
 		else:
 			name_label.text = enemy_name
 	
