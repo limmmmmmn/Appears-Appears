@@ -1,6 +1,13 @@
-[gd_scene load_steps=2 format=3 uid="uid://bckrh0oeviq4m"]
+[gd_scene load_steps=3 format=3 uid="uid://bckrh0oeviq4m"]
 
 [ext_resource type="Script" uid="uid://bm5a1dk1qc713" path="res://scripts/battle/BattleWindow.gd" id="1_battle"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5btk3"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
 
 [node name="BattleWindow" type="PanelContainer"]
 custom_minimum_size = Vector2(280, 190)
@@ -28,6 +35,7 @@ text = "×"
 [node name="BattleArea" type="PanelContainer" parent="MainVBox"]
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_5btk3")
 
 [node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea"]
 layout_mode = 2

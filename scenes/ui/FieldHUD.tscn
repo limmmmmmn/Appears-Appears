@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://c2cjb4efakggb"]
 
-[ext_resource type="Script" uid="uid://dl8ugr08jnuqs" path="res://scripts/ui/field/FieldHUD.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://b22n74rgrssul" path="res://scripts/ui/field/FieldHUD.gd" id="1_script"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 4.0

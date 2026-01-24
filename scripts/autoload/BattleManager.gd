@@ -18,9 +18,7 @@ var _battle_id_counter: int = 0
 
 # 전투창 배치 설정
 const WINDOW_SIZE := Vector2(280, 200)
-const HUD_RIGHT_WIDTH: float = 200.0  # 우측 HUD 영역
-const HUD_TOP_HEIGHT: float = 40.0    # 상단 HUD 영역
-const LEADER_SAFE_RADIUS: float = 100.0  # 리더 주변 안전 영역
+const CENTER_SAFE_SIZE: float = 100.0 # 화면 정중앙 보호 영역
 const WINDOW_MARGIN: float = 10.0
 
 var battle_container: CanvasLayer = null
@@ -153,48 +151,50 @@ func _calculate_window_position() -> Vector2:
 	if tree:
 		viewport_size = tree.root.get_visible_rect().size
 	
+	# 사용 가능 영역 (화면 전체, 마진만 적용)
 	var available_rect := Rect2(
 		WINDOW_MARGIN,
-		HUD_TOP_HEIGHT + WINDOW_MARGIN,
-		viewport_size.x - HUD_RIGHT_WIDTH - WINDOW_SIZE.x - WINDOW_MARGIN * 2,
-		viewport_size.y - HUD_TOP_HEIGHT - WINDOW_SIZE.y - WINDOW_MARGIN * 2
+		WINDOW_MARGIN,
+		viewport_size.x - WINDOW_SIZE.x - WINDOW_MARGIN * 2,
+		viewport_size.y - WINDOW_SIZE.y - WINDOW_MARGIN * 2
 	)
 	
-	var leader_pos := Vector2(-1000, -1000)
-	var field := _find_current_field()
-	if field and field.has_method("get_party_leader"):
-		var party_leader = field.get_party_leader()
-		if party_leader and is_instance_valid(party_leader):
-			leader_pos = party_leader.global_position
+	# 화면 정중앙 제외 영역 (100x100)
+	var center := viewport_size / 2
+	var center_safe_rect := Rect2(
+		center.x - 50,
+		center.y - 50,
+		100,
+		100
+	)
 	
-	for _i in range(10):
+	for _i in range(20):
 		var x := randf_range(available_rect.position.x, available_rect.position.x + available_rect.size.x)
 		var y := randf_range(available_rect.position.y, available_rect.position.y + available_rect.size.y)
 		var candidate := Vector2(x, y)
 		
-		var window_center := candidate + WINDOW_SIZE / 2
-		if window_center.distance_to(leader_pos) > LEADER_SAFE_RADIUS:
-			var overlaps := false
-			for bid in active_battles:
-				var battle_data: Dictionary = active_battles[bid]
-				if battle_data.has("window"):
-					var other_window = battle_data.get("window")
-					if is_instance_valid(other_window):
-						if candidate.distance_to(other_window.position) < 50:
-							overlaps = true
-							break
-			if not overlaps:
-				return candidate
+		# 전투창 영역이 정중앙 영역과 겹치는지 체크
+		var window_rect := Rect2(candidate, WINDOW_SIZE)
+		if window_rect.intersects(center_safe_rect):
+			continue
+		
+		# 다른 전투창과 겹치는지 체크
+		var overlaps := false
+		for bid in active_battles:
+			var battle_data: Dictionary = active_battles[bid]
+			if battle_data.has("window"):
+				var other_window = battle_data.get("window")
+				if is_instance_valid(other_window):
+					if candidate.distance_to(other_window.position) < 50:
+						overlaps = true
+						break
+		if not overlaps:
+			return candidate
 	
+	# 실패 시 좌상단
 	return Vector2(available_rect.position.x, available_rect.position.y)
 
 
-func _find_current_field() -> Node:
-	var tree := get_tree()
-	if tree and tree.current_scene:
-		if tree.current_scene.has_method("get_party_leader"):
-			return tree.current_scene
-	return null
 #endregion
 
 
