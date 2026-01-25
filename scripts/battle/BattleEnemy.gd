@@ -222,11 +222,64 @@ func _roll_random_common_equipment() -> String:
 #region 이펙트
 var _hit_tween: Tween = null
 
+# 슬래시 이펙트 스프라이트 경로
+const SLASH_SPRITE_PATH := "res://assets/sprites/effects/slash.png"
+const SLASH_CRIT_SPRITE_PATH := "res://assets/sprites/effects/slash_crit.png"
 
-func play_hit_effect(is_crit: bool = false) -> void:
-	## 피격 이펙트 - 깜빡임 + 흔들림
+
+func play_slash_effect(is_crit: bool = false) -> void:
+	## 검 휘두르는 슬래시 이펙트 (스프라이트 기반)
 	if not sprite:
 		return
+	
+	var slash := Sprite2D.new()
+	
+	# 크리티컬/일반에 따라 다른 스프라이트
+	var path := SLASH_CRIT_SPRITE_PATH if is_crit else SLASH_SPRITE_PATH
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	
+	if tex:
+		slash.texture = tex
+	else:
+		# 스프라이트 없으면 플레이스홀더 (흰색 사각형)
+		var img := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+		img.fill(Color.WHITE)
+		slash.texture = ImageTexture.create_from_image(img)
+	
+	# 스프라이트에 자식으로 추가
+	sprite.add_child(slash)
+	slash.z_index = 50
+	slash.position = Vector2(-20, 0)  # 왼쪽에서 시작
+	slash.rotation_degrees = -45  # 대각선
+	slash.scale = Vector2(0.5, 0.5) if not is_crit else Vector2(0.7, 0.7)
+	slash.modulate = Color.WHITE if not is_crit else Color(1.0, 0.9, 0.3)
+	slash.modulate.a = 0.0
+	
+	# 애니메이션: 왼쪽에서 오른쪽으로 휘두르기
+	var tween := create_tween()
+	tween.set_parallel(true)
+	
+	# 나타나면서 회전하며 이동
+	tween.tween_property(slash, "modulate:a", 1.0, 0.03)
+	tween.tween_property(slash, "position", Vector2(20, 0), 0.12).set_ease(Tween.EASE_OUT)
+	tween.tween_property(slash, "rotation_degrees", 45.0, 0.12).set_ease(Tween.EASE_OUT)
+	
+	# 크리티컬이면 스케일 커짐
+	if is_crit:
+		tween.tween_property(slash, "scale", Vector2(1.0, 1.0), 0.08)
+	
+	# 페이드아웃
+	tween.chain().tween_property(slash, "modulate:a", 0.0, 0.08)
+	tween.chain().tween_callback(func(): slash.queue_free())
+
+
+func play_hit_effect(is_crit: bool = false) -> void:
+	## 피격 이펙트 - 슬래시 + 깜빡임 + 흔들림
+	if not sprite:
+		return
+	
+	# 슬래시 이펙트 먼저!
+	play_slash_effect(is_crit)
 	
 	if _hit_tween and _hit_tween.is_valid():
 		_hit_tween.kill()

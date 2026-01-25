@@ -1,5 +1,4 @@
 extends PanelContainer
-class_name BottomPartyPanel
 ## 하단 중앙 파티 상태 패널
 ## 페이스칩 + HP바 + ATB바 가로 배치
 ## 페이스칩 이펙트: ATB 금테두리, HP 낮으면 빨간 깜빡임, 공격시 튀어오름

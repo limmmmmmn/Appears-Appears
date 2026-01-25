@@ -38,7 +38,6 @@ scale = Vector2(0.5, 0.5)
 shape = SubResource("RectangleShape2D_1")
 
 [node name="StatusBars" type="Control" parent="."]
-visible = false
 z_index = 10
 layout_mode = 3
 anchors_preset = 0

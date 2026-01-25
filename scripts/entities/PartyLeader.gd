@@ -2,6 +2,7 @@ extends CharacterBody2D
 class_name PartyLeader
 ## 파티 리더: 플레이어 조작, 팔로워들이 따라옴
 ## 스프라이트 위에 HP바 + ATB바 표시 (씬에서 참조)
+## 공격 시 머리 위 아이콘 이펙트
 
 signal moved(new_position: Vector2)
 signal direction_changed(facing_right: bool)
@@ -19,15 +20,28 @@ var hero_data: Dictionary = {}
 @onready var hp_bar: ProgressBar = $StatusBars/HPBar
 @onready var atb_bar: ProgressBar = $StatusBars/ATBBar
 
+# 공격 이펙트용
+var attack_icon: Label = null
+const ATTACK_ICONS: Dictionary = {
+	"warrior": "⚔️",
+	"knight": "🗡️",
+	"thief": "🔪",
+	"archer": "🏹",
+	"mage": "✨",
+	"cleric": "✝️"
+}
+
 
 func _ready() -> void:
 	add_to_group("party_leader")
 	add_to_group("party")
 	position_history.append(global_position)
+	_create_attack_icon()
 	
 	# BattleManager ATB 시그널 연결
 	if BattleManager:
 		BattleManager.hero_atb_changed.connect(_on_hero_atb_changed)
+		BattleManager.hero_attacked.connect(_on_hero_attacked)
 
 
 func _physics_process(_delta: float) -> void:
@@ -44,6 +58,60 @@ func _physics_process(_delta: float) -> void:
 	
 	# HP 바 업데이트
 	_update_hp_bar()
+
+
+func _create_attack_icon() -> void:
+	## 공격 이펙트용 아이콘 생성
+	attack_icon = Label.new()
+	attack_icon.text = "⚔️"
+	attack_icon.add_theme_font_size_override("font_size", 16)
+	attack_icon.position = Vector2(-8, -32)
+	attack_icon.z_index = 20
+	attack_icon.visible = false
+	add_child(attack_icon)
+
+
+func _on_hero_attacked(attacked_hero_id: String) -> void:
+	## 이 영웅이 공격했을 때 이펙트 재생
+	if attacked_hero_id == hero_id:
+		_play_attack_effect()
+
+
+func _play_attack_effect() -> void:
+	## 검 휘두르는 이펙트
+	if not attack_icon:
+		return
+	
+	# 직업에 맞는 아이콘
+	var class_id: String = hero_data.get("class_id", "warrior")
+	attack_icon.text = ATTACK_ICONS.get(class_id, "⚔️")
+	
+	# 방향에 따라 시작 위치/각도 설정
+	var start_x: float = -12.0 if not facing_right else 12.0
+	var end_x: float = 12.0 if not facing_right else -12.0
+	var start_rot: float = -45.0 if not facing_right else 45.0
+	var end_rot: float = 45.0 if not facing_right else -45.0
+	
+	attack_icon.position = Vector2(start_x, -28)
+	attack_icon.rotation_degrees = start_rot
+	attack_icon.visible = true
+	attack_icon.modulate = Color.WHITE
+	
+	# 휘두르는 애니메이션
+	var tween = create_tween()
+	tween.set_parallel(true)
+	
+	# 호 그리며 이동 (위로 갔다가 내려옴)
+	tween.tween_property(attack_icon, "position:x", end_x, 0.15).set_ease(Tween.EASE_OUT)
+	tween.tween_property(attack_icon, "position:y", -35, 0.07).set_ease(Tween.EASE_OUT)
+	tween.tween_property(attack_icon, "rotation_degrees", end_rot, 0.15).set_ease(Tween.EASE_OUT)
+	
+	# 0.07초 후 아래로
+	tween.chain().tween_property(attack_icon, "position:y", -28, 0.08).set_ease(Tween.EASE_IN)
+	
+	# 페이드 아웃
+	tween.chain().tween_property(attack_icon, "modulate:a", 0.0, 0.1)
+	tween.chain().tween_callback(func(): attack_icon.visible = false)
 
 
 func _update_hp_bar() -> void:
