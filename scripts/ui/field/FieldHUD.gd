@@ -1,33 +1,40 @@
 extends CanvasLayer
 class_name FieldHUD
-## 필드 HUD 메인 컨트롤러: 컴포넌트 조합 및 조율
+## 필드 HUD 메인 컨트롤러
+## - TopBar: 스테이지, 골드, 배속, 메뉴
+## - LogPanel: 전투 로그 (좌측 하단)
+## - PartyPanel: 파티 상태 + 인벤토리 (우측)
+## - BottomPartyPanel: 페이스칩 (하단 중앙)
 
 signal menu_pressed
 signal equipment_slot_clicked(hero_index: int, slot: String)
 
-# 상단 바
+# === 상단 바 ===
 @onready var stage_label: Label = %StageLabel
 @onready var gold_label: Label = %GoldLabel
+@onready var speed_button: Button = %SpeedButton
 @onready var menu_button: Button = %MenuButton
 
-# 전투 속도 버튼 (코드로 생성)
-var speed_button: Button
+# === 로그 패널 (좌측 하단) ===
+@onready var log_panel: PanelContainer = %LogPanel
+@onready var log_scroll: ScrollContainer = %LogScroll
+@onready var log_container: VBoxContainer = %LogContainer
 
-# 우측 패널
-@onready var minimap_panel: PanelContainer = %MinimapPanel
+# === 파티 패널 (우측) ===
+@onready var party_panel: PanelContainer = %PartyPanel
 @onready var party_container: VBoxContainer = %PartyContainer
 @onready var inventory_panel: PanelContainer = %InventoryPanel
-@onready var log_panel: PanelContainer = %LogPanel
 
-# 컴포넌트
+# === 컴포넌트 ===
 var party_slots: Array[PartySlotUI] = []
 var inventory_grid: InventoryGridUI = null
 var battle_log: BattleLogUI = null
 var drag_manager: DragDropManager = null
 
-# 컨텍스트 메뉴/툴팁
+# === 컨텍스트 메뉴/툴팁 ===
 var context_menu: PopupMenu = null
 var context_menu_item_id: String = ""
+var context_menu_type: String = ""
 var tooltip: EquipmentTooltip = null
 
 
@@ -47,8 +54,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _setup_components() -> void:
-	# 전투 속도 버튼 생성
-	_create_speed_button()
+	# 배속 버튼 스타일
+	_setup_speed_button()
 	
 	# 파티 슬롯 생성
 	for i in range(4):
@@ -67,15 +74,15 @@ func _setup_components() -> void:
 	inventory_grid.item_drag_started.connect(_on_inv_drag)
 	inventory_grid.item_right_clicked.connect(_on_inv_right_click)
 	if inventory_panel:
-		for c in inventory_panel.get_children(): c.queue_free()
+		for c in inventory_panel.get_children():
+			c.queue_free()
 		inventory_panel.add_child(inventory_grid)
 	
-	# 배틀 로그
+	# 배틀 로그 (log_container에 직접 추가)
 	battle_log = BattleLogUI.new()
 	battle_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	if log_panel:
-		for c in log_panel.get_children(): c.queue_free()
-		log_panel.add_child(battle_log)
+	if log_container:
+		log_container.add_child(battle_log)
 	
 	# 드래그 매니저
 	drag_manager = DragDropManager.new()
@@ -85,9 +92,35 @@ func _setup_components() -> void:
 	drag_manager.drag_ended.connect(func(_id, ok): if ok: update_party_display())
 
 
+func _setup_speed_button() -> void:
+	## 배속 버튼 스타일 설정
+	if not speed_button:
+		return
+	
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.border_width_bottom = 2
+	style.border_color = Color(0.4, 0.6, 0.9)
+	speed_button.add_theme_stylebox_override("normal", style)
+	
+	var hover_style := style.duplicate()
+	hover_style.bg_color = Color(0.25, 0.25, 0.3, 0.95)
+	speed_button.add_theme_stylebox_override("hover", hover_style)
+
+
 func _connect_signals() -> void:
-	if menu_button: menu_button.pressed.connect(func(): menu_pressed.emit())
-	if GameManager: GameManager.gold_changed.connect(func(_g): update_top_bar())
+	if menu_button:
+		menu_button.pressed.connect(func(): menu_pressed.emit())
+	if speed_button:
+		speed_button.pressed.connect(_on_speed_button_pressed)
+	
+	if GameManager:
+		GameManager.gold_changed.connect(func(_g): update_top_bar())
+	
 	if PartyManager and PartyManager.has_signal("party_changed"):
 		if not PartyManager.party_changed.is_connected(update_party_display):
 			PartyManager.party_changed.connect(update_party_display)
@@ -104,40 +137,7 @@ func _connect_signals() -> void:
 			BattleManager.battle_speed_changed.connect(_on_battle_speed_changed)
 
 
-func _create_speed_button() -> void:
-	## 전투 속도 버튼 생성 (상단 바에 추가)
-	speed_button = Button.new()
-	speed_button.text = "x1"
-	speed_button.custom_minimum_size = Vector2(32, 20)
-	speed_button.add_theme_font_size_override("font_size", 10)
-	speed_button.tooltip_text = "전투 속도 (클릭하여 변경)"
-	speed_button.pressed.connect(_on_speed_button_pressed)
-	
-	# 스타일 설정
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.border_width_bottom = 2
-	style.border_color = Color(0.4, 0.6, 0.9)
-	speed_button.add_theme_stylebox_override("normal", style)
-	
-	var hover_style := style.duplicate()
-	hover_style.bg_color = Color(0.25, 0.25, 0.3, 0.95)
-	speed_button.add_theme_stylebox_override("hover", hover_style)
-	
-	# 상단 바에 추가 (gold_label 옆)
-	if gold_label:
-		var parent = gold_label.get_parent()
-		if parent:
-			parent.add_child(speed_button)
-			# gold_label 다음에 배치
-			var gold_index = gold_label.get_index()
-			parent.move_child(speed_button, gold_index + 1)
-
-
+#region 이벤트 핸들러
 func _on_speed_button_pressed() -> void:
 	if BattleManager:
 		var new_speed = BattleManager.toggle_battle_speed()
@@ -159,12 +159,15 @@ func _on_hero_atb_changed(hero_id: String, value: float) -> void:
 		if slot.get_hero_id() == hero_id:
 			slot.update_atb(value)
 			break
+#endregion
 
 
+#region 업데이트 함수
 func update_all() -> void:
 	update_top_bar()
 	update_party_display()
-	if inventory_grid: inventory_grid.refresh()
+	if inventory_grid:
+		inventory_grid.refresh()
 
 
 func update_top_bar() -> void:
@@ -189,45 +192,59 @@ func update_party_display() -> void:
 
 
 func refresh_inventory() -> void:
-	if inventory_grid: inventory_grid.refresh()
+	if inventory_grid:
+		inventory_grid.refresh()
+#endregion
 
 
-# === 로그 함수 ===
+#region 로그 함수
 func add_log(msg: String, color: Color = Color.WHITE) -> void:
-	if battle_log: battle_log.add_log(msg, color)
+	if battle_log:
+		battle_log.add_log(msg, color)
 
 func add_battle_log(msg: String) -> void:
-	if battle_log: battle_log.add_battle(msg)
+	if battle_log:
+		battle_log.add_battle(msg)
 
 func add_damage_log(atk: String, tgt: String, dmg: int, crit: bool = false) -> void:
-	if battle_log: battle_log.add_damage(atk, tgt, dmg, crit)
+	if battle_log:
+		battle_log.add_damage(atk, tgt, dmg, crit)
 
 func add_heal_log(h: String, t: String, amt: int) -> void:
-	if battle_log: battle_log.add_heal(h, t, amt)
+	if battle_log:
+		battle_log.add_heal(h, t, amt)
 
 func add_defeat_log(t: String) -> void:
-	if battle_log: battle_log.add_defeat(t)
+	if battle_log:
+		battle_log.add_defeat(t)
 
 func add_exp_log(e: int) -> void:
-	if battle_log: battle_log.add_exp(e)
+	if battle_log:
+		battle_log.add_exp(e)
 
 func add_gold_log(g: int) -> void:
-	if battle_log: battle_log.add_gold(g)
+	if battle_log:
+		battle_log.add_gold(g)
 
 func add_item_log(n: String) -> void:
-	if battle_log: battle_log.add_item(n)
+	if battle_log:
+		battle_log.add_item(n)
 
 func add_system_log(msg: String) -> void:
-	if battle_log: battle_log.add_system(msg)
+	if battle_log:
+		battle_log.add_system(msg)
 
 func add_stat_description(n: String, v: String) -> void:
-	if battle_log: battle_log.add_stat_info(n, v)
+	if battle_log:
+		battle_log.add_stat_info(n, v)
 
 func clear_logs() -> void:
-	if battle_log: battle_log.clear()
+	if battle_log:
+		battle_log.clear()
+#endregion
 
 
-# === 인벤토리 이벤트 ===
+#region 인벤토리 이벤트
 func _on_inv_clicked(item_id: String) -> void:
 	var data = DataManager.get_equipment(item_id)
 	if data.is_empty():
@@ -237,7 +254,8 @@ func _on_inv_clicked(item_id: String) -> void:
 		return
 	
 	var party = PartyManager.get_party() if PartyManager else []
-	if party.is_empty(): return
+	if party.is_empty():
+		return
 	
 	var hero = party[0]
 	var slot = str(data.get("slot", "main_hand"))
@@ -251,29 +269,28 @@ func _on_inv_clicked(item_id: String) -> void:
 
 
 func _on_inv_hover(item_id: String) -> void:
-	if drag_manager and drag_manager.is_dragging(): return
 	_show_tooltip(item_id)
 
 
-func _on_inv_drag(item_id: String, _btn: Button) -> void:
-	_hide_tooltip()
-	if drag_manager: drag_manager.start_drag_from_inventory(item_id)
+func _on_inv_drag(item_id: String) -> void:
+	if drag_manager:
+		drag_manager.start_drag_from_inventory(item_id)
 
 
 func _on_inv_right_click(item_id: String, pos: Vector2) -> void:
 	var equip_data = DataManager.get_equipment(item_id)
-	var item_data = DataManager.get_item(item_id)
-	
 	if not equip_data.is_empty():
 		_show_context_menu(item_id, pos, "equip")
-	elif not item_data.is_empty() and item_data.get("type", "") == "consumable":
-		_show_context_menu(item_id, pos, "consumable")
+	else:
+		var item_data = DataManager.get_item(item_id)
+		if not item_data.is_empty() and item_data.get("type", "") == "consumable":
+			_show_context_menu(item_id, pos, "consumable")
 
 
-# === 장비 슬롯 이벤트 ===
 func _on_equip_gui_input(event: InputEvent, slot_name: String, hero_idx: int) -> void:
 	var party = PartyManager.get_party() if PartyManager else []
-	if hero_idx >= party.size(): return
+	if hero_idx >= party.size():
+		return
 	
 	var hero: Hero = party[hero_idx]
 	var eid = hero.equipment.get(slot_name, "")
@@ -289,11 +306,10 @@ func _on_equip_gui_input(event: InputEvent, slot_name: String, hero_idx: int) ->
 				drag_manager.start_drag_from_equipped(eid, hero_idx, slot_name)
 			else:
 				equipment_slot_clicked.emit(hero_idx, slot_name)
+#endregion
 
 
-# === 컨텍스트 메뉴 ===
-var context_menu_type: String = ""
-
+#region 컨텍스트 메뉴
 func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equip") -> void:
 	_hide_context_menu()
 	_hide_tooltip()
@@ -392,6 +408,16 @@ func _on_ctx_selected(id: int) -> void:
 	_hide_context_menu()
 
 
+func _hide_context_menu() -> void:
+	if context_menu and is_instance_valid(context_menu):
+		context_menu.queue_free()
+		context_menu = null
+	context_menu_item_id = ""
+	context_menu_type = ""
+#endregion
+
+
+#region 소비 아이템 사용
 func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 	var item_data: Dictionary = DataManager.get_item(item_id)
 	if item_data.is_empty():
@@ -490,21 +516,14 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 			add_system_log("%s: 알 수 없는 효과" % item_name)
 	
 	if success:
-		var removed = InventoryManager.remove_item(item_id, 1)
+		InventoryManager.remove_item(item_id, 1)
 		update_party_display()
 		if inventory_grid:
 			inventory_grid.refresh()
+#endregion
 
 
-func _hide_context_menu() -> void:
-	if context_menu and is_instance_valid(context_menu):
-		context_menu.queue_free()
-		context_menu = null
-	context_menu_item_id = ""
-	context_menu_type = ""
-
-
-# === 툴팁 ===
+#region 툴팁
 func _show_tooltip(item_id: String) -> void:
 	_hide_tooltip()
 	
@@ -524,3 +543,4 @@ func _hide_tooltip() -> void:
 	if tooltip and is_instance_valid(tooltip):
 		tooltip.queue_free()
 		tooltip = null
+#endregion

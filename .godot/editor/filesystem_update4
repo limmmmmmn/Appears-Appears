@@ -1,11 +1,2 @@
-res://scripts/entities/PartyFollower.gd
-res://scripts/entities/PartyLeader.gd
-res://scenes/field/PartyLeader.tscn
-res://scripts/battle/BattleEnemy.gd
+res://scripts/ui/field/FieldHUD.gd
 res://scenes/ui/FieldHUD.tscn
-res://scenes/field/PartyFollower.tscn
-res://data/classes.json
-res://data/equipment.json
-res://scripts/autoload/BattleManager.gd
-res://scripts/battle/BattleWindow.gd
-res://scenes/battle/BattleEnemy.tscn
