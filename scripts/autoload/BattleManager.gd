@@ -47,13 +47,14 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# ATB는 항상 충전 (비전투 중에도)
-	_update_hero_atb(delta)
+	# 비전투 중에도 HUD 표시용 ATB 업데이트 (공격은 각 BattleWindow에서 처리)
+	if active_battles.is_empty():
+		_update_hero_atb_for_hud(delta)
 
 
-#region 전역 Hero ATB 시스템
-func _update_hero_atb(delta: float) -> void:
-	## 모든 살아있는 영웅의 ATB 업데이트 (배속 적용)
+#region HUD용 Hero ATB (비전투 시)
+func _update_hero_atb_for_hud(delta: float) -> void:
+	## 비전투 중 HUD 표시용 ATB 업데이트 (공격 없음)
 	var speed_delta: float = delta * battle_speed
 	
 	for hero in PartyManager.get_alive_heroes():
@@ -65,49 +66,11 @@ func _update_hero_atb(delta: float) -> void:
 		
 		# HUD 업데이트 시그널
 		hero_atb_changed.emit(hero.id, hero_atb[hero.id])
-		
-		# ATB 풀 차면 공격 (전투 중일 때만)
-		if hero_atb[hero.id] >= ATB_MAX:
-			if _atb_active and not active_battles.is_empty():
-				_hero_attack(hero)
-				hero_atb[hero.id] = 0.0
-				hero_atb_changed.emit(hero.id, 0.0)
-			# 비전투 중이면 ATB가 꽉 찬 상태로 유지
 
 
-func _hero_attack(hero: Hero) -> void:
-	## 영웅이 가장 먼저 열린 전투창의 적을 공격
-	if hero == null or hero.is_dead:
-		return
-	
-	# 가장 먼저 열린 전투창 찾기
-	var target_window: BattleWindow = _find_oldest_attackable_window()
-	if target_window == null:
-		return
-	
-	# 공격 이펙트 시그널
-	hero_attacked.emit(hero.id)
-	
-	# 전투창에 공격 요청
-	target_window.execute_hero_attack(hero)
-
-
-func _find_oldest_attackable_window() -> BattleWindow:
-	## 가장 먼저 열린 전투창 찾기 (battle_id가 가장 작은 것)
-	var oldest_id: int = -1
-	var oldest_window: BattleWindow = null
-	
-	for battle_id in active_battles:
-		var battle_data: Dictionary = active_battles[battle_id]
-		var window: BattleWindow = battle_data.get("window")
-		
-		if window and is_instance_valid(window) and window.has_alive_enemies():
-			# 첫 번째이거나 더 오래된 전투창이면 선택
-			if oldest_id < 0 or battle_id < oldest_id:
-				oldest_id = battle_id
-				oldest_window = window
-	
-	return oldest_window
+func get_hero_atb(hero_id: String) -> float:
+	## HUD에서 호출 - 영웅 ATB 조회
+	return hero_atb.get(hero_id, 0.0)
 
 
 func init_hero_atb() -> void:
@@ -116,10 +79,6 @@ func init_hero_atb() -> void:
 	for hero in PartyManager.get_alive_heroes():
 		hero_atb[hero.id] = 0.0
 		hero_atb_changed.emit(hero.id, 0.0)
-
-
-func get_hero_atb(hero_id: String) -> float:
-	return hero_atb.get(hero_id, 0.0)
 
 
 func on_hero_died(hero_id: String) -> void:

@@ -1,12 +1,13 @@
 extends PanelContainer
 class_name BattleWindow
 ## BattleWindow: ATB 전투창
-## - 적 ATB만 관리 (영웅 ATB는 BattleManager에서 전역 관리)
-## - BattleManager로부터 영웅 공격 명령 수신
+## - 각 전투창이 독립적인 영웅 ATB + 적 ATB 관리
+## - 전투창마다 영웅의 ATB가 따로 진행
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
+signal hero_atb_changed(battle_id: int, hero_id: String, value: float)
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
 
@@ -22,8 +23,9 @@ var current_state: BattleState = BattleState.STARTING
 var enemies: Array = []
 var enemy_data_list: Array = []
 
-# === 적 ATB 시스템 ===
+# === ATB 시스템 (전투창별 독립) ===
 var enemy_atb: Dictionary = {}  # enemy_index -> atb_value
+var hero_atb: Dictionary = {}   # hero_id -> atb_value (0.0 ~ 1.0)
 
 # === 보상 ===
 var total_exp: int = 0
@@ -36,8 +38,10 @@ var drop_items: Array = []
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
 
 # === ATB 설정 ===
-const ATB_BASE_SPEED: float = 0.08  # 적 기본 ATB 충전 속도
-const ATB_SPD_FACTOR: float = 0.008
+const ENEMY_ATB_BASE: float = 0.08
+const ENEMY_ATB_SPD_FACTOR: float = 0.008
+const HERO_ATB_BASE: float = 0.15
+const HERO_ATB_SPD_FACTOR: float = 0.012
 const ATB_MAX: float = 1.0
 const BASE_ESCAPE_RATE: float = 40.0
 
@@ -56,7 +60,7 @@ func _process(delta: float) -> void:
 	if current_state != BattleState.RUNNING:
 		return
 	
-	# 적 ATB만 업데이트
+	_update_hero_atb(delta)
 	_update_enemy_atb(delta)
 
 
@@ -117,24 +121,123 @@ func _spawn_enemies(enemy_ids: Array) -> void:
 
 
 func _init_enemy_atb() -> void:
-	## 적 ATB 초기화 - 랜덤 시작 (동시 공격 방지)
 	enemy_atb.clear()
-	
 	for i in range(enemies.size()):
 		if enemies[i].is_alive():
-			enemy_atb[i] = randf() * 0.6  # 0~60% 랜덤 시작
+			enemy_atb[i] = randf() * 0.6
+
+
+func _init_hero_atb() -> void:
+	hero_atb.clear()
+	for hero in PartyManager.get_alive_heroes():
+		hero_atb[hero.id] = randf() * 0.4
 
 
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
+	_init_hero_atb()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
 #endregion
 
 
+#region 영웅 ATB 시스템
+func _update_hero_atb(delta: float) -> void:
+	var speed_delta: float = delta * BattleManager.get_battle_speed()
+	
+	for hero in PartyManager.get_alive_heroes():
+		if not hero_atb.has(hero.id):
+			hero_atb[hero.id] = 0.0
+		
+		var charge_rate: float = HERO_ATB_BASE + (hero.get_spd() * HERO_ATB_SPD_FACTOR)
+		hero_atb[hero.id] = minf(hero_atb[hero.id] + charge_rate * speed_delta, ATB_MAX)
+		
+		hero_atb_changed.emit(battle_id, hero.id, hero_atb[hero.id])
+		
+		if hero_atb[hero.id] >= ATB_MAX:
+			_hero_attack(hero)
+			hero_atb[hero.id] = 0.0
+			hero_atb_changed.emit(battle_id, hero.id, 0.0)
+			
+			if _check_battle_end():
+				return
+
+
+func _hero_attack(hero: Hero) -> void:
+	if hero == null or hero.is_dead:
+		return
+	
+	if not has_alive_enemies():
+		return
+	
+	BattleManager.hero_attacked.emit(hero.id)
+	
+	var target: BattleEnemy = _select_smart_target(hero)
+	if target == null:
+		return
+	
+	var is_evaded: bool = randf() * 100 < target.get_eva()
+	if is_evaded:
+		target.show_miss_text()
+		target.play_evade_effect()
+		_send_log("%s의 공격을 %s이(가) 회피!" % [hero.hero_name, target.enemy_name], Color.GRAY)
+		return
+	
+	var is_crit: bool = randf() * 100 < hero.get_crit()
+	var damage: int = _calc_hero_damage(hero, target, is_crit)
+	
+	target.take_damage(damage)
+	target.play_hit_effect(is_crit)
+	target.show_damage_number(damage, is_crit)
+	
+	var log_color: Color = Color.ORANGE if is_crit else Color.WHITE
+	var crit_text: String = " (크리티컬!)" if is_crit else ""
+	_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
+	
+	if not target.is_alive():
+		_on_enemy_defeated(target)
+
+
+func _select_smart_target(hero: Hero) -> BattleEnemy:
+	var alive: Array = []
+	for e in enemies:
+		if e != null and e.is_alive():
+			alive.append(e)
+	
+	if alive.is_empty():
+		return null
+	
+	var atk := hero.get_atk()
+	for enemy in alive:
+		var expected := maxi(1, atk - int(enemy.get_p_def() / 2))
+		if expected >= enemy.current_hp:
+			return enemy
+	
+	return alive[randi() % alive.size()]
+
+
+func _calc_hero_damage(hero: Hero, target: BattleEnemy, is_crit: bool) -> int:
+	var atk := hero.get_atk()
+	var p_def := target.get_p_def()
+	if is_crit:
+		return maxi(1, atk)
+	return maxi(1, atk - int(p_def / 2))
+
+
+func get_hero_atb_value(hero_id: String) -> float:
+	return hero_atb.get(hero_id, 0.0)
+
+
+func has_alive_enemies() -> bool:
+	for e in enemies:
+		if e != null and e.is_alive():
+			return true
+	return false
+#endregion
+
+
 #region 적 ATB 시스템
 func _update_enemy_atb(delta: float) -> void:
-	## 적 ATB 업데이트 및 공격 처리 (배속 적용)
 	var speed_delta: float = delta * BattleManager.get_battle_speed()
 	
 	for i in range(enemies.size()):
@@ -145,59 +248,20 @@ func _update_enemy_atb(delta: float) -> void:
 		if not enemy_atb.has(i):
 			enemy_atb[i] = randf() * 0.4
 		
-		var charge_rate: float = ATB_BASE_SPEED + (enemy.get_spd() * ATB_SPD_FACTOR)
+		var charge_rate: float = ENEMY_ATB_BASE + (enemy.get_spd() * ENEMY_ATB_SPD_FACTOR)
 		enemy_atb[i] = minf(enemy_atb[i] + charge_rate * speed_delta, ATB_MAX)
 		
-		# ATB 게이지 UI 업데이트
 		enemy.update_atb_bar(enemy_atb[i])
 		
-		# ATB 풀 차면 공격
 		if enemy_atb[i] >= ATB_MAX:
 			_enemy_attack(enemy)
 			enemy_atb[i] = 0.0
 			
 			if _check_battle_end():
 				return
-#endregion
 
 
-#region 외부 공격 인터페이스
-func has_alive_enemies() -> bool:
-	## BattleManager가 호출 - 살아있는 적이 있는지
-	for e in enemies:
-		if e != null and e.is_alive():
-			return true
-	return false
-
-
-func execute_hero_attack(hero: Hero) -> void:
-	## BattleManager에서 호출 - 영웅이 이 전투창의 적을 공격
-	if current_state != BattleState.RUNNING:
-		return
-	
-	if hero == null or hero.is_dead:
-		return
-	
-	var alive_enemies: Array = []
-	for e in enemies:
-		if e != null and e.is_alive():
-			alive_enemies.append(e)
-	
-	if alive_enemies.is_empty():
-		return
-	
-	# 스마트 타겟팅
-	var target: BattleEnemy = _select_smart_target(hero, alive_enemies)
-	_do_hero_attack(hero, target)
-	
-	# 전투 종료 체크
-	_check_battle_end()
-#endregion
-
-
-#region 전투 행동
 func _enemy_attack(enemy: BattleEnemy) -> void:
-	## 적 기본 공격
 	if not enemy.is_alive():
 		return
 	
@@ -209,71 +273,29 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	
 	enemy.play_attack_effect()
 	
-	var atk := enemy.get_atk()
-	var is_crit := randf() * 100 < enemy.get_crit()
 	var is_evaded := randf() * 100 < target.get_eva()
-	
 	if is_evaded:
 		_send_log("%s → %s 회피!" % [enemy.enemy_name, target.hero_name], Color.GRAY)
-	else:
-		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
-		PartyManager.on_hero_damaged(target, damage)
-		call_deferred("_emit_party_updated")
-		
-		if is_crit:
-			_send_log("%s → %s에게 %d! (강타)" % [enemy.enemy_name, target.hero_name, damage], Color.RED)
-		else:
-			_send_log("%s → %s에게 %d" % [enemy.enemy_name, target.hero_name, damage], Color.YELLOW)
-		
-		if target.is_dead:
-			_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
-			call_deferred("_emit_party_updated")
-
-
-func _select_smart_target(hero: Hero, alive_enemies: Array) -> BattleEnemy:
-	## 스마트 타겟팅 - 처치 가능한 적 우선
-	var atk := hero.get_atk()
-	
-	for enemy in alive_enemies:
-		if enemy == null:
-			continue
-		var expected_damage := _calculate_damage(atk, enemy.get_p_def())
-		if expected_damage >= enemy.current_hp:
-			return enemy
-	
-	return alive_enemies[randi() % alive_enemies.size()]
-
-
-func _do_hero_attack(hero: Hero, target: BattleEnemy) -> void:
-	## 영웅 공격 실행
-	if hero == null or target == null:
 		return
 	
-	var atk := hero.get_atk()
-	var is_crit := randf() * 100 < hero.get_crit()
-	var is_evaded := randf() * 100 < target.get_eva()
+	var is_crit := randf() * 100 < enemy.get_crit()
+	var damage := _calc_enemy_damage(enemy, target, is_crit)
 	
-	if is_evaded:
-		_send_log("%s → %s 회피!" % [hero.hero_name, target.enemy_name], Color.GRAY)
-		target.play_evade_effect()
-		target.show_miss_text()
-	else:
-		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
-		target.take_damage(damage)
-		target.show_damage_number(damage, is_crit)
-		
-		if is_crit:
-			_send_log("%s → %s에게 %d! (크리티컬)" % [hero.hero_name, target.enemy_name, damage], Color.ORANGE)
-			target.play_hit_effect(true)
-		else:
-			_send_log("%s → %s에게 %d" % [hero.hero_name, target.enemy_name, damage], Color.WHITE)
-			target.play_hit_effect(false)
-		
-		if not target.is_alive():
-			_on_enemy_defeated(target)
+	PartyManager.on_hero_damaged(target, damage)
+	call_deferred("_emit_party_updated")
+	
+	var log_color: Color = Color.RED if is_crit else Color.YELLOW
+	var crit_text: String = " (강타!)" if is_crit else ""
+	_send_log("%s → %s에게 %d%s" % [enemy.enemy_name, target.hero_name, damage, crit_text], log_color)
+	
+	if target.is_dead:
+		_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
+		call_deferred("_emit_party_updated")
 
 
-func _calculate_damage(atk: int, p_def: int, is_crit: bool = false) -> int:
+func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
+	var atk := enemy.get_atk()
+	var p_def := target.get_p_def()
 	if is_crit:
 		return maxi(1, atk)
 	return maxi(1, atk - int(p_def / 2))

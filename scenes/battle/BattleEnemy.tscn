@@ -43,6 +43,7 @@ value = 100.0
 show_percentage = false
 
 [node name="ATBBar" type="ProgressBar" parent="."]
+visible = false
 layout_mode = 0
 anchor_left = 0.5
 anchor_top = 1.0

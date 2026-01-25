@@ -70,6 +70,7 @@ value = 100.0
 show_percentage = false
 
 [node name="ATBBar" type="ProgressBar" parent="StatusBars"]
+visible = false
 layout_mode = 0
 offset_top = 5.0
 offset_right = 24.0
