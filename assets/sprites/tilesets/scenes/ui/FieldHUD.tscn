@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://c2cjb4efakggb"]
 
 [ext_resource type="Script" uid="uid://b22n74rgrssul" path="res://scripts/ui/field/FieldHUD.gd" id="1_script"]
-[ext_resource type="PackedScene" uid="uid://c76ssak4cmte4" path="res://assets/sprites/tilesets/scenes/ui/BottomPartyPanel.tscn" id="2_bottom_panel"]
+[ext_resource type="PackedScene" uid="uid://cbot1ompartypnl" path="res://scenes/ui/BottomPartyPanel.tscn" id="2_bottom_panel"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 4.0
@@ -13,6 +13,7 @@ border_width_left = 1
 border_color = Color(0.25, 0.25, 0.3, 1)
 
 [node name="FieldHUD" type="CanvasLayer"]
+visible = false
 script = ExtResource("1_script")
 
 [node name="Control" type="Control" parent="."]

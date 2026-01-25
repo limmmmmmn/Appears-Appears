@@ -4,12 +4,14 @@ class_name FieldHUD
 
 signal menu_pressed
 signal equipment_slot_clicked(hero_index: int, slot: String)
-signal skill_toggled(hero_index: int, skill_id: String, enabled: bool)
 
 # 상단 바
 @onready var stage_label: Label = %StageLabel
 @onready var gold_label: Label = %GoldLabel
 @onready var menu_button: Button = %MenuButton
+
+# 전투 속도 버튼 (코드로 생성)
+var speed_button: Button
 
 # 우측 패널
 @onready var minimap_panel: PanelContainer = %MinimapPanel
@@ -45,12 +47,14 @@ func _input(event: InputEvent) -> void:
 
 
 func _setup_components() -> void:
+	# 전투 속도 버튼 생성
+	_create_speed_button()
+	
 	# 파티 슬롯 생성
 	for i in range(4):
 		var slot := PartySlotUI.new()
 		slot.setup(i)
 		slot.equipment_slot_gui_input.connect(_on_equip_gui_input.bind(i))
-		slot.skill_toggled.connect(_on_skill_toggled.bind(i))
 		party_container.add_child(slot)
 		party_slots.append(slot)
 	
@@ -88,16 +92,73 @@ func _connect_signals() -> void:
 		if not PartyManager.party_changed.is_connected(update_party_display):
 			PartyManager.party_changed.connect(update_party_display)
 	
-	# BattleManager 신호 연결 - 중복 연결 방지
+	# BattleManager 신호 연결
 	if BattleManager:
 		if not BattleManager.battle_log_received.is_connected(_on_battle_log_received):
 			BattleManager.battle_log_received.connect(_on_battle_log_received)
 		if not BattleManager.party_hp_changed.is_connected(update_party_display):
 			BattleManager.party_hp_changed.connect(update_party_display)
+		if not BattleManager.hero_atb_changed.is_connected(_on_hero_atb_changed):
+			BattleManager.hero_atb_changed.connect(_on_hero_atb_changed)
+		if not BattleManager.battle_speed_changed.is_connected(_on_battle_speed_changed):
+			BattleManager.battle_speed_changed.connect(_on_battle_speed_changed)
+
+
+func _create_speed_button() -> void:
+	## 전투 속도 버튼 생성 (상단 바에 추가)
+	speed_button = Button.new()
+	speed_button.text = "x1"
+	speed_button.custom_minimum_size = Vector2(32, 20)
+	speed_button.add_theme_font_size_override("font_size", 10)
+	speed_button.tooltip_text = "전투 속도 (클릭하여 변경)"
+	speed_button.pressed.connect(_on_speed_button_pressed)
+	
+	# 스타일 설정
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.border_width_bottom = 2
+	style.border_color = Color(0.4, 0.6, 0.9)
+	speed_button.add_theme_stylebox_override("normal", style)
+	
+	var hover_style := style.duplicate()
+	hover_style.bg_color = Color(0.25, 0.25, 0.3, 0.95)
+	speed_button.add_theme_stylebox_override("hover", hover_style)
+	
+	# 상단 바에 추가 (gold_label 옆)
+	if gold_label:
+		var parent = gold_label.get_parent()
+		if parent:
+			parent.add_child(speed_button)
+			# gold_label 다음에 배치
+			var gold_index = gold_label.get_index()
+			parent.move_child(speed_button, gold_index + 1)
+
+
+func _on_speed_button_pressed() -> void:
+	if BattleManager:
+		var new_speed = BattleManager.toggle_battle_speed()
+		speed_button.text = "x%d" % int(new_speed)
+
+
+func _on_battle_speed_changed(speed: float) -> void:
+	if speed_button:
+		speed_button.text = "x%d" % int(speed)
 
 
 func _on_battle_log_received(message: String, color: Color) -> void:
 	add_log(message, color)
+
+
+func _on_hero_atb_changed(hero_id: String, value: float) -> void:
+	## 영웅 ATB 변경 시 HUD 업데이트
+	for slot in party_slots:
+		if slot.get_hero_id() == hero_id:
+			slot.update_atb(value)
+			break
 
 
 func update_all() -> void:
@@ -119,6 +180,10 @@ func update_party_display() -> void:
 	for i in range(4):
 		if i < party.size():
 			party_slots[i].update_display(party[i])
+			# 현재 ATB 값도 업데이트
+			if BattleManager:
+				var atb_value = BattleManager.get_hero_atb(party[i].id)
+				party_slots[i].update_atb(atb_value)
 		else:
 			party_slots[i].visible = false
 
@@ -196,7 +261,6 @@ func _on_inv_drag(item_id: String, _btn: Button) -> void:
 
 
 func _on_inv_right_click(item_id: String, pos: Vector2) -> void:
-	# 장비 또는 소비 아이템 모두 컨텍스트 메뉴 표시
 	var equip_data = DataManager.get_equipment(item_id)
 	var item_data = DataManager.get_item(item_id)
 	
@@ -227,16 +291,8 @@ func _on_equip_gui_input(event: InputEvent, slot_name: String, hero_idx: int) ->
 				equipment_slot_clicked.emit(hero_idx, slot_name)
 
 
-func _on_skill_toggled(skill_id: String, enabled: bool, hero_idx: int) -> void:
-	skill_toggled.emit(hero_idx, skill_id, enabled)
-	var party = PartyManager.get_party() if PartyManager else []
-	if hero_idx < party.size():
-		var sn = str(DataManager.get_skill(skill_id).get("name", skill_id))
-		add_system_log("%s: %s %s" % [party[hero_idx].hero_name, sn, "ON" if enabled else "OFF"])
-
-
 # === 컨텍스트 메뉴 ===
-var context_menu_type: String = ""  # "equip" or "consumable"
+var context_menu_type: String = ""
 
 func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equip") -> void:
 	_hide_context_menu()
@@ -267,7 +323,6 @@ func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equi
 		var is_disabled: bool = false
 		
 		if item_type == "consumable":
-			# 소비 아이템 - 필드 사용 가능 여부와 대상 상태 체크
 			var data = DataManager.get_item(item_id)
 			var effect = data.get("effect", {})
 			var effect_type = str(effect.get("type", ""))
@@ -275,17 +330,14 @@ func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equi
 			if not usable_in_field:
 				is_disabled = true
 			elif effect_type == "revive":
-				# 부활은 사망한 대상만
 				is_disabled = not party[i].is_dead
 				if party[i].is_dead:
 					hero_name += " (사망)"
 			else:
-				# 일반 회복/씨앗은 살아있는 대상만
 				is_disabled = party[i].is_dead
 				if party[i].is_dead:
 					hero_name += " (사망)"
 		else:
-			# 장비 - 사망한 대상 불가
 			if party[i].is_dead:
 				is_disabled = true
 				hero_name += " (사망)"
@@ -297,7 +349,6 @@ func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equi
 	context_menu.add_separator()
 	context_menu.add_item("취소", -2)
 	context_menu.id_pressed.connect(_on_ctx_selected)
-	# popup_hide 연결 제거 - id_pressed보다 먼저 호출되어 데이터가 사라지는 문제
 	
 	var ctrl = get_node_or_null("Control")
 	(ctrl if ctrl else self).add_child(context_menu)
@@ -342,8 +393,6 @@ func _on_ctx_selected(id: int) -> void:
 
 
 func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
-	## 소비 아이템을 영웅에게 사용
-	
 	var item_data: Dictionary = DataManager.get_item(item_id)
 	if item_data.is_empty():
 		return
@@ -459,7 +508,6 @@ func _hide_context_menu() -> void:
 func _show_tooltip(item_id: String) -> void:
 	_hide_tooltip()
 	
-	# 장비 또는 소비 아이템 모두 툴팁 표시
 	var equip_data = DataManager.get_equipment(item_id)
 	var item_data = DataManager.get_item(item_id)
 	

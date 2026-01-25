@@ -1,10 +1,9 @@
 extends PanelContainer
 class_name PartySlotUI
-## 개별 파티 슬롯 UI: 페이스칩, HP/MP, 장비, 스킬토글, 스탯패널
+## 개별 파티 슬롯 UI: 페이스칩, HP, ATB, 장비, 스탯패널 (MP 제거)
 
 signal equipment_slot_clicked(slot_name: String)
 signal equipment_slot_gui_input(event: InputEvent, slot_name: String)
-signal skill_toggled(skill_id: String, enabled: bool)
 signal stat_panel_toggled(is_open: bool)
 
 var hero_index: int = -1
@@ -15,35 +14,21 @@ var face_texture: TextureRect
 var name_label: Label
 var hp_bar: ProgressBar
 var hp_label: Label
-var mp_bar: ProgressBar
-var mp_label: Label
-var equip_buttons: Dictionary = {}  # slot_name -> Button
+var atb_bar: ProgressBar
+var equip_buttons: Dictionary = {}
 var stat_toggle_btn: Button
 var stat_panel: PanelContainer
-var skill_container: HBoxContainer
 
 # 상수
 const SLOT_ICONS: Dictionary = {
-	"main_hand": "⚔️",
-	"off_hand": "🛡️",
-	"head": "👑",
-	"body": "👕",
-	"acc1": "💍",
-	"acc2": "💎"
+	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑",
+	"body": "👕", "acc1": "💍", "acc2": "💎"
 }
 
 const ITEM_ICONS: Dictionary = {
-	"weapon": "⚔️",
-	"main_hand": "⚔️",
-	"shield": "🛡️",
-	"off_hand": "🛡️",
-	"head": "👑",
-	"helmet": "👑",
-	"body": "👕",
-	"armor": "👕",
-	"accessory": "💍",
-	"acc1": "💍",
-	"acc2": "💎"
+	"weapon": "⚔️", "main_hand": "⚔️", "shield": "🛡️", "off_hand": "🛡️",
+	"head": "👑", "helmet": "👑", "body": "👕", "armor": "👕",
+	"accessory": "💍", "acc1": "💍", "acc2": "💎"
 }
 
 const RARITY_COLORS: Dictionary = {
@@ -54,7 +39,7 @@ const RARITY_COLORS: Dictionary = {
 
 
 func _init() -> void:
-	custom_minimum_size = Vector2(150, 58)
+	custom_minimum_size = Vector2(150, 46)
 
 
 func setup(index: int) -> void:
@@ -83,19 +68,13 @@ func _create_layout() -> void:
 	vbox.add_theme_constant_override("separation", 1)
 	add_child(vbox)
 	
-	# 1행: 페이스 + 이름 + HP/MP
+	# 1행: 페이스 + 이름 + HP/ATB
 	_create_header_row(vbox)
 	
 	# 2행: 장비 슬롯 + 스탯 토글
 	_create_equipment_row(vbox)
 	
-	# 3행: 스킬 토글
-	skill_container = HBoxContainer.new()
-	skill_container.name = "SkillContainer"
-	skill_container.add_theme_constant_override("separation", 2)
-	vbox.add_child(skill_container)
-	
-	# 4행: 스탯 패널 (접힘)
+	# 3행: 스탯 패널 (접힘)
 	stat_panel = _create_stat_panel()
 	stat_panel.visible = false
 	vbox.add_child(stat_panel)
@@ -120,9 +99,9 @@ func _create_header_row(parent: VBoxContainer) -> void:
 	name_label.clip_text = true
 	row.add_child(name_label)
 	
-	# HP/MP 바
+	# HP/ATB 바
 	var bars_vbox := VBoxContainer.new()
-	bars_vbox.add_theme_constant_override("separation", 0)
+	bars_vbox.add_theme_constant_override("separation", 1)
 	bars_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(bars_vbox)
 	
@@ -132,11 +111,10 @@ func _create_header_row(parent: VBoxContainer) -> void:
 	hp_label = hp_row.get_node("ValueLabel")
 	bars_vbox.add_child(hp_row)
 	
-	# MP
-	var mp_row := _create_mini_bar("MP", Color(0.3, 0.4, 0.85))
-	mp_bar = mp_row.get_node("Bar")
-	mp_label = mp_row.get_node("ValueLabel")
-	bars_vbox.add_child(mp_row)
+	# ATB (공격 게이지)
+	var atb_row := _create_atb_bar()
+	atb_bar = atb_row.get_node("Bar")
+	bars_vbox.add_child(atb_row)
 
 
 func _create_mini_bar(label_text: String, color: Color) -> HBoxContainer:
@@ -185,12 +163,55 @@ func _create_mini_bar(label_text: String, color: Color) -> HBoxContainer:
 	return hbox
 
 
+func _create_atb_bar() -> HBoxContainer:
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 1)
+	
+	var label := Label.new()
+	label.text = "⚡"
+	label.custom_minimum_size.x = 14
+	label.add_theme_font_size_override("font_size", 7)
+	label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.3))
+	hbox.add_child(label)
+	
+	var bar := ProgressBar.new()
+	bar.name = "Bar"
+	bar.custom_minimum_size = Vector2(40, 5)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.show_percentage = false
+	bar.value = 0
+	bar.max_value = 100
+	
+	var fill_style := StyleBoxFlat.new()
+	fill_style.bg_color = Color(1.0, 0.8, 0.2)
+	fill_style.corner_radius_top_left = 1
+	fill_style.corner_radius_top_right = 1
+	fill_style.corner_radius_bottom_left = 1
+	fill_style.corner_radius_bottom_right = 1
+	bar.add_theme_stylebox_override("fill", fill_style)
+	
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.15, 0.12, 0.05)
+	bg_style.corner_radius_top_left = 1
+	bg_style.corner_radius_top_right = 1
+	bg_style.corner_radius_bottom_left = 1
+	bg_style.corner_radius_bottom_right = 1
+	bar.add_theme_stylebox_override("background", bg_style)
+	
+	hbox.add_child(bar)
+	
+	var spacer := Control.new()
+	spacer.custom_minimum_size.x = 30
+	hbox.add_child(spacer)
+	
+	return hbox
+
+
 func _create_equipment_row(parent: VBoxContainer) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 1)
 	parent.add_child(row)
 	
-	# 장비 슬롯 6개
 	var equip_container := HBoxContainer.new()
 	equip_container.add_theme_constant_override("separation", 1)
 	row.add_child(equip_container)
@@ -207,7 +228,6 @@ func _create_equipment_row(parent: VBoxContainer) -> void:
 		equip_container.add_child(btn)
 		equip_buttons[slot_name] = btn
 	
-	# 스탯 토글 버튼
 	stat_toggle_btn = Button.new()
 	stat_toggle_btn.text = "▶"
 	stat_toggle_btn.custom_minimum_size = Vector2(16, 16)
@@ -250,7 +270,6 @@ func _create_stat_panel() -> PanelContainer:
 	row2.add_child(_create_stat_label("SPD", "SPDValue"))
 	row2.add_child(_create_stat_label("LUK", "LUKValue"))
 	
-	# 구분선
 	var separator := HSeparator.new()
 	separator.add_theme_constant_override("separation", 2)
 	vbox.add_child(separator)
@@ -263,7 +282,7 @@ func _create_stat_panel() -> PanelContainer:
 	row3.add_child(_create_stat_label("P.DEF", "PDEFValue", Color(0.6, 0.8, 1.0)))
 	row3.add_child(_create_stat_label("M.DEF", "MDEFValue", Color(0.8, 0.6, 1.0)))
 	
-	# 경험치 바
+	# 경험치
 	var exp_row := HBoxContainer.new()
 	exp_row.add_theme_constant_override("separation", 4)
 	vbox.add_child(exp_row)
@@ -316,27 +335,16 @@ func update_display(new_hero: Hero) -> void:
 		return
 	
 	visible = true
-	
-	# 이름 + 레벨
 	name_label.text = "Lv.%d %s" % [hero.level, hero.hero_name]
 	
-	# 페이스칩
 	if SpriteManager:
 		face_texture.texture = SpriteManager.get_hero_face_sprite(hero.id)
 	
-	# HP/MP
 	_update_bars()
-	
-	# 장비
 	_update_equipment()
 	
-	# 스킬 토글
-	_update_skills()
-	
-	# 스탯 패널 (열려있으면)
 	if stat_panel.visible:
 		_update_stat_values()
-	
 
 
 func _update_bars() -> void:
@@ -344,15 +352,23 @@ func _update_bars() -> void:
 		return
 	
 	var max_hp := hero.get_max_hp()
-	var max_mp := hero.get_max_mp()
-	
 	hp_bar.max_value = max_hp
 	hp_bar.value = hero.current_hp
 	hp_label.text = "%d/%d" % [hero.current_hp, max_hp]
-	
-	mp_bar.max_value = max_mp
-	mp_bar.value = hero.current_mp
-	mp_label.text = "%d/%d" % [hero.current_mp, max_mp]
+
+
+func update_atb(value: float) -> void:
+	if atb_bar:
+		atb_bar.value = value * 100.0
+		
+		var fill_style: StyleBoxFlat = atb_bar.get_theme_stylebox("fill").duplicate()
+		if value >= 0.9:
+			fill_style.bg_color = Color(1.0, 1.0, 0.5)
+		elif value >= 0.7:
+			fill_style.bg_color = Color(1.0, 0.9, 0.3)
+		else:
+			fill_style.bg_color = Color(1.0, 0.8, 0.2)
+		atb_bar.add_theme_stylebox_override("fill", fill_style)
 
 
 func _update_equipment() -> void:
@@ -378,62 +394,6 @@ func _update_equipment() -> void:
 			btn.tooltip_text = "%s: %s" % [slot_name, equip_name]
 
 
-func _update_skills() -> void:
-	if not hero:
-		return
-	
-	# 스킬 목록
-	var class_data: Dictionary = DataManager.get_class_data(hero.class_id)
-	var skill_ids: Array = class_data.get("skills", ["basic_attack"])
-	
-	# 이미 올바른 스킬 토글이 있으면 값만 업데이트
-	var existing_count := skill_container.get_child_count()
-	if existing_count == skill_ids.size():
-		# 기존 토글들의 상태만 업데이트
-		for i in range(skill_ids.size()):
-			var skill_id: String = str(skill_ids[i])
-			var skill_data: Dictionary = DataManager.get_skill(skill_id)
-			var default_on: bool = skill_data.get("default_on", true)
-			var is_on: bool = hero.skill_toggles.get(skill_id, default_on)
-			
-			var toggle: CheckBox = skill_container.get_child(i) as CheckBox
-			if toggle and toggle.get_meta("skill_id", "") == skill_id:
-				# 시그널 일시 차단하고 값만 업데이트
-				toggle.set_block_signals(true)
-				toggle.button_pressed = is_on
-				toggle.set_block_signals(false)
-		return
-	
-	# 개수가 다르면 전체 재생성 (처음 한 번만)
-	for child in skill_container.get_children():
-		child.queue_free()
-	
-	# 다음 프레임에 생성 (queue_free 완료 후)
-	call_deferred("_create_skill_toggles", skill_ids)
-
-
-func _create_skill_toggles(skill_ids: Array) -> void:
-	if not hero:
-		return
-	
-	for skill_id in skill_ids:
-		var sid: String = str(skill_id)
-		var skill_data: Dictionary = DataManager.get_skill(sid)
-		var skill_name: String = str(skill_data.get("name", sid))
-		var default_on: bool = skill_data.get("default_on", true)
-		var is_on: bool = hero.skill_toggles.get(sid, default_on)
-		
-		var toggle := CheckBox.new()
-		toggle.text = skill_name.substr(0, 3)
-		toggle.button_pressed = is_on
-		toggle.add_theme_font_size_override("font_size", 8)
-		toggle.custom_minimum_size = Vector2(0, 12)
-		toggle.tooltip_text = skill_name
-		toggle.set_meta("skill_id", sid)
-		toggle.toggled.connect(_on_skill_toggled.bind(sid))
-		skill_container.add_child(toggle)
-
-
 func _update_stat_values() -> void:
 	if not hero or not stat_panel:
 		return
@@ -447,7 +407,6 @@ func _update_stat_values() -> void:
 	_set_stat_value("PDEFValue", hero.get_p_def())
 	_set_stat_value("MDEFValue", hero.get_m_def())
 	
-	# EXP 표시
 	var exp_label: Label = stat_panel.find_child("EXPValue", true, false)
 	if exp_label:
 		exp_label.text = "%d/%d" % [hero.exp, hero.exp_to_next]
@@ -477,12 +436,6 @@ func _on_stat_toggle_pressed() -> void:
 
 func _on_equip_gui_input(event: InputEvent, slot_name: String) -> void:
 	equipment_slot_gui_input.emit(event, slot_name)
-
-
-func _on_skill_toggled(enabled: bool, skill_id: String) -> void:
-	if hero:
-		hero.skill_toggles[skill_id] = enabled
-	skill_toggled.emit(skill_id, enabled)
 #endregion
 
 
@@ -494,6 +447,12 @@ func get_equipment_button(slot_name: String) -> Button:
 func get_equipped_item_id(slot_name: String) -> String:
 	if hero:
 		return hero.equipment.get(slot_name, "")
+	return ""
+
+
+func get_hero_id() -> String:
+	if hero:
+		return hero.id
 	return ""
 
 

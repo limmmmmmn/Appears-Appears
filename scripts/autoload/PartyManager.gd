@@ -46,6 +46,14 @@ func get_leader() -> Hero:
 	return null
 
 
+func get_hero_by_id(hero_id: String) -> Hero:
+	## ID로 영웅 찾기
+	for hero in party:
+		if hero.id == hero_id:
+			return hero
+	return null
+
+
 func get_alive_heroes() -> Array[Hero]:
 	var result: Array[Hero] = []
 	for hero in party:

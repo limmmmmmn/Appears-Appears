@@ -125,6 +125,22 @@ func get_crit() -> float:
 #endregion
 
 
+#region ATB 시스템
+func update_atb_bar(value: float) -> void:
+	## ATB 게이지 UI 업데이트 (0.0 ~ 1.0)
+	if atb_bar and atb_bar.visible:
+		atb_bar.value = value * 100.0
+		
+		# ATB가 거의 찼을 때 색상 변경 (공격 임박 경고)
+		if value >= 0.9:
+			atb_bar.modulate = Color(1.0, 0.3, 0.3)  # 빨간색
+		elif value >= 0.7:
+			atb_bar.modulate = Color(1.0, 0.7, 0.3)  # 주황색
+		else:
+			atb_bar.modulate = Color.WHITE
+#endregion
+
+
 #region 전투 상태
 func is_alive() -> bool:
 	return current_hp > 0

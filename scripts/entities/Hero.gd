@@ -73,14 +73,14 @@ func _initialize(hero_id: String) -> void:
 	
 	current_hp = get_max_hp()
 	current_mp = get_max_mp()
-	_init_skill_toggles()
+	# ATB 시스템에서는 스킬 토글 미사용 (기본 공격만 사용)
+	# _init_skill_toggles()
 
 
 func _init_skill_toggles() -> void:
-	var class_data: Dictionary = DataManager.get_class_data(class_id)
-	for skill_id in class_data.get("skills", []):
-		var skill_data: Dictionary = DataManager.get_skill(skill_id)
-		skill_toggles[skill_id] = skill_data.get("default_on", true)
+	# ATB 시스템으로 전환됨 - 스킬 토글 비활성화
+	# 추후 스킬 시스템 복구 시 사용
+	pass
 
 
 #region 스탯 계산

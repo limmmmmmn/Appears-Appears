@@ -1,150 +1,150 @@
 {
   "tile_types": {
-    "grass": { "can_spawn": true, "walkable": true },
-    "forest": { "can_spawn": true, "walkable": true },
-    "cave": { "can_spawn": true, "walkable": true },
-    "stone": { "can_spawn": true, "walkable": true },
-    "water": { "can_spawn": false, "walkable": false },
-    "road": { "can_spawn": false, "walkable": true },
-    "wall": { "can_spawn": false, "walkable": false },
-    "town": { "can_spawn": false, "walkable": true, "is_exit": true, "exit_type": "town" }
+	"grass": { "can_spawn": true, "walkable": true },
+	"forest": { "can_spawn": true, "walkable": true },
+	"cave": { "can_spawn": true, "walkable": true },
+	"stone": { "can_spawn": true, "walkable": true },
+	"water": { "can_spawn": false, "walkable": false },
+	"road": { "can_spawn": false, "walkable": true },
+	"wall": { "can_spawn": false, "walkable": false },
+	"town": { "can_spawn": false, "walkable": true, "is_exit": true, "exit_type": "town" }
   },
   
   "battle_config": {
-    "min_enemies": 1,
-    "max_enemies": 3,
-    "weight_exponent": 1.5
+	"min_enemies": 1,
+	"max_enemies": 3,
+	"weight_exponent": 1.5
   },
   
   "stages": [
-    {
-      "id": "stage_1",
-      "name": "초원의 길",
-      "description": "평화로워 보이지만 마물이 도사리는 초원",
-      "terrain_enemies": {
-        "grass": { "slime": 50, "bat": 35, "goblin": 15 },
-        "forest": { "goblin": 45, "bat": 40, "slime": 15 }
-      },
-      "elite_pool": ["orc_warrior"],
-      "boss_id": "boss_goblin_king",
-      "fields": [
-        {
-          "id": "field_1_1",
-          "name": "평화로운 초원",
-          "scene": "res://scenes/field/Field_1_1.tscn",
-          "enemy_count": { "min": 8, "max": 12 },
-          "elite_chance": 0.15,
-          "chest_count": { "min": 0, "max": 1 },
-          "is_boss_field": false,
-          "next": "town"
-        },
-        {
-          "id": "field_1_2",
-          "name": "숲의 입구",
-          "scene": "res://scenes/field/Field_1_2.tscn",
-          "enemy_count": { "min": 4, "max": 6 },
-          "elite_chance": 0.25,
-          "chest_count": { "min": 1, "max": 2 },
-          "is_boss_field": false,
-          "next": "town"
-        },
-        {
-          "id": "field_1_3",
-          "name": "깊은 숲 - 고블린 소굴",
-          "scene": "res://scenes/field/Field_1_3.tscn",
-          "enemy_count": { "min": 5, "max": 7 },
-          "elite_chance": 0.35,
-          "chest_count": { "min": 1, "max": 2 },
-          "is_boss_field": true,
-          "next": "ending"
-        }
-      ]
-    },
-    {
-      "id": "stage_2",
-      "name": "황폐한 폐광",
-      "description": "버려진 광산에 언데드가 출몰한다",
-      "terrain_enemies": {
-        "cave": { "skeleton": 45, "bat": 35, "goblin": 20 },
-        "stone": { "skeleton": 50, "slime": 30, "bat": 20 }
-      },
-      "elite_pool": ["orc_warrior"],
-      "boss_id": "boss_goblin_king",
-      "fields": [
-        {
-          "id": "field_2_1",
-          "name": "광산 입구",
-          "scene": "res://scenes/field/Field_2_1.tscn",
-          "enemy_count": { "min": 4, "max": 6 },
-          "elite_chance": 0.2,
-          "chest_count": { "min": 1, "max": 2 },
-          "is_boss_field": false,
-          "next": "town"
-        },
-        {
-          "id": "field_2_2",
-          "name": "어두운 갱도",
-          "scene": "res://scenes/field/Field_2_2.tscn",
-          "enemy_count": { "min": 5, "max": 7 },
-          "elite_chance": 0.3,
-          "chest_count": { "min": 1, "max": 2 },
-          "is_boss_field": false,
-          "next": "town"
-        },
-        {
-          "id": "field_2_3",
-          "name": "지하 묘지",
-          "scene": "res://scenes/field/Field_2_3.tscn",
-          "enemy_count": { "min": 6, "max": 8 },
-          "elite_chance": 0.4,
-          "chest_count": { "min": 1, "max": 3 },
-          "is_boss_field": true,
-          "next": "stage_3"
-        }
-      ]
-    },
-    {
-      "id": "stage_3",
-      "name": "마왕성",
-      "description": "최후의 결전이 기다리는 어둠의 성",
-      "terrain_enemies": {
-        "stone": { "skeleton": 40, "goblin": 35, "bat": 25 },
-        "cave": { "skeleton": 50, "bat": 30, "slime": 20 }
-      },
-      "elite_pool": ["orc_warrior"],
-      "boss_id": "boss_goblin_king",
-      "fields": [
-        {
-          "id": "field_3_1",
-          "name": "성 외곽",
-          "scene": "res://scenes/field/Field_3_1.tscn",
-          "enemy_count": { "min": 5, "max": 7 },
-          "elite_chance": 0.3,
-          "chest_count": { "min": 1, "max": 2 },
-          "is_boss_field": false,
-          "next": "town"
-        },
-        {
-          "id": "field_3_2",
-          "name": "성 내부",
-          "scene": "res://scenes/field/Field_3_2.tscn",
-          "enemy_count": { "min": 6, "max": 8 },
-          "elite_chance": 0.4,
-          "chest_count": { "min": 1, "max": 3 },
-          "is_boss_field": false,
-          "next": "town"
-        },
-        {
-          "id": "field_3_3",
-          "name": "옥좌의 방",
-          "scene": "res://scenes/field/Field_3_3.tscn",
-          "enemy_count": { "min": 7, "max": 9 },
-          "elite_chance": 0.5,
-          "chest_count": { "min": 2, "max": 3 },
-          "is_boss_field": true,
-          "next": "ending"
-        }
-      ]
-    }
+	{
+	  "id": "stage_1",
+	  "name": "초원의 길",
+	  "description": "평화로워 보이지만 마물이 도사리는 초원",
+	  "terrain_enemies": {
+		"grass": { "slime": 50, "bat": 35, "goblin": 15 },
+		"forest": { "goblin": 45, "bat": 40, "slime": 15 }
+	  },
+	  "elite_pool": ["orc_warrior"],
+	  "boss_id": "boss_goblin_king",
+	  "fields": [
+		{
+		  "id": "field_1_1",
+		  "name": "평화로운 초원",
+		  "scene": "res://scenes/field/Field_1_1.tscn",
+		  "enemy_count": { "min": 8, "max": 12 },
+		  "elite_chance": 0.15,
+		  "chest_count": { "min": 0, "max": 1 },
+		  "is_boss_field": false,
+		  "next": "town"
+		},
+		{
+		  "id": "field_1_2",
+		  "name": "숲의 입구",
+		  "scene": "res://scenes/field/Field_1_2.tscn",
+		  "enemy_count": { "min": 4, "max": 6 },
+		  "elite_chance": 0.25,
+		  "chest_count": { "min": 1, "max": 2 },
+		  "is_boss_field": false,
+		  "next": "town"
+		},
+		{
+		  "id": "field_1_3",
+		  "name": "깊은 숲 - 고블린 소굴",
+		  "scene": "res://scenes/field/Field_1_3.tscn",
+		  "enemy_count": { "min": 5, "max": 7 },
+		  "elite_chance": 0.35,
+		  "chest_count": { "min": 1, "max": 2 },
+		  "is_boss_field": true,
+		  "next": "ending"
+		}
+	  ]
+	},
+	{
+	  "id": "stage_2",
+	  "name": "황폐한 폐광",
+	  "description": "버려진 광산에 언데드가 출몰한다",
+	  "terrain_enemies": {
+		"cave": { "skeleton": 45, "bat": 35, "goblin": 20 },
+		"stone": { "skeleton": 50, "slime": 30, "bat": 20 }
+	  },
+	  "elite_pool": ["orc_warrior"],
+	  "boss_id": "boss_goblin_king",
+	  "fields": [
+		{
+		  "id": "field_2_1",
+		  "name": "광산 입구",
+		  "scene": "res://scenes/field/Field_2_1.tscn",
+		  "enemy_count": { "min": 4, "max": 6 },
+		  "elite_chance": 0.2,
+		  "chest_count": { "min": 1, "max": 2 },
+		  "is_boss_field": false,
+		  "next": "town"
+		},
+		{
+		  "id": "field_2_2",
+		  "name": "어두운 갱도",
+		  "scene": "res://scenes/field/Field_2_2.tscn",
+		  "enemy_count": { "min": 5, "max": 7 },
+		  "elite_chance": 0.3,
+		  "chest_count": { "min": 1, "max": 2 },
+		  "is_boss_field": false,
+		  "next": "town"
+		},
+		{
+		  "id": "field_2_3",
+		  "name": "지하 묘지",
+		  "scene": "res://scenes/field/Field_2_3.tscn",
+		  "enemy_count": { "min": 6, "max": 8 },
+		  "elite_chance": 0.4,
+		  "chest_count": { "min": 1, "max": 3 },
+		  "is_boss_field": true,
+		  "next": "stage_3"
+		}
+	  ]
+	},
+	{
+	  "id": "stage_3",
+	  "name": "마왕성",
+	  "description": "최후의 결전이 기다리는 어둠의 성",
+	  "terrain_enemies": {
+		"stone": { "skeleton": 40, "goblin": 35, "bat": 25 },
+		"cave": { "skeleton": 50, "bat": 30, "slime": 20 }
+	  },
+	  "elite_pool": ["orc_warrior"],
+	  "boss_id": "boss_goblin_king",
+	  "fields": [
+		{
+		  "id": "field_3_1",
+		  "name": "성 외곽",
+		  "scene": "res://scenes/field/Field_3_1.tscn",
+		  "enemy_count": { "min": 5, "max": 7 },
+		  "elite_chance": 0.3,
+		  "chest_count": { "min": 1, "max": 2 },
+		  "is_boss_field": false,
+		  "next": "town"
+		},
+		{
+		  "id": "field_3_2",
+		  "name": "성 내부",
+		  "scene": "res://scenes/field/Field_3_2.tscn",
+		  "enemy_count": { "min": 6, "max": 8 },
+		  "elite_chance": 0.4,
+		  "chest_count": { "min": 1, "max": 3 },
+		  "is_boss_field": false,
+		  "next": "town"
+		},
+		{
+		  "id": "field_3_3",
+		  "name": "옥좌의 방",
+		  "scene": "res://scenes/field/Field_3_3.tscn",
+		  "enemy_count": { "min": 7, "max": 9 },
+		  "elite_chance": 0.5,
+		  "chest_count": { "min": 2, "max": 3 },
+		  "is_boss_field": true,
+		  "next": "ending"
+		}
+	  ]
+	}
   ]
 }

@@ -13,6 +13,7 @@ position = Vector2(40, 50)
 scale = Vector2(2, 2)
 
 [node name="NameLabel" type="Label" parent="."]
+visible = false
 layout_mode = 0
 anchor_left = 0.5
 anchor_top = 1.0
@@ -28,7 +29,6 @@ text = "Enemy"
 horizontal_alignment = 1
 
 [node name="HPBar" type="ProgressBar" parent="."]
-visible = false
 layout_mode = 0
 anchor_left = 0.5
 anchor_top = 1.0
@@ -43,7 +43,6 @@ value = 100.0
 show_percentage = false
 
 [node name="ATBBar" type="ProgressBar" parent="."]
-visible = false
 layout_mode = 0
 anchor_left = 0.5
 anchor_top = 1.0

@@ -1,56 +1,66 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: 드래곤퀘스트 스타일 1인칭 전투창
-## - 적만 보이는 1인칭 뷰 (로그는 FieldHUD로 전달)
-## - 라운드 기반 자동 턴제 전투
+## BattleWindow: ATB 전투창
+## - 적 ATB만 관리 (영웅 ATB는 BattleManager에서 전역 관리)
+## - BattleManager로부터 영웅 공격 명령 수신
 
 signal battle_ended(battle_id: int, victory: bool)
-signal battle_log(message: String, color: Color)  # FieldHUD로 로그 전달
-signal party_updated  # 파티 HP/MP 변경 알림
+signal battle_log(message: String, color: Color)
+signal party_updated
 
-enum BattleState { STARTING, PLAYER_PHASE, ENEMY_PHASE, VICTORY, DEFEAT, ESCAPED, ENDED }
+enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
 
 # === 전투 식별 ===
 var battle_id: int = -1
 var is_boss_battle: bool = false
+var is_elite_battle: bool = false
 
 # === 전투 상태 ===
 var current_state: BattleState = BattleState.STARTING
-var current_round: int = 0
-var turn_order: Array = []
-var current_turn_index: int = 0
 
 # === 전투 참가자 ===
 var enemies: Array = []
 var enemy_data_list: Array = []
+
+# === 적 ATB 시스템 ===
+var enemy_atb: Dictionary = {}  # enemy_index -> atb_value
 
 # === 보상 ===
 var total_exp: int = 0
 var total_gold: int = 0
 var drop_items: Array = []
 
-# === UI 참조 (씬에서 가져옴) ===
+# === UI 참조 ===
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
 @onready var run_button: Button = $MainVBox/BottomBar/RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
 
-# === 설정 ===
+# === ATB 설정 ===
+const ATB_BASE_SPEED: float = 0.08  # 적 기본 ATB 충전 속도
+const ATB_SPD_FACTOR: float = 0.008
+const ATB_MAX: float = 1.0
 const BASE_ESCAPE_RATE: float = 40.0
-const ACTION_DELAY: float = 1.0  # 0.35 → 0.5 (모션 보이게)
 
 
 func _ready() -> void:
 	visible = false
-	# 버튼 시그널 연결
+	set_process(false)
+	
 	if run_button:
 		run_button.pressed.connect(_on_run_pressed)
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
 
 
-#region 전투 초기화
-var is_elite_battle: bool = false
+func _process(delta: float) -> void:
+	if current_state != BattleState.RUNNING:
+		return
+	
+	# 적 ATB만 업데이트
+	_update_enemy_atb(delta)
 
+
+#region 전투 초기화
 func setup(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false) -> void:
 	battle_id = p_battle_id
 	enemy_data_list = enemy_ids.duplicate()
@@ -60,21 +70,20 @@ func setup(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false) -> void
 	run_button.disabled = is_boss_battle
 	
 	_spawn_enemies(enemy_ids)
+	_init_enemy_atb()
 	
-	# 엘리트 전투면 배경색 변경
 	if is_elite_battle:
 		var bg: Panel = get_node_or_null("Panel")
 		if bg:
 			var style: StyleBoxFlat = StyleBoxFlat.new()
-			style.bg_color = Color(0.2, 0.1, 0.3, 0.95)  # 보라색 배경
+			style.bg_color = Color(0.2, 0.1, 0.3, 0.95)
 			bg.add_theme_stylebox_override("panel", style)
 	
 	visible = true
 	current_state = BattleState.STARTING
 	
-	# 바로 전투 시작
 	await get_tree().create_timer(0.3).timeout
-	_start_round()
+	_start_battle()
 
 
 func _check_is_boss_battle(enemy_ids: Array) -> bool:
@@ -98,9 +107,8 @@ func _spawn_enemies(enemy_ids: Array) -> void:
 		var battle_enemy: BattleEnemy = BATTLE_ENEMY_SCENE.instantiate()
 		enemy_container.add_child(battle_enemy)
 		
-		# 엘리트 전투에서 첫 번째 적은 엘리트 버전으로
 		if is_elite_battle and not spawned_elite:
-			battle_enemy.setup(str(enemy_id), true)  # 엘리트로 스폰
+			battle_enemy.setup(str(enemy_id), true)
 			spawned_elite = true
 		else:
 			battle_enemy.setup(str(enemy_id), false)
@@ -108,119 +116,67 @@ func _spawn_enemies(enemy_ids: Array) -> void:
 		enemies.append(battle_enemy)
 
 
-func _get_enemy_name(enemy_id: String) -> String:
-	var data: Dictionary = DataManager.get_enemy(enemy_id)
-	return str(data.get("name", enemy_id))
+func _init_enemy_atb() -> void:
+	## 적 ATB 초기화 - 랜덤 시작 (동시 공격 방지)
+	enemy_atb.clear()
+	
+	for i in range(enemies.size()):
+		if enemies[i].is_alive():
+			enemy_atb[i] = randf() * 0.6  # 0~60% 랜덤 시작
+
+
+func _start_battle() -> void:
+	current_state = BattleState.RUNNING
+	set_process(true)
+	_send_log("전투 시작!", Color.WHITE)
 #endregion
 
 
-#region 라운드 진행
-var _battle_timer: Timer
-
-
-func _start_round() -> void:
-	current_round += 1
-	_calculate_turn_order()
-	current_turn_index = 0
-	_schedule_next_turn()
-
-
-func _schedule_next_turn() -> void:
-	# Timer를 사용하여 다음 턴 예약 (while+await 대신)
-	if _battle_timer == null:
-		_battle_timer = Timer.new()
-		_battle_timer.one_shot = true
-		_battle_timer.timeout.connect(_process_scheduled_turn)
-		add_child(_battle_timer)
+#region 적 ATB 시스템
+func _update_enemy_atb(delta: float) -> void:
+	## 적 ATB 업데이트 및 공격 처리 (배속 적용)
+	var speed_delta: float = delta * BattleManager.get_battle_speed()
 	
-	_battle_timer.start(ACTION_DELAY)
+	for i in range(enemies.size()):
+		var enemy: BattleEnemy = enemies[i]
+		if not enemy.is_alive():
+			continue
+		
+		if not enemy_atb.has(i):
+			enemy_atb[i] = randf() * 0.4
+		
+		var charge_rate: float = ATB_BASE_SPEED + (enemy.get_spd() * ATB_SPD_FACTOR)
+		enemy_atb[i] = minf(enemy_atb[i] + charge_rate * speed_delta, ATB_MAX)
+		
+		# ATB 게이지 UI 업데이트
+		enemy.update_atb_bar(enemy_atb[i])
+		
+		# ATB 풀 차면 공격
+		if enemy_atb[i] >= ATB_MAX:
+			_enemy_attack(enemy)
+			enemy_atb[i] = 0.0
+			
+			if _check_battle_end():
+				return
+#endregion
 
 
-func _stop_battle_timer() -> void:
-	# 타이머 정지 및 정리
-	if _battle_timer != null and is_instance_valid(_battle_timer):
-		_battle_timer.stop()
+#region 외부 공격 인터페이스
+func has_alive_enemies() -> bool:
+	## BattleManager가 호출 - 살아있는 적이 있는지
+	for e in enemies:
+		if e != null and e.is_alive():
+			return true
+	return false
 
 
-func _process_scheduled_turn() -> void:
-	# 이미 종료된 전투면 무시
-	if current_state == BattleState.VICTORY or current_state == BattleState.DEFEAT or current_state == BattleState.ENDED:
+func execute_hero_attack(hero: Hero) -> void:
+	## BattleManager에서 호출 - 영웅이 이 전투창의 적을 공격
+	if current_state != BattleState.RUNNING:
 		return
 	
-	# 전투 종료 체크
-	if _check_battle_end():
-		return
-	
-	# 라운드 끝 체크 - 새 라운드 시작
-	if current_turn_index >= turn_order.size():
-		current_round += 1
-		_calculate_turn_order()
-		current_turn_index = 0
-	
-	# 참가자가 없으면 종료
-	if turn_order.is_empty():
-		_check_battle_end()  # 강제로 종료 체크
-		return
-	
-	# 인덱스 범위 체크
-	if current_turn_index >= turn_order.size():
-		return
-	
-	# 현재 턴 처리
-	var turn_data: Dictionary = turn_order[current_turn_index]
-	current_turn_index += 1
-	
-	if turn_data["type"] == "hero":
-		_process_hero_turn(turn_data["ref"])
-	else:
-		_process_enemy_turn(turn_data["ref"])
-	
-	
-	# 다음 턴 예약 (아직 전투 중일 때만)
-	if current_state != BattleState.VICTORY and current_state != BattleState.DEFEAT:
-		_schedule_next_turn()
-	
-
-
-func _calculate_turn_order() -> void:
-	turn_order.clear()
-	
-	var party := PartyManager.get_alive_heroes()
-	for hero in party:
-		turn_order.append({
-			"type": "hero", 
-			"ref": hero, 
-			"spd": hero.get_spd(),
-			"sort_key": hero.get_spd() * 10000 + randi() % 10000  # 정수 정렬키
-		})
-	
-	for enemy in enemies:
-		if enemy.is_alive():
-			turn_order.append({
-				"type": "enemy", 
-				"ref": enemy, 
-				"spd": enemy.get_spd(),
-				"sort_key": enemy.get_spd() * 10000 + randi() % 10000
-			})
-	
-	# 빈 배열이면 정렬 스킵
-	if turn_order.size() <= 1:
-		return
-	
-	# 정수 키로 정렬 (내림차순)
-	turn_order.sort_custom(_compare_turn_order)
-
-
-func _compare_turn_order(a: Dictionary, b: Dictionary) -> bool:
-	# 정수 비교만 사용 (부동소수점 문제 방지)
-	return a["sort_key"] > b["sort_key"]
-
-
-func _process_hero_turn(hero: Hero) -> void:
 	if hero == null or hero.is_dead:
 		return
-	
-	current_state = BattleState.PLAYER_PHASE
 	
 	var alive_enemies: Array = []
 	for e in enemies:
@@ -230,27 +186,52 @@ func _process_hero_turn(hero: Hero) -> void:
 	if alive_enemies.is_empty():
 		return
 	
+	# 스마트 타겟팅
 	var target: BattleEnemy = _select_smart_target(hero, alive_enemies)
-	_execute_hero_action(hero, target)
+	_do_hero_attack(hero, target)
+	
+	# 전투 종료 체크
+	_check_battle_end()
+#endregion
 
 
-func _process_enemy_turn(enemy: BattleEnemy) -> void:
+#region 전투 행동
+func _enemy_attack(enemy: BattleEnemy) -> void:
+	## 적 기본 공격
 	if not enemy.is_alive():
 		return
-	
-	current_state = BattleState.ENEMY_PHASE
 	
 	var alive_heroes := PartyManager.get_alive_heroes()
 	if alive_heroes.is_empty():
 		return
 	
 	var target: Hero = alive_heroes[randi() % alive_heroes.size()]
-	_execute_enemy_action(enemy, target)
-#endregion
+	
+	enemy.play_attack_effect()
+	
+	var atk := enemy.get_atk()
+	var is_crit := randf() * 100 < enemy.get_crit()
+	var is_evaded := randf() * 100 < target.get_eva()
+	
+	if is_evaded:
+		_send_log("%s → %s 회피!" % [enemy.enemy_name, target.hero_name], Color.GRAY)
+	else:
+		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
+		PartyManager.on_hero_damaged(target, damage)
+		call_deferred("_emit_party_updated")
+		
+		if is_crit:
+			_send_log("%s → %s에게 %d! (강타)" % [enemy.enemy_name, target.hero_name, damage], Color.RED)
+		else:
+			_send_log("%s → %s에게 %d" % [enemy.enemy_name, target.hero_name, damage], Color.YELLOW)
+		
+		if target.is_dead:
+			_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
+			call_deferred("_emit_party_updated")
 
 
-#region 전투 행동
 func _select_smart_target(hero: Hero, alive_enemies: Array) -> BattleEnemy:
+	## 스마트 타겟팅 - 처치 가능한 적 우선
 	var atk := hero.get_atk()
 	
 	for enemy in alive_enemies:
@@ -260,11 +241,11 @@ func _select_smart_target(hero: Hero, alive_enemies: Array) -> BattleEnemy:
 		if expected_damage >= enemy.current_hp:
 			return enemy
 	
-	var idx := randi() % alive_enemies.size()
-	return alive_enemies[idx]
+	return alive_enemies[randi() % alive_enemies.size()]
 
 
-func _execute_hero_action(hero: Hero, target: BattleEnemy) -> void:
+func _do_hero_attack(hero: Hero, target: BattleEnemy) -> void:
+	## 영웅 공격 실행
 	if hero == null or target == null:
 		return
 	
@@ -279,8 +260,6 @@ func _execute_hero_action(hero: Hero, target: BattleEnemy) -> void:
 	else:
 		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
 		target.take_damage(damage)
-		
-		# 데미지 숫자 표시
 		target.show_damage_number(damage, is_crit)
 		
 		if is_crit:
@@ -292,41 +271,6 @@ func _execute_hero_action(hero: Hero, target: BattleEnemy) -> void:
 		
 		if not target.is_alive():
 			_on_enemy_defeated(target)
-	
-
-
-func _execute_enemy_action(enemy: BattleEnemy, target: Hero) -> void:
-	# 적 공격 모션
-	enemy.play_attack_effect()
-	
-	var atk := enemy.get_atk()
-	var is_crit := randf() * 100 < enemy.get_crit()
-	var is_evaded := randf() * 100 < target.get_eva()
-	
-	if is_evaded:
-		_send_log("%s → %s 회피!" % [enemy.enemy_name, target.hero_name], Color.GRAY)
-	else:
-		var damage := _calculate_damage(atk, target.get_p_def(), is_crit)
-		
-		# PartyManager를 통해 데미지 처리 (party_wiped 시그널 발생)
-		PartyManager.on_hero_damaged(target, damage)
-		
-		# 직접 emit 대신 deferred로 호출
-		call_deferred("_emit_party_updated")
-		
-		if is_crit:
-			_send_log("%s → %s에게 %d! (강타)" % [enemy.enemy_name, target.hero_name, damage], Color.RED)
-		else:
-			_send_log("%s → %s에게 %d" % [enemy.enemy_name, target.hero_name, damage], Color.YELLOW)
-		
-		if target.is_dead:
-			_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
-			call_deferred("_emit_party_updated")
-	
-
-
-func _emit_party_updated() -> void:
-	party_updated.emit()
 
 
 func _calculate_damage(atk: int, p_def: int, is_crit: bool = false) -> int:
@@ -344,8 +288,10 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	total_gold += enemy.get_gold_reward()
 	drop_items.append_array(enemy.roll_drops())
 	
-	# play_death_effect()는 await을 사용하므로 호출만 하고 기다리지 않음
-	# (대기하면 전투 흐름이 너무 느려짐)
+	var idx := enemies.find(enemy)
+	if idx >= 0:
+		enemy_atb.erase(idx)
+	
 	enemy.play_death_effect()
 
 
@@ -370,12 +316,11 @@ func _check_battle_end() -> bool:
 
 func _end_battle_victory() -> void:
 	current_state = BattleState.VICTORY
-	_stop_battle_timer()  # 타이머 정지!
+	set_process(false)
 	
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
 	
 	for item_id in drop_items:
-		# 장비인지 소비 아이템인지 구분
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
 		if not equip_data.is_empty():
 			var rarity: String = str(equip_data.get("rarity", "common"))
@@ -389,7 +334,6 @@ func _end_battle_victory() -> void:
 			var item_data: Dictionary = DataManager.get_item(item_id)
 			_send_log("%s 획득!" % str(item_data.get("name", item_id)), Color.YELLOW)
 	
-	# 보상 지급
 	PartyManager.distribute_exp(total_exp)
 	GameManager.add_gold(total_gold)
 	for item_id in drop_items:
@@ -405,7 +349,7 @@ func _end_battle_victory() -> void:
 
 func _end_battle_defeat() -> void:
 	current_state = BattleState.DEFEAT
-	_stop_battle_timer()  # 타이머 정지!
+	set_process(false)
 	
 	_send_log("전멸...", Color.DARK_RED)
 	
@@ -418,7 +362,7 @@ func _end_battle_defeat() -> void:
 
 #region 도주 시스템
 func _on_run_pressed() -> void:
-	if is_boss_battle or current_state == BattleState.VICTORY or current_state == BattleState.DEFEAT:
+	if is_boss_battle or current_state != BattleState.RUNNING:
 		return
 	
 	run_button.disabled = true
@@ -428,7 +372,7 @@ func _on_run_pressed() -> void:
 	
 	if roll < escape_chance:
 		current_state = BattleState.ESCAPED
-		_stop_battle_timer()  # 타이머 정지!
+		set_process(false)
 		_send_log("도주 성공!", Color.CYAN)
 		run_button.visible = false
 		close_button.visible = true
@@ -454,9 +398,12 @@ func _calculate_escape_chance() -> float:
 #endregion
 
 
-#region 로그/이벤트
+#region 유틸리티
+func _emit_party_updated() -> void:
+	party_updated.emit()
+
+
 func _send_log(msg: String, color: Color = Color.WHITE) -> void:
-	# 직접 emit (deferred 제거)
 	battle_log.emit(msg, color)
 
 
