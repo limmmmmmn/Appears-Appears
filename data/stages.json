@@ -2,6 +2,7 @@
   "tile_types": {
 	"grass": { "can_spawn": true, "walkable": true },
 	"forest": { "can_spawn": true, "walkable": true },
+	"mountain": { "can_spawn": false, "walkable": false },
 	"cave": { "can_spawn": true, "walkable": true },
 	"stone": { "can_spawn": true, "walkable": true },
 	"water": { "can_spawn": false, "walkable": false },

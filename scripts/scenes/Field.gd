@@ -66,7 +66,7 @@ var spawnable_tiles: Array = []
 @export var tile_type_map: Dictionary = {
 	0: "grass",
 	1: "forest",
-	2: "road",
+	2: "mountain",  # 벽 - 스폰 안됨
 	3: "water",
 	4: "cave"
 }
@@ -74,13 +74,14 @@ var spawnable_tiles: Array = []
 
 func _ready() -> void:
 	_load_scenes()
+	
+	# tilemap이 export로 연결 안 됐으면 자동으로 찾기
+	if not tilemap:
+		tilemap = _find_tilemap_layer()
+	
 	_setup_hud()
 	_setup_game_over_ui()
 	_spawn_party()
-	
-	# 스폰 가능한 타일 캐싱
-	spawnable_tiles = _collect_spawnable_tiles()
-	
 	_spawn_field_enemies()
 	_setup_exit()
 	_setup_respawn_timer()
@@ -103,6 +104,34 @@ func _ready() -> void:
 			BattleManager.boss_victory.connect(_on_boss_victory)
 	
 	hud.add_system_log("필드에 입장했다.")
+
+
+func _find_tilemap_layer() -> TileMapLayer:
+	## TileMapLayer 자동 탐색
+	# 직접 자식 먼저
+	for child in get_children():
+		if child is TileMapLayer:
+			print("[Field] TileMapLayer 발견: ", child.name)
+			return child
+	
+	# 재귀적으로 찾기
+	var result = _find_node_by_type(self, "TileMapLayer")
+	if result:
+		print("[Field] TileMapLayer 발견 (재귀): ", result.name)
+		return result
+	
+	print("[Field] TileMapLayer를 찾을 수 없음!")
+	return null
+
+
+func _find_node_by_type(node: Node, type_name: String) -> Node:
+	for child in node.get_children():
+		if child.get_class() == type_name or child is TileMapLayer:
+			return child
+		var found = _find_node_by_type(child, type_name)
+		if found:
+			return found
+	return null
 
 
 func _load_scenes() -> void:
@@ -180,10 +209,28 @@ func _spawn_field_enemies() -> void:
 		_spawn_boss()
 		return
 	
-	var spawn_data: Array = FieldManager.spawn_field_enemies(spawnable_tiles)
+	# 스폰할 적 수 결정
+	var enemy_count_data: Dictionary = FieldManager.current_field_data.get("enemy_count", {}) as Dictionary
+	var min_count: int = int(enemy_count_data.get("min", 5))
+	var max_count: int = int(enemy_count_data.get("max", 10))
+	var count: int = randi_range(min_count, max_count)
 	
-	for data in spawn_data:
-		_spawn_single_enemy(data)
+	# 플레이어 주변 타일에서 스폰
+	var nearby_tiles: Array = _get_spawn_tiles_near_player(350.0)
+	var spawn_positions: Array = _get_distributed_spawn_positions(nearby_tiles, count)
+	
+	for tile_data in spawn_positions:
+		var tile_type: String = str(tile_data.get("tile_type", "grass"))
+		var enemy_id: String = FieldManager.select_field_enemy_for_tile(tile_type)
+		
+		var spawn_data: Dictionary = {
+			"enemy_id": enemy_id,
+			"position": tile_data.get("position", Vector2.ZERO),
+			"tile_type": tile_type
+		}
+		_spawn_single_enemy(spawn_data)
+	
+	print("[Field] 초기 스폰: %d마리" % spawn_positions.size())
 	
 
 
@@ -246,27 +293,22 @@ func _on_respawn_timer() -> void:
 	if field_enemies.size() >= MAX_ENEMIES:
 		return
 	
-	# 플레이어 위치에서 멀리 스폰
-	var safe_tiles: Array = _get_safe_spawn_tiles()
-	if safe_tiles.is_empty():
+	# 플레이어 주변에서 스폰 가능한 타일
+	var spawn_tiles: Array = _get_spawn_tiles_near_player(400.0)
+	if spawn_tiles.is_empty():
 		return
 	
-	#=============================================================================
-	# 🎮 한 번에 스폰되는 적 수 조절
-	# randi_range(최소, 최대) - 예: (1, 2) = 1~2마리, (3, 5) = 3~5마리
-	#=============================================================================
-	var spawn_count: int = randi_range(1, 2)
+	# 한 번에 스폰되는 적 수
+	var spawn_count: int = randi_range(1, 3)
+	spawn_tiles.shuffle()
 	
 	for i in range(spawn_count):
 		if field_enemies.size() >= MAX_ENEMIES:
 			break
-		if safe_tiles.is_empty():
+		if i >= spawn_tiles.size():
 			break
 		
-		var tile_idx: int = randi() % safe_tiles.size()
-		var tile_data: Dictionary = safe_tiles[tile_idx]
-		safe_tiles.remove_at(tile_idx)
-		
+		var tile_data: Dictionary = spawn_tiles[i]
 		var tile_type: String = str(tile_data.get("tile_type", "grass"))
 		var enemy_id: String = FieldManager.select_field_enemy_for_tile(tile_type)
 		
@@ -280,11 +322,19 @@ func _on_respawn_timer() -> void:
 
 
 func _get_safe_spawn_tiles() -> Array:
-	## 플레이어에서 일정 거리 이상 떨어진 타일만 반환
+	## 플레이어에서 일정 거리 이상 떨어진 타일만 반환 (최적화)
 	var safe_tiles: Array = []
 	var player_pos: Vector2 = party_leader.global_position if party_leader else Vector2.ZERO
 	
-	for tile_data in spawnable_tiles:
+	# 타일이 너무 많으면 샘플링
+	var tiles_to_check: Array = spawnable_tiles
+	if spawnable_tiles.size() > 1000:
+		tiles_to_check = []
+		var step: int = spawnable_tiles.size() / 300
+		for i in range(0, spawnable_tiles.size(), step):
+			tiles_to_check.append(spawnable_tiles[i])
+	
+	for tile_data in tiles_to_check:
 		var tile_dict: Dictionary = tile_data as Dictionary
 		var tile_pos: Vector2 = tile_dict.get("position", Vector2.ZERO) as Vector2
 		
@@ -297,25 +347,108 @@ func _get_safe_spawn_tiles() -> Array:
 func _collect_spawnable_tiles() -> Array:
 	var result: Array = []
 	
+	print("[Field] tilemap 존재: ", tilemap != null)
+	
 	if tilemap:
 		var used_cells: Array = tilemap.get_used_cells()
+		print("[Field] 전체 타일 수: ", used_cells.size())
+		
+		var type_count: Dictionary = {}
+		
 		for cell in used_cells:
 			var cell_vec: Vector2i = cell as Vector2i
 			var source_id: int = tilemap.get_cell_source_id(cell_vec)
-			var tile_type: String = str(tile_type_map.get(source_id, "grass"))
+			var tile_type: String = str(tile_type_map.get(source_id, "unknown_%d" % source_id))
+			
+			# 타입별 카운트
+			if not type_count.has(tile_type):
+				type_count[tile_type] = 0
+			type_count[tile_type] += 1
 			
 			if FieldManager.can_spawn_on_tile(tile_type):
 				result.append({
 					"position": tilemap.map_to_local(cell_vec),
 					"tile_type": tile_type
 				})
+		
+		print("[Field] 타일 타입별 수: ", type_count)
+		print("[Field] 스폰 가능 타일 수: ", result.size())
+		
+		# 스폰 가능 타일 위치 범위 출력
+		if not result.is_empty():
+			var min_x: float = INF
+			var max_x: float = -INF
+			var min_y: float = INF
+			var max_y: float = -INF
+			for t in result:
+				var pos: Vector2 = t.get("position", Vector2.ZERO)
+				min_x = minf(min_x, pos.x)
+				max_x = maxf(max_x, pos.x)
+				min_y = minf(min_y, pos.y)
+				max_y = maxf(max_y, pos.y)
+			print("[Field] 스폰 범위: X(%.0f ~ %.0f), Y(%.0f ~ %.0f)" % [min_x, max_x, min_y, max_y])
 	
 	if result.is_empty():
-		for i in range(8):
-			result.append({
-				"position": Vector2(150 + (i % 4) * 100, 100 + (i / 4) * 80),
-				"tile_type": "grass"
-			})
+		print("[Field] 폴백 스폰 포인트 사용!")
+		# 폴백: 맵 전체에 그리드로 스폰 포인트 생성
+		for x in range(5):
+			for y in range(4):
+				result.append({
+					"position": Vector2(80 + x * 100, 60 + y * 70),
+					"tile_type": "grass"
+				})
+	
+	return result
+
+
+func _get_spawn_tiles_near_player(radius: float = 300.0) -> Array:
+	## 플레이어 주변 타일만 반환 (최적화)
+	var result: Array = []
+	var player_pos: Vector2 = party_leader.global_position if party_leader else Vector2(200, 150)
+	
+	if not tilemap:
+		return result
+	
+	# 플레이어 위치를 타일 좌표로 변환
+	var player_tile: Vector2i = tilemap.local_to_map(player_pos)
+	var tile_size: int = 16  # 타일 크기
+	var tile_radius: int = int(radius / tile_size) + 1
+	
+	# 플레이어 주변 타일만 체크
+	for x in range(player_tile.x - tile_radius, player_tile.x + tile_radius + 1):
+		for y in range(player_tile.y - tile_radius, player_tile.y + tile_radius + 1):
+			var cell := Vector2i(x, y)
+			var source_id: int = tilemap.get_cell_source_id(cell)
+			
+			if source_id == -1:  # 빈 타일
+				continue
+			
+			var tile_type: String = str(tile_type_map.get(source_id, "grass"))
+			
+			if FieldManager.can_spawn_on_tile(tile_type):
+				var world_pos: Vector2 = tilemap.map_to_local(cell)
+				var dist: float = world_pos.distance_to(player_pos)
+				
+				# 너무 가까우면 제외, 범위 내면 포함
+				if dist > MIN_SPAWN_DISTANCE and dist < radius:
+					result.append({
+						"position": world_pos,
+						"tile_type": tile_type
+					})
+	
+	return result
+
+
+func _get_distributed_spawn_positions(tiles: Array, count: int) -> Array:
+	## 타일 목록에서 분산 스폰 위치 선택
+	if tiles.is_empty():
+		return []
+	
+	tiles.shuffle()
+	var result: Array = []
+	
+	for i in range(mini(count, tiles.size())):
+		result.append(tiles[i])
 	
 	return result
 
