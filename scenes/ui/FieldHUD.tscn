@@ -39,6 +39,7 @@ corner_radius_top_left = 4
 corner_radius_top_right = 4
 
 [node name="FieldHUD" type="CanvasLayer"]
+layer = 20
 script = ExtResource("1_script")
 
 [node name="Control" type="Control" parent="."]
@@ -97,8 +98,8 @@ anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 4.0
-offset_top = -121.0
-offset_right = 210.0
+offset_top = -100.0
+offset_right = 180.0
 offset_bottom = -4.0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
@@ -134,8 +135,9 @@ anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -160.0
-offset_top = -93.0
-offset_right = 160.0
+offset_top = -58.0
+offset_right = 100.0
+offset_bottom = -4.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_bottom")
@@ -153,8 +155,8 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -196.0
-offset_top = -117.0
+offset_left = -118.0
+offset_top = -58.0
 offset_right = -4.0
 offset_bottom = -4.0
 grow_horizontal = 0
