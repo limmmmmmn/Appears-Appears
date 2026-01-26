@@ -64,7 +64,8 @@ func save_game() -> bool:
 		"game": _serialize_game_state(),
 		"party": _serialize_party(),
 		"inventory": _serialize_inventory(),
-		"field_position": _serialize_field_position()
+		"field_position": _serialize_field_position(),
+		"town": _serialize_town_state()
 	}
 	
 	var json_string: String = JSON.stringify(save_data, "\t")
@@ -120,6 +121,15 @@ func _serialize_field_position() -> Dictionary:
 		"stage_id": last_field_stage,
 		"field_id": last_field_id
 	}
+
+
+func _serialize_town_state() -> Dictionary:
+	## TownManager 상태 저장
+	return {
+		"tavern_heroes": TownManager.tavern_heroes.duplicate(),
+		"recruit_remaining": TownManager.recruit_remaining,
+		"explore_count": TownManager.explore_count
+	}
 #endregion
 
 
@@ -148,6 +158,7 @@ func load_game() -> bool:
 	_deserialize_party(save_data.get("party", []))
 	_deserialize_inventory(save_data.get("inventory", {}))
 	_deserialize_field_position(save_data.get("field_position", {}))
+	_deserialize_town_state(save_data.get("town", {}))
 	
 	load_completed.emit(true)
 	return true
@@ -221,6 +232,28 @@ func _deserialize_field_position(data: Dictionary) -> void:
 	)
 	last_field_stage = str(data.get("stage_id", ""))
 	last_field_id = str(data.get("field_id", ""))
+
+
+func _deserialize_town_state(data: Dictionary) -> void:
+	## TownManager 상태 복원
+	if data.is_empty():
+		# 세이브 데이터에 town 정보가 없으면 새로 초기화
+		TownManager.init_new_game()
+		return
+	
+	# tavern_heroes 복원
+	TownManager.tavern_heroes.clear()
+	var saved_tavern: Array = data.get("tavern_heroes", [])
+	for hero_id in saved_tavern:
+		TownManager.tavern_heroes.append(str(hero_id))
+	
+	# recruit_remaining 복원
+	TownManager.recruit_remaining = int(data.get("recruit_remaining", 3))
+	
+	# explore_count 복원
+	TownManager.explore_count = int(data.get("explore_count", 0))
+	
+	TownManager.tavern_updated.emit()
 #endregion
 
 

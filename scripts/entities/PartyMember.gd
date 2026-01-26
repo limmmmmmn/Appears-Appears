@@ -112,9 +112,6 @@ func get_path_position(distance: float) -> Vector2:
 #=============================================================================
 # 팔로워 로직
 #=============================================================================
-var _last_position: Vector2 = Vector2.ZERO
-var _debug_count: int = 0
-
 func _process_follower(_delta: float) -> void:
 	if not is_instance_valid(leader_ref):
 		return
@@ -126,11 +123,6 @@ func _process_follower(_delta: float) -> void:
 	# 현재 위치에서 목표까지 얼마나 이동해야 하는지
 	var to_target: Vector2 = target_pos - global_position
 	var move_distance: float = to_target.length()
-	
-	# 디버그 (처음 60프레임만)
-	_debug_count += 1
-	if _debug_count <= 60 and _debug_count % 20 == 0:
-		print("[Follower %d] move_dist: %.2f, to_target: %s, dir: %s" % [member_index, move_distance, to_target, current_direction])
 	
 	# 목표 위치로 이동
 	global_position = target_pos
@@ -289,7 +281,6 @@ func setup_as_follower(hero: RefCounted, leader: PartyMember, index: int) -> voi
 	
 	# 초기 위치
 	global_position = leader.get_path_position(FOLLOW_DISTANCE * index)
-	_last_position = global_position
 	
 	# 초기 방향을 리더와 맞춤
 	current_direction = leader.current_direction
@@ -323,11 +314,10 @@ func _setup_hero_data(hero: RefCounted) -> void:
 		var sprite_frames: SpriteFrames = SpriteManager.get_hero_sprite_frames(hero_id)
 		if sprite_frames:
 			sprite.sprite_frames = sprite_frames
-			sprite.animation = "walk_" + current_direction  # 현재 방향에 맞게
+			sprite.animation = "walk_" + current_direction
 			sprite.play()
 			sprite.stop()
 			sprite.frame = 1
-			print("[PartyMember] 스프라이트 설정 완료: %s (index: %d, dir: %s)" % [hero_id, member_index, current_direction])
 		else:
 			push_error("[PartyMember] SpriteFrames를 가져올 수 없음: " + hero_id)
 	else:

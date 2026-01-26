@@ -1,6 +1,6 @@
-[gd_scene load_steps=7 format=3 uid="uid://vv1h1nx6bkkr"]
+[gd_scene load_steps=7 format=3 uid="uid://partymember001"]
 
-[ext_resource type="Script" uid="uid://caidblhiyg3o6" path="res://scripts/entities/PartyMember.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/entities/PartyMember.gd" id="1_script"]
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_member"]
 
