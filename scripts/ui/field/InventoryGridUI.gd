@@ -5,7 +5,7 @@ class_name InventoryGridUI
 signal item_clicked(item_id: String)
 signal item_hover_started(item_id: String)
 signal item_hover_ended()
-signal item_drag_started(item_id: String, button: Button)
+signal item_drag_started(item_id: String)
 signal item_right_clicked(item_id: String, global_pos: Vector2)
 
 var grid: GridContainer
@@ -17,6 +17,8 @@ var pending_drag_item: String = ""
 
 const DRAG_THRESHOLD: float = 5.0
 const MIN_SLOTS: int = 8
+const ITEM_SIZE: Vector2 = Vector2(28, 26)
+const ITEM_FONT_SIZE: int = 14
 
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️",
@@ -106,7 +108,7 @@ func refresh() -> void:
 
 func _create_item_button(item_info: Dictionary) -> Button:
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(22, 22)
+	btn.custom_minimum_size = ITEM_SIZE
 	
 	var item_id: String = str(item_info.get("id", ""))
 	var quantity: int = int(item_info.get("quantity", 1))
@@ -126,7 +128,7 @@ func _create_item_button(item_info: Dictionary) -> Button:
 	else:
 		btn.text = icon
 	
-	btn.add_theme_font_size_override("font_size", 10)
+	btn.add_theme_font_size_override("font_size", ITEM_FONT_SIZE)
 	btn.modulate = RARITY_COLORS.get(rarity, Color.WHITE)
 	
 	btn.set_meta("item_id", item_id)
@@ -143,7 +145,7 @@ func _create_item_button(item_info: Dictionary) -> Button:
 
 func _create_empty_slot() -> Button:
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(18, 18)
+	btn.custom_minimum_size = ITEM_SIZE
 	btn.text = ""
 	btn.disabled = true
 	btn.modulate = Color(0.3, 0.3, 0.3, 0.3)
@@ -170,7 +172,7 @@ func _on_button_gui_input(event: InputEvent, btn: Button, item_id: String) -> vo
 		if pending_drag_item == item_id:
 			var distance = event.global_position.distance_to(drag_start_pos)
 			if distance > DRAG_THRESHOLD:
-				item_drag_started.emit(item_id, btn)
+				item_drag_started.emit(item_id)
 				pending_drag_item = ""
 
 

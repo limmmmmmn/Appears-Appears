@@ -16,6 +16,7 @@ signal boss_victory(battle_id: int)
 signal hero_atb_changed(hero_id: String, value: float)  # HUD 업데이트용
 signal battle_speed_changed(speed: float)  # 전투 속도 변경
 signal hero_attacked(hero_id: String)  # 영웅 공격 시 (이펙트용)
+signal loot_animation_requested(item_id: String, start_pos: Vector2)  # 아이템 획득 애니메이션
 
 var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite}
 var _battle_id_counter: int = 0
@@ -89,7 +90,7 @@ func on_hero_died(hero_id: String) -> void:
 
 
 #region 전투 시작/종료
-func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = false) -> int:
+func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = false, _collision_pos: Vector2 = Vector2.ZERO) -> int:
 	_battle_id_counter += 1
 	var battle_id := _battle_id_counter
 	
@@ -112,15 +113,31 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 	
 	battle_container.add_child(window)
 	
-	# 위치 배정
-	var pos := _calculate_window_position()
-	window.position = pos
+	# 최종 목표 위치
+	var target_pos := _calculate_window_position()
+	
+	# 시작 위치: 항상 화면(뷰포트) 중앙
+	var viewport_size := Vector2(480, 270)  # 기본값
+	var tree := get_tree()
+	if tree:
+		viewport_size = tree.root.get_visible_rect().size
+	
+	var start_pos: Vector2 = viewport_size / 2 - WINDOW_SIZE / 2
+	
+	# 시작 위치에 배치 (중앙, 투명, 작은 크기)
+	window.position = start_pos
+	window.modulate.a = 0.0
+	window.scale = Vector2(0.5, 0.5)
 	
 	# 전투 초기화
 	window.setup(battle_id, enemy_ids, is_elite)
 	window.battle_ended.connect(_on_battle_window_ended)
 	window.battle_log.connect(_on_battle_log)
 	window.party_updated.connect(_on_party_updated)
+	window.loot_drop_requested.connect(_on_loot_drop_requested)  # 아이템 애니메이션
+	
+	# 등장 애니메이션
+	_animate_window_appear(window, target_pos)
 	
 	# 등록
 	active_battles[battle_id] = {
@@ -135,6 +152,23 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 	
 	battle_started.emit(battle_id)
 	return battle_id
+
+
+func _animate_window_appear(window: BattleWindow, target_pos: Vector2) -> void:
+	## 전투창 등장 애니메이션 (화면 중앙 → 랜덤 위치)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_BACK)
+	
+	# 위치 이동
+	tween.tween_property(window, "position", target_pos, 0.35)
+	
+	# 페이드인
+	tween.tween_property(window, "modulate:a", 1.0, 0.2)
+	
+	# 스케일 확대
+	tween.tween_property(window, "scale", Vector2.ONE, 0.3)
 
 
 func end_battle(battle_id: int, victory: bool) -> void:
@@ -188,6 +222,11 @@ func _on_party_updated() -> void:
 		var hero = PartyManager.get_hero_by_id(hero_id)
 		if hero == null or hero.is_dead:
 			on_hero_died(hero_id)
+
+
+func _on_loot_drop_requested(item_id: String, start_pos: Vector2) -> void:
+	## 전투창에서 아이템 드롭 애니메이션 요청 -> HUD로 전달
+	loot_animation_requested.emit(item_id, start_pos)
 #endregion
 
 

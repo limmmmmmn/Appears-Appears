@@ -8,6 +8,7 @@ signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
 signal hero_atb_changed(battle_id: int, hero_id: String, value: float)
+signal loot_drop_requested(item_id: String, start_global_pos: Vector2)  # 아이템 애니메이션 요청
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
 
@@ -342,7 +343,35 @@ func _end_battle_victory() -> void:
 	
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
 	
+	# 경험치/골드는 즉시 지급
+	PartyManager.distribute_exp(total_exp)
+	GameManager.add_gold(total_gold)
+	
+	# 아이템 드롭 애니메이션 시작 (지연 순차 처리)
+	if not drop_items.is_empty():
+		_start_loot_animations()
+	
+	call_deferred("_emit_party_updated")
+	
+	run_button.visible = false
+	close_button.visible = true
+	
+	battle_ended.emit(battle_id, true)
+
+
+func _start_loot_animations() -> void:
+	## 드롭 아이템 순차 애니메이션 시작
+	var delay: float = 0.0
+	var delay_interval: float = 0.15  # 아이템 간 간격
+	
 	for item_id in drop_items:
+		# 전투창 중앙에서 시작
+		var start_pos: Vector2 = global_position + size / 2
+		
+		# 지연 후 애니메이션 요청 + 인벤토리 추가
+		_delayed_loot_drop(item_id, start_pos, delay)
+		
+		# 로그 메시지
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
 		if not equip_data.is_empty():
 			var rarity: String = str(equip_data.get("rarity", "common"))
@@ -355,18 +384,20 @@ func _end_battle_victory() -> void:
 		else:
 			var item_data: Dictionary = DataManager.get_item(item_id)
 			_send_log("%s 획득!" % str(item_data.get("name", item_id)), Color.YELLOW)
+		
+		delay += delay_interval
+
+
+func _delayed_loot_drop(item_id: String, start_pos: Vector2, delay: float) -> void:
+	## 지연 후 아이템 드롭 애니메이션 요청
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
 	
-	PartyManager.distribute_exp(total_exp)
-	GameManager.add_gold(total_gold)
-	for item_id in drop_items:
-		InventoryManager.add_item(item_id)
+	# 아이템을 인벤토리에 추가
+	InventoryManager.add_item(item_id)
 	
-	call_deferred("_emit_party_updated")
-	
-	run_button.visible = false
-	close_button.visible = true
-	
-	battle_ended.emit(battle_id, true)
+	# 애니메이션 요청 시그널
+	loot_drop_requested.emit(item_id, start_pos)
 
 
 func _end_battle_defeat() -> void:

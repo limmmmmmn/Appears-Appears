@@ -33,7 +33,7 @@
 		  "id": "field_1_1",
 		  "name": "평화로운 초원",
 		  "scene": "res://scenes/field/Field_1_1.tscn",
-		  "enemy_count": { "min": 8, "max": 12 },
+		  "enemy_count": { "min": 8, "max": 200 },
 		  "elite_chance": 0.15,
 		  "chest_count": { "min": 0, "max": 1 },
 		  "is_boss_field": false,

@@ -1,13 +1,12 @@
 extends CanvasLayer
 class_name FieldHUD
-## 필드 HUD 메인 컨트롤러
+## 필드 HUD 메인 컨트롤러 (새 레이아웃)
 ## - TopBar: 스테이지, 골드, 배속, 메뉴
 ## - LogPanel: 전투 로그 (좌측 하단)
-## - PartyPanel: 파티 상태 + 인벤토리 (우측)
-## - BottomPartyPanel: 페이스칩 (하단 중앙)
+## - BottomPartyPanel: 파티 정보 + 장비 (하단 중앙)
+## - InventoryPanel: 인벤토리 (우측 하단)
 
 signal menu_pressed
-signal equipment_slot_clicked(hero_index: int, slot: String)
 
 # === 상단 바 ===
 @onready var stage_label: Label = %StageLabel
@@ -20,22 +19,27 @@ signal equipment_slot_clicked(hero_index: int, slot: String)
 @onready var log_scroll: ScrollContainer = %LogScroll
 @onready var log_container: VBoxContainer = %LogContainer
 
-# === 파티 패널 (우측) ===
-@onready var party_panel: PanelContainer = %PartyPanel
-@onready var party_container: VBoxContainer = %PartyContainer
+# === 하단 파티 패널 (중앙) ===
+@onready var bottom_party_panel: PanelContainer = %BottomPartyPanel
+@onready var party_container: HBoxContainer = %PartyContainer
+
+# === 인벤토리 패널 (우측 하단) ===
 @onready var inventory_panel: PanelContainer = %InventoryPanel
 
 # === 컴포넌트 ===
-var party_slots: Array[PartySlotUI] = []
+var party_slots: Array[BottomPartySlot] = []
 var inventory_grid: InventoryGridUI = null
 var battle_log: BattleLogUI = null
 var drag_manager: DragDropManager = null
 
-# === 컨텍스트 메뉴/툴팁 ===
+# === 툴팁 ===
+var tooltip: EquipmentTooltip = null
+var equipped_tooltip: EquippedItemTooltip = null
+
+# === 컨텍스트 메뉴 ===
 var context_menu: PopupMenu = null
 var context_menu_item_id: String = ""
 var context_menu_type: String = ""
-var tooltip: EquipmentTooltip = null
 
 
 func _ready() -> void:
@@ -54,14 +58,15 @@ func _input(event: InputEvent) -> void:
 
 
 func _setup_components() -> void:
-	# 배속 버튼 스타일
 	_setup_speed_button()
 	
-	# 파티 슬롯 생성
+	# 파티 슬롯 생성 (하단 중앙)
 	for i in range(4):
-		var slot := PartySlotUI.new()
+		var slot := BottomPartySlot.new()
 		slot.setup(i)
 		slot.equipment_slot_gui_input.connect(_on_equip_gui_input.bind(i))
+		slot.equipment_slot_hovered.connect(_on_equip_slot_hovered.bind(i))
+		slot.equipment_slot_unhovered.connect(_on_equip_slot_unhovered)
 		party_container.add_child(slot)
 		party_slots.append(slot)
 	
@@ -78,7 +83,7 @@ func _setup_components() -> void:
 			c.queue_free()
 		inventory_panel.add_child(inventory_grid)
 	
-	# 배틀 로그 (log_container에 직접 추가)
+	# 배틀 로그
 	battle_log = BattleLogUI.new()
 	battle_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if log_container:
@@ -93,7 +98,6 @@ func _setup_components() -> void:
 
 
 func _setup_speed_button() -> void:
-	## 배속 버튼 스타일 설정
 	if not speed_button:
 		return
 	
@@ -107,9 +111,9 @@ func _setup_speed_button() -> void:
 	style.border_color = Color(0.4, 0.6, 0.9)
 	speed_button.add_theme_stylebox_override("normal", style)
 	
-	var hover_style := style.duplicate()
-	hover_style.bg_color = Color(0.25, 0.25, 0.3, 0.95)
-	speed_button.add_theme_stylebox_override("hover", hover_style)
+	var hover := style.duplicate()
+	hover.bg_color = Color(0.25, 0.25, 0.3, 0.95)
+	speed_button.add_theme_stylebox_override("hover", hover)
 
 
 func _connect_signals() -> void:
@@ -125,16 +129,15 @@ func _connect_signals() -> void:
 		if not PartyManager.party_changed.is_connected(update_party_display):
 			PartyManager.party_changed.connect(update_party_display)
 	
-	# BattleManager 신호 연결
 	if BattleManager:
 		if not BattleManager.battle_log_received.is_connected(_on_battle_log_received):
 			BattleManager.battle_log_received.connect(_on_battle_log_received)
 		if not BattleManager.party_hp_changed.is_connected(update_party_display):
 			BattleManager.party_hp_changed.connect(update_party_display)
-		if not BattleManager.hero_atb_changed.is_connected(_on_hero_atb_changed):
-			BattleManager.hero_atb_changed.connect(_on_hero_atb_changed)
 		if not BattleManager.battle_speed_changed.is_connected(_on_battle_speed_changed):
 			BattleManager.battle_speed_changed.connect(_on_battle_speed_changed)
+		if not BattleManager.loot_animation_requested.is_connected(_on_loot_animation_requested):
+			BattleManager.loot_animation_requested.connect(_on_loot_animation_requested)
 
 
 #region 이벤트 핸들러
@@ -153,16 +156,33 @@ func _on_battle_log_received(message: String, color: Color) -> void:
 	add_log(message, color)
 
 
-func _on_hero_atb_changed(hero_id: String, value: float) -> void:
-	## 영웅 ATB 변경 시 HUD 업데이트
-	for slot in party_slots:
-		if slot.get_hero_id() == hero_id:
-			slot.update_atb(value)
-			break
+func _on_loot_animation_requested(item_id: String, start_pos: Vector2) -> void:
+	var target_pos: Vector2 = _get_inventory_target_position()
+	
+	var loot_anim := LootAnimationUI.new()
+	var ctrl := get_node_or_null("Control")
+	if ctrl:
+		ctrl.add_child(loot_anim)
+	else:
+		add_child(loot_anim)
+	
+	loot_anim.animation_completed.connect(_on_loot_animation_completed)
+	loot_anim.setup(item_id, start_pos, target_pos)
+
+
+func _get_inventory_target_position() -> Vector2:
+	if inventory_panel and is_instance_valid(inventory_panel):
+		return inventory_panel.global_position + inventory_panel.size / 2
+	return Vector2(400, 200)
+
+
+func _on_loot_animation_completed(_item_id: String) -> void:
+	if inventory_grid:
+		inventory_grid.refresh()
 #endregion
 
 
-#region 업데이트 함수
+#region 업데이트
 func update_all() -> void:
 	update_top_bar()
 	update_party_display()
@@ -183,10 +203,6 @@ func update_party_display() -> void:
 	for i in range(4):
 		if i < party.size():
 			party_slots[i].update_display(party[i])
-			# 현재 ATB 값도 업데이트
-			if BattleManager:
-				var atb_value = BattleManager.get_hero_atb(party[i].id)
-				party_slots[i].update_atb(atb_value)
 		else:
 			party_slots[i].visible = false
 
@@ -197,7 +213,7 @@ func refresh_inventory() -> void:
 #endregion
 
 
-#region 로그 함수
+#region 로그
 func add_log(msg: String, color: Color = Color.WHITE) -> void:
 	if battle_log:
 		battle_log.add_log(msg, color)
@@ -234,10 +250,6 @@ func add_system_log(msg: String) -> void:
 	if battle_log:
 		battle_log.add_system(msg)
 
-func add_stat_description(n: String, v: String) -> void:
-	if battle_log:
-		battle_log.add_stat_info(n, v)
-
 func clear_logs() -> void:
 	if battle_log:
 		battle_log.clear()
@@ -248,9 +260,6 @@ func clear_logs() -> void:
 func _on_inv_clicked(item_id: String) -> void:
 	var data = DataManager.get_equipment(item_id)
 	if data.is_empty():
-		data = DataManager.get_item(item_id)
-		if not data.is_empty():
-			add_stat_description(str(data.get("name", item_id)), str(data.get("effect", "")))
 		return
 	
 	var party = PartyManager.get_party() if PartyManager else []
@@ -275,6 +284,8 @@ func _on_inv_hover(item_id: String) -> void:
 func _on_inv_drag(item_id: String) -> void:
 	if drag_manager:
 		drag_manager.start_drag_from_inventory(item_id)
+	if inventory_grid:
+		inventory_grid.clear_pending_drag()
 
 
 func _on_inv_right_click(item_id: String, pos: Vector2) -> void:
@@ -304,8 +315,6 @@ func _on_equip_gui_input(event: InputEvent, slot_name: String, hero_idx: int) ->
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			if not eid.is_empty() and drag_manager:
 				drag_manager.start_drag_from_equipped(eid, hero_idx, slot_name)
-			else:
-				equipment_slot_clicked.emit(hero_idx, slot_name)
 #endregion
 
 
@@ -313,6 +322,7 @@ func _on_equip_gui_input(event: InputEvent, slot_name: String, hero_idx: int) ->
 func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equip") -> void:
 	_hide_context_menu()
 	_hide_tooltip()
+	_hide_equipped_tooltip()
 	context_menu_item_id = item_id
 	context_menu_type = item_type
 	
@@ -347,16 +357,10 @@ func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equi
 				is_disabled = true
 			elif effect_type == "revive":
 				is_disabled = not party[i].is_dead
-				if party[i].is_dead:
-					hero_name += " (사망)"
 			else:
 				is_disabled = party[i].is_dead
-				if party[i].is_dead:
-					hero_name += " (사망)"
 		else:
-			if party[i].is_dead:
-				is_disabled = true
-				hero_name += " (사망)"
+			is_disabled = party[i].is_dead
 		
 		context_menu.add_item(hero_name, i)
 		if is_disabled:
@@ -417,7 +421,7 @@ func _hide_context_menu() -> void:
 #endregion
 
 
-#region 소비 아이템 사용
+#region 소비 아이템
 func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 	var item_data: Dictionary = DataManager.get_item(item_id)
 	if item_data.is_empty():
@@ -437,7 +441,6 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 	match effect_type:
 		"heal_percent":
 			if hero.is_dead:
-				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
 				return
 			var heal_percent: float = float(effect.get("value", 0.3))
 			var heal_amount: int = int(hero.get_max_hp() * heal_percent)
@@ -445,12 +448,9 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 			if actual_heal > 0:
 				add_system_log("%s: %s HP +%d" % [hero.hero_name, item_name, actual_heal])
 				success = true
-			else:
-				add_system_log("%s: HP가 이미 가득 참" % hero.hero_name)
 		
 		"restore_mp_percent":
 			if hero.is_dead:
-				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
 				return
 			var mp_percent: float = float(effect.get("value", 0.5))
 			var mp_amount: int = int(hero.get_max_mp() * mp_percent)
@@ -458,21 +458,17 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 			if actual_mp > 0:
 				add_system_log("%s: %s MP +%d" % [hero.hero_name, item_name, actual_mp])
 				success = true
-			else:
-				add_system_log("%s: MP가 이미 가득 참" % hero.hero_name)
 		
 		"full_restore":
 			if hero.is_dead:
-				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
 				return
 			hero.heal(hero.get_max_hp())
 			hero.restore_mp(hero.get_max_mp())
-			add_system_log("%s: %s 사용 - 완전 회복!" % [hero.hero_name, item_name])
+			add_system_log("%s: %s 완전 회복!" % [hero.hero_name, item_name])
 			success = true
 		
 		"revive":
 			if not hero.is_dead:
-				add_system_log("%s: 살아있는 대상에게 사용 불가" % item_name)
 				return
 			var hp_percent: float = float(effect.get("hp_percent", 0.3))
 			hero.revive(hp_percent)
@@ -481,12 +477,11 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 		
 		"permanent_stat":
 			if hero.is_dead:
-				add_system_log("%s: 사망한 대상에게 사용 불가" % item_name)
 				return
 			var stat: String = str(effect.get("stat", ""))
 			var value: int = int(effect.get("value", 1))
 			hero.apply_seed_bonus(stat, value)
-			add_system_log("%s: %s 사용 - %s +%d!" % [hero.hero_name, item_name, stat.to_upper(), value])
+			add_system_log("%s: %s - %s +%d!" % [hero.hero_name, item_name, stat.to_upper(), value])
 			success = true
 		
 		"full_restore_party":
@@ -495,25 +490,20 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 				if not member.is_dead:
 					member.heal(member.get_max_hp())
 					member.restore_mp(member.get_max_mp())
-			add_system_log("%s 사용 - 파티 전원 완전 회복!" % item_name)
+			add_system_log("%s - 파티 전원 회복!" % item_name)
 			success = true
 		
 		"revive_all":
 			var all_party = PartyManager.get_party() if PartyManager else []
 			var hp_percent: float = float(effect.get("hp_percent", 0.5))
-			var revived_count: int = 0
+			var count: int = 0
 			for member in all_party:
 				if member.is_dead:
 					member.revive(hp_percent)
-					revived_count += 1
-			if revived_count > 0:
-				add_system_log("%s 사용 - %d명 부활!" % [item_name, revived_count])
+					count += 1
+			if count > 0:
+				add_system_log("%s - %d명 부활!" % [item_name, count])
 				success = true
-			else:
-				add_system_log("부활시킬 대상이 없음")
-		
-		_:
-			add_system_log("%s: 알 수 없는 효과" % item_name)
 	
 	if success:
 		InventoryManager.remove_item(item_id, 1)
@@ -526,6 +516,7 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 #region 툴팁
 func _show_tooltip(item_id: String) -> void:
 	_hide_tooltip()
+	_hide_equipped_tooltip()
 	
 	var equip_data = DataManager.get_equipment(item_id)
 	var item_data = DataManager.get_item(item_id)
@@ -543,4 +534,33 @@ func _hide_tooltip() -> void:
 	if tooltip and is_instance_valid(tooltip):
 		tooltip.queue_free()
 		tooltip = null
+
+
+func _on_equip_slot_hovered(slot_name: String, item_id: String, hero_index: int) -> void:
+	if drag_manager and drag_manager.is_dragging():
+		return
+	
+	_hide_tooltip()
+	_hide_equipped_tooltip()
+	
+	if hero_index >= party_slots.size():
+		return
+	
+	var slot: BottomPartySlot = party_slots[hero_index]
+	var anchor_rect: Rect2 = slot.get_global_rect()
+	
+	equipped_tooltip = EquippedItemTooltip.new()
+	var ctrl = get_node_or_null("Control")
+	(ctrl if ctrl else self).add_child(equipped_tooltip)
+	equipped_tooltip.setup(item_id, slot_name, anchor_rect)
+
+
+func _on_equip_slot_unhovered() -> void:
+	_hide_equipped_tooltip()
+
+
+func _hide_equipped_tooltip() -> void:
+	if equipped_tooltip and is_instance_valid(equipped_tooltip):
+		equipped_tooltip.queue_free()
+		equipped_tooltip = null
 #endregion
