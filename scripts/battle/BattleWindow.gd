@@ -171,6 +171,8 @@ func _hero_attack(hero: Hero) -> void:
 	if not has_alive_enemies():
 		return
 	
+	_bring_to_front()  # 액션 시 맨 위로
+	
 	BattleManager.hero_attacked.emit(hero.id)
 	
 	var target: BattleEnemy = _select_smart_target(hero)
@@ -269,6 +271,8 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	var alive_heroes := PartyManager.get_alive_heroes()
 	if alive_heroes.is_empty():
 		return
+	
+	_bring_to_front()  # 액션 시 맨 위로
 	
 	var target: Hero = alive_heroes[randi() % alive_heroes.size()]
 	
@@ -452,6 +456,13 @@ func _calculate_escape_chance() -> float:
 
 
 #region 유틸리티
+func _bring_to_front() -> void:
+	## 이 전투창을 형제 노드 중 맨 위로 이동
+	var parent = get_parent()
+	if parent:
+		parent.move_child(self, -1)
+
+
 func _emit_party_updated() -> void:
 	party_updated.emit()
 

@@ -1,6 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://bb5xaxnatwvjk"]
+[gd_scene load_steps=7 format=3 uid="uid://bb5xaxnatwvjk"]
 
 [ext_resource type="Script" uid="uid://deyxnhy4ojeqv" path="res://scripts/entities/PartyFollower.gd" id="1_script"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_je8lu"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(12, 12)
@@ -31,8 +33,9 @@ collision_layer = 2
 collision_mask = 4
 script = ExtResource("1_script")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(0.5, 0.5)
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+position = Vector2(0, -12)
+sprite_frames = SubResource("SpriteFrames_je8lu")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_1")
@@ -43,9 +46,9 @@ z_index = 10
 layout_mode = 3
 anchors_preset = 0
 offset_left = -12.0
-offset_top = -22.0
+offset_top = -28.0
 offset_right = 12.0
-offset_bottom = -12.0
+offset_bottom = -18.0
 
 [node name="HPBar" type="ProgressBar" parent="StatusBars"]
 layout_mode = 0

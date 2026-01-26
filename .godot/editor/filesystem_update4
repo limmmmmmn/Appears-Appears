@@ -1,0 +1,10 @@
+res://scripts/battle/BattleWindow.gd
+res://scripts/entities/PartyFollower.gd
+res://scripts/entities/PartyLeader.gd
+res://scripts/autoload/SpriteManager.gd
+res://scenes/main/Main.tscn
+res://scenes/field/PartyFollower.tscn
+res://scenes/field/PartyLeader.tscn
+res://scripts/scenes/Field.gd
+res://scenes/field/PartyMember.tscn
+res://scripts/entities/PartyMember.gd

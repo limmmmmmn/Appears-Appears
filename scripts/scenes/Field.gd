@@ -11,8 +11,8 @@ signal field_cleared
 @export var town_area: Area2D
 @export var tilemap: TileMapLayer
 
-var party_leader: PartyLeader
-var party_followers: Array[PartyFollower] = []
+var party_leader: PartyMember
+var party_followers: Array[PartyMember] = []
 var field_enemies: Array[FieldEnemy] = []
 var hud: FieldHUD
 var game_over_ui: GameOverUI
@@ -55,8 +55,8 @@ func _process(_delta: float) -> void:
 
 
 func _load_scenes() -> void:
-	party_leader_scene = load("res://scenes/field/PartyLeader.tscn")
-	party_follower_scene = load("res://scenes/field/PartyFollower.tscn")
+	party_leader_scene = load("res://scenes/field/PartyMember.tscn")
+	party_follower_scene = load("res://scenes/field/PartyMember.tscn")
 	field_enemy_scene = load("res://scenes/field/FieldEnemy.tscn")
 	hud_scene = load("res://scenes/ui/FieldHUD.tscn")
 
@@ -140,21 +140,24 @@ func _spawn_party() -> void:
 	var party_members: Array = PartyManager.get_party() if PartyManager else []
 	
 	# 리더 생성
-	party_leader = party_leader_scene.instantiate() as PartyLeader
-	party_leader.global_position = start_pos
+	party_leader = party_leader_scene.instantiate() as PartyMember
 	add_child(party_leader)
 	
 	if party_members.size() > 0:
-		party_leader.setup_hero(party_members[0])
+		party_leader.setup_as_leader(party_members[0], start_pos)
+	else:
+		party_leader.setup_as_leader(null, start_pos)
 	
 	# 팔로워 생성
 	if party_members.size() > 1:
-		await get_tree().create_timer(0.1).timeout
+		await get_tree().create_timer(0.05).timeout
 		
 		for i in range(1, party_members.size()):
-			var follower: PartyFollower = party_follower_scene.instantiate()
+			var follower: PartyMember = party_follower_scene.instantiate()
 			add_child(follower)
-			follower.setup(party_leader, i, party_members[i])
+			# 노드가 tree에 완전히 추가된 후 setup 호출
+			await get_tree().process_frame
+			follower.setup_as_follower(party_members[i], party_leader, i)
 			party_followers.append(follower)
 	
 	SaveManager.last_field_position = Vector2.ZERO
@@ -391,7 +394,7 @@ func get_remaining_enemies() -> int:
 	return field_enemies.size()
 
 
-func get_party_leader() -> PartyLeader:
+func get_party_leader() -> PartyMember:
 	return party_leader
 
 
