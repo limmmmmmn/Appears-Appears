@@ -235,14 +235,12 @@ func _save_field_position() -> void:
 # 이벤트 핸들러
 #=============================================================================
 func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
+	## 필드 적과 충돌 시 - 전투창 증식 시스템 (1:1 대응)
+	## 필드 적 1마리 = 전투창 적 1마리
 	var enemy_data: Dictionary = DataManager.get_enemy(field_enemy.enemy_id)
 	var enemy_name: String = str(enemy_data.get("name", field_enemy.enemy_id))
 	
-	var battle_enemies: Array = FieldManager.generate_battle_enemies(
-		field_enemy.enemy_id, field_enemy.tile_type
-	)
-	
-	# 충돌 위치 계산 (적과 플레이어 사이)
+	# 충돌 위치 계산
 	var collision_pos: Vector2 = field_enemy.global_position
 	if party_leader:
 		collision_pos = (field_enemy.global_position + party_leader.global_position) / 2
@@ -252,20 +250,21 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 		var msg: String
 		if field_enemy.is_elite:
 			msg = "⭐ 엘리트 %s이(가) 나타났다!" % enemy_name
-		elif battle_enemies.size() > 1:
-			msg = "%s 외 %d마리가 나타났다!" % [enemy_name, battle_enemies.size() - 1]
 		else:
 			msg = "%s이(가) 나타났다!" % enemy_name
 		hud.add_battle_log(msg)
 	
 	var was_elite: bool = field_enemy.is_elite
+	var enemy_id: String = field_enemy.enemy_id
+	
 	field_enemies.erase(field_enemy)
 	field_enemy.despawn()
 	
+	# 새 시스템: 적 1마리씩 전투에 추가 (기존 창에 추가되거나 새 창 생성)
 	if BattleManager:
-		BattleManager.start_battle(battle_enemies, self, was_elite, collision_pos)
+		BattleManager.add_enemy_to_battle(enemy_id, self, was_elite, collision_pos)
 	
-	battle_triggered.emit(battle_enemies)
+	battle_triggered.emit([enemy_id])
 
 
 func _on_exit_body_entered(body: Node2D) -> void:

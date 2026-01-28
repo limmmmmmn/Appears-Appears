@@ -1,8 +1,8 @@
 extends Node
-## BattleManager: 동시다발 전투 관리 + 전역 Hero ATB
-## - 여러 전투창을 동시에 관리
-## - 영웅 ATB는 전역으로 관리 (전투창 공유)
-## - ATB 풀 차면 열려있는 전투창 중 하나에 공격 명령
+## BattleManager: 전투창 증식 시스템
+## - 필드 적 1마리 = 전투창 적 1마리 (1:1 대응)
+## - 전투창 하나에 최대 MAX_ENEMIES_PER_WINDOW 마리
+## - 전투창 최대 MAX_BATTLE_WINDOWS 개
 
 const BATTLE_WINDOW_SCENE = preload("res://scenes/battle/BattleWindow.tscn")
 
@@ -13,26 +13,34 @@ signal battle_log_received(message: String, color: Color)
 signal party_hp_changed
 signal elite_victory(battle_id: int)
 signal boss_victory(battle_id: int)
-signal hero_atb_changed(hero_id: String, value: float)  # HUD 업데이트용
-signal battle_speed_changed(speed: float)  # 전투 속도 변경
-signal hero_attacked(hero_id: String)  # 영웅 공격 시 (이펙트용)
-signal loot_animation_requested(item_id: String, start_pos: Vector2)  # 아이템 획득 애니메이션
+signal hero_atb_changed(hero_id: String, value: float)
+signal battle_speed_changed(speed: float)
+signal hero_attacked(hero_id: String)
+signal loot_animation_requested(item_id: String, start_pos: Vector2)
+
+# === 전투창 증식 시스템 설정 ===
+const MAX_ENEMIES_PER_WINDOW: int = 5  # 전투창 하나당 최대 적 수
+const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
+
+# === 창 생성 효과 (비워둠) ===
+signal window_created(window_count: int)      # 새 전투창 생성 시
+signal threshold_reached(window_count: int)   # 임계치 도달 시
 
 var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite}
 var _battle_id_counter: int = 0
 
 # === 전역 Hero ATB 시스템 ===
 var hero_atb: Dictionary = {}  # hero_id -> atb_value (0.0 ~ 1.0)
-var _atb_active: bool = false  # 전투 중일 때만 ATB 진행
+var _atb_active: bool = false
 
 # === 전투 속도 ===
-var battle_speed: float = 1.0  # 1x, 2x, 3x
+var battle_speed: float = 1.0
 const BATTLE_SPEEDS: Array[float] = [1.0, 2.0, 3.0]
 var _current_speed_index: int = 0
 
 # ATB 설정
-const ATB_BASE_SPEED: float = 0.12  # 기본 ATB 충전 속도 (초당)
-const ATB_SPD_FACTOR: float = 0.01  # SPD 1당 추가 충전 속도
+const ATB_BASE_SPEED: float = 0.12
+const ATB_SPD_FACTOR: float = 0.01
 const ATB_MAX: float = 1.0
 
 # 전투창 배치 설정
@@ -48,14 +56,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# 비전투 중에도 HUD 표시용 ATB 업데이트 (공격은 각 BattleWindow에서 처리)
 	if active_battles.is_empty():
 		_update_hero_atb_for_hud(delta)
 
 
 #region HUD용 Hero ATB (비전투 시)
 func _update_hero_atb_for_hud(delta: float) -> void:
-	## 비전투 중 HUD 표시용 ATB 업데이트 (공격 없음)
 	var speed_delta: float = delta * battle_speed
 	
 	for hero in PartyManager.get_alive_heroes():
@@ -65,17 +71,14 @@ func _update_hero_atb_for_hud(delta: float) -> void:
 		var charge_rate: float = ATB_BASE_SPEED + (hero.get_spd() * ATB_SPD_FACTOR)
 		hero_atb[hero.id] = minf(hero_atb[hero.id] + charge_rate * speed_delta, ATB_MAX)
 		
-		# HUD 업데이트 시그널
 		hero_atb_changed.emit(hero.id, hero_atb[hero.id])
 
 
 func get_hero_atb(hero_id: String) -> float:
-	## HUD에서 호출 - 영웅 ATB 조회
 	return hero_atb.get(hero_id, 0.0)
 
 
 func init_hero_atb() -> void:
-	## 전투 시작 시 Hero ATB 초기화
 	hero_atb.clear()
 	for hero in PartyManager.get_alive_heroes():
 		hero_atb[hero.id] = 0.0
@@ -83,22 +86,81 @@ func init_hero_atb() -> void:
 
 
 func on_hero_died(hero_id: String) -> void:
-	## 영웅 사망 시 ATB 제거
 	hero_atb.erase(hero_id)
 	hero_atb_changed.emit(hero_id, 0.0)
 #endregion
 
 
-#region 전투 시작/종료
-func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = false, _collision_pos: Vector2 = Vector2.ZERO) -> int:
-	_battle_id_counter += 1
-	var battle_id := _battle_id_counter
+#region 전투창 증식 시스템 - 핵심 로직
+func add_enemy_to_battle(enemy_id: String, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
+	## 필드에서 적 1마리와 충돌 시 호출
+	## 기존 전투창에 추가하거나 새 전투창 생성
 	
-	var is_boss := _check_boss_battle(enemy_ids)
+	var is_boss := _check_boss_enemy(enemy_id)
 	
 	# 보스전 시작 시 다른 전투 모두 강제 종료
 	if is_boss:
 		force_end_all_non_boss()
+		return _create_new_battle([enemy_id], parent_node, is_elite, is_boss, collision_pos)
+	
+	# 기존 전투창 중 여유 있는 곳 찾기
+	var available_window: BattleWindow = _find_available_window()
+	
+	if available_window != null:
+		# 기존 전투창에 적 추가
+		available_window.add_enemy(enemy_id, is_elite)
+		return available_window.battle_id
+	else:
+		# 새 전투창 필요
+		if get_active_battle_count() >= MAX_BATTLE_WINDOWS:
+			# 최대 전투창 도달 - 오버플로 처리 (현재는 가장 오래된 창에 강제 추가)
+			var oldest_window: BattleWindow = _get_oldest_non_boss_window()
+			if oldest_window:
+				oldest_window.add_enemy(enemy_id, is_elite)
+				return oldest_window.battle_id
+			# 그래도 없으면 무시 (보스전만 있는 경우)
+			return -1
+		
+		# 새 전투창 생성
+		return _create_new_battle([enemy_id], parent_node, is_elite, false, collision_pos)
+
+
+func _find_available_window() -> BattleWindow:
+	## 적을 추가할 수 있는 전투창 찾기 (보스 제외, 여유 있는 창)
+	for battle_id in active_battles:
+		var battle_data: Dictionary = active_battles[battle_id]
+		if battle_data.get("is_boss", false):
+			continue
+		
+		var window: BattleWindow = battle_data.get("window")
+		if window and is_instance_valid(window):
+			if window.get_enemy_count() < MAX_ENEMIES_PER_WINDOW:
+				return window
+	
+	return null
+
+
+func _get_oldest_non_boss_window() -> BattleWindow:
+	## 가장 먼저 생성된 비보스 전투창 반환
+	var oldest_id: int = -1
+	var oldest_window: BattleWindow = null
+	
+	for battle_id in active_battles:
+		var battle_data: Dictionary = active_battles[battle_id]
+		if battle_data.get("is_boss", false):
+			continue
+		
+		if oldest_id == -1 or battle_id < oldest_id:
+			oldest_id = battle_id
+			oldest_window = battle_data.get("window")
+	
+	return oldest_window
+
+
+func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_boss: bool, _collision_pos: Vector2) -> int:
+	## 새 전투창 생성
+	_battle_id_counter += 1
+	var battle_id := _battle_id_counter
 	
 	# 첫 전투 시작 시 ATB 초기화
 	if active_battles.is_empty():
@@ -116,8 +178,8 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 	# 최종 목표 위치
 	var target_pos := _calculate_window_position()
 	
-	# 시작 위치: 항상 화면(뷰포트) 중앙
-	var viewport_size := Vector2(480, 270)  # 기본값
+	# 시작 위치: 화면 중앙
+	var viewport_size := Vector2(480, 270)
 	var tree := get_tree()
 	if tree:
 		viewport_size = tree.root.get_visible_rect().size
@@ -129,12 +191,12 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 	window.modulate.a = 0.0
 	window.scale = Vector2(0.5, 0.5)
 	
-	# 전투 초기화
-	window.setup(battle_id, enemy_ids, is_elite)
+	# 전투 초기화 (새 시스템용)
+	window.setup_new(battle_id, enemy_ids, is_elite, is_boss)
 	window.battle_ended.connect(_on_battle_window_ended)
 	window.battle_log.connect(_on_battle_log)
 	window.party_updated.connect(_on_party_updated)
-	window.loot_drop_requested.connect(_on_loot_drop_requested)  # 아이템 애니메이션
+	window.loot_drop_requested.connect(_on_loot_drop_requested)
 	
 	# 등장 애니메이션
 	_animate_window_appear(window, target_pos)
@@ -142,7 +204,6 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 	# 등록
 	active_battles[battle_id] = {
 		"window": window,
-		"enemies": enemy_ids,
 		"is_boss": is_boss,
 		"is_elite": is_elite
 	}
@@ -150,27 +211,95 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 	# ATB 활성화
 	_atb_active = true
 	
+	# === 창 생성 효과 (비워둠) ===
+	var window_count := get_active_battle_count()
+	window_created.emit(window_count)
+	_on_window_created_effect(window_count)
+	
+	# 임계치 체크
+	_check_threshold(window_count)
+	
 	battle_started.emit(battle_id)
 	return battle_id
 
 
+func _on_window_created_effect(_window_count: int) -> void:
+	## 전투창 생성 시 발동하는 효과 (현재 비워둠)
+	## TODO: 파티 보호막, 힐 토큰, 디버프, 보상 배율 등
+	pass
+
+
+func _check_threshold(window_count: int) -> void:
+	## 전투창 개수 임계치 체크 및 효과 발동 (현재 비워둠)
+	if window_count == 3:
+		threshold_reached.emit(3)
+		_on_threshold_3_effect()
+	elif window_count == 5:
+		threshold_reached.emit(5)
+		_on_threshold_5_effect()
+	elif window_count == MAX_BATTLE_WINDOWS:
+		threshold_reached.emit(MAX_BATTLE_WINDOWS)
+		_on_threshold_max_effect()
+
+
+func _on_threshold_3_effect() -> void:
+	## 전투창 3개 도달 효과 (비워둠)
+	pass
+
+
+func _on_threshold_5_effect() -> void:
+	## 전투창 5개 도달 효과 (비워둠)
+	pass
+
+
+func _on_threshold_max_effect() -> void:
+	## 전투창 최대치 도달 효과 (비워둠)
+	pass
+#endregion
+
+
+#region 레거시 호환 - start_battle
+func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
+	## 레거시 호환용: 여러 적을 한번에 전투에 추가
+	## 새 시스템에서는 add_enemy_to_battle 사용 권장
+	
+	if enemy_ids.is_empty():
+		return -1
+	
+	var first_enemy_id: String = str(enemy_ids[0])
+	var is_boss := _check_boss_enemy(first_enemy_id)
+	
+	# 보스전은 별도 창으로 처리
+	if is_boss:
+		force_end_all_non_boss()
+		return _create_new_battle(enemy_ids, parent_node, is_elite, true, collision_pos)
+	
+	# 첫 번째 적으로 전투 시작/추가
+	var battle_id: int = add_enemy_to_battle(first_enemy_id, parent_node, is_elite, collision_pos)
+	
+	# 나머지 적들 추가 (1:1 대응이므로 순차 추가)
+	for i in range(1, enemy_ids.size()):
+		var enemy_id: String = str(enemy_ids[i])
+		add_enemy_to_battle(enemy_id, parent_node, false, collision_pos)
+	
+	return battle_id
+#endregion
+
+
+#region 전투창 등장 애니메이션
 func _animate_window_appear(window: BattleWindow, target_pos: Vector2) -> void:
-	## 전투창 등장 애니메이션 (화면 중앙 → 랜덤 위치)
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_BACK)
 	
-	# 위치 이동
 	tween.tween_property(window, "position", target_pos, 0.35)
-	
-	# 페이드인
 	tween.tween_property(window, "modulate:a", 1.0, 0.2)
-	
-	# 스케일 확대
 	tween.tween_property(window, "scale", Vector2.ONE, 0.3)
+#endregion
 
 
+#region 전투 종료
 func end_battle(battle_id: int, victory: bool) -> void:
 	if not active_battles.has(battle_id):
 		return
@@ -217,7 +346,6 @@ func _on_battle_log(message: String, color: Color) -> void:
 func _on_party_updated() -> void:
 	party_hp_changed.emit()
 	
-	# 사망한 영웅 ATB 정리
 	for hero_id in hero_atb.keys():
 		var hero = PartyManager.get_hero_by_id(hero_id)
 		if hero == null or hero.is_dead:
@@ -225,7 +353,6 @@ func _on_party_updated() -> void:
 
 
 func _on_loot_drop_requested(item_id: String, start_pos: Vector2) -> void:
-	## 전투창에서 아이템 드롭 애니메이션 요청 -> HUD로 전달
 	loot_animation_requested.emit(item_id, start_pos)
 #endregion
 
@@ -303,6 +430,16 @@ func get_active_battle_count() -> int:
 	return active_battles.size()
 
 
+func get_total_enemy_count() -> int:
+	## 모든 전투창의 적 수 합계
+	var total: int = 0
+	for battle_id in active_battles:
+		var window: BattleWindow = active_battles[battle_id].get("window")
+		if window and is_instance_valid(window):
+			total += window.get_enemy_count()
+	return total
+
+
 func has_boss_battle() -> bool:
 	for battle_id in active_battles:
 		if active_battles[battle_id].get("is_boss", false):
@@ -310,12 +447,9 @@ func has_boss_battle() -> bool:
 	return false
 
 
-func _check_boss_battle(enemy_ids: Array) -> bool:
-	for enemy_id in enemy_ids:
-		var enemy_data: Dictionary = DataManager.get_enemy(str(enemy_id))
-		if enemy_data.get("type", "") == "boss":
-			return true
-	return false
+func _check_boss_enemy(enemy_id: String) -> bool:
+	var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
+	return enemy_data.get("type", "") == "boss"
 
 
 func force_end_all_non_boss() -> void:
@@ -348,7 +482,6 @@ func close_all_battles() -> void:
 
 
 func toggle_battle_speed() -> float:
-	## 전투 속도 토글 (1x -> 2x -> 3x -> 1x)
 	_current_speed_index = (_current_speed_index + 1) % BATTLE_SPEEDS.size()
 	battle_speed = BATTLE_SPEEDS[_current_speed_index]
 	battle_speed_changed.emit(battle_speed)
@@ -356,7 +489,6 @@ func toggle_battle_speed() -> float:
 
 
 func set_battle_speed(speed: float) -> void:
-	## 전투 속도 직접 설정
 	battle_speed = speed
 	for i in range(BATTLE_SPEEDS.size()):
 		if is_equal_approx(BATTLE_SPEEDS[i], speed):

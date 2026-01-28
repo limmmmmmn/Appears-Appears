@@ -1,14 +1,14 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: ATB 전투창
+## BattleWindow: ATB 전투창 (전투창 증식 시스템)
 ## - 각 전투창이 독립적인 영웅 ATB + 적 ATB 관리
-## - 전투창마다 영웅의 ATB가 따로 진행
+## - 전투 중 적 동적 추가 지원
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
 signal hero_atb_changed(battle_id: int, hero_id: String, value: float)
-signal loot_drop_requested(item_id: String, start_global_pos: Vector2)  # 아이템 애니메이션 요청
+signal loot_drop_requested(item_id: String, start_global_pos: Vector2)
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
 
@@ -25,8 +25,8 @@ var enemies: Array = []
 var enemy_data_list: Array = []
 
 # === ATB 시스템 (전투창별 독립) ===
-var enemy_atb: Dictionary = {}  # enemy_index -> atb_value
-var hero_atb: Dictionary = {}   # hero_id -> atb_value (0.0 ~ 1.0)
+var enemy_atb: Dictionary = {}
+var hero_atb: Dictionary = {}
 
 # === 보상 ===
 var total_exp: int = 0
@@ -45,6 +45,8 @@ const HERO_ATB_BASE: float = 0.15
 const HERO_ATB_SPD_FACTOR: float = 0.012
 const ATB_MAX: float = 1.0
 const BASE_ESCAPE_RATE: float = 40.0
+
+const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
 
 
 func _ready() -> void:
@@ -65,24 +67,22 @@ func _process(delta: float) -> void:
 	_update_enemy_atb(delta)
 
 
-#region 전투 초기화
-func setup(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false) -> void:
+#region 전투 초기화 (새 시스템)
+func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_is_boss: bool = false) -> void:
 	battle_id = p_battle_id
 	enemy_data_list = enemy_ids.duplicate()
 	is_elite_battle = p_is_elite
+	is_boss_battle = p_is_boss
 	
-	is_boss_battle = _check_is_boss_battle(enemy_ids)
 	run_button.disabled = is_boss_battle
 	
-	_spawn_enemies(enemy_ids)
-	_init_enemy_atb()
+	for i in range(enemy_ids.size()):
+		var enemy_id: String = str(enemy_ids[i])
+		var make_elite: bool = (i == 0 and is_elite_battle)
+		_spawn_single_enemy(enemy_id, make_elite)
 	
 	if is_elite_battle:
-		var bg: Panel = get_node_or_null("Panel")
-		if bg:
-			var style: StyleBoxFlat = StyleBoxFlat.new()
-			style.bg_color = Color(0.2, 0.1, 0.3, 0.95)
-			bg.add_theme_stylebox_override("panel", style)
+		_apply_elite_style()
 	
 	visible = true
 	current_state = BattleState.STARTING
@@ -91,41 +91,79 @@ func setup(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false) -> void
 	_start_battle()
 
 
+func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
+	if current_state == BattleState.VICTORY or current_state == BattleState.DEFEAT:
+		return
+	
+	enemy_data_list.append(enemy_id)
+	_spawn_single_enemy(enemy_id, is_elite)
+	
+	var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
+	var enemy_name: String = str(enemy_data.get("name", enemy_id))
+	if is_elite:
+		_send_log("⭐ 엘리트 %s 합류!" % enemy_name, Color.PURPLE)
+	else:
+		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
+	
+	if current_state == BattleState.RUNNING:
+		var idx: int = enemies.size() - 1
+		enemy_atb[idx] = randf() * 0.3
+	
+	_shake_window()
+
+
+func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
+	var battle_enemy: BattleEnemy = BATTLE_ENEMY_SCENE.instantiate()
+	enemy_container.add_child(battle_enemy)
+	battle_enemy.setup(enemy_id, make_elite)
+	enemies.append(battle_enemy)
+	
+	var idx: int = enemies.size() - 1
+	enemy_atb[idx] = randf() * 0.6
+
+
+func _shake_window() -> void:
+	var original_pos: Vector2 = position
+	var tween := create_tween()
+	tween.tween_property(self, "position", original_pos + Vector2(5, 0), 0.05)
+	tween.tween_property(self, "position", original_pos + Vector2(-5, 0), 0.05)
+	tween.tween_property(self, "position", original_pos + Vector2(3, 0), 0.05)
+	tween.tween_property(self, "position", original_pos, 0.05)
+
+
+func _apply_elite_style() -> void:
+	var bg: Panel = get_node_or_null("Panel")
+	if bg:
+		var style: StyleBoxFlat = StyleBoxFlat.new()
+		style.bg_color = Color(0.2, 0.1, 0.3, 0.95)
+		bg.add_theme_stylebox_override("panel", style)
+
+
+func get_enemy_count() -> int:
+	var count: int = 0
+	for e in enemies:
+		if e != null and e.is_alive():
+			count += 1
+	return count
+
+
+func get_total_enemy_count() -> int:
+	return enemies.size()
+#endregion
+
+
+#region 레거시 호환
+func setup(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false) -> void:
+	var is_boss: bool = _check_is_boss_battle(enemy_ids)
+	setup_new(p_battle_id, enemy_ids, p_is_elite, is_boss)
+
+
 func _check_is_boss_battle(enemy_ids: Array) -> bool:
 	for enemy_id in enemy_ids:
 		var data: Dictionary = DataManager.get_enemy(str(enemy_id))
 		if data.get("type", "") == "boss":
 			return true
 	return false
-
-
-const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
-
-func _spawn_enemies(enemy_ids: Array) -> void:
-	for child in enemy_container.get_children():
-		child.queue_free()
-	enemies.clear()
-	
-	var spawned_elite: bool = false
-	
-	for enemy_id in enemy_ids:
-		var battle_enemy: BattleEnemy = BATTLE_ENEMY_SCENE.instantiate()
-		enemy_container.add_child(battle_enemy)
-		
-		if is_elite_battle and not spawned_elite:
-			battle_enemy.setup(str(enemy_id), true)
-			spawned_elite = true
-		else:
-			battle_enemy.setup(str(enemy_id), false)
-		
-		enemies.append(battle_enemy)
-
-
-func _init_enemy_atb() -> void:
-	enemy_atb.clear()
-	for i in range(enemies.size()):
-		if enemies[i].is_alive():
-			enemy_atb[i] = randf() * 0.6
 
 
 func _init_hero_atb() -> void:
@@ -171,7 +209,7 @@ func _hero_attack(hero: Hero) -> void:
 	if not has_alive_enemies():
 		return
 	
-	_bring_to_front()  # 액션 시 맨 위로
+	_bring_to_front()
 	
 	BattleManager.hero_attacked.emit(hero.id)
 	
@@ -272,7 +310,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	if alive_heroes.is_empty():
 		return
 	
-	_bring_to_front()  # 액션 시 맨 위로
+	_bring_to_front()
 	
 	var target: Hero = alive_heroes[randi() % alive_heroes.size()]
 	
@@ -347,11 +385,9 @@ func _end_battle_victory() -> void:
 	
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
 	
-	# 경험치/골드는 즉시 지급
 	PartyManager.distribute_exp(total_exp)
 	GameManager.add_gold(total_gold)
 	
-	# 아이템 드롭 애니메이션 시작 (지연 순차 처리)
 	if not drop_items.is_empty():
 		_start_loot_animations()
 	
@@ -364,18 +400,13 @@ func _end_battle_victory() -> void:
 
 
 func _start_loot_animations() -> void:
-	## 드롭 아이템 순차 애니메이션 시작
 	var delay: float = 0.0
-	var delay_interval: float = 0.15  # 아이템 간 간격
+	var delay_interval: float = 0.15
 	
 	for item_id in drop_items:
-		# 전투창 중앙에서 시작
 		var start_pos: Vector2 = global_position + size / 2
-		
-		# 지연 후 애니메이션 요청 + 인벤토리 추가
 		_delayed_loot_drop(item_id, start_pos, delay)
 		
-		# 로그 메시지
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
 		if not equip_data.is_empty():
 			var rarity: String = str(equip_data.get("rarity", "common"))
@@ -393,14 +424,10 @@ func _start_loot_animations() -> void:
 
 
 func _delayed_loot_drop(item_id: String, start_pos: Vector2, delay: float) -> void:
-	## 지연 후 아이템 드롭 애니메이션 요청
 	if delay > 0.0:
 		await get_tree().create_timer(delay).timeout
 	
-	# 아이템을 인벤토리에 추가
 	InventoryManager.add_item(item_id)
-	
-	# 애니메이션 요청 시그널
 	loot_drop_requested.emit(item_id, start_pos)
 
 
@@ -457,7 +484,6 @@ func _calculate_escape_chance() -> float:
 
 #region 유틸리티
 func _bring_to_front() -> void:
-	## 이 전투창을 형제 노드 중 맨 위로 이동
 	var parent = get_parent()
 	if parent:
 		parent.move_child(self, -1)
