@@ -150,13 +150,16 @@ func _spawn_party() -> void:
 	
 	# 팔로워 생성
 	if party_members.size() > 1:
-		await get_tree().create_timer(0.05).timeout
+		# 트리에 있는지 확인 후 await
+		if is_inside_tree():
+			await get_tree().create_timer(0.05).timeout
 		
 		for i in range(1, party_members.size()):
 			var follower: PartyMember = party_follower_scene.instantiate()
 			add_child(follower)
-			# 노드가 tree에 완전히 추가된 후 setup 호출
-			await get_tree().process_frame
+			# 트리에 있는지 확인 후 await
+			if follower.is_inside_tree():
+				await follower.get_tree().process_frame
 			follower.setup_as_follower(party_members[i], party_leader, i)
 			party_followers.append(follower)
 	

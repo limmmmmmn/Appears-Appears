@@ -3,7 +3,7 @@ class_name PartyMember
 ## 파티 멤버: 리더/팔로워 통합
 ## JRPG 스네이크 무브먼트 - 리더가 지나간 길을 따라감
 
-@export var move_speed: float = 80.0
+@export var move_speed: float = 60.0
 
 var is_leader: bool = false
 var member_index: int = 0  # 0=리더, 1,2,3=팔로워
