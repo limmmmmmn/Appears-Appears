@@ -1,9 +1,9 @@
-[gd_scene load_steps=2 format=3 uid="uid://c0q0lm7h0q0oo"]
+[gd_scene format=3 uid="uid://c0q0lm7h0q0oo"]
 
-[ext_resource type="Script" uid="uid://pausemenuscript" path="res://scripts/systems/PauseMenu.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://d0uxnyrxgir43" path="res://scripts/systems/PauseMenu.gd" id="1_script"]
 
-[node name="PauseMenu" type="CanvasLayer"]
-layer = 100
+[node name="PauseMenu" type="CanvasLayer" unique_id=529583451]
 process_mode = 3
+layer = 100
 visible = false
 script = ExtResource("1_script")

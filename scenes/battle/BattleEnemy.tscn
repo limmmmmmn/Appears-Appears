@@ -1,18 +1,18 @@
-[gd_scene load_steps=2 format=3 uid="uid://c8t6jagorydns"]
+[gd_scene format=3 uid="uid://c8t6jagorydns"]
 
 [ext_resource type="Script" uid="uid://buyis0no4ixyb" path="res://scripts/battle/BattleEnemy.gd" id="1_enemy"]
 
-[node name="BattleEnemy" type="Control"]
+[node name="BattleEnemy" type="Control" unique_id=515317644]
 custom_minimum_size = Vector2(80, 80)
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_enemy")
 
-[node name="Sprite" type="Sprite2D" parent="."]
+[node name="Sprite" type="Sprite2D" parent="." unique_id=571454494]
 position = Vector2(40, 50)
 scale = Vector2(2, 2)
 
-[node name="NameLabel" type="Label" parent="."]
+[node name="NameLabel" type="Label" parent="." unique_id=1448364364]
 visible = false
 layout_mode = 0
 anchor_left = 0.5
@@ -28,7 +28,7 @@ theme_override_font_sizes/font_size = 10
 text = "Enemy"
 horizontal_alignment = 1
 
-[node name="HPBar" type="ProgressBar" parent="."]
+[node name="HPBar" type="ProgressBar" parent="." unique_id=1022121393]
 layout_mode = 0
 anchor_left = 0.5
 anchor_top = 1.0
@@ -42,7 +42,7 @@ grow_vertical = 0
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="."]
+[node name="ATBBar" type="ProgressBar" parent="." unique_id=450620701]
 visible = false
 layout_mode = 0
 anchor_left = 0.5

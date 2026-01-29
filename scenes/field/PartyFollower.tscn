@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://cxfsefn5fooo2"]
+[gd_scene format=3 uid="uid://cxfsefn5fooo2"]
 
 [sub_resource type="GDScript" id="GDScript_7jjy1"]
 script/source = "extends CharacterBody2D
@@ -232,19 +232,19 @@ corner_radius_top_right = 1
 corner_radius_bottom_right = 1
 corner_radius_bottom_left = 1
 
-[node name="PartyFollower" type="CharacterBody2D"]
+[node name="PartyFollower" type="CharacterBody2D" unique_id=958290519]
 collision_layer = 2
 collision_mask = 4
 script = SubResource("GDScript_7jjy1")
 
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1126175217]
 position = Vector2(0, -12)
 sprite_frames = SubResource("SpriteFrames_je8lu")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=2061629736]
 shape = SubResource("RectangleShape2D_1")
 
-[node name="StatusBars" type="Control" parent="."]
+[node name="StatusBars" type="Control" parent="." unique_id=1785439617]
 visible = false
 z_index = 10
 layout_mode = 3
@@ -254,7 +254,7 @@ offset_top = -28.0
 offset_right = 12.0
 offset_bottom = -18.0
 
-[node name="HPBar" type="ProgressBar" parent="StatusBars"]
+[node name="HPBar" type="ProgressBar" parent="StatusBars" unique_id=542088597]
 layout_mode = 0
 offset_right = 24.0
 offset_bottom = 4.0
@@ -263,7 +263,7 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="StatusBars"]
+[node name="ATBBar" type="ProgressBar" parent="StatusBars" unique_id=1619428600]
 layout_mode = 0
 offset_top = 5.0
 offset_right = 24.0

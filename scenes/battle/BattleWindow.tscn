@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://bckrh0oeviq4m"]
+[gd_scene format=3 uid="uid://bckrh0oeviq4m"]
 
 [ext_resource type="Script" uid="uid://bm5a1dk1qc713" path="res://scripts/battle/BattleWindow.gd" id="1_battle"]
 
@@ -9,7 +9,7 @@ border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
 
-[node name="BattleWindow" type="PanelContainer"]
+[node name="BattleWindow" type="PanelContainer" unique_id=1167346498]
 custom_minimum_size = Vector2(280, 190)
 offset_left = 3.0
 offset_top = 1.0
@@ -17,37 +17,37 @@ offset_right = 283.0
 offset_bottom = 181.0
 script = ExtResource("1_battle")
 
-[node name="MainVBox" type="VBoxContainer" parent="."]
+[node name="MainVBox" type="VBoxContainer" parent="." unique_id=482878077]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="TopBar" type="HBoxContainer" parent="MainVBox"]
+[node name="TopBar" type="HBoxContainer" parent="MainVBox" unique_id=1913141494]
 visible = false
 layout_mode = 2
 alignment = 2
 
-[node name="CloseButton" type="Button" parent="MainVBox/TopBar"]
+[node name="CloseButton" type="Button" parent="MainVBox/TopBar" unique_id=262349809]
 visible = false
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 text = "×"
 
-[node name="BattleArea" type="PanelContainer" parent="MainVBox"]
+[node name="BattleArea" type="PanelContainer" parent="MainVBox" unique_id=897254730]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_5btk3")
 
-[node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea"]
+[node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea" unique_id=197219225]
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 5
 alignment = 1
 
-[node name="BottomBar" type="HBoxContainer" parent="MainVBox"]
+[node name="BottomBar" type="HBoxContainer" parent="MainVBox" unique_id=676078642]
 layout_mode = 2
 alignment = 2
 
-[node name="RunButton" type="Button" parent="MainVBox/BottomBar"]
+[node name="RunButton" type="Button" parent="MainVBox/BottomBar" unique_id=219318160]
 custom_minimum_size = Vector2(50, 24)
 layout_mode = 2
 text = "도주"

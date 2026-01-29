@@ -1,6 +1,6 @@
-[gd_scene load_steps=6 format=3 uid="uid://cbot1ompartypnl"]
+[gd_scene format=3 uid="uid://c76ssak4cmte4"]
 
-[ext_resource type="Script" path="res://scripts/ui/field/BottomPartyPanel.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://chj1ksn8pbwwo" path="res://scripts/ui/field/BottomPartyPanel.gd" id="1_script"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 6.0
@@ -18,15 +18,15 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
-bg_color = Color(0.2, 0.8, 0.2, 1)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_bg"]
+bg_color = Color(0.15, 0.15, 0.15, 0.9)
 corner_radius_top_left = 2
 corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_bg"]
-bg_color = Color(0.15, 0.15, 0.15, 0.9)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
+bg_color = Color(0.2, 0.8, 0.2, 1)
 corner_radius_top_left = 2
 corner_radius_top_right = 2
 corner_radius_bottom_right = 2
@@ -39,7 +39,7 @@ corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
-[node name="BottomPartyPanel" type="PanelContainer"]
+[node name="BottomPartyPanel" type="PanelContainer" unique_id=839086173]
 anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
@@ -50,137 +50,125 @@ offset_top = -50.0
 offset_right = 140.0
 grow_horizontal = 2
 grow_vertical = 0
-script = ExtResource("1_script")
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+script = ExtResource("1_script")
 
-[node name="HBox" type="HBoxContainer" parent="."]
+[node name="HBox" type="HBoxContainer" parent="." unique_id=295917681]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Slot0" type="VBoxContainer" parent="HBox"]
+[node name="Slot0" type="VBoxContainer" parent="HBox" unique_id=177700522]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot0"]
+[node name="Face" type="TextureRect" parent="HBox/Slot0" unique_id=783054603]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot0"]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot0" unique_id=1450356206]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot0/Bars"]
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot0/Bars" unique_id=1286664143]
 custom_minimum_size = Vector2(50, 6)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot0/Bars"]
+[node name="ATBBar" type="ProgressBar" parent="HBox/Slot0/Bars" unique_id=1137717648]
 custom_minimum_size = Vector2(50, 4)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
-value = 0.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 show_percentage = false
 
-[node name="Slot1" type="VBoxContainer" parent="HBox"]
+[node name="Slot1" type="VBoxContainer" parent="HBox" unique_id=889907487]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot1"]
+[node name="Face" type="TextureRect" parent="HBox/Slot1" unique_id=951874593]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot1"]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot1" unique_id=23296907]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot1/Bars"]
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot1/Bars" unique_id=807941918]
 custom_minimum_size = Vector2(50, 6)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot1/Bars"]
+[node name="ATBBar" type="ProgressBar" parent="HBox/Slot1/Bars" unique_id=2093417931]
 custom_minimum_size = Vector2(50, 4)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
-value = 0.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 show_percentage = false
 
-[node name="Slot2" type="VBoxContainer" parent="HBox"]
+[node name="Slot2" type="VBoxContainer" parent="HBox" unique_id=1179154771]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot2"]
+[node name="Face" type="TextureRect" parent="HBox/Slot2" unique_id=852408804]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot2"]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot2" unique_id=618991100]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot2/Bars"]
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot2/Bars" unique_id=1295175580]
 custom_minimum_size = Vector2(50, 6)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot2/Bars"]
+[node name="ATBBar" type="ProgressBar" parent="HBox/Slot2/Bars" unique_id=163641985]
 custom_minimum_size = Vector2(50, 4)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
-value = 0.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 show_percentage = false
 
-[node name="Slot3" type="VBoxContainer" parent="HBox"]
+[node name="Slot3" type="VBoxContainer" parent="HBox" unique_id=496396459]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot3"]
+[node name="Face" type="TextureRect" parent="HBox/Slot3" unique_id=260707160]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot3"]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot3" unique_id=179998747]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot3/Bars"]
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot3/Bars" unique_id=236783784]
 custom_minimum_size = Vector2(50, 6)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot3/Bars"]
+[node name="ATBBar" type="ProgressBar" parent="HBox/Slot3/Bars" unique_id=1159439183]
 custom_minimum_size = Vector2(50, 4)
 layout_mode = 2
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-max_value = 100.0
-value = 0.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
 show_percentage = false
