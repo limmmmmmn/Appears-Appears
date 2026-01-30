@@ -4,7 +4,7 @@ class_name FieldHUD
 ## - TopBar: 스테이지, 골드, 배속, 메뉴
 ## - LogPanel: 전투 로그 (좌측 하단)
 ## - BottomPartyPanel: 파티 정보 (하단 중앙) - 외부 씬
-## - InventoryPanel: 인벤토리 (우측 하단)
+## - MinimapPanel: 미니맵 (우측 하단)
 
 signal menu_pressed
 
@@ -22,20 +22,17 @@ signal menu_pressed
 # === 하단 파티 패널 (중앙) - 외부 씬 ===
 @onready var bottom_party_panel: BottomPartyPanel = %BottomPartyPanel
 
-# === 인벤토리 패널 (우측 하단) ===
-@onready var inventory_panel: PanelContainer = %InventoryPanel
+# === 미니맵 패널 (우측 하단) ===
+@onready var minimap_panel: PanelContainer = %MinimapPanel
+@onready var minimap_viewport: SubViewportContainer = %MinimapViewport
+@onready var minimap_camera: Camera2D = %MinimapCamera
 
 # === 컴포넌트 ===
-var inventory_grid: InventoryGridUI = null
 var battle_log: BattleLogUI = null
 
-# === 툴팁 ===
-var tooltip: EquipmentTooltip = null
-
-# === 컨텍스트 메뉴 ===
-var context_menu: PopupMenu = null
-var context_menu_item_id: String = ""
-var context_menu_type: String = ""
+# === 미니맵 설정 ===
+var minimap_zoom: float = 0.1  # 미니맵 줌 레벨 (작을수록 더 넓은 영역 표시)
+var minimap_target: Node2D = null  # 추적할 대상 (파티 리더)
 
 
 func _ready() -> void:
@@ -44,26 +41,22 @@ func _ready() -> void:
 	update_all()
 
 
+func _process(_delta: float) -> void:
+	_update_minimap()
+
+
 func _setup_components() -> void:
 	_setup_speed_button()
-	
-	# 인벤토리 그리드
-	inventory_grid = InventoryGridUI.new()
-	inventory_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	inventory_grid.item_clicked.connect(_on_inv_clicked)
-	inventory_grid.item_hover_started.connect(_on_inv_hover)
-	inventory_grid.item_hover_ended.connect(_hide_tooltip)
-	inventory_grid.item_right_clicked.connect(_on_inv_right_click)
-	if inventory_panel:
-		for c in inventory_panel.get_children():
-			c.queue_free()
-		inventory_panel.add_child(inventory_grid)
 	
 	# 배틀 로그
 	battle_log = BattleLogUI.new()
 	battle_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if log_container:
 		log_container.add_child(battle_log)
+	
+	# 미니맵 카메라 초기 설정
+	if minimap_camera:
+		minimap_camera.zoom = Vector2(minimap_zoom, minimap_zoom)
 
 
 func _setup_speed_button() -> void:
@@ -107,6 +100,55 @@ func _connect_signals() -> void:
 			BattleManager.hero_atb_changed.connect(_on_hero_atb_changed)
 
 
+#region 미니맵
+func _update_minimap() -> void:
+	if not minimap_camera:
+		return
+	
+	# 추적 대상이 없으면 파티 리더 찾기
+	if not is_instance_valid(minimap_target):
+		_find_minimap_target()
+	
+	# 대상이 있으면 카메라 위치 업데이트
+	if is_instance_valid(minimap_target):
+		minimap_camera.global_position = minimap_target.global_position
+
+
+func _find_minimap_target() -> void:
+	# 필드 씬에서 PartyMember (리더) 찾기
+	var field = get_tree().get_first_node_in_group("field")
+	if field:
+		var leader = field.get_node_or_null("PartyLeader")
+		if leader:
+			minimap_target = leader
+			return
+	
+	# 그룹으로 찾기
+	var party_members = get_tree().get_nodes_in_group("party_member")
+	if party_members.size() > 0:
+		minimap_target = party_members[0]
+
+
+func set_minimap_target(target: Node2D) -> void:
+	## 미니맵이 추적할 대상 설정
+	minimap_target = target
+
+
+func set_minimap_zoom(zoom_level: float) -> void:
+	## 미니맵 줌 레벨 설정 (0.05 ~ 0.5 권장)
+	minimap_zoom = clamp(zoom_level, 0.02, 1.0)
+	if minimap_camera:
+		minimap_camera.zoom = Vector2(minimap_zoom, minimap_zoom)
+
+
+func get_minimap_viewport() -> SubViewport:
+	## 미니맵 SubViewport 반환 (외부에서 레이어 추가 등에 사용)
+	if minimap_viewport:
+		return minimap_viewport.get_node_or_null("SubViewport")
+	return null
+#endregion
+
+
 #region 이벤트 핸들러
 func _on_speed_button_pressed() -> void:
 	if BattleManager:
@@ -129,7 +171,8 @@ func _on_battle_log_received(message: String, color: Color) -> void:
 
 
 func _on_loot_animation_requested(item_id: String, start_pos: Vector2) -> void:
-	var target_pos: Vector2 = _get_inventory_target_position()
+	# 미니맵 패널 위치로 애니메이션 (또는 하단 중앙)
+	var target_pos: Vector2 = _get_loot_target_position()
 	
 	var loot_anim := LootAnimationUI.new()
 	var ctrl := get_node_or_null("Control")
@@ -142,15 +185,16 @@ func _on_loot_animation_requested(item_id: String, start_pos: Vector2) -> void:
 	loot_anim.setup(item_id, start_pos, target_pos)
 
 
-func _get_inventory_target_position() -> Vector2:
-	if inventory_panel and is_instance_valid(inventory_panel):
-		return inventory_panel.global_position + inventory_panel.size / 2
-	return Vector2(400, 200)
+func _get_loot_target_position() -> Vector2:
+	# 하단 파티 패널 중앙으로 루팅 애니메이션
+	if bottom_party_panel and is_instance_valid(bottom_party_panel):
+		return bottom_party_panel.global_position + bottom_party_panel.size / 2
+	return Vector2(240, 200)
 
 
 func _on_loot_animation_completed(_item_id: String) -> void:
-	if inventory_grid:
-		inventory_grid.refresh()
+	# 인벤토리 패널 삭제됨 - 필요시 다른 피드백 추가
+	pass
 #endregion
 
 
@@ -158,8 +202,6 @@ func _on_loot_animation_completed(_item_id: String) -> void:
 func update_all() -> void:
 	update_top_bar()
 	update_party_display()
-	if inventory_grid:
-		inventory_grid.refresh()
 
 
 func update_top_bar() -> void:
@@ -173,11 +215,6 @@ func update_top_bar() -> void:
 func update_party_display() -> void:
 	if bottom_party_panel:
 		bottom_party_panel.update_display()
-
-
-func refresh_inventory() -> void:
-	if inventory_grid:
-		inventory_grid.refresh()
 #endregion
 
 
@@ -221,261 +258,4 @@ func add_system_log(msg: String) -> void:
 func clear_logs() -> void:
 	if battle_log:
 		battle_log.clear()
-#endregion
-
-
-#region 인벤토리 이벤트
-func _on_inv_clicked(item_id: String) -> void:
-	var data = DataManager.get_equipment(item_id)
-	if data.is_empty():
-		return
-	
-	var party = PartyManager.get_party() if PartyManager else []
-	if party.is_empty():
-		return
-	
-	# 첫 번째 살아있는 파티원에게 장착
-	for hero in party:
-		if hero.is_dead:
-			continue
-		var slot = str(data.get("slot", "main_hand"))
-		if slot == "accessory":
-			slot = "acc1" if hero.equipment.get("acc1", "").is_empty() else "acc2"
-		if InventoryManager.equip_item(hero, item_id, slot):
-			add_system_log("%s: %s 장착!" % [hero.hero_name, str(data.get("name", item_id))])
-			update_party_display()
-			if inventory_grid:
-				inventory_grid.refresh()
-			break
-
-
-func _on_inv_hover(item_id: String) -> void:
-	_show_tooltip(item_id)
-
-
-func _on_inv_right_click(item_id: String, mouse_pos: Vector2) -> void:
-	var equip_data = DataManager.get_equipment(item_id)
-	var item_data = DataManager.get_item(item_id)
-	
-	if not equip_data.is_empty():
-		_show_context_menu(item_id, mouse_pos, "equip")
-	elif not item_data.is_empty() and item_data.get("type", "") == "consumable":
-		_show_context_menu(item_id, mouse_pos, "consumable")
-#endregion
-
-
-#region 컨텍스트 메뉴
-func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equip") -> void:
-	_hide_context_menu()
-	_hide_tooltip()
-	context_menu_item_id = item_id
-	context_menu_type = item_type
-	
-	var item_name: String = ""
-	var usable_in_field: bool = true
-	
-	if item_type == "equip":
-		var data = DataManager.get_equipment(item_id)
-		item_name = str(data.get("name", item_id))
-	else:
-		var data = DataManager.get_item(item_id)
-		item_name = str(data.get("name", item_id))
-		usable_in_field = data.get("usable_in_field", false)
-	
-	context_menu = PopupMenu.new()
-	context_menu.add_theme_font_size_override("font_size", 10)
-	context_menu.add_item("[ %s ]" % item_name, -1)
-	context_menu.set_item_disabled(0, true)
-	context_menu.add_separator()
-	
-	var party = PartyManager.get_party() if PartyManager else []
-	for i in range(party.size()):
-		var hero_name: String = party[i].hero_name
-		var is_disabled: bool = false
-		
-		if item_type == "consumable":
-			var data = DataManager.get_item(item_id)
-			var effect = data.get("effect", {})
-			var effect_type = str(effect.get("type", ""))
-			
-			if not usable_in_field:
-				is_disabled = true
-			elif effect_type == "revive":
-				is_disabled = not party[i].is_dead
-			else:
-				is_disabled = party[i].is_dead
-		else:
-			is_disabled = party[i].is_dead
-		
-		context_menu.add_item(hero_name, i)
-		if is_disabled:
-			context_menu.set_item_disabled(context_menu.item_count - 1, true)
-	
-	context_menu.add_separator()
-	context_menu.add_item("취소", -2)
-	context_menu.id_pressed.connect(_on_ctx_selected)
-	
-	var ctrl = get_node_or_null("Control")
-	(ctrl if ctrl else self).add_child(context_menu)
-	context_menu.position = Vector2i(int(pos.x), int(pos.y))
-	context_menu.popup()
-
-
-func _on_ctx_selected(id: int) -> void:
-	var saved_item_id: String = context_menu_item_id
-	var saved_type: String = context_menu_type
-	
-	if id < 0:
-		_hide_context_menu()
-		return
-	
-	var party = PartyManager.get_party() if PartyManager else []
-	if id >= party.size():
-		_hide_context_menu()
-		return
-	
-	var hero = party[id]
-	
-	if saved_type == "consumable":
-		_use_consumable_on_hero(saved_item_id, hero)
-	else:
-		var data = DataManager.get_equipment(saved_item_id)
-		if data.is_empty():
-			_hide_context_menu()
-			return
-		
-		var slot = str(data.get("slot", "main_hand"))
-		if slot == "accessory":
-			slot = "acc1" if hero.equipment.get("acc1", "").is_empty() else "acc2"
-		
-		if InventoryManager.equip_item(hero, saved_item_id, slot):
-			add_system_log("%s: %s 장착!" % [hero.hero_name, str(data.get("name", saved_item_id))])
-			update_party_display()
-			if inventory_grid:
-				inventory_grid.refresh()
-	
-	_hide_context_menu()
-
-
-func _hide_context_menu() -> void:
-	if context_menu and is_instance_valid(context_menu):
-		context_menu.queue_free()
-		context_menu = null
-	context_menu_item_id = ""
-	context_menu_type = ""
-#endregion
-
-
-#region 소비 아이템
-func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
-	var item_data: Dictionary = DataManager.get_item(item_id)
-	if item_data.is_empty():
-		return
-	
-	var item_name: String = str(item_data.get("name", item_id))
-	var effect: Dictionary = item_data.get("effect", {})
-	var effect_type: String = str(effect.get("type", ""))
-	var usable_in_field: bool = item_data.get("usable_in_field", false)
-	
-	if not usable_in_field:
-		add_system_log("%s: 전투 중에만 사용 가능" % item_name)
-		return
-	
-	var success: bool = false
-	
-	match effect_type:
-		"heal_percent":
-			if hero.is_dead:
-				return
-			var heal_percent: float = float(effect.get("value", 0.3))
-			var heal_amount: int = int(hero.get_max_hp() * heal_percent)
-			var actual_heal: int = hero.heal(heal_amount)
-			if actual_heal > 0:
-				add_system_log("%s: %s HP +%d" % [hero.hero_name, item_name, actual_heal])
-				success = true
-		
-		"restore_mp_percent":
-			if hero.is_dead:
-				return
-			var mp_percent: float = float(effect.get("value", 0.5))
-			var mp_amount: int = int(hero.get_max_mp() * mp_percent)
-			var actual_mp: int = hero.restore_mp(mp_amount)
-			if actual_mp > 0:
-				add_system_log("%s: %s MP +%d" % [hero.hero_name, item_name, actual_mp])
-				success = true
-		
-		"full_restore":
-			if hero.is_dead:
-				return
-			hero.heal(hero.get_max_hp())
-			hero.restore_mp(hero.get_max_mp())
-			add_system_log("%s: %s 완전 회복!" % [hero.hero_name, item_name])
-			success = true
-		
-		"revive":
-			if not hero.is_dead:
-				return
-			var hp_percent: float = float(effect.get("hp_percent", 0.3))
-			hero.revive(hp_percent)
-			add_system_log("%s: %s 부활!" % [hero.hero_name, item_name])
-			success = true
-		
-		"permanent_stat":
-			if hero.is_dead:
-				return
-			var stat: String = str(effect.get("stat", ""))
-			var value: int = int(effect.get("value", 1))
-			hero.apply_seed_bonus(stat, value)
-			add_system_log("%s: %s - %s +%d!" % [hero.hero_name, item_name, stat.to_upper(), value])
-			success = true
-		
-		"full_restore_party":
-			var all_party = PartyManager.get_party() if PartyManager else []
-			for member in all_party:
-				if not member.is_dead:
-					member.heal(member.get_max_hp())
-					member.restore_mp(member.get_max_mp())
-			add_system_log("%s - 파티 전원 회복!" % item_name)
-			success = true
-		
-		"revive_all":
-			var all_party = PartyManager.get_party() if PartyManager else []
-			var hp_percent: float = float(effect.get("hp_percent", 0.5))
-			var count: int = 0
-			for member in all_party:
-				if member.is_dead:
-					member.revive(hp_percent)
-					count += 1
-			if count > 0:
-				add_system_log("%s - %d명 부활!" % [item_name, count])
-				success = true
-	
-	if success:
-		InventoryManager.remove_item(item_id, 1)
-		update_party_display()
-		if inventory_grid:
-			inventory_grid.refresh()
-#endregion
-
-
-#region 툴팁
-func _show_tooltip(item_id: String) -> void:
-	_hide_tooltip()
-	
-	var equip_data = DataManager.get_equipment(item_id)
-	var item_data = DataManager.get_item(item_id)
-	
-	if equip_data.is_empty() and (item_data.is_empty() or item_data.get("type", "") != "consumable"):
-		return
-	
-	tooltip = EquipmentTooltip.new()
-	var ctrl = get_node_or_null("Control")
-	(ctrl if ctrl else self).add_child(tooltip)
-	tooltip.setup_for_item(item_id, inventory_panel)
-
-
-func _hide_tooltip() -> void:
-	if tooltip and is_instance_valid(tooltip):
-		tooltip.queue_free()
-		tooltip = null
 #endregion
