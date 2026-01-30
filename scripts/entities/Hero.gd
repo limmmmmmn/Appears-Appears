@@ -73,14 +73,15 @@ func _initialize(hero_id: String) -> void:
 	
 	current_hp = get_max_hp()
 	current_mp = get_max_mp()
-	# ATB 시스템에서는 스킬 토글 미사용 (기본 공격만 사용)
-	# _init_skill_toggles()
+	_init_skill_toggles()
 
 
 func _init_skill_toggles() -> void:
-	# ATB 시스템으로 전환됨 - 스킬 토글 비활성화
-	# 추후 스킬 시스템 복구 시 사용
-	pass
+	## 클래스 스킬에 대한 토글 초기화 (기본값: 모두 활성화)
+	skill_toggles.clear()
+	var class_skills := DataManager.get_class_skills(class_id)
+	for skill_id in class_skills:
+		skill_toggles[skill_id] = true  # 기본적으로 모든 스킬 활성화
 
 
 #region 스탯 계산
@@ -262,7 +263,8 @@ func toggle_skill(skill_id: String) -> void:
 
 
 func is_skill_enabled(skill_id: String) -> bool:
-	return skill_toggles.get(skill_id, false)
+	## skill_toggles에 없으면 기본값 true (기존 세이브 호환)
+	return skill_toggles.get(skill_id, true)
 
 
 func get_enabled_skills() -> Array:
@@ -271,6 +273,33 @@ func get_enabled_skills() -> Array:
 		if skill_toggles[skill_id]:
 			result.append(skill_id)
 	return result
+
+
+func get_available_skills() -> Array:
+	## 클래스가 보유한 스킬 목록 반환
+	return DataManager.get_class_skills(class_id)
+
+
+func get_usable_skills() -> Array:
+	## 토글 ON이고 MP가 충분한 스킬 목록 반환 (기본 공격 제외)
+	var result: Array = []
+	var skills := get_available_skills()
+	for skill_id in skills:
+		if skill_id == "basic_attack":
+			continue
+		# 토글이 OFF면 스킵
+		if not is_skill_enabled(skill_id):
+			continue
+		var mp_cost: int = DataManager.get_skill_mp_cost(skill_id)
+		if current_mp >= mp_cost:
+			result.append(skill_id)
+	return result
+
+
+func can_use_skill(skill_id: String) -> bool:
+	## 해당 스킬을 사용할 수 있는지 확인
+	var mp_cost: int = DataManager.get_skill_mp_cost(skill_id)
+	return current_mp >= mp_cost
 #endregion
 
 

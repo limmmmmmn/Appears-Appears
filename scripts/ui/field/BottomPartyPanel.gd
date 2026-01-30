@@ -11,6 +11,7 @@ class SlotUI:
 	var face: TextureRect
 	var hp_bar: ProgressBar
 	var mp_bar: ProgressBar
+	var atb_bar: ProgressBar
 	var equip_buttons: Dictionary = {}  # slot_name -> Button
 	var skill_row: HBoxContainer
 	var skill_buttons: Dictionary = {}  # skill_id -> Button
@@ -23,6 +24,8 @@ const HP_COLOR_LOW := Color(0.9, 0.2, 0.2)
 const MP_COLOR_HIGH := Color(0.3, 0.5, 0.9)
 const MP_COLOR_MID := Color(0.4, 0.5, 0.85)
 const MP_COLOR_LOW := Color(0.6, 0.3, 0.7)
+const ATB_COLOR_CHARGING := Color(0.7, 0.6, 0.2)
+const ATB_COLOR_READY := Color(1.0, 0.9, 0.3)
 
 const SLOT_ICONS := {
 	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑",
@@ -76,6 +79,7 @@ func _setup_slots() -> void:
 		slot.face = slot_node.get_node_or_null("Face")
 		slot.hp_bar = slot_node.get_node_or_null("Bars/HPBar")
 		slot.mp_bar = slot_node.get_node_or_null("Bars/MPBar")
+		slot.atb_bar = slot_node.get_node_or_null("Bars/ATBBar")
 		slot.skill_row = slot_node.get_node_or_null("SkillRow")
 		
 		# 장비 버튼 참조
@@ -271,7 +275,7 @@ func _on_skill_toggled(toggled_on: bool, skill_id: String, hero_index: int) -> v
 	var hero: Hero = party[hero_index]
 	hero.skill_toggles[skill_id] = toggled_on
 	
-	if SoundManager:
+	if SoundManager != null:
 		SoundManager.play_select()
 	
 	# 버튼 상태 업데이트
@@ -300,3 +304,30 @@ func _on_equip_gui_input(event: InputEvent, hero_index: int, slot_name: String) 
 			equipment_right_clicked.emit(hero_index, slot_name, equip_id)
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			equipment_clicked.emit(hero_index, slot_name, equip_id)
+
+
+func update_hero_atb(hero_id: String, atb_value: float) -> void:
+	## 특정 영웅의 ATB 바 업데이트
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	
+	for i in range(mini(slots.size(), party.size())):
+		var hero: Hero = party[i]
+		if hero.id == hero_id:
+			var slot := slots[i]
+			if slot.atb_bar:
+				slot.atb_bar.value = atb_value * 100.0
+				_update_atb_color(slot, atb_value)
+			break
+
+
+func _update_atb_color(slot: SlotUI, atb_percent: float) -> void:
+	if not slot.atb_bar:
+		return
+	var fill_style: StyleBoxFlat = slot.atb_bar.get_theme_stylebox("fill")
+	if fill_style:
+		fill_style = fill_style.duplicate()
+		if atb_percent >= 1.0:
+			fill_style.bg_color = ATB_COLOR_READY
+		else:
+			fill_style.bg_color = ATB_COLOR_CHARGING
+		slot.atb_bar.add_theme_stylebox_override("fill", fill_style)

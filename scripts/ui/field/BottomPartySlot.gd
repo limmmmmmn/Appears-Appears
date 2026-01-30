@@ -15,6 +15,22 @@ var hp_bar: ProgressBar
 var equip_row1: HBoxContainer  # 주무기, 보조, 머리
 var equip_row2: HBoxContainer  # 몸통, 장신구1, 장신구2
 var equip_buttons: Dictionary = {}
+var skill_row: HBoxContainer  # 스킬 토글
+var skill_buttons: Dictionary = {}  # skill_id -> Button
+
+# 스킬 아이콘 매핑
+const SKILL_ICONS := {
+	"basic_attack": "⚔️",
+	"power_strike": "💥",
+	"fireball": "🔥",
+	"heal": "💚",
+	"quick_slash": "⚡",
+	"power_shot": "🏹",
+	"shield_bash": "🛡️",
+	"ice_bolt": "❄️",
+	"blessing": "✨",
+	"double_shot": "🎯",
+}
 
 # 상수
 const SLOT_SIZE: Vector2 = Vector2(18, 16)
@@ -101,6 +117,12 @@ func _create_layout() -> void:
 	
 	for slot_name in ["body", "acc1", "acc2"]:
 		_create_equip_button(equip_row2, slot_name)
+	
+	# 5행: 스킬 토글
+	skill_row = HBoxContainer.new()
+	skill_row.add_theme_constant_override("separation", 1)
+	skill_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(skill_row)
 
 
 func _create_equip_button(parent: HBoxContainer, slot_name: String) -> void:
@@ -134,6 +156,7 @@ func update_display(new_hero: Hero) -> void:
 	
 	_update_hp_bar()
 	_update_equipment()
+	_update_skill_toggles()
 
 
 func _update_hp_bar() -> void:
@@ -182,6 +205,95 @@ func _update_equipment() -> void:
 			btn.text = icon
 			btn.modulate = RARITY_COLORS.get(rarity, Color.WHITE)
 			btn.tooltip_text = SLOT_NAMES_KR.get(slot_name, slot_name) + ": " + equip_name
+
+
+func _update_skill_toggles() -> void:
+	## 스킬 토글 버튼 업데이트
+	if not hero:
+		return
+	
+	var current_skills := hero.get_available_skills()
+	
+	# 기존 버튼 중 더 이상 없는 스킬 제거
+	var to_remove: Array = []
+	for skill_id in skill_buttons:
+		if skill_id not in current_skills:
+			to_remove.append(skill_id)
+	
+	for skill_id in to_remove:
+		skill_buttons[skill_id].queue_free()
+		skill_buttons.erase(skill_id)
+	
+	# 새 스킬 버튼 추가 또는 기존 버튼 업데이트
+	for skill_id in current_skills:
+		if skill_buttons.has(skill_id):
+			_update_skill_button_state(skill_buttons[skill_id], skill_id)
+		else:
+			var btn := _create_skill_button(skill_id)
+			skill_row.add_child(btn)
+			skill_buttons[skill_id] = btn
+
+
+func _create_skill_button(skill_id: String) -> Button:
+	## 스킬 토글 버튼 생성
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(18, 18)
+	btn.toggle_mode = true
+	btn.button_pressed = hero.is_skill_enabled(skill_id)
+	
+	# 스킬 아이콘 설정
+	var icon: String = SKILL_ICONS.get(skill_id, "⚡")
+	btn.text = icon
+	btn.add_theme_font_size_override("font_size", 10)
+	
+	# 스킬 이름으로 툴팁
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	var skill_name: String = skill_data.get("name", skill_id)
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	btn.tooltip_text = "%s (MP %d)" % [skill_name, mp_cost] if mp_cost > 0 else skill_name
+	
+	# 토글 시그널 연결
+	btn.toggled.connect(_on_skill_toggled.bind(skill_id))
+	
+	# 초기 스타일 설정
+	_update_skill_button_state(btn, skill_id)
+	
+	return btn
+
+
+func _update_skill_button_state(btn: Button, skill_id: String) -> void:
+	## 스킬 버튼 상태 업데이트
+	if not hero:
+		return
+	
+	var is_enabled: bool = hero.is_skill_enabled(skill_id)
+	btn.button_pressed = is_enabled
+	
+	# MP 부족 시 빨간 틴트
+	var mp_cost: int = DataManager.get_skill_mp_cost(skill_id)
+	var has_mp: bool = hero.current_mp >= mp_cost
+	
+	if is_enabled:
+		if has_mp:
+			btn.modulate = Color.WHITE
+		else:
+			btn.modulate = Color(1.0, 0.5, 0.5, 0.8)
+	else:
+		btn.modulate = Color(0.5, 0.5, 0.5, 0.6)
+
+
+func _on_skill_toggled(toggled_on: bool, skill_id: String) -> void:
+	## 스킬 토글 시 호출
+	if hero:
+		hero.skill_toggles[skill_id] = toggled_on
+	
+	# 사운드 재생
+	if SoundManager:
+		SoundManager.play_select()
+	
+	# 버튼 상태 업데이트
+	if skill_buttons.has(skill_id):
+		_update_skill_button_state(skill_buttons[skill_id], skill_id)
 #endregion
 
 

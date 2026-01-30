@@ -93,6 +93,11 @@ func get_skill(skill_id: String) -> Dictionary:
 func get_skill_mp_cost(skill_id: String) -> int:
 	return int(get_skill(skill_id).get("mp_cost", 0))
 
+func get_class_skills(class_id: String) -> Array:
+	## 클래스의 스킬 목록 반환
+	var class_data := get_class_data(class_id)
+	return class_data.get("skills", ["basic_attack"])
+
 
 # 장비
 func get_equipment(equip_id: String) -> Dictionary:

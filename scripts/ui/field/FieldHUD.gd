@@ -103,6 +103,8 @@ func _connect_signals() -> void:
 			BattleManager.battle_speed_changed.connect(_on_battle_speed_changed)
 		if not BattleManager.loot_animation_requested.is_connected(_on_loot_animation_requested):
 			BattleManager.loot_animation_requested.connect(_on_loot_animation_requested)
+		if not BattleManager.hero_atb_changed.is_connected(_on_hero_atb_changed):
+			BattleManager.hero_atb_changed.connect(_on_hero_atb_changed)
 
 
 #region 이벤트 핸들러
@@ -115,6 +117,11 @@ func _on_speed_button_pressed() -> void:
 func _on_battle_speed_changed(speed: float) -> void:
 	if speed_button:
 		speed_button.text = "x%d" % int(speed)
+
+
+func _on_hero_atb_changed(hero_id: String, atb_value: float) -> void:
+	if bottom_party_panel:
+		bottom_party_panel.update_hero_atb(hero_id, atb_value)
 
 
 func _on_battle_log_received(message: String, color: Color) -> void:

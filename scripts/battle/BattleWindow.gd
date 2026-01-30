@@ -48,6 +48,27 @@ const BASE_ESCAPE_RATE: float = 40.0
 
 const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
 
+# === Mother 2 스타일 배경 효과 ===
+var background: ColorRect = null
+var bg_material: ShaderMaterial = null
+var effect_time: float = 0.0
+var current_effect: int = 0
+
+# 색상 팔레트
+const COLOR_PALETTES: Array = [
+	[Color(0.2, 0.1, 0.3), Color(0.4, 0.2, 0.5)],  # 보라
+	[Color(0.1, 0.2, 0.3), Color(0.2, 0.4, 0.5)],  # 파랑
+	[Color(0.3, 0.1, 0.1), Color(0.5, 0.2, 0.2)],  # 빨강
+	[Color(0.1, 0.3, 0.1), Color(0.2, 0.5, 0.2)],  # 초록
+	[Color(0.3, 0.2, 0.1), Color(0.5, 0.4, 0.2)],  # 주황
+	[Color(0.2, 0.2, 0.2), Color(0.4, 0.4, 0.4)],  # 회색
+	[Color(0.3, 0.1, 0.2), Color(0.5, 0.2, 0.4)],  # 핑크
+	[Color(0.1, 0.2, 0.2), Color(0.2, 0.4, 0.4)],  # 청록
+]
+
+const EFFECT_CHANGE_INTERVAL: float = 4.0
+var effect_timer: float = 0.0
+
 
 func _ready() -> void:
 	visible = false
@@ -57,6 +78,9 @@ func _ready() -> void:
 		run_button.pressed.connect(_on_run_pressed)
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
+	
+	# 배경 셰이더 설정
+	_setup_background_shader()
 
 
 func _process(delta: float) -> void:
@@ -65,6 +89,7 @@ func _process(delta: float) -> void:
 	
 	_update_hero_atb(delta)
 	_update_enemy_atb(delta)
+	_update_background_effect(delta)
 
 
 #region 전투 초기화 (새 시스템)
@@ -86,6 +111,9 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	
 	visible = true
 	current_state = BattleState.STARTING
+	
+	# 배경 효과 초기화 (한 번만)
+	_init_background_effect()
 	
 	await get_tree().create_timer(0.3).timeout
 	_start_battle()
@@ -191,12 +219,13 @@ func _update_hero_atb(delta: float) -> void:
 		var charge_rate: float = HERO_ATB_BASE + (hero.get_spd() * HERO_ATB_SPD_FACTOR)
 		hero_atb[hero.id] = minf(hero_atb[hero.id] + charge_rate * speed_delta, ATB_MAX)
 		
-		hero_atb_changed.emit(battle_id, hero.id, hero_atb[hero.id])
+		# BattleManager 시그널로 HUD 업데이트
+		BattleManager.hero_atb_changed.emit(hero.id, hero_atb[hero.id])
 		
 		if hero_atb[hero.id] >= ATB_MAX:
 			_hero_attack(hero)
 			hero_atb[hero.id] = 0.0
-			hero_atb_changed.emit(battle_id, hero.id, 0.0)
+			BattleManager.hero_atb_changed.emit(hero.id, 0.0)
 			
 			if _check_battle_end():
 				return
@@ -240,19 +269,21 @@ func _hero_attack(hero: Hero) -> void:
 
 
 func _select_skill_for_hero(hero: Hero) -> String:
-	## 영웅이 사용할 스킬 선택 (AI)
+	## 영웅이 사용할 스킬 선택 - 토글된 스킬 우선 사용
 	var usable_skills: Array = hero.get_usable_skills()
-
+	
 	# 힐러인 경우 아군 체력 확인
-	if "heal" in hero.get_available_skills():
+	if hero.is_skill_enabled("heal") and hero.can_use_skill("heal"):
 		var wounded := _get_wounded_heroes()
-		if not wounded.is_empty() and hero.can_use_skill("heal"):
+		if not wounded.is_empty():
 			return "heal"
-
-	# 사용 가능한 스킬 중 랜덤 선택 (70% 확률로 스킬 사용)
-	if not usable_skills.is_empty() and randf() < 0.7:
+	
+	# 토글 ON이고 MP 충분한 스킬이 있으면 우선 사용
+	if not usable_skills.is_empty():
+		# 랜덤하게 선택
 		return usable_skills[randi() % usable_skills.size()]
-
+	
+	# 토글된 스킬이 없거나 MP 부족하면 기본 공격
 	return "basic_attack"
 
 
@@ -299,6 +330,10 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	target.take_damage(damage)
 	target.play_hit_effect(is_crit)
 	target.show_damage_number(damage, is_crit)
+	
+	# 크리티컬 시 진동 효과
+	if is_crit:
+		play_critical_shake()
 
 	var log_color: Color = Color.ORANGE if is_crit else (Color.CYAN if skill_type == "magic" else Color.WHITE)
 	var crit_text: String = " ⭐" if is_crit else ""
@@ -323,10 +358,16 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 	if alive_enemies.is_empty():
 		return
 
+	# 전체 공격 플래시 효과
+	play_aoe_flash()
+	
 	_send_log("%s [%s] 발동!" % [hero.hero_name, skill_name], Color.YELLOW)
 
+	var any_crit: bool = false
 	for target in alive_enemies:
 		var is_crit: bool = randf() * 100 < hero.get_crit()
+		if is_crit:
+			any_crit = true
 		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
 
 		target.take_damage(damage)
@@ -335,6 +376,10 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 
 		if not target.is_alive():
 			_on_enemy_defeated(target)
+	
+	# 크리티컬이 하나라도 있으면 진동
+	if any_crit:
+		play_critical_shake()
 
 
 func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, target_type: String) -> void:
@@ -691,4 +736,100 @@ func _send_log(msg: String, color: Color = Color.WHITE) -> void:
 func _on_close_pressed() -> void:
 	current_state = BattleState.ENDED
 	queue_free()
+#endregion
+
+
+#region Mother 2 스타일 배경 효과
+var is_shaking: bool = false
+var shake_time: float = 0.0
+var shake_intensity: float = 0.0
+var shake_original_pos: Vector2 = Vector2.ZERO
+
+func _setup_background_shader() -> void:
+	background = get_node_or_null("MainVBox/BattleArea/Background")
+	if not background:
+		return
+	
+	# 셰이더 로드
+	var shader: Shader = load("res://resources/shaders/mother2_bg.gdshader")
+	if shader:
+		bg_material = ShaderMaterial.new()
+		bg_material.shader = shader
+		background.material = bg_material
+	else:
+		# 셰이더가 없으면 기본 색상 애니메이션 사용
+		bg_material = null
+
+
+func _update_background_effect(delta: float) -> void:
+	var speed_mult: float = BattleManager.get_battle_speed()
+	effect_time += delta * speed_mult
+	
+	# 셰이더 시간 업데이트
+	if bg_material:
+		bg_material.set_shader_parameter("time", effect_time)
+	elif background:
+		# 셰이더 없으면 간단한 색상 애니메이션
+		var t: float = (sin(effect_time * 2.0) + 1.0) / 2.0
+		var palette: Array = COLOR_PALETTES[current_effect % COLOR_PALETTES.size()]
+		background.color = palette[0].lerp(palette[1], t)
+	
+	# 진동 효과 업데이트
+	if is_shaking:
+		shake_time -= delta
+		if shake_time <= 0:
+			is_shaking = false
+			position = shake_original_pos
+		else:
+			var shake_x: float = (randf() - 0.5) * shake_intensity
+			var shake_y: float = (randf() - 0.5) * shake_intensity
+			position = shake_original_pos + Vector2(shake_x, shake_y)
+
+
+func _init_background_effect() -> void:
+	# 전투 시작 시 한 번만 랜덤 선택 (변경 없음)
+	current_effect = randi() % 8
+	effect_time = 0.0
+	
+	# 랜덤 색상 팔레트 선택
+	var palette_idx: int = randi() % COLOR_PALETTES.size()
+	var palette: Array = COLOR_PALETTES[palette_idx]
+	
+	if bg_material:
+		bg_material.set_shader_parameter("effect_type", current_effect)
+		bg_material.set_shader_parameter("color1", Vector3(palette[0].r, palette[0].g, palette[0].b))
+		bg_material.set_shader_parameter("color2", Vector3(palette[1].r, palette[1].g, palette[1].b))
+	elif background:
+		background.color = palette[0]
+
+
+func play_critical_shake() -> void:
+	## 크리티컬 공격 시 진동 효과
+	if not is_shaking:
+		shake_original_pos = position  # 현재 위치 저장
+	is_shaking = true
+	shake_time = 0.3
+	shake_intensity = 8.0
+
+
+func play_aoe_flash() -> void:
+	## 전체 공격 시 흰색 번쩍 효과
+	if background:
+		var original_color: Color = background.color
+		var original_material = background.material
+		
+		# 흰색 플래시
+		background.material = null
+		background.color = Color.WHITE
+		
+		# 0.1초 후 원래대로
+		var tween := create_tween()
+		tween.tween_interval(0.1)
+		tween.tween_callback(func():
+			background.material = original_material
+			if bg_material:
+				background.color = Color.WHITE  # 셰이더가 색상 덮어씀
+			else:
+				background.color = original_color
+		)
 #endregion

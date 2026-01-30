@@ -19,7 +19,7 @@ signal hero_attacked(hero_id: String)
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
 
 # === 전투창 증식 시스템 설정 ===
-const MAX_ENEMIES_PER_WINDOW: int = 5  # 전투창 하나당 최대 적 수
+const MAX_ENEMIES_PER_WINDOW: int = 3  # 전투창 하나당 최대 적 수
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
 
 # === 창 생성 효과 (비워둠) ===
@@ -161,6 +161,10 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 	## 새 전투창 생성
 	_battle_id_counter += 1
 	var battle_id := _battle_id_counter
+	
+	# 적 조우 사운드 재생
+	if SoundManager:
+		SoundManager.play_encounter()
 	
 	# 첫 전투 시작 시 ATB 초기화
 	if active_battles.is_empty():

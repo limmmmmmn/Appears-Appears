@@ -274,9 +274,13 @@ func play_slash_effect(is_crit: bool = false) -> void:
 
 
 func play_hit_effect(is_crit: bool = false) -> void:
-	## 피격 이펙트 - 슬래시 + 깜빡임 + 흔들림
+	## 피격 이펙트 - 슬래시 + 깜빡임 + 흔들림 + 사운드
 	if not sprite:
 		return
+	
+	# 사운드 재생
+	if SoundManager:
+		SoundManager.play_hit(is_crit)
 	
 	# 슬래시 이펙트 먼저!
 	play_slash_effect(is_crit)
@@ -330,9 +334,14 @@ func play_attack_effect() -> void:
 
 
 func play_evade_effect() -> void:
-	## 회피 이펙트 - 스프라이트를 옆으로
+	## 회피 이펙트 - 스프라이트를 옆으로 + 사운드
 	if not sprite:
 		return
+	
+	# 사운드 재생
+	if SoundManager:
+		SoundManager.play_miss()
+	
 	var original_pos := sprite.position
 	var tween := create_tween()
 	tween.tween_property(sprite, "position:x", sprite.position.x + 12, 0.08)
@@ -340,9 +349,13 @@ func play_evade_effect() -> void:
 
 
 func play_death_effect() -> void:
-	## 사망 이펙트 - 스프라이트 페이드아웃
+	## 사망 이펙트 - 스프라이트 페이드아웃 + 사운드
 	if not sprite:
 		return
+	
+	# 사운드 재생
+	if SoundManager:
+		SoundManager.play_death()
 	
 	var tween := create_tween()
 	
