@@ -1,6 +1,7 @@
-[gd_scene format=3 uid="uid://c2cjb4efakggb"]
+[gd_scene load_steps=5 format=3 uid="uid://c2cjb4efakggb"]
 
 [ext_resource type="Script" uid="uid://b22n74rgrssul" path="res://scripts/ui/field/FieldHUD.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://dqm3y8kn2vpxu" path="res://scenes/ui/BottomPartyPanel.tscn" id="2_party_panel"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
 content_margin_left = 8.0
@@ -38,11 +39,11 @@ border_color = Color(0.25, 0.25, 0.3, 1)
 corner_radius_top_left = 4
 corner_radius_top_right = 4
 
-[node name="FieldHUD" type="CanvasLayer" unique_id=825513507]
+[node name="FieldHUD" type="CanvasLayer"]
 layer = 20
 script = ExtResource("1_script")
 
-[node name="Control" type="Control" parent="." unique_id=1350773226]
+[node name="Control" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -50,7 +51,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="TopBar" type="PanelContainer" parent="Control" unique_id=266694371]
+[node name="TopBar" type="PanelContainer" parent="Control"]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -58,18 +59,18 @@ offset_bottom = 24.0
 grow_horizontal = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_topbar")
 
-[node name="HBox" type="HBoxContainer" parent="Control/TopBar" unique_id=265195786]
+[node name="HBox" type="HBoxContainer" parent="Control/TopBar"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="StageLabel" type="Label" parent="Control/TopBar/HBox" unique_id=662577884]
+[node name="StageLabel" type="Label" parent="Control/TopBar/HBox"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 11
 text = "Stage 1-1: 평화로운 초원"
 
-[node name="GoldLabel" type="Label" parent="Control/TopBar/HBox" unique_id=1727135251]
+[node name="GoldLabel" type="Label" parent="Control/TopBar/HBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
@@ -77,7 +78,7 @@ theme_override_font_sizes/font_size = 11
 text = "1234 G"
 horizontal_alignment = 2
 
-[node name="SpeedButton" type="Button" parent="Control/TopBar/HBox" unique_id=1055349179]
+[node name="SpeedButton" type="Button" parent="Control/TopBar/HBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(36, 0)
 layout_mode = 2
@@ -85,13 +86,13 @@ tooltip_text = "전투 속도 (클릭하여 변경)"
 theme_override_font_sizes/font_size = 10
 text = "x1"
 
-[node name="MenuButton" type="Button" parent="Control/TopBar/HBox" unique_id=1807071811]
+[node name="MenuButton" type="Button" parent="Control/TopBar/HBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "☰"
 
-[node name="LogPanel" type="PanelContainer" parent="Control" unique_id=863616919]
+[node name="LogPanel" type="PanelContainer" parent="Control"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 2
@@ -104,50 +105,33 @@ offset_bottom = -4.0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
-[node name="VBox" type="VBoxContainer" parent="Control/LogPanel" unique_id=600207892]
+[node name="VBox" type="VBoxContainer" parent="Control/LogPanel"]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="LogTitle" type="Label" parent="Control/LogPanel/VBox" unique_id=2084407425]
+[node name="LogTitle" type="Label" parent="Control/LogPanel/VBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
 text = "[ 전투 로그 ]"
 
-[node name="LogScroll" type="ScrollContainer" parent="Control/LogPanel/VBox" unique_id=473746307]
+[node name="LogScroll" type="ScrollContainer" parent="Control/LogPanel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="LogContainer" type="VBoxContainer" parent="Control/LogPanel/VBox/LogScroll" unique_id=1820513481]
+[node name="LogContainer" type="VBoxContainer" parent="Control/LogPanel/VBox/LogScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/separation = 0
 
-[node name="BottomPartyPanel" type="PanelContainer" parent="Control" unique_id=1301914000]
+[node name="BottomPartyPanel" parent="Control" instance=ExtResource("2_party_panel")]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -160.0
-offset_top = -58.0
-offset_right = 100.0
-offset_bottom = -4.0
-grow_horizontal = 2
-grow_vertical = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_bottom")
 
-[node name="PartyContainer" type="HBoxContainer" parent="Control/BottomPartyPanel" unique_id=544168409]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="InventoryPanel" type="PanelContainer" parent="Control" unique_id=179529855]
+[node name="InventoryPanel" type="PanelContainer" parent="Control"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 3

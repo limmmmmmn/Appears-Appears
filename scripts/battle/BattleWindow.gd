@@ -205,38 +205,229 @@ func _update_hero_atb(delta: float) -> void:
 func _hero_attack(hero: Hero) -> void:
 	if hero == null or hero.is_dead:
 		return
-	
+
 	if not has_alive_enemies():
 		return
-	
+
 	_bring_to_front()
-	
 	BattleManager.hero_attacked.emit(hero.id)
-	
+
+	# 스킬 선택
+	var skill_id: String = _select_skill_for_hero(hero)
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+
+	# 스킬 데이터가 없으면 기본 공격으로 폴백
+	if skill_data.is_empty():
+		skill_id = "basic_attack"
+		skill_data = DataManager.get_skill("basic_attack")
+
+	var target_type: String = skill_data.get("target", "single_enemy")
+
+	# MP 소모
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	if mp_cost > 0:
+		hero.use_mp(mp_cost)
+		call_deferred("_emit_party_updated")
+
+	# 타겟 타입에 따른 처리
+	match target_type:
+		"single_ally", "all_allies":
+			_execute_ally_skill(hero, skill_id, skill_data, target_type)
+		"all_enemies":
+			_execute_aoe_attack(hero, skill_id, skill_data)
+		_:  # single_enemy
+			_execute_single_attack(hero, skill_id, skill_data)
+
+
+func _select_skill_for_hero(hero: Hero) -> String:
+	## 영웅이 사용할 스킬 선택 (AI)
+	var usable_skills: Array = hero.get_usable_skills()
+
+	# 힐러인 경우 아군 체력 확인
+	if "heal" in hero.get_available_skills():
+		var wounded := _get_wounded_heroes()
+		if not wounded.is_empty() and hero.can_use_skill("heal"):
+			return "heal"
+
+	# 사용 가능한 스킬 중 랜덤 선택 (70% 확률로 스킬 사용)
+	if not usable_skills.is_empty() and randf() < 0.7:
+		return usable_skills[randi() % usable_skills.size()]
+
+	return "basic_attack"
+
+
+func _get_wounded_heroes() -> Array:
+	## HP가 50% 이하인 아군 반환
+	var result: Array = []
+	for hero in PartyManager.get_alive_heroes():
+		if hero.get_hp_percent() < 0.5:
+			result.append(hero)
+	return result
+
+
+func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -> void:
+	## 단일 대상 공격 실행
+	if not has_alive_enemies():
+		return
+
 	var target: BattleEnemy = _select_smart_target(hero)
 	if target == null:
 		return
-	
-	var is_evaded: bool = randf() * 100 < target.get_eva()
+
+	var skill_name: String = skill_data.get("name", "공격")
+	var skill_type: String = skill_data.get("type", "physical")
+
+	# 회피 판정
+	var eva_ignore: float = _get_skill_effect_value(skill_data, "ignore_eva", 0.0)
+	var effective_eva: float = target.get_eva() * (1.0 - eva_ignore)
+	var is_evaded: bool = randf() * 100 < effective_eva
+
 	if is_evaded:
 		target.show_miss_text()
 		target.play_evade_effect()
-		_send_log("%s의 공격을 %s이(가) 회피!" % [hero.hero_name, target.enemy_name], Color.GRAY)
+		_send_log("%s의 %s을(를) %s이(가) 회피!" % [hero.hero_name, skill_name, target.enemy_name], Color.GRAY)
 		return
-	
-	var is_crit: bool = randf() * 100 < hero.get_crit()
-	var damage: int = _calc_hero_damage(hero, target, is_crit)
-	
+
+	# 크리티컬 판정
+	var crit_bonus: float = _get_skill_effect_value(skill_data, "crit_bonus", 0.0)
+	var crit_chance: float = hero.get_crit() + crit_bonus
+	var is_crit: bool = randf() * 100 < crit_chance
+
+	# 데미지 계산
+	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
+
 	target.take_damage(damage)
 	target.play_hit_effect(is_crit)
 	target.show_damage_number(damage, is_crit)
-	
-	var log_color: Color = Color.ORANGE if is_crit else Color.WHITE
-	var crit_text: String = " (크리티컬!)" if is_crit else ""
-	_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
-	
+
+	var log_color: Color = Color.ORANGE if is_crit else (Color.CYAN if skill_type == "magic" else Color.WHITE)
+	var crit_text: String = " ⭐" if is_crit else ""
+
+	if skill_id == "basic_attack":
+		_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
+	else:
+		_send_log("%s [%s] → ⭐ %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
+
 	if not target.is_alive():
 		_on_enemy_defeated(target)
+
+
+func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -> void:
+	## 전체 공격 실행
+	var skill_name: String = skill_data.get("name", "공격")
+	var alive_enemies: Array = []
+	for e in enemies:
+		if e != null and e.is_alive():
+			alive_enemies.append(e)
+
+	if alive_enemies.is_empty():
+		return
+
+	_send_log("%s [%s] 발동!" % [hero.hero_name, skill_name], Color.YELLOW)
+
+	for target in alive_enemies:
+		var is_crit: bool = randf() * 100 < hero.get_crit()
+		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
+
+		target.take_damage(damage)
+		target.play_hit_effect(is_crit)
+		target.show_damage_number(damage, is_crit)
+
+		if not target.is_alive():
+			_on_enemy_defeated(target)
+
+
+func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, target_type: String) -> void:
+	## 아군 대상 스킬 실행 (힐 등)
+	var skill_name: String = skill_data.get("name", "스킬")
+	var skill_type: String = skill_data.get("type", "utility")
+
+	if skill_type == "heal":
+		var targets: Array = []
+		if target_type == "single_ally":
+			# 가장 체력이 낮은 아군 선택
+			var lowest_hp_hero: Hero = null
+			var lowest_percent: float = 1.0
+			for h in PartyManager.get_alive_heroes():
+				var hp_percent := h.get_hp_percent()
+				if hp_percent < lowest_percent:
+					lowest_percent = hp_percent
+					lowest_hp_hero = h
+			if lowest_hp_hero:
+				targets.append(lowest_hp_hero)
+		else:  # all_allies
+			targets = PartyManager.get_alive_heroes()
+
+		# 회복 사운드 재생
+		if targets.size() > 0:
+			if SoundManager != null:
+				SoundManager.play_heal()
+
+		for target in targets:
+			var heal_amount: int = _calc_heal_amount(hero, skill_data)
+			var actual_heal: int = target.heal(heal_amount)
+			_send_log("%s [%s] → %s HP +%d" % [hero.hero_name, skill_name, target.hero_name, actual_heal], Color.GREEN)
+
+		call_deferred("_emit_party_updated")
+	else:
+		# 유틸리티 스킬 (도발 등) - 추후 구현
+		_send_log("%s [%s] 발동!" % [hero.hero_name, skill_name], Color.PURPLE)
+
+
+func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, is_crit: bool) -> int:
+	## 스킬 데미지 계산
+	var damage_base: int = int(skill_data.get("damage_base", 0))
+	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
+	var stat_name: String = scaling.get("stat", "str")
+	var multiplier: float = scaling.get("multiplier", 1.0)
+
+	var stat_value: int = 0
+	match stat_name:
+		"str": stat_value = hero.get_str()
+		"int": stat_value = hero.get_int()
+		"def": stat_value = hero.get_def()
+		"spd": stat_value = hero.get_spd()
+		"luk": stat_value = hero.get_luk()
+
+	var base_damage: int = damage_base + int(stat_value * multiplier)
+
+	# 방어력 적용
+	var skill_type: String = skill_data.get("type", "physical")
+	var defense: int = 0
+	if skill_type == "physical":
+		defense = target.get_p_def()
+	elif skill_type == "magic":
+		defense = target.get_m_def()
+
+	if is_crit:
+		return maxi(1, base_damage)  # 크리티컬은 방어 무시
+
+	return maxi(1, base_damage - int(defense / 2))
+
+
+func _calc_heal_amount(hero: Hero, skill_data: Dictionary) -> int:
+	## 힐량 계산
+	var heal_base: int = int(skill_data.get("heal_base", 0))
+	var scaling: Dictionary = skill_data.get("heal_scaling", {"stat": "int", "multiplier": 0.5})
+	var stat_name: String = scaling.get("stat", "int")
+	var multiplier: float = scaling.get("multiplier", 0.5)
+
+	var stat_value: int = 0
+	match stat_name:
+		"str": stat_value = hero.get_str()
+		"int": stat_value = hero.get_int()
+		_: stat_value = hero.get_int()
+
+	return heal_base + int(stat_value * multiplier)
+
+
+func _get_skill_effect_value(skill_data: Dictionary, effect_type: String, default_value: float) -> float:
+	## 스킬 효과 값 가져오기
+	var effects: Array = skill_data.get("effects", [])
+	for effect in effects:
+		if effect.get("type", "") == effect_type:
+			return float(effect.get("value", default_value))
+	return default_value
 
 
 func _select_smart_target(hero: Hero) -> BattleEnemy:
@@ -255,14 +446,6 @@ func _select_smart_target(hero: Hero) -> BattleEnemy:
 			return enemy
 	
 	return alive[randi() % alive.size()]
-
-
-func _calc_hero_damage(hero: Hero, target: BattleEnemy, is_crit: bool) -> int:
-	var atk := hero.get_atk()
-	var p_def := target.get_p_def()
-	if is_crit:
-		return maxi(1, atk)
-	return maxi(1, atk - int(p_def / 2))
 
 
 func get_hero_atb_value(hero_id: String) -> float:
@@ -383,6 +566,10 @@ func _end_battle_victory() -> void:
 	current_state = BattleState.VICTORY
 	set_process(false)
 	
+	# 승리 사운드 재생
+	if SoundManager != null:
+		SoundManager.play_victory()
+	
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
 	
 	PartyManager.distribute_exp(total_exp)
@@ -434,6 +621,10 @@ func _delayed_loot_drop(item_id: String, start_pos: Vector2, delay: float) -> vo
 func _end_battle_defeat() -> void:
 	current_state = BattleState.DEFEAT
 	set_process(false)
+	
+	# 패배 사운드 재생
+	if SoundManager != null:
+		SoundManager.play_defeat()
 	
 	_send_log("전멸...", Color.DARK_RED)
 	

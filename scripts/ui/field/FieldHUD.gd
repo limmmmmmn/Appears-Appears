@@ -1,9 +1,9 @@
 extends CanvasLayer
 class_name FieldHUD
-## 필드 HUD 메인 컨트롤러 (새 레이아웃)
+## 필드 HUD 메인 컨트롤러
 ## - TopBar: 스테이지, 골드, 배속, 메뉴
 ## - LogPanel: 전투 로그 (좌측 하단)
-## - BottomPartyPanel: 파티 정보 + 장비 (하단 중앙)
+## - BottomPartyPanel: 파티 정보 (하단 중앙) - 외부 씬
 ## - InventoryPanel: 인벤토리 (우측 하단)
 
 signal menu_pressed
@@ -19,22 +19,18 @@ signal menu_pressed
 @onready var log_scroll: ScrollContainer = %LogScroll
 @onready var log_container: VBoxContainer = %LogContainer
 
-# === 하단 파티 패널 (중앙) ===
-@onready var bottom_party_panel: PanelContainer = %BottomPartyPanel
-@onready var party_container: HBoxContainer = %PartyContainer
+# === 하단 파티 패널 (중앙) - 외부 씬 ===
+@onready var bottom_party_panel: BottomPartyPanel = %BottomPartyPanel
 
 # === 인벤토리 패널 (우측 하단) ===
 @onready var inventory_panel: PanelContainer = %InventoryPanel
 
 # === 컴포넌트 ===
-var party_slots: Array[BottomPartySlot] = []
 var inventory_grid: InventoryGridUI = null
 var battle_log: BattleLogUI = null
-var drag_manager: DragDropManager = null
 
 # === 툴팁 ===
 var tooltip: EquipmentTooltip = null
-var equipped_tooltip: EquippedItemTooltip = null
 
 # === 컨텍스트 메뉴 ===
 var context_menu: PopupMenu = null
@@ -48,27 +44,8 @@ func _ready() -> void:
 	update_all()
 
 
-func _input(event: InputEvent) -> void:
-	if drag_manager and drag_manager.is_dragging():
-		if event is InputEventMouseMotion:
-			drag_manager.update_drag_position(event.global_position)
-		elif event is InputEventMouseButton:
-			if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-				drag_manager.end_drag(event.global_position)
-
-
 func _setup_components() -> void:
 	_setup_speed_button()
-	
-	# 파티 슬롯 생성 (하단 중앙)
-	for i in range(4):
-		var slot := BottomPartySlot.new()
-		slot.setup(i)
-		slot.equipment_slot_gui_input.connect(_on_equip_gui_input.bind(i))
-		slot.equipment_slot_hovered.connect(_on_equip_slot_hovered.bind(i))
-		slot.equipment_slot_unhovered.connect(_on_equip_slot_unhovered)
-		party_container.add_child(slot)
-		party_slots.append(slot)
 	
 	# 인벤토리 그리드
 	inventory_grid = InventoryGridUI.new()
@@ -76,7 +53,6 @@ func _setup_components() -> void:
 	inventory_grid.item_clicked.connect(_on_inv_clicked)
 	inventory_grid.item_hover_started.connect(_on_inv_hover)
 	inventory_grid.item_hover_ended.connect(_hide_tooltip)
-	inventory_grid.item_drag_started.connect(_on_inv_drag)
 	inventory_grid.item_right_clicked.connect(_on_inv_right_click)
 	if inventory_panel:
 		for c in inventory_panel.get_children():
@@ -88,13 +64,6 @@ func _setup_components() -> void:
 	battle_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if log_container:
 		log_container.add_child(battle_log)
-	
-	# 드래그 매니저
-	drag_manager = DragDropManager.new()
-	var ctrl = get_node_or_null("Control")
-	drag_manager.setup(party_slots, inventory_panel, ctrl if ctrl else self)
-	drag_manager.log_message.connect(add_system_log)
-	drag_manager.drag_ended.connect(func(_id, ok): if ok: update_party_display())
 
 
 func _setup_speed_button() -> void:
@@ -124,10 +93,6 @@ func _connect_signals() -> void:
 	
 	if GameManager:
 		GameManager.gold_changed.connect(func(_g): update_top_bar())
-	
-	if PartyManager and PartyManager.has_signal("party_changed"):
-		if not PartyManager.party_changed.is_connected(update_party_display):
-			PartyManager.party_changed.connect(update_party_display)
 	
 	if BattleManager:
 		if not BattleManager.battle_log_received.is_connected(_on_battle_log_received):
@@ -199,12 +164,8 @@ func update_top_bar() -> void:
 
 
 func update_party_display() -> void:
-	var party = PartyManager.get_party() if PartyManager else []
-	for i in range(4):
-		if i < party.size():
-			party_slots[i].update_display(party[i])
-		else:
-			party_slots[i].visible = false
+	if bottom_party_panel:
+		bottom_party_panel.update_display()
 
 
 func refresh_inventory() -> void:
@@ -266,55 +227,33 @@ func _on_inv_clicked(item_id: String) -> void:
 	if party.is_empty():
 		return
 	
-	var hero = party[0]
-	var slot = str(data.get("slot", "main_hand"))
-	if slot == "accessory":
-		slot = "acc1" if hero.equipment.get("acc1", "").is_empty() else "acc2"
-	
-	if InventoryManager.equip_item(hero, item_id, slot):
-		add_system_log("%s: %s 장착" % [hero.hero_name, str(data.get("name", item_id))])
-		update_party_display()
-		_hide_tooltip()
+	# 첫 번째 살아있는 파티원에게 장착
+	for hero in party:
+		if hero.is_dead:
+			continue
+		var slot = str(data.get("slot", "main_hand"))
+		if slot == "accessory":
+			slot = "acc1" if hero.equipment.get("acc1", "").is_empty() else "acc2"
+		if InventoryManager.equip_item(hero, item_id, slot):
+			add_system_log("%s: %s 장착!" % [hero.hero_name, str(data.get("name", item_id))])
+			update_party_display()
+			if inventory_grid:
+				inventory_grid.refresh()
+			break
 
 
 func _on_inv_hover(item_id: String) -> void:
 	_show_tooltip(item_id)
 
 
-func _on_inv_drag(item_id: String) -> void:
-	if drag_manager:
-		drag_manager.start_drag_from_inventory(item_id)
-	if inventory_grid:
-		inventory_grid.clear_pending_drag()
-
-
-func _on_inv_right_click(item_id: String, pos: Vector2) -> void:
+func _on_inv_right_click(item_id: String, mouse_pos: Vector2) -> void:
 	var equip_data = DataManager.get_equipment(item_id)
+	var item_data = DataManager.get_item(item_id)
+	
 	if not equip_data.is_empty():
-		_show_context_menu(item_id, pos, "equip")
-	else:
-		var item_data = DataManager.get_item(item_id)
-		if not item_data.is_empty() and item_data.get("type", "") == "consumable":
-			_show_context_menu(item_id, pos, "consumable")
-
-
-func _on_equip_gui_input(event: InputEvent, slot_name: String, hero_idx: int) -> void:
-	var party = PartyManager.get_party() if PartyManager else []
-	if hero_idx >= party.size():
-		return
-	
-	var hero: Hero = party[hero_idx]
-	var eid = hero.equipment.get(slot_name, "")
-	
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_RIGHT and not eid.is_empty():
-			if InventoryManager.unequip_item(hero, slot_name):
-				var n = str(DataManager.get_equipment(eid).get("name", eid))
-				add_system_log("%s: %s 해제" % [hero.hero_name, n])
-				update_party_display()
-		elif event.button_index == MOUSE_BUTTON_LEFT:
-			if not eid.is_empty() and drag_manager:
-				drag_manager.start_drag_from_equipped(eid, hero_idx, slot_name)
+		_show_context_menu(item_id, mouse_pos, "equip")
+	elif not item_data.is_empty() and item_data.get("type", "") == "consumable":
+		_show_context_menu(item_id, mouse_pos, "consumable")
 #endregion
 
 
@@ -322,7 +261,6 @@ func _on_equip_gui_input(event: InputEvent, slot_name: String, hero_idx: int) ->
 func _show_context_menu(item_id: String, pos: Vector2, item_type: String = "equip") -> void:
 	_hide_context_menu()
 	_hide_tooltip()
-	_hide_equipped_tooltip()
 	context_menu_item_id = item_id
 	context_menu_type = item_type
 	
@@ -516,7 +454,6 @@ func _use_consumable_on_hero(item_id: String, hero: Hero) -> void:
 #region 툴팁
 func _show_tooltip(item_id: String) -> void:
 	_hide_tooltip()
-	_hide_equipped_tooltip()
 	
 	var equip_data = DataManager.get_equipment(item_id)
 	var item_data = DataManager.get_item(item_id)
@@ -534,33 +471,4 @@ func _hide_tooltip() -> void:
 	if tooltip and is_instance_valid(tooltip):
 		tooltip.queue_free()
 		tooltip = null
-
-
-func _on_equip_slot_hovered(slot_name: String, item_id: String, hero_index: int) -> void:
-	if drag_manager and drag_manager.is_dragging():
-		return
-	
-	_hide_tooltip()
-	_hide_equipped_tooltip()
-	
-	if hero_index >= party_slots.size():
-		return
-	
-	var slot: BottomPartySlot = party_slots[hero_index]
-	var anchor_rect: Rect2 = slot.get_global_rect()
-	
-	equipped_tooltip = EquippedItemTooltip.new()
-	var ctrl = get_node_or_null("Control")
-	(ctrl if ctrl else self).add_child(equipped_tooltip)
-	equipped_tooltip.setup(item_id, slot_name, anchor_rect)
-
-
-func _on_equip_slot_unhovered() -> void:
-	_hide_equipped_tooltip()
-
-
-func _hide_equipped_tooltip() -> void:
-	if equipped_tooltip and is_instance_valid(equipped_tooltip):
-		equipped_tooltip.queue_free()
-		equipped_tooltip = null
 #endregion

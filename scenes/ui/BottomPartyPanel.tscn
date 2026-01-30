@@ -3,172 +3,366 @@
 [ext_resource type="Script" uid="uid://chj1ksn8pbwwo" path="res://scripts/ui/field/BottomPartyPanel.gd" id="1_script"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-content_margin_left = 6.0
+content_margin_left = 4.0
 content_margin_top = 4.0
-content_margin_right = 6.0
+content_margin_right = 4.0
 content_margin_bottom = 4.0
-bg_color = Color(0.1, 0.1, 0.12, 0.9)
+bg_color = Color(0.08, 0.08, 0.1, 0.92)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.3, 0.3, 0.35, 1)
+border_color = Color(0.25, 0.25, 0.3, 1)
 corner_radius_top_left = 4
 corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_bg"]
-bg_color = Color(0.15, 0.15, 0.15, 0.9)
+bg_color = Color(0.12, 0.1, 0.1, 1)
 corner_radius_top_left = 2
 corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp_fill"]
-bg_color = Color(0.2, 0.8, 0.2, 1)
+bg_color = Color(0.2, 0.75, 0.2, 1)
 corner_radius_top_left = 2
 corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_atb_fill"]
-bg_color = Color(1, 0.8, 0.2, 1)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mp_fill"]
+bg_color = Color(0.3, 0.5, 0.9, 1)
 corner_radius_top_left = 2
 corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
-[node name="BottomPartyPanel" type="PanelContainer" unique_id=2064867243]
+[node name="BottomPartyPanel" type="PanelContainer" unique_id=801237157]
 anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -140.0
-offset_top = -50.0
-offset_right = 140.0
+offset_left = -180.0
+offset_top = -130.0
+offset_right = 180.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 script = ExtResource("1_script")
 
-[node name="HBox" type="HBoxContainer" parent="." unique_id=199790713]
+[node name="HBox" type="HBoxContainer" parent="." unique_id=1881069059]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 6
 
-[node name="Slot0" type="VBoxContainer" parent="HBox" unique_id=2091187290]
+[node name="Slot0" type="VBoxContainer" parent="HBox" unique_id=357215076]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot0" unique_id=1910626093]
-custom_minimum_size = Vector2(32, 32)
+[node name="Face" type="TextureRect" parent="HBox/Slot0" unique_id=1960094408]
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot0" unique_id=1761189058]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot0" unique_id=495413980]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot0/Bars" unique_id=1403990541]
-custom_minimum_size = Vector2(50, 6)
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot0/Bars" unique_id=450748545]
+custom_minimum_size = Vector2(60, 8)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot0/Bars" unique_id=74074991]
-custom_minimum_size = Vector2(50, 4)
+[node name="MPBar" type="ProgressBar" parent="HBox/Slot0/Bars" unique_id=1667675058]
+custom_minimum_size = Vector2(60, 6)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
+theme_override_styles/fill = SubResource("StyleBoxFlat_mp_fill")
+value = 100.0
 show_percentage = false
 
-[node name="Slot1" type="VBoxContainer" parent="HBox" unique_id=837063845]
+[node name="EquipRow1" type="HBoxContainer" parent="HBox/Slot0" unique_id=847065026]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="MainHand" type="Button" parent="HBox/Slot0/EquipRow1" unique_id=350667135]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "⚔️"
+
+[node name="OffHand" type="Button" parent="HBox/Slot0/EquipRow1" unique_id=39970488]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "🛡️"
+
+[node name="Head" type="Button" parent="HBox/Slot0/EquipRow1" unique_id=1950126128]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👑"
+
+[node name="EquipRow2" type="HBoxContainer" parent="HBox/Slot0" unique_id=1242732027]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Body" type="Button" parent="HBox/Slot0/EquipRow2" unique_id=1120777385]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👕"
+
+[node name="Acc1" type="Button" parent="HBox/Slot0/EquipRow2" unique_id=2009768798]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💍"
+
+[node name="Acc2" type="Button" parent="HBox/Slot0/EquipRow2" unique_id=1605885322]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💎"
+
+[node name="SkillRow" type="HBoxContainer" parent="HBox/Slot0" unique_id=690481913]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Slot1" type="VBoxContainer" parent="HBox" unique_id=1503475871]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot1" unique_id=131842385]
-custom_minimum_size = Vector2(32, 32)
+[node name="Face" type="TextureRect" parent="HBox/Slot1" unique_id=1089861167]
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot1" unique_id=21365712]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot1" unique_id=1874562898]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot1/Bars" unique_id=2013646755]
-custom_minimum_size = Vector2(50, 6)
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot1/Bars" unique_id=202831597]
+custom_minimum_size = Vector2(60, 8)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot1/Bars" unique_id=2121910914]
-custom_minimum_size = Vector2(50, 4)
+[node name="MPBar" type="ProgressBar" parent="HBox/Slot1/Bars" unique_id=607675682]
+custom_minimum_size = Vector2(60, 6)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
+theme_override_styles/fill = SubResource("StyleBoxFlat_mp_fill")
+value = 100.0
 show_percentage = false
 
-[node name="Slot2" type="VBoxContainer" parent="HBox" unique_id=2081141039]
+[node name="EquipRow1" type="HBoxContainer" parent="HBox/Slot1" unique_id=1879270742]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="MainHand" type="Button" parent="HBox/Slot1/EquipRow1" unique_id=258226904]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "⚔️"
+
+[node name="OffHand" type="Button" parent="HBox/Slot1/EquipRow1" unique_id=1840867078]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "🛡️"
+
+[node name="Head" type="Button" parent="HBox/Slot1/EquipRow1" unique_id=285989646]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👑"
+
+[node name="EquipRow2" type="HBoxContainer" parent="HBox/Slot1" unique_id=645316927]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Body" type="Button" parent="HBox/Slot1/EquipRow2" unique_id=404682358]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👕"
+
+[node name="Acc1" type="Button" parent="HBox/Slot1/EquipRow2" unique_id=2032373597]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💍"
+
+[node name="Acc2" type="Button" parent="HBox/Slot1/EquipRow2" unique_id=466817908]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💎"
+
+[node name="SkillRow" type="HBoxContainer" parent="HBox/Slot1" unique_id=794412160]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Slot2" type="VBoxContainer" parent="HBox" unique_id=160763396]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot2" unique_id=361781624]
-custom_minimum_size = Vector2(32, 32)
+[node name="Face" type="TextureRect" parent="HBox/Slot2" unique_id=31722102]
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot2" unique_id=2071406439]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot2" unique_id=697516865]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot2/Bars" unique_id=1719626069]
-custom_minimum_size = Vector2(50, 6)
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot2/Bars" unique_id=1410261917]
+custom_minimum_size = Vector2(60, 8)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot2/Bars" unique_id=153773201]
-custom_minimum_size = Vector2(50, 4)
+[node name="MPBar" type="ProgressBar" parent="HBox/Slot2/Bars" unique_id=690156416]
+custom_minimum_size = Vector2(60, 6)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
+theme_override_styles/fill = SubResource("StyleBoxFlat_mp_fill")
+value = 100.0
 show_percentage = false
 
-[node name="Slot3" type="VBoxContainer" parent="HBox" unique_id=927005324]
+[node name="EquipRow1" type="HBoxContainer" parent="HBox/Slot2" unique_id=191234453]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="MainHand" type="Button" parent="HBox/Slot2/EquipRow1" unique_id=509778899]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "⚔️"
+
+[node name="OffHand" type="Button" parent="HBox/Slot2/EquipRow1" unique_id=850746514]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "🛡️"
+
+[node name="Head" type="Button" parent="HBox/Slot2/EquipRow1" unique_id=567837624]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👑"
+
+[node name="EquipRow2" type="HBoxContainer" parent="HBox/Slot2" unique_id=1029665928]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Body" type="Button" parent="HBox/Slot2/EquipRow2" unique_id=118238182]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👕"
+
+[node name="Acc1" type="Button" parent="HBox/Slot2/EquipRow2" unique_id=86447578]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💍"
+
+[node name="Acc2" type="Button" parent="HBox/Slot2/EquipRow2" unique_id=1650464964]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💎"
+
+[node name="SkillRow" type="HBoxContainer" parent="HBox/Slot2" unique_id=1506761167]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Slot3" type="VBoxContainer" parent="HBox" unique_id=685608537]
 layout_mode = 2
 theme_override_constants/separation = 2
 
-[node name="Face" type="TextureRect" parent="HBox/Slot3" unique_id=588998733]
-custom_minimum_size = Vector2(32, 32)
+[node name="Face" type="TextureRect" parent="HBox/Slot3" unique_id=544929701]
+custom_minimum_size = Vector2(36, 36)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="Bars" type="VBoxContainer" parent="HBox/Slot3" unique_id=34295760]
+[node name="Bars" type="VBoxContainer" parent="HBox/Slot3" unique_id=638271625]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="HPBar" type="ProgressBar" parent="HBox/Slot3/Bars" unique_id=552144769]
-custom_minimum_size = Vector2(50, 6)
+[node name="HPBar" type="ProgressBar" parent="HBox/Slot3/Bars" unique_id=357054667]
+custom_minimum_size = Vector2(60, 8)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="HBox/Slot3/Bars" unique_id=1292287440]
-custom_minimum_size = Vector2(50, 4)
+[node name="MPBar" type="ProgressBar" parent="HBox/Slot3/Bars" unique_id=1076151520]
+custom_minimum_size = Vector2(60, 6)
 layout_mode = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_bar_bg")
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
+theme_override_styles/fill = SubResource("StyleBoxFlat_mp_fill")
+value = 100.0
 show_percentage = false
+
+[node name="EquipRow1" type="HBoxContainer" parent="HBox/Slot3" unique_id=188856658]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="MainHand" type="Button" parent="HBox/Slot3/EquipRow1" unique_id=582749755]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "⚔️"
+
+[node name="OffHand" type="Button" parent="HBox/Slot3/EquipRow1" unique_id=1083764462]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "🛡️"
+
+[node name="Head" type="Button" parent="HBox/Slot3/EquipRow1" unique_id=2039431407]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👑"
+
+[node name="EquipRow2" type="HBoxContainer" parent="HBox/Slot3" unique_id=800838048]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Body" type="Button" parent="HBox/Slot3/EquipRow2" unique_id=1217073085]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "👕"
+
+[node name="Acc1" type="Button" parent="HBox/Slot3/EquipRow2" unique_id=1790895912]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💍"
+
+[node name="Acc2" type="Button" parent="HBox/Slot3/EquipRow2" unique_id=83054241]
+custom_minimum_size = Vector2(20, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "💎"
+
+[node name="SkillRow" type="HBoxContainer" parent="HBox/Slot3" unique_id=1433377094]
+layout_mode = 2
+theme_override_constants/separation = 1
