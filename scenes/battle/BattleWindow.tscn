@@ -10,22 +10,6 @@ border_width_right = 2
 border_width_bottom = 2
 border_color = Color(0.3, 0.3, 0.3, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_logbox"]
-bg_color = Color(0, 0, 0, 0.75)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.5, 0.5, 0.5, 0.8)
-corner_radius_left_top = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_left_bottom = 4
-content_margin_left = 8.0
-content_margin_top = 4.0
-content_margin_right = 8.0
-content_margin_bottom = 4.0
-
 [node name="BattleWindow" type="Control"]
 custom_minimum_size = Vector2(280, 160)
 offset_right = 280.0
@@ -66,19 +50,3 @@ grow_vertical = 2
 theme_override_constants/separation = 8
 alignment = 1
 
-[node name="BattleLogBox" type="PanelContainer" parent="."]
-layout_mode = 0
-offset_left = 70.0
-offset_top = 8.0
-offset_right = 210.0
-offset_bottom = 34.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_logbox")
-
-[node name="BattleLogLabel" type="RichTextLabel" parent="BattleLogBox"]
-layout_mode = 2
-mouse_filter = 2
-bbcode_enabled = true
-text = ""
-fit_content = true
-scroll_active = false

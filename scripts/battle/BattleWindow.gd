@@ -35,14 +35,6 @@ var drop_items: Array = []
 
 # === UI 참조 ===
 @onready var enemy_container: HBoxContainer = $BattlePanel/EnemyContainer
-@onready var battle_log_box: PanelContainer = $BattleLogBox
-@onready var battle_log_label: RichTextLabel = $BattleLogBox/BattleLogLabel
-
-# === 전투창 내부 로그 시스템 ===
-const MAX_LOG_LINES: int = 3
-const LOG_DISPLAY_TIME: float = 2.5
-var window_logs: Array = []
-var log_timers: Array = []
 
 # === ATB 설정 ===
 const ENEMY_ATB_BASE: float = 0.08
@@ -83,15 +75,8 @@ func _ready() -> void:
 	# 배경 셰이더 설정
 	_setup_background_shader()
 
-	# 로그 박스 초기 숨김
-	if battle_log_box:
-		battle_log_box.visible = false
-
 
 func _process(delta: float) -> void:
-	# 로그 타이머는 항상 업데이트
-	_update_log_timers(delta)
-
 	if current_state != BattleState.RUNNING:
 		return
 
@@ -121,30 +106,8 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	# 배경 효과 초기화 (한 번만)
 	_init_background_effect()
 
-	# 적 등장 로그 표시
-	_show_enemy_appear_log()
-
 	await get_tree().create_timer(0.3).timeout
 	_start_battle()
-
-
-func _show_enemy_appear_log() -> void:
-	## 적 등장 로그를 전투창에 표시
-	if enemies.is_empty():
-		return
-
-	var names: Array = []
-	for enemy in enemies:
-		if enemy != null:
-			var display_name: String = enemy.enemy_name
-			if enemy.is_elite_version:
-				display_name = "⭐" + display_name
-			names.append(display_name)
-
-	if names.size() == 1:
-		_add_window_log("%s 등장!" % names[0], Color.ORANGE)
-	else:
-		_add_window_log("%s 등장!" % ", ".join(names), Color.ORANGE)
 
 
 func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
@@ -158,10 +121,8 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	var enemy_name: String = str(enemy_data.get("name", enemy_id))
 	if is_elite:
 		_send_log("⭐ 엘리트 %s 합류!" % enemy_name, Color.PURPLE)
-		_add_window_log("⭐%s 합류!" % enemy_name, Color.PURPLE)
 	else:
 		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
-		_add_window_log("%s 합류!" % enemy_name, Color.YELLOW)
 
 	if current_state == BattleState.RUNNING:
 		var idx: int = enemies.size() - 1
@@ -645,7 +606,6 @@ func _end_battle_victory() -> void:
 		SoundManager.play_victory()
 
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
-	_add_window_log("⚔️ 승리!", Color.CYAN)
 	
 	PartyManager.distribute_exp(total_exp)
 	GameManager.add_gold(total_gold)
@@ -698,7 +658,6 @@ func _end_battle_defeat() -> void:
 		SoundManager.play_defeat()
 
 	_send_log("전멸...", Color.DARK_RED)
-	_add_window_log("💀 패배...", Color.DARK_RED)
 
 	battle_ended.emit(battle_id, false)
 #endregion
@@ -717,61 +676,6 @@ func _emit_party_updated() -> void:
 
 func _send_log(msg: String, color: Color = Color.WHITE) -> void:
 	battle_log.emit(msg, color)
-
-
-func _add_window_log(msg: String, color: Color = Color.WHITE) -> void:
-	## 전투창 내부에 로그 표시 (적 등장/합류/승리/패배 전용)
-	if not battle_log_label:
-		return
-
-	# 새 로그 추가
-	window_logs.append({"msg": msg, "color": color})
-	log_timers.append(LOG_DISPLAY_TIME)
-
-	# 최대 줄 수 제한
-	while window_logs.size() > MAX_LOG_LINES:
-		window_logs.pop_front()
-		log_timers.pop_front()
-
-	_update_log_display()
-
-
-func _update_log_timers(delta: float) -> void:
-	## 로그 타이머 업데이트 (오래된 로그 자동 제거)
-	var i: int = 0
-	var updated: bool = false
-	while i < log_timers.size():
-		log_timers[i] -= delta
-		if log_timers[i] <= 0:
-			window_logs.remove_at(i)
-			log_timers.remove_at(i)
-			updated = true
-		else:
-			i += 1
-
-	if updated:
-		_update_log_display()
-
-
-func _update_log_display() -> void:
-	## 로그 라벨 텍스트 갱신
-	if not battle_log_label:
-		return
-
-	if window_logs.is_empty():
-		battle_log_box.visible = false
-		return
-
-	battle_log_box.visible = true
-	var text: String = ""
-	for i in range(window_logs.size()):
-		var log_entry: Dictionary = window_logs[i]
-		var color_hex: String = log_entry.color.to_html(false)
-		if i > 0:
-			text += "\n"
-		text += "[center][color=#%s]%s[/color][/center]" % [color_hex, log_entry.msg]
-
-	battle_log_label.text = text
 
 
 func _on_close_pressed() -> void:
