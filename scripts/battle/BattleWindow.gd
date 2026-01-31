@@ -1,4 +1,4 @@
-extends PanelContainer
+extends Control
 class_name BattleWindow
 ## BattleWindow: ATB 전투창 (전투창 증식 시스템)
 ## - 각 전투창이 독립적인 영웅 ATB + 적 ATB 관리
@@ -34,9 +34,7 @@ var total_gold: int = 0
 var drop_items: Array = []
 
 # === UI 참조 ===
-@onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
-@onready var run_button: Button = $MainVBox/BottomBar/RunButton
-@onready var close_button: Button = $MainVBox/TopBar/CloseButton
+@onready var enemy_container: HBoxContainer = $BattlePanel/EnemyContainer
 @onready var battle_log_box: PanelContainer = $BattleLogBox
 @onready var battle_log_label: RichTextLabel = $BattleLogBox/BattleLogLabel
 
@@ -82,11 +80,6 @@ func _ready() -> void:
 	visible = false
 	set_process(true)
 
-	if run_button:
-		run_button.pressed.connect(_on_run_pressed)
-	if close_button:
-		close_button.pressed.connect(_on_close_pressed)
-
 	# 배경 셰이더 설정
 	_setup_background_shader()
 
@@ -113,8 +106,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	enemy_data_list = enemy_ids.duplicate()
 	is_elite_battle = p_is_elite
 	is_boss_battle = p_is_boss
-
-	run_button.disabled = is_boss_battle
 
 	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
@@ -663,10 +654,7 @@ func _end_battle_victory() -> void:
 		_start_loot_animations()
 	
 	call_deferred("_emit_party_updated")
-	
-	run_button.visible = false
-	close_button.visible = true
-	
+
 	battle_ended.emit(battle_id, true)
 
 
@@ -711,48 +699,8 @@ func _end_battle_defeat() -> void:
 
 	_send_log("전멸...", Color.DARK_RED)
 	_add_window_log("💀 패배...", Color.DARK_RED)
-	
-	run_button.visible = false
-	close_button.visible = true
-	
+
 	battle_ended.emit(battle_id, false)
-#endregion
-
-
-#region 도주 시스템
-func _on_run_pressed() -> void:
-	if is_boss_battle or current_state != BattleState.RUNNING:
-		return
-	
-	run_button.disabled = true
-	
-	var escape_chance := _calculate_escape_chance()
-	var roll := randf() * 100
-	
-	if roll < escape_chance:
-		current_state = BattleState.ESCAPED
-		_send_log("도주 성공!", Color.CYAN)
-		run_button.visible = false
-		close_button.visible = true
-		battle_ended.emit(battle_id, false)
-	else:
-		_send_log("도주 실패!", Color.GRAY)
-		run_button.disabled = false
-
-
-func _calculate_escape_chance() -> float:
-	var party_avg_spd := PartyManager.get_party_average_spd()
-	
-	var enemy_total_spd: float = 0.0
-	var alive_count: int = 0
-	for enemy in enemies:
-		if enemy.is_alive():
-			enemy_total_spd += enemy.get_spd()
-			alive_count += 1
-	var enemy_avg_spd: float = enemy_total_spd / maxf(1.0, float(alive_count))
-	
-	var chance := BASE_ESCAPE_RATE + (party_avg_spd - enemy_avg_spd) * 2.0
-	return clampf(chance, 5.0, 95.0)
 #endregion
 
 
@@ -839,7 +787,7 @@ var shake_intensity: float = 0.0
 var shake_original_pos: Vector2 = Vector2.ZERO
 
 func _setup_background_shader() -> void:
-	background = get_node_or_null("MainVBox/BattleArea/Background")
+	background = get_node_or_null("BattlePanel/Background")
 	if not background:
 		return
 	
