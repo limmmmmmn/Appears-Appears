@@ -146,7 +146,7 @@ func _show_enemy_appear_log() -> void:
 	for enemy in enemies:
 		if enemy != null:
 			var display_name: String = enemy.enemy_name
-			if enemy.is_elite:
+			if enemy.is_elite_version:
 				display_name = "⭐" + display_name
 			names.append(display_name)
 
