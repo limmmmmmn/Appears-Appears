@@ -133,28 +133,6 @@ size_flags_vertical = 4
 theme_override_constants/separation = 5
 alignment = 1
 
-[node name="BattleLogBox" type="PanelContainer" parent="MainVBox/BattleArea"]
-layout_mode = 0
-offset_left = 70.0
-offset_top = 6.0
-offset_right = 210.0
-offset_bottom = 40.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_logbox")
-
-[node name="BattleLogLabel" type="RichTextLabel" parent="MainVBox/BattleArea/BattleLogBox"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-bbcode_enabled = true
-text = ""
-fit_content = true
-scroll_active = false
-
 [node name="BottomBar" type="HBoxContainer" parent="MainVBox" unique_id=676078642]
 layout_mode = 2
 alignment = 2
@@ -163,3 +141,25 @@ alignment = 2
 custom_minimum_size = Vector2(50, 24)
 layout_mode = 2
 text = "도주"
+
+[node name="BattleLogBox" type="PanelContainer" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_top = 0.0
+anchor_right = 0.5
+anchor_bottom = 0.0
+offset_left = -70.0
+offset_top = 10.0
+offset_right = 70.0
+offset_bottom = 36.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_logbox")
+
+[node name="BattleLogLabel" type="RichTextLabel" parent="BattleLogBox"]
+layout_mode = 2
+mouse_filter = 2
+bbcode_enabled = true
+text = ""
+fit_content = true
+scroll_active = false

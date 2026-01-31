@@ -37,8 +37,8 @@ var drop_items: Array = []
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
 @onready var run_button: Button = $MainVBox/BottomBar/RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
-@onready var battle_log_box: PanelContainer = $MainVBox/BattleArea/BattleLogBox
-@onready var battle_log_label: RichTextLabel = $MainVBox/BattleArea/BattleLogBox/BattleLogLabel
+@onready var battle_log_box: PanelContainer = $BattleLogBox
+@onready var battle_log_label: RichTextLabel = $BattleLogBox/BattleLogLabel
 
 # === 전투창 내부 로그 시스템 ===
 const MAX_LOG_LINES: int = 3
