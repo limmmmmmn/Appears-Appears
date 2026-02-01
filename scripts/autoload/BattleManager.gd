@@ -386,33 +386,53 @@ func clear_battle_container() -> void:
 
 
 #region 전투창 위치 계산
+# HUD 영역 설정
+const HUD_TOP_HEIGHT: float = 28.0  # TopBar 높이 + 여유
+const HUD_BOTTOM_HEIGHT: float = 55.0  # BottomPartyPanel 높이 + 여유
+
 func _calculate_window_position() -> Vector2:
 	var viewport_size := Vector2(640, 360)
 	var tree := get_tree()
 	if tree:
 		viewport_size = tree.root.get_visible_rect().size
-	
+
+	# HUD를 피한 안전 영역 계산
+	var safe_left: float = WINDOW_MARGIN
+	var safe_top: float = HUD_TOP_HEIGHT
+	var safe_right: float = viewport_size.x - WINDOW_SIZE.x - WINDOW_MARGIN
+	var safe_bottom: float = viewport_size.y - WINDOW_SIZE.y - HUD_BOTTOM_HEIGHT
+
+	# 화면을 벗어나지 않도록 클램프
+	safe_left = maxf(safe_left, 0)
+	safe_top = maxf(safe_top, 0)
+	safe_right = maxf(safe_right, safe_left)
+	safe_bottom = maxf(safe_bottom, safe_top)
+
 	var available_rect := Rect2(
-		WINDOW_MARGIN,
-		WINDOW_MARGIN,
-		viewport_size.x - WINDOW_SIZE.x - WINDOW_MARGIN * 2,
-		viewport_size.y - WINDOW_SIZE.y - WINDOW_MARGIN * 2
+		safe_left,
+		safe_top,
+		safe_right - safe_left,
+		safe_bottom - safe_top
 	)
-	
+
 	var center := viewport_size / 2
 	var center_safe_rect := Rect2(
 		center.x - 50, center.y - 50, 100, 100
 	)
-	
+
 	for _i in range(20):
 		var x := randf_range(available_rect.position.x, available_rect.position.x + available_rect.size.x)
 		var y := randf_range(available_rect.position.y, available_rect.position.y + available_rect.size.y)
 		var candidate := Vector2(x, y)
-		
+
+		# 화면 경계 체크
+		candidate.x = clampf(candidate.x, 0, viewport_size.x - WINDOW_SIZE.x)
+		candidate.y = clampf(candidate.y, HUD_TOP_HEIGHT, viewport_size.y - WINDOW_SIZE.y - HUD_BOTTOM_HEIGHT)
+
 		var window_rect := Rect2(candidate, WINDOW_SIZE)
 		if window_rect.intersects(center_safe_rect):
 			continue
-		
+
 		var overlaps := false
 		for bid in active_battles:
 			var battle_data: Dictionary = active_battles[bid]
@@ -424,8 +444,9 @@ func _calculate_window_position() -> Vector2:
 						break
 		if not overlaps:
 			return candidate
-	
-	return Vector2(available_rect.position.x, available_rect.position.y)
+
+	# 기본 위치: 안전 영역 내 좌상단
+	return Vector2(safe_left, safe_top)
 #endregion
 
 
