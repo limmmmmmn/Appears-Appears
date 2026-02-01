@@ -408,45 +408,49 @@ func _calculate_window_position() -> Vector2:
 	safe_right = maxf(safe_right, safe_left)
 	safe_bottom = maxf(safe_bottom, safe_top)
 
-	var available_rect := Rect2(
-		safe_left,
-		safe_top,
-		safe_right - safe_left,
-		safe_bottom - safe_top
-	)
+	# 우선순위 위치: 좌상단, 우상단 순으로 배치
+	var priority_positions: Array[Vector2] = [
+		Vector2(safe_left, safe_top),  # 좌상단
+		Vector2(safe_right, safe_top),  # 우상단
+	]
 
+	# 우선순위 위치 중 비어있는 곳 찾기
+	for priority_pos in priority_positions:
+		if _is_position_available(priority_pos):
+			return priority_pos
+
+	# 우선순위 위치가 모두 사용 중이면 빈 공간 찾기
 	var center := viewport_size / 2
 	var center_safe_rect := Rect2(
 		center.x - 50, center.y - 50, 100, 100
 	)
 
 	for _i in range(20):
-		var x := randf_range(available_rect.position.x, available_rect.position.x + available_rect.size.x)
-		var y := randf_range(available_rect.position.y, available_rect.position.y + available_rect.size.y)
+		var x := randf_range(safe_left, safe_right)
+		var y := randf_range(safe_top, safe_bottom)
 		var candidate := Vector2(x, y)
-
-		# 화면 경계 체크
-		candidate.x = clampf(candidate.x, 0, viewport_size.x - WINDOW_SIZE.x)
-		candidate.y = clampf(candidate.y, HUD_TOP_HEIGHT, viewport_size.y - WINDOW_SIZE.y - HUD_BOTTOM_HEIGHT)
 
 		var window_rect := Rect2(candidate, WINDOW_SIZE)
 		if window_rect.intersects(center_safe_rect):
 			continue
 
-		var overlaps := false
-		for bid in active_battles:
-			var battle_data: Dictionary = active_battles[bid]
-			if battle_data.has("window"):
-				var other_window = battle_data.get("window")
-				if is_instance_valid(other_window):
-					if candidate.distance_to(other_window.position) < 50:
-						overlaps = true
-						break
-		if not overlaps:
+		if _is_position_available(candidate):
 			return candidate
 
 	# 기본 위치: 안전 영역 내 좌상단
 	return Vector2(safe_left, safe_top)
+
+
+func _is_position_available(pos: Vector2) -> bool:
+	## 해당 위치에 다른 전투창이 없는지 확인
+	for bid in active_battles:
+		var battle_data: Dictionary = active_battles[bid]
+		if battle_data.has("window"):
+			var other_window = battle_data.get("window")
+			if is_instance_valid(other_window):
+				if pos.distance_to(other_window.position) < WINDOW_SIZE.x * 0.8:
+					return false
+	return true
 #endregion
 
 
