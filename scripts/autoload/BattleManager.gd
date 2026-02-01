@@ -134,7 +134,8 @@ func _find_available_window() -> BattleWindow:
 		
 		var window: BattleWindow = battle_data.get("window")
 		if window and is_instance_valid(window):
-			if window.get_enemy_count() < MAX_ENEMIES_PER_WINDOW:
+			# charm 효과로 인한 동적 최대 적 수 사용
+			if window.get_enemy_count() < window.get_max_enemies():
 				return window
 	
 	return null

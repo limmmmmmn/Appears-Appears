@@ -52,6 +52,15 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var loot_label: Label = %LootLabel
 @onready var kill_count_label: Label = %KillCountLabel
 
+# === Charm 슬롯 참조 ===
+@onready var charm_slot1: Button = %CharmSlot1
+@onready var charm_slot2: Button = %CharmSlot2
+@onready var charm_slot3: Button = %CharmSlot3
+@onready var charm_slot4: Button = %CharmSlot4
+
+# === Charm 효과 ===
+var extra_enemy_slots: int = 0  # 추가 적 슬롯 (charm1 효과)
+
 # === ATB 설정 ===
 const ENEMY_ATB_BASE: float = 0.08
 const ENEMY_ATB_SPD_FACTOR: float = 0.008
@@ -96,6 +105,10 @@ func _ready() -> void:
 		hold_button.toggled.connect(_on_hold_toggled)
 	if close_reserve_button:
 		close_reserve_button.toggled.connect(_on_close_reserve_toggled)
+
+	# Charm 슬롯 이벤트 연결
+	if charm_slot1:
+		charm_slot1.toggled.connect(_on_charm1_toggled)
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
@@ -831,6 +844,28 @@ func _add_rewards(exp: int, gold: int, items: Array) -> void:
 	total_gold += gold
 	drop_items.append_array(items)
 	_update_rewards_ui()
+#endregion
+
+
+#region Charm 시스템
+func _on_charm1_toggled(button_pressed: bool) -> void:
+	## Charm 1: 적 최대 숫자 +1
+	if button_pressed:
+		extra_enemy_slots = 1
+		_send_log("👹 Charm 장착: 적 슬롯 +1", Color.PURPLE)
+	else:
+		extra_enemy_slots = 0
+		_send_log("👹 Charm 해제", Color.GRAY)
+
+
+func get_max_enemies() -> int:
+	## 이 전투창의 최대 적 수 반환 (기본 3 + charm 효과)
+	return 3 + extra_enemy_slots
+
+
+func is_charm1_active() -> bool:
+	## Charm 1 활성화 여부
+	return charm_slot1 != null and charm_slot1.button_pressed
 #endregion
 
 
