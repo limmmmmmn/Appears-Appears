@@ -88,13 +88,16 @@ script = ExtResource("1_battle")
 
 [node name="MainVBox" type="VBoxContainer" parent="." unique_id=482878077]
 layout_mode = 2
+mouse_filter = 1
 theme_override_constants/separation = 4
 
 [node name="RewardsPanel" type="PanelContainer" parent="MainVBox"]
 layout_mode = 2
+mouse_filter = 1
 
 [node name="RewardsHBox" type="HBoxContainer" parent="MainVBox/RewardsPanel"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 12
 alignment = 1
 
@@ -150,6 +153,7 @@ text = "×"
 
 [node name="BattleArea" type="PanelContainer" parent="MainVBox" unique_id=897254730]
 layout_mode = 2
+mouse_filter = 1
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBoxFlat_5btk3")
 
@@ -160,12 +164,14 @@ mouse_filter = 2
 
 [node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea" unique_id=197219225]
 layout_mode = 2
+mouse_filter = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 5
 alignment = 1
 
 [node name="BottomBar" type="HBoxContainer" parent="MainVBox" unique_id=676078642]
 layout_mode = 2
+mouse_filter = 1
 theme_override_constants/separation = 8
 alignment = 1
 
@@ -173,6 +179,7 @@ alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 28)
 layout_mode = 2
+mouse_filter = 0
 text = "Hold"
 toggle_mode = true
 
@@ -180,6 +187,7 @@ toggle_mode = true
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 28)
 layout_mode = 2
+mouse_filter = 0
 text = "Close"
 toggle_mode = true
 
@@ -187,4 +195,5 @@ toggle_mode = true
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 28)
 layout_mode = 2
+mouse_filter = 0
 text = "Run"
