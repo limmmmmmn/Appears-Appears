@@ -90,6 +90,53 @@ script = ExtResource("1_battle")
 layout_mode = 2
 theme_override_constants/separation = 4
 
+[node name="RewardsPanel" type="PanelContainer" parent="MainVBox"]
+layout_mode = 2
+
+[node name="RewardsHBox" type="HBoxContainer" parent="MainVBox/RewardsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="GoldContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="GoldIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/GoldContainer"]
+layout_mode = 2
+text = "💰"
+
+[node name="GoldLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/GoldContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0"
+
+[node name="ExpContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ExpIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/ExpContainer"]
+layout_mode = 2
+text = "⭐"
+
+[node name="ExpLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/ExpContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0"
+
+[node name="LootContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="LootIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/LootContainer"]
+layout_mode = 2
+text = "🎁"
+
+[node name="LootLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/LootContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "x1"
+
 [node name="TopBar" type="HBoxContainer" parent="MainVBox" unique_id=1913141494]
 visible = false
 layout_mode = 2
@@ -119,9 +166,25 @@ alignment = 1
 
 [node name="BottomBar" type="HBoxContainer" parent="MainVBox" unique_id=676078642]
 layout_mode = 2
-alignment = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="HoldButton" type="Button" parent="MainVBox/BottomBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 28)
+layout_mode = 2
+text = "Hold"
+toggle_mode = true
+
+[node name="CloseReserveButton" type="Button" parent="MainVBox/BottomBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 28)
+layout_mode = 2
+text = "Close"
+toggle_mode = true
 
 [node name="RunButton" type="Button" parent="MainVBox/BottomBar" unique_id=219318160]
-custom_minimum_size = Vector2(50, 24)
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 28)
 layout_mode = 2
-text = "도주"
+text = "Run"

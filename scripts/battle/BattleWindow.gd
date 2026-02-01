@@ -32,11 +32,24 @@ var hero_atb: Dictionary = {}
 var total_exp: int = 0
 var total_gold: int = 0
 var drop_items: Array = []
+var loot_multiplier: float = 1.0  # 루팅 배율 (아이템 등장 확률 배수)
+
+# === 전투창 모드 ===
+enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
+var window_mode: WindowMode = WindowMode.NORMAL
+var is_accepting_rewards: bool = true  # Hold 모드 시 false
 
 # === UI 참조 ===
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
-@onready var run_button: Button = $MainVBox/BottomBar/RunButton
+@onready var run_button: Button = %RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
+@onready var hold_button: Button = %HoldButton
+@onready var close_reserve_button: Button = %CloseReserveButton
+
+# === 보상 UI 참조 ===
+@onready var gold_label: Label = %GoldLabel
+@onready var exp_label: Label = %ExpLabel
+@onready var loot_label: Label = %LootLabel
 
 # === ATB 설정 ===
 const ENEMY_ATB_BASE: float = 0.08
@@ -73,14 +86,21 @@ var effect_timer: float = 0.0
 func _ready() -> void:
 	visible = false
 	set_process(false)
-	
+
 	if run_button:
 		run_button.pressed.connect(_on_run_pressed)
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
-	
+	if hold_button:
+		hold_button.toggled.connect(_on_hold_toggled)
+	if close_reserve_button:
+		close_reserve_button.toggled.connect(_on_close_reserve_toggled)
+
 	# 배경 셰이더 설정
 	_setup_background_shader()
+
+	# 보상 UI 초기화
+	_update_rewards_ui()
 
 
 func _process(delta: float) -> void:
@@ -98,23 +118,50 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	enemy_data_list = enemy_ids.duplicate()
 	is_elite_battle = p_is_elite
 	is_boss_battle = p_is_boss
-	
-	run_button.disabled = is_boss_battle
-	
+
+	# 보상 초기화
+	total_exp = 0
+	total_gold = 0
+	drop_items.clear()
+	window_mode = WindowMode.NORMAL
+	is_accepting_rewards = true
+
+	# 루팅 배율 계산 (엘리트: x2, 보스: x4, 기본: x1)
+	if is_boss_battle:
+		loot_multiplier = 4.0
+	elif is_elite_battle:
+		loot_multiplier = 2.0
+	else:
+		loot_multiplier = 1.0
+
+	# 버튼 초기화
+	if run_button:
+		run_button.disabled = is_boss_battle
+		run_button.visible = true
+	if hold_button:
+		hold_button.button_pressed = false
+		hold_button.visible = true
+	if close_reserve_button:
+		close_reserve_button.button_pressed = false
+		close_reserve_button.visible = true
+
 	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
 		var make_elite: bool = (i == 0 and is_elite_battle)
 		_spawn_single_enemy(enemy_id, make_elite)
-	
+
 	if is_elite_battle:
 		_apply_elite_style()
-	
+
 	visible = true
 	current_state = BattleState.STARTING
-	
+
+	# 보상 UI 업데이트
+	_update_rewards_ui()
+
 	# 배경 효과 초기화 (한 번만)
 	_init_background_effect()
-	
+
 	await get_tree().create_timer(0.3).timeout
 	_start_battle()
 
@@ -576,15 +623,24 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 #region 적 처치/전투 종료
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
-	
-	total_exp += enemy.exp_reward
-	total_gold += enemy.get_gold_reward()
-	drop_items.append_array(enemy.roll_drops())
-	
+
+	# Hold 모드가 아닐 때만 보상 수집
+	if is_accepting_rewards:
+		var exp_reward: int = enemy.exp_reward
+		var gold_reward: int = enemy.get_gold_reward()
+		var items: Array = enemy.roll_drops()
+
+		total_exp += exp_reward
+		total_gold += gold_reward
+		drop_items.append_array(items)
+		_update_rewards_ui()
+	else:
+		_send_log("(Hold 모드: 보상 무시됨)", Color.GRAY)
+
 	var idx := enemies.find(enemy)
 	if idx >= 0:
 		enemy_atb.erase(idx)
-	
+
 	enemy.play_death_effect()
 
 
@@ -593,41 +649,59 @@ func _check_battle_end() -> bool:
 	for e in enemies:
 		if e != null and e.is_alive():
 			alive_enemies.append(e)
-	
+
 	var alive_heroes := PartyManager.get_alive_heroes()
-	
+
 	if alive_enemies.is_empty():
+		# Hold 모드: 적이 죽어도 창 유지 (자동 승리 처리 안함)
+		if window_mode == WindowMode.HOLD:
+			_send_log("모든 적 처치! (Hold 모드: 창 유지)", Color.YELLOW)
+			return false
+
+		# Close 예약 모드: 적 소멸 시 자동 닫기
+		if window_mode == WindowMode.CLOSE_RESERVED:
+			_close_with_rewards()
+			return true
+
+		# 일반 모드: 기존 승리 처리
 		_end_battle_victory()
 		return true
-	
+
 	if alive_heroes.is_empty():
 		_end_battle_defeat()
 		return true
-	
+
 	return false
 
 
 func _end_battle_victory() -> void:
 	current_state = BattleState.VICTORY
 	set_process(false)
-	
+
 	# 승리 사운드 재생
 	if SoundManager != null:
 		SoundManager.play_victory()
-	
+
 	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
-	
+
 	PartyManager.distribute_exp(total_exp)
 	GameManager.add_gold(total_gold)
-	
+
 	if not drop_items.is_empty():
 		_start_loot_animations()
-	
+
 	call_deferred("_emit_party_updated")
-	
-	run_button.visible = false
-	close_button.visible = true
-	
+
+	# 버튼 상태 업데이트
+	if hold_button:
+		hold_button.visible = false
+	if close_reserve_button:
+		close_reserve_button.visible = false
+	if run_button:
+		run_button.visible = false
+	if close_button:
+		close_button.visible = true
+
 	battle_ended.emit(battle_id, true)
 
 
@@ -666,40 +740,43 @@ func _delayed_loot_drop(item_id: String, start_pos: Vector2, delay: float) -> vo
 func _end_battle_defeat() -> void:
 	current_state = BattleState.DEFEAT
 	set_process(false)
-	
+
 	# 패배 사운드 재생
 	if SoundManager != null:
 		SoundManager.play_defeat()
-	
+
 	_send_log("전멸...", Color.DARK_RED)
-	
-	run_button.visible = false
-	close_button.visible = true
-	
+
+	# 버튼 상태 업데이트
+	if hold_button:
+		hold_button.visible = false
+	if close_reserve_button:
+		close_reserve_button.visible = false
+	if run_button:
+		run_button.visible = false
+	if close_button:
+		close_button.visible = true
+
 	battle_ended.emit(battle_id, false)
 #endregion
 
 
 #region 도주 시스템
 func _on_run_pressed() -> void:
-	if is_boss_battle or current_state != BattleState.RUNNING:
+	## Run 버튼: 50% 보상만 받고 즉시 도주
+	if is_boss_battle:
+		_send_log("보스전에서는 도주할 수 없습니다!", Color.RED)
 		return
-	
+
+	if current_state != BattleState.RUNNING and current_state != BattleState.VICTORY:
+		return
+
 	run_button.disabled = true
-	
-	var escape_chance := _calculate_escape_chance()
-	var roll := randf() * 100
-	
-	if roll < escape_chance:
-		current_state = BattleState.ESCAPED
-		set_process(false)
-		_send_log("도주 성공!", Color.CYAN)
-		run_button.visible = false
-		close_button.visible = true
-		battle_ended.emit(battle_id, false)
-	else:
-		_send_log("도주 실패!", Color.GRAY)
-		run_button.disabled = false
+	hold_button.disabled = true
+	close_reserve_button.disabled = true
+
+	# 즉시 도주 (확률 판정 없음, 대신 50% 보상만)
+	_run_with_partial_rewards()
 
 
 func _calculate_escape_chance() -> float:
@@ -715,6 +792,118 @@ func _calculate_escape_chance() -> float:
 	
 	var chance := BASE_ESCAPE_RATE + (party_avg_spd - enemy_avg_spd) * 2.0
 	return clampf(chance, 5.0, 95.0)
+#endregion
+
+
+#region 보상 UI 시스템
+func _update_rewards_ui() -> void:
+	## 상단 보상 패널 UI 업데이트
+	if gold_label:
+		gold_label.text = str(total_gold)
+	if exp_label:
+		exp_label.text = str(total_exp)
+	if loot_label:
+		loot_label.text = "x%d" % int(loot_multiplier)
+
+
+func set_loot_multiplier(multiplier: float) -> void:
+	## 루팅 배율 설정 (외부에서 호출 가능)
+	loot_multiplier = maxf(1.0, multiplier)
+	_update_rewards_ui()
+
+
+func _add_rewards(exp: int, gold: int, items: Array) -> void:
+	## 보상 추가 (Hold 모드 시 무시)
+	if not is_accepting_rewards:
+		return
+
+	total_exp += exp
+	total_gold += gold
+	drop_items.append_array(items)
+	_update_rewards_ui()
+#endregion
+
+
+#region 전투창 모드 시스템
+func _on_hold_toggled(button_pressed: bool) -> void:
+	## Hold 모드 토글: 창 유지, 보상 수집 중단
+	if button_pressed:
+		window_mode = WindowMode.HOLD
+		is_accepting_rewards = false
+		if close_reserve_button:
+			close_reserve_button.button_pressed = false
+		_send_log("Hold: 보상 수집 중단", Color.ORANGE)
+	else:
+		window_mode = WindowMode.NORMAL
+		is_accepting_rewards = true
+		_send_log("Hold 해제: 보상 수집 재개", Color.GREEN)
+
+
+func _on_close_reserve_toggled(button_pressed: bool) -> void:
+	## Close 모드 토글: 적이 사라지면 자동 닫기 예약
+	if button_pressed:
+		window_mode = WindowMode.CLOSE_RESERVED
+		if hold_button:
+			hold_button.button_pressed = false
+		is_accepting_rewards = true
+		_send_log("Close 예약: 적 소멸 시 자동 닫힘", Color.YELLOW)
+
+		# 이미 적이 없으면 바로 닫기
+		if not has_alive_enemies():
+			_close_with_rewards()
+	else:
+		window_mode = WindowMode.NORMAL
+		_send_log("Close 예약 해제", Color.GRAY)
+
+
+func _close_with_rewards() -> void:
+	## 현재까지 쌓인 보상을 받고 창 닫기
+	if total_exp > 0 or total_gold > 0:
+		PartyManager.distribute_exp(total_exp)
+		GameManager.add_gold(total_gold)
+		_send_log("보상 획득! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
+
+	if not drop_items.is_empty():
+		_start_loot_animations()
+
+	call_deferred("_emit_party_updated")
+	current_state = BattleState.ENDED
+	battle_ended.emit(battle_id, true)
+
+	# 잠시 후 창 닫기 (애니메이션 시간)
+	await get_tree().create_timer(0.3).timeout
+	queue_free()
+
+
+func _run_with_partial_rewards() -> void:
+	## Run: 50% 보상만 받고 즉시 닫기
+	var partial_exp: int = int(total_exp * 0.5)
+	var partial_gold: int = int(total_gold * 0.5)
+
+	if partial_exp > 0 or partial_gold > 0:
+		PartyManager.distribute_exp(partial_exp)
+		GameManager.add_gold(partial_gold)
+		_send_log("도주! 보상 50%%만 획득: EXP +%d, Gold +%d" % [partial_exp, partial_gold], Color.ORANGE)
+	else:
+		_send_log("도주!", Color.ORANGE)
+
+	# 드랍 아이템은 50% 확률로 획득
+	var partial_drops: Array = []
+	for item in drop_items:
+		if randf() < 0.5:
+			partial_drops.append(item)
+
+	if not partial_drops.is_empty():
+		drop_items = partial_drops
+		_start_loot_animations()
+
+	call_deferred("_emit_party_updated")
+	current_state = BattleState.ESCAPED
+	set_process(false)
+	battle_ended.emit(battle_id, false)
+
+	await get_tree().create_timer(0.3).timeout
+	queue_free()
 #endregion
 
 
