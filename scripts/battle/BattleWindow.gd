@@ -165,23 +165,31 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 
 func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
-	if current_state == BattleState.VICTORY or current_state == BattleState.DEFEAT:
+	# Hold 모드에서는 VICTORY 상태에서도 적 추가 가능
+	if current_state == BattleState.DEFEAT:
 		return
-	
+	if current_state == BattleState.VICTORY and window_mode != WindowMode.HOLD:
+		return
+
 	enemy_data_list.append(enemy_id)
 	_spawn_single_enemy(enemy_id, is_elite)
-	
+
 	var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
 	var enemy_name: String = str(enemy_data.get("name", enemy_id))
 	if is_elite:
 		_send_log("⭐ 엘리트 %s 합류!" % enemy_name, Color.PURPLE)
 	else:
 		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
-	
-	if current_state == BattleState.RUNNING:
-		var idx: int = enemies.size() - 1
-		enemy_atb[idx] = randf() * 0.3
-	
+
+	var idx: int = enemies.size() - 1
+	enemy_atb[idx] = randf() * 0.3
+
+	# Hold 모드에서 적이 추가되면 전투 재개
+	if window_mode == WindowMode.HOLD and current_state == BattleState.VICTORY:
+		current_state = BattleState.RUNNING
+		set_process(true)
+		_send_log("전투 재개!", Color.GREEN)
+
 	_shake_window()
 
 
