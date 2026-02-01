@@ -37,7 +37,6 @@ var loot_multiplier: float = 1.0  # 루팅 배율 (아이템 등장 확률 배�
 # === 전투창 모드 ===
 enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
 var window_mode: WindowMode = WindowMode.NORMAL
-var is_accepting_rewards: bool = true  # Hold 모드 시 false
 
 # === UI 참조 ===
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
@@ -124,7 +123,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	total_gold = 0
 	drop_items.clear()
 	window_mode = WindowMode.NORMAL
-	is_accepting_rewards = true
 
 	# 루팅 배율 계산 (엘리트: x2, 보스: x4, 기본: x1)
 	if is_boss_battle:
@@ -624,18 +622,15 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
-	# Hold 모드가 아닐 때만 보상 수집
-	if is_accepting_rewards:
-		var exp_reward: int = enemy.exp_reward
-		var gold_reward: int = enemy.get_gold_reward()
-		var items: Array = enemy.roll_drops()
+	# 보상은 항상 전투창에 쌓임 (아직 파티가 획득하지 않음)
+	var exp_reward: int = enemy.exp_reward
+	var gold_reward: int = enemy.get_gold_reward()
+	var items: Array = enemy.roll_drops()
 
-		total_exp += exp_reward
-		total_gold += gold_reward
-		drop_items.append_array(items)
-		_update_rewards_ui()
-	else:
-		_send_log("(Hold 모드: 보상 무시됨)", Color.GRAY)
+	total_exp += exp_reward
+	total_gold += gold_reward
+	drop_items.append_array(items)
+	_update_rewards_ui()
 
 	var idx := enemies.find(enemy)
 	if idx >= 0:
@@ -653,17 +648,14 @@ func _check_battle_end() -> bool:
 	var alive_heroes := PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
-		# Hold 모드: 적이 죽어도 창 유지 (자동 승리 처리 안함)
+		# Hold 모드: 적이 죽어도 창 유지 (보상 획득 지연)
 		if window_mode == WindowMode.HOLD:
-			_send_log("모든 적 처치! (Hold 모드: 창 유지)", Color.YELLOW)
+			set_process(false)  # 전투 멈춤
+			current_state = BattleState.VICTORY
+			_send_log("모든 적 처치! (보상 대기 중...)", Color.YELLOW)
 			return false
 
-		# Close 예약 모드: 적 소멸 시 자동 닫기
-		if window_mode == WindowMode.CLOSE_RESERVED:
-			_close_with_rewards()
-			return true
-
-		# 일반 모드: 기존 승리 처리
+		# Close 모드 또는 일반 모드: 보상 획득 + 창 닫기
 		_end_battle_victory()
 		return true
 
@@ -813,10 +805,7 @@ func set_loot_multiplier(multiplier: float) -> void:
 
 
 func _add_rewards(exp: int, gold: int, items: Array) -> void:
-	## 보상 추가 (Hold 모드 시 무시)
-	if not is_accepting_rewards:
-		return
-
+	## 보상 추가 (전투창에 쌓임)
 	total_exp += exp
 	total_gold += gold
 	drop_items.append_array(items)
@@ -826,17 +815,18 @@ func _add_rewards(exp: int, gold: int, items: Array) -> void:
 
 #region 전투창 모드 시스템
 func _on_hold_toggled(button_pressed: bool) -> void:
-	## Hold 모드 토글: 창 유지, 보상 수집 중단
+	## Hold 모드 토글: 보상 계속 쌓기 + 적 다 죽어도 창 유지 (보상 획득 지연)
 	if button_pressed:
 		window_mode = WindowMode.HOLD
-		is_accepting_rewards = false
 		if close_reserve_button:
 			close_reserve_button.button_pressed = false
-		_send_log("Hold: 보상 수집 중단", Color.ORANGE)
+		_send_log("Hold: 전투창 유지 (보상 지연)", Color.ORANGE)
 	else:
 		window_mode = WindowMode.NORMAL
-		is_accepting_rewards = true
-		_send_log("Hold 해제: 보상 수집 재개", Color.GREEN)
+		_send_log("Hold 해제", Color.GREEN)
+		# Hold 해제 시 적이 없으면 바로 승리 처리
+		if not has_alive_enemies():
+			_end_battle_victory()
 
 
 func _on_close_reserve_toggled(button_pressed: bool) -> void:
@@ -845,8 +835,7 @@ func _on_close_reserve_toggled(button_pressed: bool) -> void:
 		window_mode = WindowMode.CLOSE_RESERVED
 		if hold_button:
 			hold_button.button_pressed = false
-		is_accepting_rewards = true
-		_send_log("Close 예약: 적 소멸 시 자동 닫힘", Color.YELLOW)
+		_send_log("Close: 적 소멸 시 보상 획득", Color.YELLOW)
 
 		# 이미 적이 없으면 바로 닫기
 		if not has_alive_enemies():
