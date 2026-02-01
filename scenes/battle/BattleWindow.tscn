@@ -84,6 +84,7 @@ offset_left = 3.0
 offset_top = 1.0
 offset_right = 283.0
 offset_bottom = 181.0
+mouse_filter = 1
 script = ExtResource("1_battle")
 
 [node name="MainVBox" type="VBoxContainer" parent="." unique_id=482878077]
