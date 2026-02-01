@@ -27,21 +27,26 @@ func init_new_game() -> void:
 
 
 func _populate_tavern() -> void:
-	## 선술집에 영웅 5명 배치 (롤랜드 제외)
+	## 선술집에 영웅 5명 배치 (파티에 있는 영웅 제외)
 	tavern_heroes.clear()
-	
+
+	# 이미 파티에 있는 영웅 ID 수집
+	var party_ids: Array[String] = []
+	for hero in PartyManager.get_party():
+		party_ids.append(hero.id)
+
 	var all_heroes := DataManager.get_all_hero_ids()
 	var available: Array[String] = []
-	
+
 	for hero_id in all_heroes:
-		if hero_id != "roland":  # 용사(롤랜드)는 제외
+		if hero_id not in party_ids:  # 파티에 있는 영웅은 제외
 			available.append(hero_id)
-	
+
 	# 셔플해서 5명 선택
 	available.shuffle()
 	for i in range(mini(5, available.size())):
 		tavern_heroes.append(available[i])
-	
+
 	tavern_updated.emit()
 
 

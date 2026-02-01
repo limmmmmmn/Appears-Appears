@@ -80,22 +80,25 @@ func _start_new_game() -> void:
 	## 새 게임 시작
 	# 게임 초기화
 	GameManager.start_new_game()
-	
+
 	# 용사(롤랜드)를 파티에 자동 추가
 	PartyManager.add_hero_by_id("roland")
-	
+
+	# 랜덤 동료 3명 추가하여 파티 4명 채우기
+	_add_random_companions(3)
+
 	# 시작 장비 지급
 	PartyManager.add_item("sword_common")
 	PartyManager.add_item("leather_armor")
 	PartyManager.add_item("potion_small", 3)
-	
+
 	# 롤랜드에게 기본 장비 장착
 	var roland := PartyManager.get_hero_at(0)
 	if roland:
 		PartyManager.equip_to_hero(roland, "sword_common", "main_hand")
 		PartyManager.equip_to_hero(roland, "leather_armor", "body")
-	
-	# 선술집 초기화 (영웅 5명 배치)
+
+	# 선술집 초기화 (영웅 5명 배치) - 이미 파티에 있는 영웅은 제외됨
 	TownManager.init_new_game()
 	
 	# 필드에서 시작! (Stage 1-1)
@@ -135,3 +138,24 @@ func _clear_current_scene() -> void:
 	if current_scene:
 		current_scene.queue_free()
 		current_scene = null
+
+
+func _add_random_companions(count: int) -> void:
+	## 랜덤 동료 추가 (롤랜드 및 이미 파티에 있는 영웅 제외)
+	var all_heroes := DataManager.get_all_hero_ids()
+	var available: Array[String] = []
+
+	# 이미 파티에 있는 영웅 ID 수집
+	var party_ids: Array[String] = []
+	for hero in PartyManager.get_party():
+		party_ids.append(hero.id)
+
+	# 사용 가능한 영웅 필터링
+	for hero_id in all_heroes:
+		if hero_id not in party_ids:
+			available.append(hero_id)
+
+	# 셔플 후 count명 추가
+	available.shuffle()
+	for i in range(mini(count, available.size())):
+		PartyManager.add_hero_by_id(available[i])
