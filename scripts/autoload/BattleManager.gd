@@ -46,7 +46,7 @@ const ATB_MAX: float = 1.0
 # 전투창 배치 설정
 const WINDOW_SIZE := Vector2(280, 200)
 const CENTER_SAFE_SIZE: float = 100.0
-const WINDOW_MARGIN: float = 10.0
+const WINDOW_MARGIN: float = 20.0  # 화면 가장자리 여유
 
 var battle_container: CanvasLayer = null
 
@@ -387,8 +387,8 @@ func clear_battle_container() -> void:
 
 #region 전투창 위치 계산
 # HUD 영역 설정
-const HUD_TOP_HEIGHT: float = 28.0  # TopBar 높이 + 여유
-const HUD_BOTTOM_HEIGHT: float = 55.0  # BottomPartyPanel 높이 + 여유
+const HUD_TOP_HEIGHT: float = 32.0  # TopBar 높이 + 여유
+const HUD_BOTTOM_HEIGHT: float = 60.0  # BottomPartyPanel 높이 + 여유
 
 func _calculate_window_position() -> Vector2:
 	var viewport_size := Vector2(640, 360)
