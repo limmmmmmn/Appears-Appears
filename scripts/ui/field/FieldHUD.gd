@@ -27,6 +27,13 @@ signal menu_pressed
 @onready var minimap_viewport: SubViewportContainer = %MinimapViewport
 @onready var minimap_camera: Camera2D = %MinimapCamera
 
+# === Charm 슬롯 (우측 상단) ===
+@onready var charm_slots_panel: PanelContainer = %CharmSlotsPanel
+@onready var charm_slot1: Button = %CharmSlot1
+@onready var charm_slot2: Button = %CharmSlot2
+@onready var charm_slot3: Button = %CharmSlot3
+@onready var charm_slot4: Button = %CharmSlot4
+
 # === 컴포넌트 ===
 var battle_log: BattleLogUI = null
 
@@ -83,7 +90,11 @@ func _connect_signals() -> void:
 		menu_button.pressed.connect(func(): menu_pressed.emit())
 	if speed_button:
 		speed_button.pressed.connect(_on_speed_button_pressed)
-	
+
+	# Charm 슬롯 이벤트 연결
+	if charm_slot1:
+		charm_slot1.toggled.connect(_on_charm1_toggled)
+
 	if GameManager:
 		GameManager.gold_changed.connect(func(_g): update_top_bar())
 	
@@ -258,4 +269,17 @@ func add_system_log(msg: String) -> void:
 func clear_logs() -> void:
 	if battle_log:
 		battle_log.clear()
+#endregion
+
+
+#region Charm 시스템
+func _on_charm1_toggled(button_pressed: bool) -> void:
+	## Charm 1: 적 최대 숫자 +1
+	if BattleManager:
+		BattleManager.set_extra_enemy_slots(1 if button_pressed else 0)
+
+	if button_pressed:
+		add_log("👹 Charm 장착: 적 슬롯 +1", Color.PURPLE)
+	else:
+		add_log("👹 Charm 해제", Color.GRAY)
 #endregion

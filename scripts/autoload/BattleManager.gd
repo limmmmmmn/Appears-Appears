@@ -38,6 +38,9 @@ var battle_speed: float = 1.0
 const BATTLE_SPEEDS: Array[float] = [1.0, 2.0, 3.0]
 var _current_speed_index: int = 0
 
+# === Charm 효과 ===
+var extra_enemy_slots: int = 0  # 추가 적 슬롯 (charm1 효과)
+
 # ATB 설정
 const ATB_BASE_SPEED: float = 0.12
 const ATB_SPD_FACTOR: float = 0.01
@@ -452,6 +455,22 @@ func _is_position_available(pos: Vector2) -> bool:
 				if pos.distance_to(other_window.position) < WINDOW_SIZE.x * 0.8:
 					return false
 	return true
+#endregion
+
+
+#region Charm 시스템
+func set_extra_enemy_slots(slots: int) -> void:
+	## Charm 효과: 추가 적 슬롯 설정
+	extra_enemy_slots = maxi(0, slots)
+
+
+func get_extra_enemy_slots() -> int:
+	return extra_enemy_slots
+
+
+func get_max_enemies_per_window() -> int:
+	## 전투창당 최대 적 수 반환 (기본값 + charm 효과)
+	return MAX_ENEMIES_PER_WINDOW + extra_enemy_slots
 #endregion
 
 
