@@ -33,6 +33,7 @@ var total_exp: int = 0
 var total_gold: int = 0
 var drop_items: Array = []
 var loot_multiplier: float = 1.0  # 루팅 배율 (아이템 등장 확률 배수)
+var kill_count: int = 0  # 원념 (적 처치 횟수)
 
 # === 전투창 모드 ===
 enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
@@ -49,6 +50,7 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var gold_label: Label = %GoldLabel
 @onready var exp_label: Label = %ExpLabel
 @onready var loot_label: Label = %LootLabel
+@onready var kill_count_label: Label = %KillCountLabel
 
 # === ATB 설정 ===
 const ENEMY_ATB_BASE: float = 0.08
@@ -122,6 +124,7 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	total_exp = 0
 	total_gold = 0
 	drop_items.clear()
+	kill_count = 0
 	window_mode = WindowMode.NORMAL
 
 	# 루팅 배율 계산 (엘리트: x2, 보스: x4, 기본: x1)
@@ -630,6 +633,9 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
+	# 원념 증가
+	kill_count += 1
+
 	# 보상은 항상 전투창에 쌓임 (아직 파티가 획득하지 않음)
 	var exp_reward: int = enemy.exp_reward
 	var gold_reward: int = enemy.get_gold_reward()
@@ -804,12 +810,19 @@ func _update_rewards_ui() -> void:
 		exp_label.text = str(total_exp)
 	if loot_label:
 		loot_label.text = "x%d" % int(loot_multiplier)
+	if kill_count_label:
+		kill_count_label.text = str(kill_count)
 
 
 func set_loot_multiplier(multiplier: float) -> void:
 	## 루팅 배율 설정 (외부에서 호출 가능)
 	loot_multiplier = maxf(1.0, multiplier)
 	_update_rewards_ui()
+
+
+func get_kill_count() -> int:
+	## 원념 (적 처치 횟수) 반환
+	return kill_count
 
 
 func _add_rewards(exp: int, gold: int, items: Array) -> void:
