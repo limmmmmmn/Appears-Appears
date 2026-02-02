@@ -724,16 +724,20 @@ func _show_danger_level_up_message(new_level: int) -> void:
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	## 전투창 중앙에 팝업 텍스트 표시
 	print("[BattleWindow] _show_popup_text called: ", title, " - ", subtitle)
+	print("[BattleWindow] BattleWindow global_position: ", global_position, " size: ", size)
 
-	# CanvasLayer를 사용해서 확실하게 최상위 렌더링
+	# 가장 상위 노드(루트)에 직접 추가
+	var root := get_tree().root
+
+	# CanvasLayer를 루트에 추가
 	var canvas_layer := CanvasLayer.new()
-	canvas_layer.layer = 100  # BattleContainer(10)보다 높게
-	add_child(canvas_layer)
+	canvas_layer.layer = 100
+	root.add_child(canvas_layer)
 
-	# 배경 패널 (반투명 검정)
+	# 배경 패널
 	var bg := PanelContainer.new()
 	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0, 0, 0, 0.85)
+	bg_style.bg_color = Color(0, 0, 0, 0.9)
 	bg_style.corner_radius_top_left = 8
 	bg_style.corner_radius_top_right = 8
 	bg_style.corner_radius_bottom_left = 8
@@ -770,41 +774,40 @@ func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner_vbox.add_child(sub_label)
 
-	# 전투창 중앙에 위치 계산 (call_deferred로 레이아웃 완료 후)
+	# 즉시 위치 설정 (레이아웃 계산 전이라 수동으로 크기 추정)
+	var estimated_width: float = 150.0
+	var estimated_height: float = 80.0
+	var window_center: Vector2 = global_position + size / 2
+	bg.position = window_center - Vector2(estimated_width, estimated_height) / 2
+
+	print("[BattleWindow] Initial popup position: ", bg.position)
+
+	# 애니메이션 (call_deferred로 실제 크기 반영)
 	_animate_popup.call_deferred(canvas_layer, bg)
 
 
 func _animate_popup(canvas_layer: CanvasLayer, bg: PanelContainer) -> void:
-	## 팝업 애니메이션 (레이아웃 완료 후 호출)
+	## 팝업 애니메이션
 	if not is_instance_valid(canvas_layer) or not is_instance_valid(bg):
 		return
 
+	# 실제 크기로 위치 재조정
 	var window_center: Vector2 = global_position + size / 2
 	var popup_size: Vector2 = bg.size
 	bg.position = window_center - popup_size / 2
-
-	# 스케일 중심점을 팝업 중앙으로 설정
 	bg.pivot_offset = popup_size / 2
 
-	print("[BattleWindow] popup position: ", bg.position, " size: ", popup_size)
+	print("[BattleWindow] Final popup position: ", bg.position, " size: ", popup_size)
 
-	bg.modulate.a = 0.0
-	bg.scale = Vector2(0.8, 0.8)
+	# 애니메이션 시작 (처음엔 보이게)
+	bg.modulate.a = 1.0
+	bg.scale = Vector2(1.0, 1.0)
 
-	# 페이드 인 + 스케일 업 → 유지 → 페이드 아웃
+	# 2초 후 페이드 아웃
 	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(bg, "modulate:a", 1.0, 0.15)
-	tween.tween_property(bg, "scale", Vector2(1.1, 1.1), 0.15).set_ease(Tween.EASE_OUT)
-
-	tween.chain().set_parallel(true)
-	tween.tween_property(bg, "scale", Vector2(1.0, 1.0), 0.1)
 	tween.tween_interval(2.0)
-
-	tween.chain().set_parallel(true)
 	tween.tween_property(bg, "modulate:a", 0.0, 0.4)
-
-	tween.chain().tween_callback(canvas_layer.queue_free)
+	tween.tween_callback(canvas_layer.queue_free)
 
 
 func _check_battle_end() -> bool:
