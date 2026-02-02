@@ -140,13 +140,17 @@ func _find_available_window() -> BattleWindow:
 		var battle_data: Dictionary = active_battles[battle_id]
 		if battle_data.get("is_boss", false):
 			continue
-		
-		var window: BattleWindow = battle_data.get("window")
-		if window and is_instance_valid(window):
+
+		var window_ref = battle_data.get("window")
+		if window_ref == null or not is_instance_valid(window_ref):
+			continue
+
+		var window: BattleWindow = window_ref as BattleWindow
+		if window:
 			# charm 효과로 인한 동적 최대 적 수 사용
 			if window.get_enemy_count() < window.get_max_enemies():
 				return window
-	
+
 	return null
 
 
@@ -154,16 +158,20 @@ func _get_oldest_non_boss_window() -> BattleWindow:
 	## 가장 먼저 생성된 비보스 전투창 반환
 	var oldest_id: int = -1
 	var oldest_window: BattleWindow = null
-	
+
 	for battle_id in active_battles:
 		var battle_data: Dictionary = active_battles[battle_id]
 		if battle_data.get("is_boss", false):
 			continue
-		
+
+		var window_ref = battle_data.get("window")
+		if window_ref == null or not is_instance_valid(window_ref):
+			continue
+
 		if oldest_id == -1 or battle_id < oldest_id:
 			oldest_id = battle_id
-			oldest_window = battle_data.get("window")
-	
+			oldest_window = window_ref as BattleWindow
+
 	return oldest_window
 
 
@@ -317,13 +325,13 @@ func _animate_window_appear(window: BattleWindow, target_pos: Vector2) -> void:
 func end_battle(battle_id: int, victory: bool) -> void:
 	if not active_battles.has(battle_id):
 		return
-	
+
 	var battle_data: Dictionary = active_battles[battle_id]
-	var window: BattleWindow = battle_data.get("window")
-	
-	if window and is_instance_valid(window):
-		window.queue_free()
-	
+	var window_ref = battle_data.get("window")
+
+	if window_ref != null and is_instance_valid(window_ref):
+		window_ref.queue_free()
+
 	active_battles.erase(battle_id)
 	battle_ended.emit(battle_id, victory)
 	
@@ -455,11 +463,10 @@ func _is_position_available(pos: Vector2) -> bool:
 	## 해당 위치에 다른 전투창이 없는지 확인
 	for bid in active_battles:
 		var battle_data: Dictionary = active_battles[bid]
-		if battle_data.has("window"):
-			var other_window = battle_data.get("window")
-			if is_instance_valid(other_window):
-				if pos.distance_to(other_window.position) < WINDOW_SIZE.x * 0.8:
-					return false
+		var window_ref = battle_data.get("window")
+		if window_ref != null and is_instance_valid(window_ref):
+			if pos.distance_to(window_ref.position) < WINDOW_SIZE.x * 0.8:
+				return false
 	return true
 #endregion
 
@@ -541,26 +548,26 @@ func force_end_all_non_boss() -> void:
 	for battle_id in active_battles:
 		if not active_battles[battle_id].get("is_boss", false):
 			to_remove.append(battle_id)
-	
+
 	for battle_id in to_remove:
 		var battle_data: Dictionary = active_battles.get(battle_id, {})
-		var window = battle_data.get("window")
-		if is_instance_valid(window):
-			window.queue_free()
+		var window_ref = battle_data.get("window")
+		if window_ref != null and is_instance_valid(window_ref):
+			window_ref.queue_free()
 		active_battles.erase(battle_id)
 		battle_ended.emit(battle_id, false)
 
 
 func close_all_battles() -> void:
 	var to_remove: Array = active_battles.keys().duplicate()
-	
+
 	for battle_id in to_remove:
 		var battle_data: Dictionary = active_battles.get(battle_id, {})
-		var window = battle_data.get("window")
-		if is_instance_valid(window):
-			window.queue_free()
+		var window_ref = battle_data.get("window")
+		if window_ref != null and is_instance_valid(window_ref):
+			window_ref.queue_free()
 		active_battles.erase(battle_id)
-	
+
 	_atb_active = false
 	hero_atb.clear()
 
