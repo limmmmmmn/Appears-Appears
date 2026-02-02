@@ -681,6 +681,12 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	drop_items.append_array(items)
 	_update_rewards_ui()
 
+	var idx := enemies.find(enemy)
+	if idx >= 0:
+		enemy_atb.erase(idx)
+
+	enemy.play_death_effect()
+
 
 func _show_danger_level_up_message(new_level: int) -> void:
 	## 위험도 상승 시 드라마틱 메시지 표시
@@ -704,12 +710,6 @@ func _show_danger_level_up_message(new_level: int) -> void:
 
 	# 화면 흔들림 효과
 	_shake_window()
-
-	var idx := enemies.find(enemy)
-	if idx >= 0:
-		enemy_atb.erase(idx)
-
-	enemy.play_death_effect()
 
 
 func _check_battle_end() -> bool:
