@@ -89,6 +89,9 @@ var border_style: StyleBoxFlat = null
 var border_pulse_time: float = 0.0
 
 # 위험도별 테두리 색상 (레벨 0~5+)
+# 위험도 레벨 설정
+const DANGER_LEVEL_INTERVAL: int = 5  # 킬카운트 N마다 위험도 1 증가
+
 const DANGER_BORDER_COLORS: Array = [
 	Color(0.3, 0.3, 0.3),      # 0: 회색 (기본)
 	Color(0.8, 0.7, 0.2),      # 1: 노란색
@@ -230,8 +233,8 @@ func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
 
 
 func get_local_danger_level() -> int:
-	## 이 전투창의 위험도 (킬카운트 / 10)
-	return kill_count / 10
+	## 이 전투창의 위험도 (킬카운트 / DANGER_LEVEL_INTERVAL)
+	return kill_count / DANGER_LEVEL_INTERVAL
 
 
 func _shake_window() -> void:
@@ -663,9 +666,11 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	# 원념 증가 (로컬만)
 	kill_count += 1
+	print("[BattleWindow] Enemy defeated! kill_count: ", kill_count)
 
 	# 위험도 레벨 변경 시 테두리 업데이트 + 드라마틱 메시지
 	var new_danger: int = get_local_danger_level()
+	print("[BattleWindow] new_danger: ", new_danger, " current danger_level: ", danger_level)
 	if new_danger > danger_level:
 		_show_danger_level_up_message(new_danger)
 		update_danger_level()
@@ -690,6 +695,8 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 func _show_danger_level_up_message(new_level: int) -> void:
 	## 위험도 상승 시 드라마틱 메시지 표시
+	print("[BattleWindow] 원념 레벨 업! Level: ", new_level, " Kill Count: ", kill_count)
+
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
 		"적들의 원념이 깨어나기 시작한다...",
@@ -705,6 +712,7 @@ func _show_danger_level_up_message(new_level: int) -> void:
 	# 로그에도 보내기
 	_send_log("━━━ 원념 %d단계 ━━━" % new_level, Color.ORANGE_RED)
 	_send_log(message, Color.ORANGE)
+	print("[BattleWindow] Log sent: ", message)
 
 	# 전투창 중앙에 큰 텍스트 표시
 	_show_popup_text("원념 %d단계" % new_level, message, DANGER_BORDER_COLORS[mini(new_level, DANGER_BORDER_COLORS.size() - 1)])
@@ -715,9 +723,16 @@ func _show_danger_level_up_message(new_level: int) -> void:
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	## 전투창 중앙에 팝업 텍스트 표시
+	print("[BattleWindow] _show_popup_text called: ", title, " - ", subtitle)
+	# BattleArea에 추가해서 정확히 전투 영역 중앙에 표시
+	var battle_area := get_node_or_null("MainVBox/BattleArea")
+	var popup_parent: Control = battle_area if battle_area else self
+	print("[BattleWindow] popup_parent: ", popup_parent.name if popup_parent else "null")
+
 	var popup := CenterContainer.new()
 	popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	popup.z_index = 100  # 최상위 렌더링
 
 	var vbox := VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -727,15 +742,15 @@ func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	# 배경 패널 (반투명 검정)
 	var bg := PanelContainer.new()
 	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0, 0, 0, 0.7)
+	bg_style.bg_color = Color(0, 0, 0, 0.85)
 	bg_style.corner_radius_top_left = 8
 	bg_style.corner_radius_top_right = 8
 	bg_style.corner_radius_bottom_left = 8
 	bg_style.corner_radius_bottom_right = 8
-	bg_style.content_margin_left = 16
-	bg_style.content_margin_right = 16
-	bg_style.content_margin_top = 8
-	bg_style.content_margin_bottom = 8
+	bg_style.content_margin_left = 20
+	bg_style.content_margin_right = 20
+	bg_style.content_margin_top = 12
+	bg_style.content_margin_bottom = 12
 	bg.add_theme_stylebox_override("panel", bg_style)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(bg)
@@ -747,25 +762,26 @@ func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	# 제목 라벨
 	var title_label := Label.new()
 	title_label.text = title
-	title_label.add_theme_font_size_override("font_size", 18)
+	title_label.add_theme_font_size_override("font_size", 20)
 	title_label.add_theme_color_override("font_color", color)
 	title_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	title_label.add_theme_constant_override("outline_size", 4)
+	title_label.add_theme_constant_override("outline_size", 5)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner_vbox.add_child(title_label)
 
 	# 부제목 라벨
 	var sub_label := Label.new()
 	sub_label.text = subtitle
-	sub_label.add_theme_font_size_override("font_size", 11)
+	sub_label.add_theme_font_size_override("font_size", 12)
 	sub_label.add_theme_color_override("font_color", Color.YELLOW)
 	sub_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	sub_label.add_theme_constant_override("outline_size", 2)
+	sub_label.add_theme_constant_override("outline_size", 3)
 	sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner_vbox.add_child(sub_label)
 
-	# 전투창에 추가
-	add_child(popup)
+	# BattleArea에 추가 (전투 영역 중앙에 표시)
+	popup_parent.add_child(popup)
+	popup_parent.move_child(popup, -1)  # 최상위로 이동
 	popup.modulate.a = 0.0
 	popup.scale = Vector2(0.8, 0.8)
 
