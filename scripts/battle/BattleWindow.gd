@@ -664,21 +664,46 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	# 원념 증가 (로컬만)
 	kill_count += 1
 
-	# 위험도 레벨 변경 시 테두리 업데이트
+	# 위험도 레벨 변경 시 테두리 업데이트 + 드라마틱 메시지
 	var new_danger: int = get_local_danger_level()
 	if new_danger > danger_level:
-		_send_log("원념 상승! 위험도 %d" % new_danger, Color.ORANGE_RED)
+		_show_danger_level_up_message(new_danger)
 		update_danger_level()
 
-	# 보상은 항상 전투창에 쌓임 (아직 파티가 획득하지 않음)
-	var exp_reward: int = enemy.exp_reward
-	var gold_reward: int = enemy.get_gold_reward()
+	# 보상 (위험도에 따라 증가)
+	var danger_reward_mult: float = 1.0 + (danger_level * 0.1)  # 위험도당 10% 보상 증가
+	var exp_reward: int = int(enemy.exp_reward * danger_reward_mult)
+	var gold_reward: int = int(enemy.get_gold_reward() * danger_reward_mult)
 	var items: Array = enemy.roll_drops()
 
 	total_exp += exp_reward
 	total_gold += gold_reward
 	drop_items.append_array(items)
 	_update_rewards_ui()
+
+
+func _show_danger_level_up_message(new_level: int) -> void:
+	## 위험도 상승 시 드라마틱 메시지 표시
+	var messages: Array[String] = [
+		"",  # 레벨 0 (사용 안함)
+		"적들의 원념이 깨어나기 시작한다...",
+		"원념이 짙어진다. 적들이 강해지고 있다!",
+		"분노한 영혼들이 적에게 힘을 불어넣는다!",
+		"원념이 폭발한다! 적들의 힘이 급격히 상승!",
+		"이곳은 죽음의 기운으로 가득 찼다..!",
+	]
+
+	var msg_idx: int = mini(new_level, messages.size() - 1)
+	var message: String = messages[msg_idx]
+
+	_send_log("", Color.WHITE)  # 빈 줄
+	_send_log("━━━ 원념 %d단계 ━━━" % new_level, Color.ORANGE_RED)
+	_send_log(message, Color.ORANGE)
+	_send_log("적이 강해집니다! 하지만 보상도 증가합니다.", Color.YELLOW)
+	_send_log("", Color.WHITE)  # 빈 줄
+
+	# 화면 흔들림 효과
+	_shake_window()
 
 	var idx := enemies.find(enemy)
 	if idx >= 0:
@@ -843,9 +868,18 @@ func _update_rewards_ui() -> void:
 	if exp_label:
 		exp_label.text = str(total_exp)
 	if loot_label:
-		loot_label.text = "x%d" % int(loot_multiplier)
+		# 루팅 배율 + 위험도 보너스 표시
+		var total_mult: float = loot_multiplier * (1.0 + danger_level * 0.1)
+		if danger_level > 0:
+			loot_label.text = "x%.1f" % total_mult
+		else:
+			loot_label.text = "x%d" % int(loot_multiplier)
 	if kill_count_label:
-		kill_count_label.text = str(kill_count)
+		# 킬카운트 + 위험도 레벨 표시
+		if danger_level > 0:
+			kill_count_label.text = "%d (Lv.%d)" % [kill_count, danger_level]
+		else:
+			kill_count_label.text = str(kill_count)
 
 
 func set_loot_multiplier(multiplier: float) -> void:
