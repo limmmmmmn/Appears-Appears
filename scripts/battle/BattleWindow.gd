@@ -144,7 +144,7 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	total_gold = 0
 	drop_items.clear()
 	kill_count = 0
-	window_mode = WindowMode.NORMAL
+	window_mode = WindowMode.HOLD  # 기본값: Hold 모드
 
 	# 루팅 배율 계산 (엘리트: x2, 보스: x4, 기본: x1)
 	if is_boss_battle:
@@ -159,7 +159,7 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 		run_button.disabled = is_boss_battle
 		run_button.visible = true
 	if hold_button:
-		hold_button.button_pressed = false
+		hold_button.button_pressed = true  # 기본값: Hold 활성화
 		hold_button.visible = true
 	if close_reserve_button:
 		close_reserve_button.button_pressed = false
@@ -715,51 +715,72 @@ func _show_danger_level_up_message(new_level: int) -> void:
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	## 전투창 중앙에 팝업 텍스트 표시
-	var popup := VBoxContainer.new()
-	popup.alignment = BoxContainer.ALIGNMENT_CENTER
+	var popup := CenterContainer.new()
+	popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	popup.add_child(vbox)
+
+	# 배경 패널 (반투명 검정)
+	var bg := PanelContainer.new()
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0, 0, 0, 0.7)
+	bg_style.corner_radius_top_left = 8
+	bg_style.corner_radius_top_right = 8
+	bg_style.corner_radius_bottom_left = 8
+	bg_style.corner_radius_bottom_right = 8
+	bg_style.content_margin_left = 16
+	bg_style.content_margin_right = 16
+	bg_style.content_margin_top = 8
+	bg_style.content_margin_bottom = 8
+	bg.add_theme_stylebox_override("panel", bg_style)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(bg)
+
+	var inner_vbox := VBoxContainer.new()
+	inner_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	bg.add_child(inner_vbox)
 
 	# 제목 라벨
 	var title_label := Label.new()
 	title_label.text = title
-	title_label.add_theme_font_size_override("font_size", 16)
+	title_label.add_theme_font_size_override("font_size", 18)
 	title_label.add_theme_color_override("font_color", color)
 	title_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	title_label.add_theme_constant_override("outline_size", 3)
+	title_label.add_theme_constant_override("outline_size", 4)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	popup.add_child(title_label)
+	inner_vbox.add_child(title_label)
 
 	# 부제목 라벨
 	var sub_label := Label.new()
 	sub_label.text = subtitle
-	sub_label.add_theme_font_size_override("font_size", 10)
+	sub_label.add_theme_font_size_override("font_size", 11)
 	sub_label.add_theme_color_override("font_color", Color.YELLOW)
 	sub_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	sub_label.add_theme_constant_override("outline_size", 2)
 	sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	popup.add_child(sub_label)
+	inner_vbox.add_child(sub_label)
 
 	# 전투창에 추가
 	add_child(popup)
-
-	# 중앙 배치
-	popup.position = size / 2 - Vector2(80, 30)
 	popup.modulate.a = 0.0
-	popup.scale = Vector2(0.5, 0.5)
+	popup.scale = Vector2(0.8, 0.8)
 
 	# 페이드 인 + 스케일 업 → 유지 → 페이드 아웃
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(popup, "modulate:a", 1.0, 0.2)
-	tween.tween_property(popup, "scale", Vector2(1.2, 1.2), 0.2).set_ease(Tween.EASE_OUT)
+	tween.tween_property(popup, "modulate:a", 1.0, 0.15)
+	tween.tween_property(popup, "scale", Vector2(1.1, 1.1), 0.15).set_ease(Tween.EASE_OUT)
 
 	tween.chain().set_parallel(true)
 	tween.tween_property(popup, "scale", Vector2(1.0, 1.0), 0.1)
-	tween.tween_interval(1.5)
+	tween.tween_interval(2.0)
 
 	tween.chain().set_parallel(true)
-	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
-	tween.tween_property(popup, "position:y", popup.position.y - 20, 0.5)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.4)
 
 	tween.chain().tween_callback(popup.queue_free)
 
