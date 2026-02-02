@@ -724,20 +724,12 @@ func _show_danger_level_up_message(new_level: int) -> void:
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	## 전투창 중앙에 팝업 텍스트 표시
 	print("[BattleWindow] _show_popup_text called: ", title, " - ", subtitle)
-	# BattleArea에 추가해서 정확히 전투 영역 중앙에 표시
-	var battle_area := get_node_or_null("MainVBox/BattleArea")
-	var popup_parent: Control = battle_area if battle_area else self
-	print("[BattleWindow] popup_parent: ", popup_parent.name if popup_parent else "null")
 
-	var popup := CenterContainer.new()
-	popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Control 노드를 top_level로 설정해서 부모 레이아웃 무시
+	var popup := Control.new()
+	popup.top_level = true  # 부모 레이아웃에서 독립
 	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	popup.z_index = 100  # 최상위 렌더링
-
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	popup.add_child(vbox)
+	popup.z_index = 100
 
 	# 배경 패널 (반투명 검정)
 	var bg := PanelContainer.new()
@@ -753,7 +745,7 @@ func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	bg_style.content_margin_bottom = 12
 	bg.add_theme_stylebox_override("panel", bg_style)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(bg)
+	popup.add_child(bg)
 
 	var inner_vbox := VBoxContainer.new()
 	inner_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -779,9 +771,28 @@ func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner_vbox.add_child(sub_label)
 
-	# BattleArea에 추가 (전투 영역 중앙에 표시)
-	popup_parent.add_child(popup)
-	popup_parent.move_child(popup, -1)  # 최상위로 이동
+	# BattleWindow에 추가
+	add_child(popup)
+
+	# 전투창 중앙에 위치 계산 (global_position 사용)
+	# call_deferred로 레이아웃 완료 후 애니메이션 시작
+	_animate_popup.call_deferred(popup, bg)
+
+
+func _animate_popup(popup: Control, bg: PanelContainer) -> void:
+	## 팝업 애니메이션 (레이아웃 완료 후 호출)
+	if not is_instance_valid(popup) or not is_instance_valid(bg):
+		return
+
+	var window_center: Vector2 = global_position + size / 2
+	var popup_size: Vector2 = bg.size
+	popup.global_position = window_center - popup_size / 2
+
+	# 스케일 중심점을 팝업 중앙으로 설정
+	popup.pivot_offset = popup_size / 2
+
+	print("[BattleWindow] popup position: ", popup.global_position, " size: ", popup_size)
+
 	popup.modulate.a = 0.0
 	popup.scale = Vector2(0.8, 0.8)
 
