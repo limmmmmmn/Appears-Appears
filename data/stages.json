@@ -23,8 +23,8 @@
 	  "name": "초원의 길",
 	  "description": "평화로워 보이지만 마물이 도사리는 초원",
 	  "terrain_enemies": {
-		"grass": { "slime": 50, "bat": 35, "goblin": 15 },
-		"forest": { "goblin": 45, "bat": 40, "slime": 15 }
+		"grass": { "slime": 70, "bat": 40, "goblin": 20 },
+		"forest": { "goblin": 35, "bat": 45, "slime": 50 }
 	  },
 	  "elite_pool": ["orc_warrior"],
 	  "boss_id": "boss_goblin_king",
@@ -66,8 +66,8 @@
 	  "name": "황폐한 폐광",
 	  "description": "버려진 광산에 언데드가 출몰한다",
 	  "terrain_enemies": {
-		"cave": { "skeleton": 45, "bat": 35, "goblin": 20 },
-		"stone": { "skeleton": 50, "slime": 30, "bat": 20 }
+		"cave": { "skeleton": 30, "bat": 50, "goblin": 35, "slime": 40 },
+		"stone": { "skeleton": 35, "slime": 50, "bat": 45 }
 	  },
 	  "elite_pool": ["orc_warrior"],
 	  "boss_id": "boss_goblin_king",
@@ -109,8 +109,8 @@
 	  "name": "마왕성",
 	  "description": "최후의 결전이 기다리는 어둠의 성",
 	  "terrain_enemies": {
-		"stone": { "skeleton": 40, "goblin": 35, "bat": 25 },
-		"cave": { "skeleton": 50, "bat": 30, "slime": 20 }
+		"stone": { "skeleton": 30, "goblin": 40, "bat": 45, "slime": 35 },
+		"cave": { "skeleton": 35, "bat": 50, "slime": 45 }
 	  },
 	  "elite_pool": ["orc_warrior"],
 	  "boss_id": "boss_goblin_king",

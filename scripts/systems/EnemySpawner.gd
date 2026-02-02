@@ -7,17 +7,17 @@ class_name EnemySpawner
 #=============================================================================
 # 스폰 설정
 #=============================================================================
-const MAX_ENEMIES: int = 12                        # 최대 동시 적 수
+const MAX_ENEMIES: int = 20                        # 최대 동시 적 수 (12→20)
 const MIN_SPAWN_DISTANCE_FROM_PLAYER: float = 100.0  # 플레이어로부터 최소 거리
 const MAX_SPAWN_DISTANCE_FROM_PLAYER: float = 250.0  # 플레이어로부터 최대 거리 (카메라 밖)
-const MIN_SPAWN_DISTANCE_BETWEEN: float = 32.0     # 적들 사이 최소 거리
+const MIN_SPAWN_DISTANCE_BETWEEN: float = 28.0     # 적들 사이 최소 거리 (32→28)
 const ELITE_SPAWN_CHANCE: float = 0.15
 const MAX_SPAWN_ATTEMPTS: int = 50
 
 # 이동 기반 스폰 설정
-const DISTANCE_PER_SPAWN: float = 60.0   # 이 거리 이동할 때마다 스폰 체크
-const SPAWN_CHANCE_PER_CHECK: float = 0.7  # 체크 시 스폰 확률 (70%)
-const INITIAL_ENEMY_COUNT: int = 3       # 시작 시 적 수
+const DISTANCE_PER_SPAWN: float = 40.0   # 이 거리 이동할 때마다 스폰 체크 (60→40)
+const SPAWN_CHANCE_PER_CHECK: float = 0.8  # 체크 시 스폰 확률 (70%→80%)
+const INITIAL_ENEMY_COUNT: int = 5       # 시작 시 적 수 (3→5)
 
 var tile_type_map: Dictionary = {
 	0: "grass",
