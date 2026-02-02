@@ -693,23 +693,75 @@ func _show_danger_level_up_message(new_level: int) -> void:
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
 		"적들의 원념이 깨어나기 시작한다...",
-		"원념이 짙어진다. 적들이 강해지고 있다!",
-		"분노한 영혼들이 적에게 힘을 불어넣는다!",
-		"원념이 폭발한다! 적들의 힘이 급격히 상승!",
-		"이곳은 죽음의 기운으로 가득 찼다..!",
+		"원념이 짙어진다!",
+		"분노한 영혼들이 힘을 불어넣는다!",
+		"원념이 폭발한다!",
+		"죽음의 기운으로 가득 찼다!",
 	]
 
 	var msg_idx: int = mini(new_level, messages.size() - 1)
 	var message: String = messages[msg_idx]
 
-	_send_log("", Color.WHITE)  # 빈 줄
+	# 로그에도 보내기
 	_send_log("━━━ 원념 %d단계 ━━━" % new_level, Color.ORANGE_RED)
 	_send_log(message, Color.ORANGE)
-	_send_log("적이 강해집니다! 하지만 보상도 증가합니다.", Color.YELLOW)
-	_send_log("", Color.WHITE)  # 빈 줄
+
+	# 전투창 중앙에 큰 텍스트 표시
+	_show_popup_text("원념 %d단계" % new_level, message, DANGER_BORDER_COLORS[mini(new_level, DANGER_BORDER_COLORS.size() - 1)])
 
 	# 화면 흔들림 효과
 	_shake_window()
+
+
+func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
+	## 전투창 중앙에 팝업 텍스트 표시
+	var popup := VBoxContainer.new()
+	popup.alignment = BoxContainer.ALIGNMENT_CENTER
+	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# 제목 라벨
+	var title_label := Label.new()
+	title_label.text = title
+	title_label.add_theme_font_size_override("font_size", 16)
+	title_label.add_theme_color_override("font_color", color)
+	title_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	title_label.add_theme_constant_override("outline_size", 3)
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.add_child(title_label)
+
+	# 부제목 라벨
+	var sub_label := Label.new()
+	sub_label.text = subtitle
+	sub_label.add_theme_font_size_override("font_size", 10)
+	sub_label.add_theme_color_override("font_color", Color.YELLOW)
+	sub_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	sub_label.add_theme_constant_override("outline_size", 2)
+	sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	popup.add_child(sub_label)
+
+	# 전투창에 추가
+	add_child(popup)
+
+	# 중앙 배치
+	popup.position = size / 2 - Vector2(80, 30)
+	popup.modulate.a = 0.0
+	popup.scale = Vector2(0.5, 0.5)
+
+	# 페이드 인 + 스케일 업 → 유지 → 페이드 아웃
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(popup, "modulate:a", 1.0, 0.2)
+	tween.tween_property(popup, "scale", Vector2(1.2, 1.2), 0.2).set_ease(Tween.EASE_OUT)
+
+	tween.chain().set_parallel(true)
+	tween.tween_property(popup, "scale", Vector2(1.0, 1.0), 0.1)
+	tween.tween_interval(1.5)
+
+	tween.chain().set_parallel(true)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.5)
+	tween.tween_property(popup, "position:y", popup.position.y - 20, 0.5)
+
+	tween.chain().tween_callback(popup.queue_free)
 
 
 func _check_battle_end() -> bool:
