@@ -39,15 +39,15 @@ var is_elite_version: bool = false  # 엘리트 버전 여부
 func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	enemy_id = p_enemy_id
 	is_elite_version = p_is_elite
-	
+
 	var data: Dictionary = DataManager.get_enemy(enemy_id)
 	if data.is_empty():
 		push_error("[BattleEnemy] 데이터 없음: " + enemy_id)
 		return
-	
+
 	enemy_name = str(data.get("name", enemy_id))
 	enemy_type = str(data.get("type", "normal"))
-	
+
 	# 기본 스탯
 	var stats: Dictionary = data.get("stats", {})
 	max_hp = int(stats.get("hp", 10))
@@ -56,7 +56,14 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	base_int = int(stats.get("int", 1))
 	base_spd = int(stats.get("spd", 5))
 	base_luk = int(stats.get("luk", 2))
-	
+
+	# 원념(위험도)에 따른 스탯 스케일링
+	var stat_mult: float = BattleManager.get_enemy_stat_multiplier()
+	if stat_mult > 1.0:
+		max_hp = int(max_hp * stat_mult)
+		base_str = int(base_str * stat_mult)
+		base_def = int(base_def * stat_mult)
+
 	# 엘리트 버전이면 스탯 강화!
 	if is_elite_version:
 		enemy_name = "⭐ " + enemy_name
@@ -64,7 +71,7 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 		max_hp = int(max_hp * 2.0)  # HP 2배
 		base_str = int(base_str * 1.5)  # 공격력 1.5배
 		base_def = int(base_def * 1.5)  # 방어력 1.5배
-	
+
 	current_hp = max_hp
 	
 	# 보상 (엘리트는 2배)

@@ -83,6 +83,21 @@ const COLOR_PALETTES: Array = [
 const EFFECT_CHANGE_INTERVAL: float = 4.0
 var effect_timer: float = 0.0
 
+# === 위험도 테두리 효과 ===
+var danger_level: int = 0
+var border_style: StyleBoxFlat = null
+var border_pulse_time: float = 0.0
+
+# 위험도별 테두리 색상 (레벨 0~5+)
+const DANGER_BORDER_COLORS: Array = [
+	Color(0.3, 0.3, 0.3),      # 0: 회색 (기본)
+	Color(0.8, 0.7, 0.2),      # 1: 노란색
+	Color(1.0, 0.5, 0.1),      # 2: 주황색
+	Color(1.0, 0.2, 0.2),      # 3: 빨간색
+	Color(0.8, 0.1, 0.3),      # 4: 진홍색
+	Color(0.6, 0.0, 0.6),      # 5+: 보라색 (최고 위험)
+]
+
 
 func _ready() -> void:
 	visible = false
@@ -100,6 +115,9 @@ func _ready() -> void:
 	# 배경 셰이더 설정
 	_setup_background_shader()
 
+	# 위험도 테두리 설정
+	_setup_danger_border()
+
 	# 보상 UI 초기화
 	_update_rewards_ui()
 
@@ -107,10 +125,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if current_state != BattleState.RUNNING:
 		return
-	
+
 	_update_hero_atb(delta)
 	_update_enemy_atb(delta)
 	_update_background_effect(delta)
+	_update_danger_border_pulse(delta)
 
 
 #region 전투 초기화 (새 시스템)
@@ -162,6 +181,9 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 	# 배경 효과 초기화 (한 번만)
 	_init_background_effect()
+
+	# 위험도 테두리 초기화
+	_setup_danger_border()
 
 	await get_tree().create_timer(0.3).timeout
 	_start_battle()
@@ -633,8 +655,15 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
-	# 원념 증가
+	# 원념 증가 (로컬 + 글로벌)
 	kill_count += 1
+	BattleManager.add_global_kill_count(1)
+
+	# 위험도 레벨 변경 시 테두리 업데이트
+	var new_danger: int = BattleManager.get_danger_level()
+	if new_danger > danger_level:
+		_send_log("원념 상승! 위험도 %d" % new_danger, Color.ORANGE_RED)
+		update_danger_level()
 
 	# 보상은 항상 전투창에 쌓임 (아직 파티가 획득하지 않음)
 	var exp_reward: int = enemy.exp_reward
@@ -1021,11 +1050,11 @@ func play_aoe_flash() -> void:
 	if background:
 		var original_color: Color = background.color
 		var original_material = background.material
-		
+
 		# 흰색 플래시
 		background.material = null
 		background.color = Color.WHITE
-		
+
 		# 0.1초 후 원래대로
 		var tween := create_tween()
 		tween.tween_interval(0.1)
@@ -1036,4 +1065,68 @@ func play_aoe_flash() -> void:
 			else:
 				background.color = original_color
 		)
+#endregion
+
+
+#region 위험도 테두리 효과
+func _setup_danger_border() -> void:
+	## 위험도에 따른 테두리 스타일 설정
+	danger_level = BattleManager.get_danger_level()
+
+	# StyleBoxFlat 생성
+	border_style = StyleBoxFlat.new()
+	border_style.bg_color = Color(0.1, 0.1, 0.1, 0.95)
+
+	# 테두리 두께 설정 (위험도에 따라 증가)
+	var border_width: int = 2 + mini(danger_level, 4)
+	border_style.border_width_left = border_width
+	border_style.border_width_top = border_width
+	border_style.border_width_right = border_width
+	border_style.border_width_bottom = border_width
+
+	# 테두리 색상 설정
+	var color_idx: int = mini(danger_level, DANGER_BORDER_COLORS.size() - 1)
+	var border_color: Color = DANGER_BORDER_COLORS[color_idx]
+	border_style.border_color = border_color
+
+	# 코너 라운드
+	border_style.corner_radius_top_left = 4
+	border_style.corner_radius_top_right = 4
+	border_style.corner_radius_bottom_left = 4
+	border_style.corner_radius_bottom_right = 4
+
+	# 스타일 적용
+	add_theme_stylebox_override("panel", border_style)
+
+
+func _update_danger_border_pulse(delta: float) -> void:
+	## 높은 위험도에서 테두리 펄스 효과
+	if danger_level < 2 or border_style == null:
+		return
+
+	border_pulse_time += delta * BattleManager.get_battle_speed()
+
+	# 펄스 속도는 위험도에 따라 증가
+	var pulse_speed: float = 2.0 + (danger_level * 0.5)
+	var pulse: float = (sin(border_pulse_time * pulse_speed) + 1.0) / 2.0
+
+	# 테두리 색상 펄스
+	var color_idx: int = mini(danger_level, DANGER_BORDER_COLORS.size() - 1)
+	var base_color: Color = DANGER_BORDER_COLORS[color_idx]
+	var bright_color: Color = base_color.lightened(0.3 + (danger_level * 0.05))
+
+	border_style.border_color = base_color.lerp(bright_color, pulse)
+
+	# 높은 위험도(4+)에서는 배경도 살짝 붉게
+	if danger_level >= 4 and background:
+		var bg_tint: float = pulse * 0.1
+		modulate = Color(1.0 + bg_tint, 1.0 - bg_tint * 0.5, 1.0 - bg_tint * 0.5)
+
+
+func update_danger_level() -> void:
+	## 위험도 레벨 업데이트 (외부에서 호출 가능)
+	var new_level: int = BattleManager.get_danger_level()
+	if new_level != danger_level:
+		danger_level = new_level
+		_setup_danger_border()
 #endregion

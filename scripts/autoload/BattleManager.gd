@@ -17,10 +17,16 @@ signal hero_atb_changed(hero_id: String, value: float)
 signal battle_speed_changed(speed: float)
 signal hero_attacked(hero_id: String)
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
+signal global_kill_count_changed(count: int, danger_level: int)
 
 # === 전투창 증식 시스템 설정 ===
 const MAX_ENEMIES_PER_WINDOW: int = 3  # 전투창 하나당 최대 적 수
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
+
+# === 글로벌 킬카운트 (원념) 시스템 ===
+var global_kill_count: int = 0  # 전체 적 처치 횟수
+const DANGER_LEVEL_INTERVAL: int = 10  # 위험도 1레벨당 킬 수
+const STAT_SCALE_PER_LEVEL: float = 0.05  # 위험도 1레벨당 스탯 증가율 (5%)
 
 # === 창 생성 효과 (비워둠) ===
 signal window_created(window_count: int)      # 새 전투창 생성 시
@@ -471,6 +477,35 @@ func get_extra_enemy_slots() -> int:
 func get_max_enemies_per_window() -> int:
 	## 전투창당 최대 적 수 반환 (기본값 + charm 효과)
 	return MAX_ENEMIES_PER_WINDOW + extra_enemy_slots
+#endregion
+
+
+#region 글로벌 킬카운트 (원념) 시스템
+func add_global_kill_count(amount: int = 1) -> void:
+	## 글로벌 킬카운트 증가
+	global_kill_count += amount
+	global_kill_count_changed.emit(global_kill_count, get_danger_level())
+
+
+func get_global_kill_count() -> int:
+	return global_kill_count
+
+
+func get_danger_level() -> int:
+	## 위험도 레벨 반환 (킬카운트 / 10)
+	return global_kill_count / DANGER_LEVEL_INTERVAL
+
+
+func get_enemy_stat_multiplier() -> float:
+	## 위험도에 따른 적 스탯 배율 반환
+	var danger_level := get_danger_level()
+	return 1.0 + (danger_level * STAT_SCALE_PER_LEVEL)
+
+
+func reset_global_kill_count() -> void:
+	## 킬카운트 초기화 (새 게임 시작 시)
+	global_kill_count = 0
+	global_kill_count_changed.emit(0, 0)
 #endregion
 
 
