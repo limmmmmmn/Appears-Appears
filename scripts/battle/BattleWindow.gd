@@ -43,8 +43,7 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
 @onready var run_button: Button = %RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
-@onready var hold_button: Button = %HoldButton
-@onready var close_reserve_button: Button = %CloseReserveButton
+@onready var hold_toggle: CheckButton = %HoldToggle
 
 # === 보상 UI 참조 ===
 @onready var gold_label: Label = %GoldLabel
@@ -110,10 +109,8 @@ func _ready() -> void:
 		run_button.pressed.connect(_on_run_pressed)
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
-	if hold_button:
-		hold_button.toggled.connect(_on_hold_toggled)
-	if close_reserve_button:
-		close_reserve_button.toggled.connect(_on_close_reserve_toggled)
+	if hold_toggle:
+		hold_toggle.toggled.connect(_on_hold_toggled)
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
@@ -161,12 +158,8 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	if run_button:
 		run_button.disabled = is_boss_battle
 		run_button.visible = true
-	if hold_button:
-		hold_button.button_pressed = true  # 기본값: Hold 활성화
-		hold_button.visible = true
-	if close_reserve_button:
-		close_reserve_button.button_pressed = false
-		close_reserve_button.visible = true
+	if hold_toggle:
+		hold_toggle.button_pressed = true  # 기본값: 유지 ON
 
 	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
@@ -856,10 +849,8 @@ func _end_battle_victory() -> void:
 	call_deferred("_emit_party_updated")
 
 	# 버튼 상태 업데이트
-	if hold_button:
-		hold_button.visible = false
-	if close_reserve_button:
-		close_reserve_button.visible = false
+	if hold_toggle:
+		hold_toggle.visible = false
 	if run_button:
 		run_button.visible = false
 	if close_button:
@@ -911,10 +902,8 @@ func _end_battle_defeat() -> void:
 	_send_log("전멸...", Color.DARK_RED)
 
 	# 버튼 상태 업데이트
-	if hold_button:
-		hold_button.visible = false
-	if close_reserve_button:
-		close_reserve_button.visible = false
+	if hold_toggle:
+		hold_toggle.visible = false
 	if run_button:
 		run_button.visible = false
 	if close_button:
@@ -935,8 +924,8 @@ func _on_run_pressed() -> void:
 		return
 
 	run_button.disabled = true
-	hold_button.disabled = true
-	close_reserve_button.disabled = true
+	if hold_toggle:
+		hold_toggle.disabled = true
 
 	# 즉시 도주 (확률 판정 없음, 대신 50% 보상만)
 	_run_with_partial_rewards()
@@ -1007,34 +996,14 @@ func get_max_enemies() -> int:
 
 #region 전투창 모드 시스템
 func _on_hold_toggled(button_pressed: bool) -> void:
-	## Hold 모드 토글: 보상 계속 쌓기 + 적 다 죽어도 창 유지 (보상 획득 지연)
+	## 유지 토글: ON이면 적이 없어도 전투창 유지, OFF면 자동 종료
 	if button_pressed:
 		window_mode = WindowMode.HOLD
-		if close_reserve_button:
-			close_reserve_button.button_pressed = false
-		_send_log("Hold: 전투창 유지 (보상 지연)", Color.ORANGE)
 	else:
 		window_mode = WindowMode.NORMAL
-		_send_log("Hold 해제", Color.GREEN)
-		# Hold 해제 시 적이 없으면 바로 승리 처리
+		# 유지 해제 시 적이 없으면 바로 승리 처리 (보상 100%)
 		if not has_alive_enemies():
 			_end_battle_victory()
-
-
-func _on_close_reserve_toggled(button_pressed: bool) -> void:
-	## Close 모드 토글: 적이 사라지면 자동 닫기 예약
-	if button_pressed:
-		window_mode = WindowMode.CLOSE_RESERVED
-		if hold_button:
-			hold_button.button_pressed = false
-		_send_log("Close: 적 소멸 시 보상 획득", Color.YELLOW)
-
-		# 이미 적이 없으면 바로 닫기
-		if not has_alive_enemies():
-			_close_with_rewards()
-	else:
-		window_mode = WindowMode.NORMAL
-		_send_log("Close 예약 해제", Color.GRAY)
 
 
 func _close_with_rewards() -> void:
