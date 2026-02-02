@@ -36,7 +36,7 @@ var original_modulate: Color = Color.WHITE
 
 var is_elite_version: bool = false  # 엘리트 버전 여부
 
-func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
+func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0) -> void:
 	enemy_id = p_enemy_id
 	is_elite_version = p_is_elite
 
@@ -57,9 +57,9 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	base_spd = int(stats.get("spd", 5))
 	base_luk = int(stats.get("luk", 2))
 
-	# 원념(위험도)에 따른 스탯 스케일링
-	var stat_mult: float = BattleManager.get_enemy_stat_multiplier()
-	if stat_mult > 1.0:
+	# 전투창별 위험도에 따른 스탯 스케일링 (레벨당 5%)
+	if p_danger_level > 0:
+		var stat_mult: float = 1.0 + (p_danger_level * 0.05)
 		max_hp = int(max_hp * stat_mult)
 		base_str = int(base_str * stat_mult)
 		base_def = int(base_def * stat_mult)

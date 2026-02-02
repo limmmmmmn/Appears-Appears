@@ -221,11 +221,17 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
 	var battle_enemy: BattleEnemy = BATTLE_ENEMY_SCENE.instantiate()
 	enemy_container.add_child(battle_enemy)
-	battle_enemy.setup(enemy_id, make_elite)
+	# 전투창별 위험도를 적에게 전달
+	battle_enemy.setup(enemy_id, make_elite, get_local_danger_level())
 	enemies.append(battle_enemy)
-	
+
 	var idx: int = enemies.size() - 1
 	enemy_atb[idx] = randf() * 0.6
+
+
+func get_local_danger_level() -> int:
+	## 이 전투창의 위험도 (킬카운트 / 10)
+	return kill_count / 10
 
 
 func _shake_window() -> void:
@@ -655,12 +661,11 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
-	# 원념 증가 (로컬 + 글로벌)
+	# 원념 증가 (로컬만)
 	kill_count += 1
-	BattleManager.add_global_kill_count(1)
 
 	# 위험도 레벨 변경 시 테두리 업데이트
-	var new_danger: int = BattleManager.get_danger_level()
+	var new_danger: int = get_local_danger_level()
 	if new_danger > danger_level:
 		_send_log("원념 상승! 위험도 %d" % new_danger, Color.ORANGE_RED)
 		update_danger_level()
@@ -1070,8 +1075,8 @@ func play_aoe_flash() -> void:
 
 #region 위험도 테두리 효과
 func _setup_danger_border() -> void:
-	## 위험도에 따른 테두리 스타일 설정
-	danger_level = BattleManager.get_danger_level()
+	## 위험도에 따른 테두리 스타일 설정 (전투창별 로컬)
+	danger_level = get_local_danger_level()
 
 	# StyleBoxFlat 생성
 	border_style = StyleBoxFlat.new()
@@ -1124,8 +1129,8 @@ func _update_danger_border_pulse(delta: float) -> void:
 
 
 func update_danger_level() -> void:
-	## 위험도 레벨 업데이트 (외부에서 호출 가능)
-	var new_level: int = BattleManager.get_danger_level()
+	## 위험도 레벨 업데이트 (전투창별 로컬)
+	var new_level: int = get_local_danger_level()
 	if new_level != danger_level:
 		danger_level = new_level
 		_setup_danger_border()
