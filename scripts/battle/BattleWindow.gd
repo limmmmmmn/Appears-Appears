@@ -43,7 +43,10 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
 @onready var run_button: Button = %RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
-@onready var hold_toggle: CheckButton = %HoldToggle
+@onready var battle_area: PanelContainer = $MainVBox/BattleArea
+
+# === 동적 생성 UI ===
+var claim_reward_button: Button = null
 
 # === 보상 UI 참조 ===
 @onready var gold_label: Label = %GoldLabel
@@ -109,8 +112,6 @@ func _ready() -> void:
 		run_button.pressed.connect(_on_run_pressed)
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
-	if hold_toggle:
-		hold_toggle.toggled.connect(_on_hold_toggled)
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
@@ -158,8 +159,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	if run_button:
 		run_button.disabled = is_boss_battle
 		run_button.visible = true
-	if hold_toggle:
-		hold_toggle.button_pressed = true  # 기본값: 유지 ON
 
 	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
@@ -186,10 +185,8 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 
 func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
-	# Hold 모드에서는 VICTORY 상태에서도 적 추가 가능
+	# 패배 상태에서는 적 추가 불가
 	if current_state == BattleState.DEFEAT:
-		return
-	if current_state == BattleState.VICTORY and window_mode != WindowMode.HOLD:
 		return
 
 	enemy_data_list.append(enemy_id)
@@ -205,13 +202,31 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	var idx: int = enemies.size() - 1
 	enemy_atb[idx] = randf() * 0.3
 
-	# Hold 모드에서 적이 추가되면 전투 재개
-	if window_mode == WindowMode.HOLD and current_state == BattleState.VICTORY:
+	# 적이 추가되면 전투 재개
+	if current_state == BattleState.VICTORY:
 		current_state = BattleState.RUNNING
 		set_process(true)
 		_send_log("전투 재개!", Color.GREEN)
+		_hide_claim_reward_button()
+		_update_buttons_for_enemies()
 
 	_shake_window()
+
+
+func _hide_claim_reward_button() -> void:
+	## 보상 받기 버튼 제거
+	if claim_reward_button != null and is_instance_valid(claim_reward_button):
+		var parent = claim_reward_button.get_parent()
+		if parent:
+			parent.queue_free()  # CenterContainer도 함께 제거
+		claim_reward_button = null
+
+
+func _update_buttons_for_enemies() -> void:
+	## 적이 있을 때 버튼 상태 업데이트
+	if run_button:
+		run_button.disabled = is_boss_battle
+		run_button.tooltip_text = "즉시 도주 (보상 50%)"
 
 
 func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
@@ -812,22 +827,82 @@ func _check_battle_end() -> bool:
 	var alive_heroes := PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
-		# Hold 모드: 적이 죽어도 창 유지 (보상 획득 지연)
-		if window_mode == WindowMode.HOLD:
-			set_process(false)  # 전투 멈춤
-			current_state = BattleState.VICTORY
-			_send_log("모든 적 처치! (보상 대기 중...)", Color.YELLOW)
-			return false
-
-		# Close 모드 또는 일반 모드: 보상 획득 + 창 닫기
-		_end_battle_victory()
-		return true
+		# 적이 없으면 도주 버튼 비활성화 + 보상 받기 버튼 표시
+		set_process(false)
+		current_state = BattleState.VICTORY
+		_update_buttons_for_no_enemies()
+		_show_claim_reward_button()
+		return false
 
 	if alive_heroes.is_empty():
 		_end_battle_defeat()
 		return true
 
 	return false
+
+
+func _update_buttons_for_no_enemies() -> void:
+	## 적이 없을 때 버튼 상태 업데이트
+	if run_button:
+		run_button.disabled = true
+		run_button.tooltip_text = "적이 없습니다"
+
+
+func _show_claim_reward_button() -> void:
+	## 보상 받기 버튼을 전투 영역 중앙에 표시
+	if claim_reward_button != null:
+		return  # 이미 생성됨
+
+	claim_reward_button = Button.new()
+	claim_reward_button.text = "보상 받기"
+	claim_reward_button.custom_minimum_size = Vector2(100, 36)
+	claim_reward_button.pressed.connect(_on_claim_reward_pressed)
+
+	# 스타일 설정
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.2, 0.6, 0.3, 0.95)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.4, 0.8, 0.5)
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	claim_reward_button.add_theme_stylebox_override("normal", style)
+
+	var hover_style := style.duplicate()
+	hover_style.bg_color = Color(0.3, 0.7, 0.4, 0.95)
+	claim_reward_button.add_theme_stylebox_override("hover", hover_style)
+
+	claim_reward_button.add_theme_font_size_override("font_size", 14)
+
+	# CenterContainer로 중앙 배치
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(claim_reward_button)
+
+	if battle_area:
+		battle_area.add_child(center)
+
+	# 등장 애니메이션
+	claim_reward_button.modulate.a = 0.0
+	claim_reward_button.scale = Vector2(0.8, 0.8)
+	claim_reward_button.pivot_offset = claim_reward_button.size / 2
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(claim_reward_button, "modulate:a", 1.0, 0.2)
+	tween.tween_property(claim_reward_button, "scale", Vector2(1.0, 1.0), 0.2).set_ease(Tween.EASE_OUT)
+
+
+func _on_claim_reward_pressed() -> void:
+	## 보상 받기 버튼 클릭
+	if claim_reward_button:
+		claim_reward_button.disabled = true
+	_end_battle_victory()
 
 
 func _end_battle_victory() -> void:
@@ -848,15 +923,19 @@ func _end_battle_victory() -> void:
 
 	call_deferred("_emit_party_updated")
 
-	# 버튼 상태 업데이트
-	if hold_toggle:
-		hold_toggle.visible = false
-	if run_button:
-		run_button.visible = false
-	if close_button:
-		close_button.visible = true
-
 	battle_ended.emit(battle_id, true)
+
+	# 닫힘 이펙트와 함께 창 닫기
+	_play_close_effect()
+
+
+func _play_close_effect() -> void:
+	## 전투창 닫힘 이펙트
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "modulate:a", 0.0, 0.3).set_ease(Tween.EASE_IN)
+	tween.tween_property(self, "scale", Vector2(0.8, 0.8), 0.3).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(queue_free)
 
 
 func _start_loot_animations() -> void:
@@ -901,15 +980,10 @@ func _end_battle_defeat() -> void:
 
 	_send_log("전멸...", Color.DARK_RED)
 
-	# 버튼 상태 업데이트
-	if hold_toggle:
-		hold_toggle.visible = false
-	if run_button:
-		run_button.visible = false
-	if close_button:
-		close_button.visible = true
-
 	battle_ended.emit(battle_id, false)
+
+	# 패배 시에도 닫힘 이펙트
+	_play_close_effect()
 #endregion
 
 
@@ -924,8 +998,6 @@ func _on_run_pressed() -> void:
 		return
 
 	run_button.disabled = true
-	if hold_toggle:
-		hold_toggle.disabled = true
 
 	# 즉시 도주 (확률 판정 없음, 대신 50% 보상만)
 	_run_with_partial_rewards()
@@ -995,17 +1067,6 @@ func get_max_enemies() -> int:
 
 
 #region 전투창 모드 시스템
-func _on_hold_toggled(button_pressed: bool) -> void:
-	## 유지 토글: ON이면 적이 없어도 전투창 유지, OFF면 자동 종료
-	if button_pressed:
-		window_mode = WindowMode.HOLD
-	else:
-		window_mode = WindowMode.NORMAL
-		# 유지 해제 시 적이 없으면 바로 승리 처리 (보상 100%)
-		if not has_alive_enemies():
-			_end_battle_victory()
-
-
 func _close_with_rewards() -> void:
 	## 현재까지 쌓인 보상을 받고 창 닫기
 	if total_exp > 0 or total_gold > 0:
