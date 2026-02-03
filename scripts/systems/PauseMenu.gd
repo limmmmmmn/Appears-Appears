@@ -613,7 +613,8 @@ func _show_equipment_popup(hero: Hero, slot: String) -> void:
 	scroll.add_child(items_vbox)
 
 	var inventory: Dictionary = InventoryManager.items if InventoryManager else {}
-	var slot_type := {"main_hand": "weapon", "off_hand": "shield", "head": "head", "body": "body", "acc1": "accessory", "acc2": "accessory"}.get(slot, "")
+	var slot_type_map: Dictionary = {"main_hand": "weapon", "off_hand": "shield", "head": "head", "body": "body", "acc1": "accessory", "acc2": "accessory"}
+	var slot_type: String = slot_type_map.get(slot, "")
 
 	for item_id in inventory:
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
