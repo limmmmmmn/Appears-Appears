@@ -41,8 +41,19 @@ const CLASS_PATTERNS := {
 }
 const DEFAULT_PATTERN := [1, 0, 1, 0]        # 기본 패턴
 
+# 클래스별 엇박 오프셋 (초 단위) - 용사만 정박, 나머지는 살짝 엇박
+const CLASS_OFFBEAT := {
+	"warrior": 0.0,    # 정박
+	"mage": 0.12,      # 살짝 느림
+	"thief": 0.08,     # 약간 느림
+	"cleric": 0.15,    # 조금 느림
+	"archer": 0.06,    # 미세하게 느림
+	"knight": 0.10,    # 약간 느림
+}
+
 # 영웅별 비트 인덱스 추적
 var hero_beat_index: Dictionary = {}
+var hero_pending_action: Dictionary = {}  # 엇박 대기 중인 액션 {hero_id: {action, skill_id, timer}}
 
 # 적 비트 시스템 (2비트마다 공격)
 var enemy_beat_offset: Dictionary = {}  # 적별 시작 오프셋 (0 또는 1)
@@ -314,6 +325,7 @@ func _init_beat_system() -> void:
 	beat_timer = 0.0
 	current_beat = 0
 	hero_beat_index.clear()
+	hero_pending_action.clear()
 	enemy_beat_offset.clear()
 
 	# 영웅별 비트 인덱스 초기화
@@ -339,10 +351,35 @@ func _update_beat_system(delta: float) -> void:
 	var speed_delta: float = delta * BattleManager.get_battle_speed()
 	beat_timer += speed_delta
 
+	# 엇박 대기 중인 액션 처리
+	_update_pending_actions(speed_delta)
+
 	# 비트 발생 체크
 	if beat_timer >= BEAT_INTERVAL:
 		beat_timer -= BEAT_INTERVAL
 		_on_beat_occurred()
+
+
+func _update_pending_actions(delta: float) -> void:
+	## 엇박 타이밍으로 대기 중인 액션 처리
+	var to_execute: Array = []
+
+	for hero_id in hero_pending_action.keys():
+		var pending: Dictionary = hero_pending_action[hero_id]
+		pending["timer"] -= delta
+
+		if pending["timer"] <= 0:
+			to_execute.append(hero_id)
+
+	for hero_id in to_execute:
+		var pending: Dictionary = hero_pending_action[hero_id]
+		var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+		if hero and not hero.is_dead:
+			_hero_attack(hero, pending["skill_id"])
+		hero_pending_action.erase(hero_id)
+
+		if _check_battle_end():
+			return
 
 
 func _on_beat_occurred() -> void:
@@ -353,13 +390,15 @@ func _on_beat_occurred() -> void:
 	# 비트 시각 효과
 	_play_beat_effect()
 
-	# 영웅 행동 처리
+	# 영웅 행동 처리 (용사는 즉시, 나머지는 엇박으로 지연)
 	for hero in PartyManager.get_alive_heroes():
 		if hero.is_dead:
 			continue
 		_process_hero_beat(hero)
-		if _check_battle_end():
-			return
+
+	# 용사 공격 후 전투 종료 체크
+	if _check_battle_end():
+		return
 
 	# 적 행동 처리 (2비트마다)
 	for i in range(enemies.size()):
@@ -383,13 +422,27 @@ func _process_hero_beat(hero: Hero) -> void:
 	# 다음 비트로 이동
 	hero_beat_index[hero.id] = (beat_idx + 1) % pattern.size()
 
-	# 행동 실행
+	# 행동 없음
 	if action == 0:
-		return  # 대기
-	elif action == 1:
-		_hero_attack(hero, "basic_attack")
-	elif action >= 2:
-		_hero_attack(hero, _get_hero_skill(hero, action))
+		return
+
+	# 스킬 ID 결정
+	var skill_id: String = "basic_attack"
+	if action >= 2:
+		skill_id = _get_hero_skill(hero, action)
+
+	# 엇박 오프셋 적용
+	var offbeat: float = CLASS_OFFBEAT.get(hero.class_id, 0.0)
+
+	if offbeat <= 0.0:
+		# 정박 (용사) - 즉시 실행
+		_hero_attack(hero, skill_id)
+	else:
+		# 엇박 - 지연 실행
+		hero_pending_action[hero.id] = {
+			"skill_id": skill_id,
+			"timer": offbeat
+		}
 
 
 func _process_enemy_beat(enemy: BattleEnemy, enemy_index: int) -> void:
