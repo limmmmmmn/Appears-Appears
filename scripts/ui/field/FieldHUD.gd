@@ -315,8 +315,8 @@ func _update_trait_display() -> void:
 
 	# 파티원별 특성 표시
 	for hero in heroes_with_runes:
-		var rune_data := hero.get_equipped_rune()
-		var trait_data := DataManager.get_rune_trait(hero.equipped_rune_id)
+		var rune_data: Dictionary = hero.get_equipped_rune()
+		var trait_data: Dictionary = DataManager.get_rune_trait(hero.equipped_rune_id)
 		if trait_data.is_empty():
 			continue
 
