@@ -87,23 +87,18 @@ func _start_new_game() -> void:
 	# 랜덤 동료 3명 추가하여 파티 4명 채우기
 	_add_random_companions(3)
 
-	# 시작 장비 지급
-	PartyManager.add_item("sword_common")
-	PartyManager.add_item("leather_armor")
+	# 시작 아이템: 포션만 지급 (장비는 파밍)
 	PartyManager.add_item("potion_small", 3)
 
-	# 롤랜드에게 기본 장비 장착
-	var roland := PartyManager.get_hero_at(0)
-	if roland:
-		PartyManager.equip_to_hero(roland, "sword_common", "main_hand")
-		PartyManager.equip_to_hero(roland, "leather_armor", "body")
+	# 랜덤 룬 2개 지급
+	_add_random_runes(2)
 
 	# 선술집 초기화 (영웅 5명 배치) - 이미 파티에 있는 영웅은 제외됨
 	TownManager.init_new_game()
-	
+
 	# 필드에서 시작! (Stage 1-1)
 	GameManager.go_to_field()
-	
+
 	# 새 게임 시작 후 자동 저장
 	SaveManager.auto_save("새 게임 시작")
 
@@ -159,3 +154,15 @@ func _add_random_companions(count: int) -> void:
 	available.shuffle()
 	for i in range(mini(count, available.size())):
 		PartyManager.add_hero_by_id(available[i])
+
+
+func _add_random_runes(count: int) -> void:
+	## 랜덤 룬 추가
+	var all_runes := DataManager.get_all_rune_ids()
+	if all_runes.is_empty():
+		return
+
+	# 셔플 후 count개 추가
+	all_runes.shuffle()
+	for i in range(mini(count, all_runes.size())):
+		InventoryManager.add_item(all_runes[i])
