@@ -315,9 +315,15 @@ func _update_trait_display() -> void:
 
 	# 특성 표시
 	for trait_data in all_traits:
+		# 특성별 컨테이너 (세로 배치)
+		var trait_container := VBoxContainer.new()
+		trait_container.add_theme_constant_override("separation", 0)
+		trait_vbox.add_child(trait_container)
+
+		# 상단: 아이콘 + 이름
 		var trait_hbox := HBoxContainer.new()
 		trait_hbox.add_theme_constant_override("separation", 4)
-		trait_vbox.add_child(trait_hbox)
+		trait_container.add_child(trait_hbox)
 
 		# 아이콘
 		var icon_label := Label.new()
@@ -332,8 +338,14 @@ func _update_trait_display() -> void:
 		name_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
 		name_label.add_theme_color_override("font_outline_color", Color.BLACK)
 		name_label.add_theme_constant_override("outline_size", 2)
-		name_label.tooltip_text = trait_data.get("description", "")
 		trait_hbox.add_child(name_label)
+
+		# 하단: 설명
+		var desc_label := Label.new()
+		desc_label.text = "  " + trait_data.get("description", "")
+		desc_label.add_theme_font_size_override("font_size", 8)
+		desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		trait_container.add_child(desc_label)
 
 
 func refresh_traits() -> void:
