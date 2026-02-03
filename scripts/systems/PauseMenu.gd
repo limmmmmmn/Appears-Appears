@@ -2,6 +2,8 @@ extends CanvasLayer
 class_name PauseMenu
 ## 일시정지 메뉴 UI
 ## - 파티 상태 (상세 스탯)
+## - 장비 장착
+## - 룬 장착
 ## - 게임 설정
 
 signal resume_pressed
@@ -15,6 +17,10 @@ var is_showing: bool = false
 var tab_buttons: Array[Button] = []
 var content_container: Control = null
 var main_control: Control = null
+
+# 장비/룬 선택 상태
+var selected_hero: Hero = null
+var selected_slot: String = ""
 
 
 func _ready() -> void:
@@ -120,7 +126,7 @@ func _create_header(parent_node: VBoxContainer) -> void:
 	tab_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header_hbox.add_child(tab_container)
 	
-	var tabs := ["파티 상태", "설정"]
+	var tabs := ["파티 상태", "장비", "룬", "설정"]
 	for i in range(tabs.size()):
 		var tab_btn := Button.new()
 		tab_btn.text = tabs[i]
@@ -224,6 +230,10 @@ func _switch_tab(tab_index: int) -> void:
 		0:
 			_create_party_content()
 		1:
+			_create_equipment_content()
+		2:
+			_create_rune_content()
+		3:
 			_create_settings_content()
 
 
@@ -400,6 +410,528 @@ func _add_stat_row(parent_vbox: VBoxContainer, stat_name: String, value: int, co
 	value_label.add_theme_font_size_override("font_size", 10)
 	value_label.add_theme_color_override("font_color", color)
 	hbox.add_child(value_label)
+#endregion
+
+
+#region 장비 탭
+func _create_equipment_content() -> void:
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	content_container.add_child(scroll)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	scroll.add_child(margin)
+
+	var main_hbox := HBoxContainer.new()
+	main_hbox.add_theme_constant_override("separation", 10)
+	main_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(main_hbox)
+
+	# 각 파티원 장비 카드
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	for hero in party:
+		var card := _create_equipment_card(hero)
+		main_hbox.add_child(card)
+
+
+func _create_equipment_card(hero: Hero) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(130, 0)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.12, 0.15, 0.98)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.3, 0.3, 0.35)
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	card.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	card.add_child(vbox)
+
+	# 헤더: 이름
+	var name_label := Label.new()
+	name_label.text = hero.hero_name
+	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(name_label)
+
+	vbox.add_child(HSeparator.new())
+
+	# 장비 슬롯들
+	var slots := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
+	var slot_names := {"main_hand": "주무기", "off_hand": "보조", "head": "머리", "body": "몸통", "acc1": "악세1", "acc2": "악세2"}
+
+	for slot in slots:
+		var equip_id: String = hero.equipment.get(slot, "")
+		var equip_data: Dictionary = DataManager.get_equipment(equip_id) if not equip_id.is_empty() else {}
+
+		var slot_btn := Button.new()
+		slot_btn.custom_minimum_size = Vector2(0, 28)
+		slot_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+		if equip_data.is_empty():
+			slot_btn.text = "[%s] -" % slot_names[slot]
+			slot_btn.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+		else:
+			var rarity: String = equip_data.get("rarity", "common")
+			var color := _get_rarity_color(rarity)
+			slot_btn.text = "[%s] %s" % [slot_names[slot], equip_data.get("name", "?")]
+			slot_btn.add_theme_color_override("font_color", color)
+
+		slot_btn.add_theme_font_size_override("font_size", 9)
+		slot_btn.pressed.connect(_on_equipment_slot_pressed.bind(hero, slot))
+		vbox.add_child(slot_btn)
+
+	return card
+
+
+func _get_rarity_color(rarity: String) -> Color:
+	match rarity:
+		"common": return Color(0.8, 0.8, 0.8)
+		"uncommon": return Color(0.4, 0.8, 0.4)
+		"magic": return Color(0.4, 0.6, 1.0)
+		"rare": return Color(0.8, 0.6, 1.0)
+		"epic": return Color(1.0, 0.5, 0.2)
+		"legendary": return Color(1.0, 0.8, 0.2)
+		_: return Color.WHITE
+
+
+func _on_equipment_slot_pressed(hero: Hero, slot: String) -> void:
+	selected_hero = hero
+	selected_slot = slot
+	_show_equipment_selection_popup(hero, slot)
+
+
+func _show_equipment_selection_popup(hero: Hero, slot: String) -> void:
+	# 기존 팝업 제거
+	var existing := main_control.get_node_or_null("EquipPopup")
+	if existing:
+		existing.queue_free()
+
+	var popup := PanelContainer.new()
+	popup.name = "EquipPopup"
+	popup.set_anchors_preset(Control.PRESET_CENTER)
+	popup.custom_minimum_size = Vector2(280, 320)
+
+	var popup_style := StyleBoxFlat.new()
+	popup_style.bg_color = Color(0.1, 0.1, 0.12, 0.98)
+	popup_style.border_width_left = 2
+	popup_style.border_width_right = 2
+	popup_style.border_width_top = 2
+	popup_style.border_width_bottom = 2
+	popup_style.border_color = Color(0.4, 0.4, 0.5)
+	popup_style.corner_radius_top_left = 8
+	popup_style.corner_radius_top_right = 8
+	popup_style.corner_radius_bottom_left = 8
+	popup_style.corner_radius_bottom_right = 8
+	popup_style.content_margin_left = 12
+	popup_style.content_margin_right = 12
+	popup_style.content_margin_top = 12
+	popup_style.content_margin_bottom = 12
+	popup.add_theme_stylebox_override("panel", popup_style)
+	main_control.add_child(popup)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	popup.add_child(vbox)
+
+	# 제목
+	var title := Label.new()
+	var slot_names := {"main_hand": "주무기", "off_hand": "보조", "head": "머리", "body": "몸통", "acc1": "악세1", "acc2": "악세2"}
+	title.text = "%s - %s 선택" % [hero.hero_name, slot_names.get(slot, slot)]
+	title.add_theme_font_size_override("font_size", 12)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	vbox.add_child(HSeparator.new())
+
+	# 장착 해제 버튼
+	var unequip_btn := Button.new()
+	unequip_btn.text = "[ 장착 해제 ]"
+	unequip_btn.add_theme_font_size_override("font_size", 10)
+	unequip_btn.add_theme_color_override("font_color", Color(0.7, 0.4, 0.4))
+	unequip_btn.pressed.connect(_on_equip_selected.bind(hero, slot, ""))
+	vbox.add_child(unequip_btn)
+
+	vbox.add_child(HSeparator.new())
+
+	# 스크롤 영역
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 200)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(scroll)
+
+	var items_vbox := VBoxContainer.new()
+	items_vbox.add_theme_constant_override("separation", 4)
+	items_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(items_vbox)
+
+	# 인벤토리에서 장착 가능한 아이템 목록
+	var inventory: Dictionary = InventoryManager.items if InventoryManager else {}
+	var slot_type := _get_slot_type(slot)
+
+	for item_id in inventory:
+		var equip_data: Dictionary = DataManager.get_equipment(item_id)
+		if equip_data.is_empty():
+			continue
+
+		var item_slot: String = equip_data.get("slot", "")
+		if item_slot != slot_type:
+			continue
+
+		if not hero.can_equip(item_id):
+			continue
+
+		var qty: int = inventory[item_id]
+		var rarity: String = equip_data.get("rarity", "common")
+		var color := _get_rarity_color(rarity)
+
+		var item_btn := Button.new()
+		item_btn.text = "%s x%d" % [equip_data.get("name", item_id), qty]
+		item_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		item_btn.add_theme_font_size_override("font_size", 10)
+		item_btn.add_theme_color_override("font_color", color)
+		item_btn.pressed.connect(_on_equip_selected.bind(hero, slot, item_id))
+		items_vbox.add_child(item_btn)
+
+		# 스탯 미리보기
+		var stats: Dictionary = equip_data.get("stats", {})
+		if not stats.is_empty():
+			var stat_text := "  "
+			for stat_name in stats:
+				stat_text += "%s+%d " % [stat_name.to_upper(), stats[stat_name]]
+			var stat_label := Label.new()
+			stat_label.text = stat_text
+			stat_label.add_theme_font_size_override("font_size", 8)
+			stat_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+			items_vbox.add_child(stat_label)
+
+	# 닫기 버튼
+	var close_btn := Button.new()
+	close_btn.text = "닫기"
+	close_btn.add_theme_font_size_override("font_size", 10)
+	close_btn.pressed.connect(func(): popup.queue_free())
+	vbox.add_child(close_btn)
+
+
+func _get_slot_type(slot: String) -> String:
+	match slot:
+		"main_hand": return "weapon"
+		"off_hand": return "shield"
+		"head": return "head"
+		"body": return "body"
+		"acc1", "acc2": return "accessory"
+		_: return ""
+
+
+func _on_equip_selected(hero: Hero, slot: String, item_id: String) -> void:
+	# 기존 장비 인벤토리로 반환
+	var old_equip: String = hero.equipment.get(slot, "")
+	if not old_equip.is_empty():
+		InventoryManager.add_item(old_equip)
+
+	# 새 장비 장착
+	if not item_id.is_empty():
+		InventoryManager.remove_item(item_id)
+		hero.equip_item(item_id, slot)
+	else:
+		hero.unequip_slot(slot)
+
+	# 팝업 닫기 및 새로고침
+	var popup := main_control.get_node_or_null("EquipPopup")
+	if popup:
+		popup.queue_free()
+
+	_switch_tab(1)  # 장비 탭 새로고침
+#endregion
+
+
+#region 룬 탭
+func _create_rune_content() -> void:
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	content_container.add_child(scroll)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_top", 10)
+	margin.add_theme_constant_override("margin_bottom", 10)
+	scroll.add_child(margin)
+
+	var main_hbox := HBoxContainer.new()
+	main_hbox.add_theme_constant_override("separation", 10)
+	main_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.add_child(main_hbox)
+
+	# 각 파티원 룬 카드
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	for hero in party:
+		var card := _create_rune_card(hero)
+		main_hbox.add_child(card)
+
+
+func _create_rune_card(hero: Hero) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(130, 0)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.12, 0.15, 0.98)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.3, 0.3, 0.35)
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	card.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	card.add_child(vbox)
+
+	# 헤더: 이름
+	var name_label := Label.new()
+	name_label.text = hero.hero_name
+	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(name_label)
+
+	vbox.add_child(HSeparator.new())
+
+	# 현재 장착 룬
+	var rune_data: Dictionary = hero.get_equipped_rune()
+	var trait_data: Dictionary = {}
+	if not rune_data.is_empty():
+		trait_data = DataManager.get_rune_trait(hero.equipped_rune_id)
+
+	var rune_container := VBoxContainer.new()
+	rune_container.add_theme_constant_override("separation", 2)
+	vbox.add_child(rune_container)
+
+	if rune_data.is_empty():
+		var empty_label := Label.new()
+		empty_label.text = "[ 룬 없음 ]"
+		empty_label.add_theme_font_size_override("font_size", 10)
+		empty_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+		empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		rune_container.add_child(empty_label)
+	else:
+		# 룬 이름
+		var rune_hbox := HBoxContainer.new()
+		rune_hbox.add_theme_constant_override("separation", 4)
+		rune_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		rune_container.add_child(rune_hbox)
+
+		var rune_icon := Label.new()
+		rune_icon.text = rune_data.get("icon", "")
+		rune_icon.add_theme_font_size_override("font_size", 14)
+		rune_hbox.add_child(rune_icon)
+
+		var rune_name := Label.new()
+		rune_name.text = rune_data.get("name", "")
+		rune_name.add_theme_font_size_override("font_size", 10)
+		rune_name.add_theme_color_override("font_color", _get_rarity_color(rune_data.get("rarity", "common")))
+		rune_hbox.add_child(rune_name)
+
+		# 특성 정보
+		if not trait_data.is_empty():
+			var trait_hbox := HBoxContainer.new()
+			trait_hbox.add_theme_constant_override("separation", 4)
+			trait_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+			rune_container.add_child(trait_hbox)
+
+			var trait_icon := Label.new()
+			trait_icon.text = trait_data.get("icon", "")
+			trait_icon.add_theme_font_size_override("font_size", 10)
+			trait_hbox.add_child(trait_icon)
+
+			var trait_name := Label.new()
+			trait_name.text = trait_data.get("name", "")
+			trait_name.add_theme_font_size_override("font_size", 9)
+			trait_name.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
+			trait_hbox.add_child(trait_name)
+
+			var desc_label := Label.new()
+			desc_label.text = trait_data.get("description", "")
+			desc_label.add_theme_font_size_override("font_size", 8)
+			desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+			desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+			rune_container.add_child(desc_label)
+
+	vbox.add_child(HSeparator.new())
+
+	# 변경 버튼
+	var change_btn := Button.new()
+	change_btn.text = "룬 변경"
+	change_btn.add_theme_font_size_override("font_size", 10)
+	change_btn.pressed.connect(_on_rune_slot_pressed.bind(hero))
+	vbox.add_child(change_btn)
+
+	return card
+
+
+func _on_rune_slot_pressed(hero: Hero) -> void:
+	selected_hero = hero
+	_show_rune_selection_popup(hero)
+
+
+func _show_rune_selection_popup(hero: Hero) -> void:
+	# 기존 팝업 제거
+	var existing := main_control.get_node_or_null("RunePopup")
+	if existing:
+		existing.queue_free()
+
+	var popup := PanelContainer.new()
+	popup.name = "RunePopup"
+	popup.set_anchors_preset(Control.PRESET_CENTER)
+	popup.custom_minimum_size = Vector2(300, 350)
+
+	var popup_style := StyleBoxFlat.new()
+	popup_style.bg_color = Color(0.1, 0.1, 0.12, 0.98)
+	popup_style.border_width_left = 2
+	popup_style.border_width_right = 2
+	popup_style.border_width_top = 2
+	popup_style.border_width_bottom = 2
+	popup_style.border_color = Color(0.5, 0.4, 0.6)
+	popup_style.corner_radius_top_left = 8
+	popup_style.corner_radius_top_right = 8
+	popup_style.corner_radius_bottom_left = 8
+	popup_style.corner_radius_bottom_right = 8
+	popup_style.content_margin_left = 12
+	popup_style.content_margin_right = 12
+	popup_style.content_margin_top = 12
+	popup_style.content_margin_bottom = 12
+	popup.add_theme_stylebox_override("panel", popup_style)
+	main_control.add_child(popup)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	popup.add_child(vbox)
+
+	# 제목
+	var title := Label.new()
+	title.text = "%s - 룬 선택" % hero.hero_name
+	title.add_theme_font_size_override("font_size", 12)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	vbox.add_child(HSeparator.new())
+
+	# 장착 해제 버튼
+	var unequip_btn := Button.new()
+	unequip_btn.text = "[ 룬 해제 ]"
+	unequip_btn.add_theme_font_size_override("font_size", 10)
+	unequip_btn.add_theme_color_override("font_color", Color(0.7, 0.4, 0.4))
+	unequip_btn.pressed.connect(_on_rune_selected.bind(hero, ""))
+	vbox.add_child(unequip_btn)
+
+	vbox.add_child(HSeparator.new())
+
+	# 스크롤 영역
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 220)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(scroll)
+
+	var items_vbox := VBoxContainer.new()
+	items_vbox.add_theme_constant_override("separation", 6)
+	items_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(items_vbox)
+
+	# 인벤토리에서 룬 목록
+	var inventory: Dictionary = InventoryManager.items if InventoryManager else {}
+
+	for item_id in inventory:
+		var rune_data: Dictionary = DataManager.get_rune(item_id)
+		if rune_data.is_empty():
+			continue
+
+		var trait_data: Dictionary = DataManager.get_rune_trait(item_id)
+		var qty: int = inventory[item_id]
+		var rarity: String = rune_data.get("rarity", "common")
+		var color := _get_rarity_color(rarity)
+
+		var rune_container := VBoxContainer.new()
+		rune_container.add_theme_constant_override("separation", 2)
+		items_vbox.add_child(rune_container)
+
+		var item_btn := Button.new()
+		item_btn.text = "%s %s x%d" % [rune_data.get("icon", ""), rune_data.get("name", item_id), qty]
+		item_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		item_btn.add_theme_font_size_override("font_size", 10)
+		item_btn.add_theme_color_override("font_color", color)
+		item_btn.pressed.connect(_on_rune_selected.bind(hero, item_id))
+		rune_container.add_child(item_btn)
+
+		# 특성 미리보기
+		if not trait_data.is_empty():
+			var trait_label := Label.new()
+			trait_label.text = "  %s %s: %s" % [trait_data.get("icon", ""), trait_data.get("name", ""), trait_data.get("description", "")]
+			trait_label.add_theme_font_size_override("font_size", 8)
+			trait_label.add_theme_color_override("font_color", Color(0.6, 0.55, 0.4))
+			rune_container.add_child(trait_label)
+
+	# 닫기 버튼
+	var close_btn := Button.new()
+	close_btn.text = "닫기"
+	close_btn.add_theme_font_size_override("font_size", 10)
+	close_btn.pressed.connect(func(): popup.queue_free())
+	vbox.add_child(close_btn)
+
+
+func _on_rune_selected(hero: Hero, rune_id: String) -> void:
+	# 기존 룬 인벤토리로 반환
+	var old_rune: String = hero.equipped_rune_id
+	if not old_rune.is_empty():
+		InventoryManager.add_item(old_rune)
+
+	# 새 룬 장착
+	if not rune_id.is_empty():
+		InventoryManager.remove_item(rune_id)
+		hero.equip_rune(rune_id)
+	else:
+		hero.unequip_rune()
+
+	# FieldHUD 특성 표시 갱신
+	var field_hud = get_tree().get_first_node_in_group("field_hud")
+	if field_hud and field_hud.has_method("refresh_traits"):
+		field_hud.refresh_traits()
+
+	# 팝업 닫기 및 새로고침
+	var popup := main_control.get_node_or_null("RunePopup")
+	if popup:
+		popup.queue_free()
+
+	_switch_tab(2)  # 룬 탭 새로고침
 #endregion
 
 

@@ -40,6 +40,7 @@ var minimap_target: Node2D = null  # 추적할 대상 (파티 리더)
 
 
 func _ready() -> void:
+	add_to_group("field_hud")
 	_setup_components()
 	_connect_signals()
 	update_all()
