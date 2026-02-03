@@ -461,7 +461,8 @@ func _refresh_equipment_inventory() -> void:
 		var qty: int = inventory[item_id]
 		var rarity: String = equip_data.get("rarity", "common")
 		var slot: String = equip_data.get("slot", "")
-		var slot_icon := {"weapon": "⚔", "shield": "🛡", "head": "👒", "body": "👕", "accessory": "💍"}.get(slot, "?")
+		var slot_icons: Dictionary = {"weapon": "⚔", "shield": "🛡", "head": "👒", "body": "👕", "accessory": "💍"}
+		var slot_icon: String = slot_icons.get(slot, "?")
 
 		var item_label := Label.new()
 		item_label.text = "%s %s x%d" % [slot_icon, equip_data.get("name", item_id), qty]
