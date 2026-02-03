@@ -44,9 +44,14 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var run_button: Button = %RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
+@onready var trait_panel: PanelContainer = %TraitPanel
+@onready var trait_vbox: VBoxContainer = %TraitVBox
 
 # === 동적 생성 UI ===
 var claim_reward_button: Button = null
+
+# === 활성 특성 ===
+var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 
 # === 보상 UI 참조 ===
 @onready var gold_label: Label = %GoldLabel
@@ -179,6 +184,11 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 	# 위험도 테두리 초기화
 	_setup_danger_border()
+
+	# 파티 특성 수집 및 표시
+	_collect_party_traits()
+	_apply_trait_bonuses()
+	_display_trait_panel()
 
 	await get_tree().create_timer(0.3).timeout
 	_start_battle()
@@ -674,19 +684,26 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	# 원념 증가 (로컬만)
 	kill_count += 1
-	print("[BattleWindow] Enemy defeated! kill_count: ", kill_count)
+
+	# 특성: 적 3마리 이상일 때 보너스 원념
+	if _check_trait_condition("enemies_gte_3"):
+		var bonus_kill: int = _get_trait_effect_value("bonus_kill_count", "enemies_gte_3")
+		if bonus_kill > 0:
+			kill_count += bonus_kill
 
 	# 위험도 레벨 변경 시 테두리 업데이트 + 드라마틱 메시지
 	var new_danger: int = get_local_danger_level()
-	print("[BattleWindow] new_danger: ", new_danger, " current danger_level: ", danger_level)
 	if new_danger > danger_level:
 		_show_danger_level_up_message(new_danger)
 		update_danger_level()
 
-	# 보상 (위험도에 따라 증가)
+	# 보상 계산 (위험도 + 특성 적용)
 	var danger_reward_mult: float = 1.0 + (danger_level * 0.1)  # 위험도당 10% 보상 증가
-	var exp_reward: int = int(enemy.exp_reward * danger_reward_mult)
-	var gold_reward: int = int(enemy.get_gold_reward() * danger_reward_mult)
+	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
+	var exp_trait_mult: float = 1.0 + _get_trait_effect_float("exp_mult")
+
+	var exp_reward: int = int(enemy.exp_reward * danger_reward_mult * exp_trait_mult)
+	var gold_reward: int = int(enemy.get_gold_reward() * danger_reward_mult * gold_trait_mult)
 	var items: Array = enemy.roll_drops()
 
 	total_exp += exp_reward
@@ -703,8 +720,6 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 func _show_danger_level_up_message(new_level: int) -> void:
 	## 위험도 상승 시 드라마틱 메시지 표시
-	print("[BattleWindow] 원념 레벨 업! Level: ", new_level, " Kill Count: ", kill_count)
-
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
 		"적들의 원념이 깨어나기 시작한다...",
@@ -720,7 +735,6 @@ func _show_danger_level_up_message(new_level: int) -> void:
 	# 로그에도 보내기
 	_send_log("━━━ 원념 %d단계 ━━━" % new_level, Color.ORANGE_RED)
 	_send_log(message, Color.ORANGE)
-	print("[BattleWindow] Log sent: ", message)
 
 	# 전투창 중앙에 큰 텍스트 표시
 	_show_popup_text("원념 %d단계" % new_level, message, DANGER_BORDER_COLORS[mini(new_level, DANGER_BORDER_COLORS.size() - 1)])
@@ -731,9 +745,6 @@ func _show_danger_level_up_message(new_level: int) -> void:
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	## 전투창 중앙에 팝업 텍스트 표시
-	print("[BattleWindow] _show_popup_text called: ", title, " - ", subtitle)
-	print("[BattleWindow] BattleWindow global_position: ", global_position, " size: ", size)
-
 	# 가장 상위 노드(루트)에 직접 추가
 	var root := get_tree().root
 
@@ -788,8 +799,6 @@ func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
 	var window_center: Vector2 = global_position + size / 2
 	bg.position = window_center - Vector2(estimated_width, estimated_height) / 2
 
-	print("[BattleWindow] Initial popup position: ", bg.position)
-
 	# 애니메이션 (call_deferred로 실제 크기 반영)
 	_animate_popup.call_deferred(canvas_layer, bg)
 
@@ -804,8 +813,6 @@ func _animate_popup(canvas_layer: CanvasLayer, bg: PanelContainer) -> void:
 	var popup_size: Vector2 = bg.size
 	bg.position = window_center - popup_size / 2
 	bg.pivot_offset = popup_size / 2
-
-	print("[BattleWindow] Final popup position: ", bg.position, " size: ", popup_size)
 
 	# 애니메이션 시작 (처음엔 보이게)
 	bg.modulate.a = 1.0
@@ -1062,8 +1069,107 @@ func _add_rewards(exp: int, gold: int, items: Array) -> void:
 
 
 func get_max_enemies() -> int:
-	## 이 전투창의 최대 적 수 반환 (기본 3 + BattleManager charm 효과)
-	return BattleManager.get_max_enemies_per_window()
+	## 이 전투창의 최대 적 수 반환 (기본 3 + 특성 효과)
+	var base_max: int = BattleManager.get_max_enemies_per_window()
+	var trait_bonus: int = _get_trait_effect_value("max_enemies")
+	return maxi(1, base_max + trait_bonus)  # 최소 1
+
+
+#region 특성 시스템
+func _collect_party_traits() -> void:
+	## 파티원들의 특성 수집
+	active_traits.clear()
+	for hero in PartyManager.get_alive_heroes():
+		for trait_data in hero.get_traits():
+			if not trait_data.is_empty():
+				active_traits.append(trait_data)
+
+
+func _apply_trait_bonuses() -> void:
+	## 특성 보너스 적용 (전투 시작 시)
+	# 루팅 배율 보너스
+	var loot_trait_mult: float = _get_trait_effect_float("loot_mult")
+	if loot_trait_mult > 0:
+		loot_multiplier += loot_multiplier * loot_trait_mult
+
+
+func _display_trait_panel() -> void:
+	## 특성 패널에 활성 특성 표시
+	if trait_vbox == null:
+		return
+
+	# 기존 자식 제거
+	for child in trait_vbox.get_children():
+		child.queue_free()
+
+	if active_traits.is_empty():
+		if trait_panel:
+			trait_panel.visible = false
+		return
+
+	if trait_panel:
+		trait_panel.visible = true
+		# 반투명 배경 스타일
+		var panel_style := StyleBoxFlat.new()
+		panel_style.bg_color = Color(0, 0, 0, 0.6)
+		panel_style.corner_radius_top_left = 4
+		panel_style.corner_radius_top_right = 4
+		panel_style.corner_radius_bottom_left = 4
+		panel_style.corner_radius_bottom_right = 4
+		panel_style.content_margin_left = 6
+		panel_style.content_margin_right = 6
+		panel_style.content_margin_top = 4
+		panel_style.content_margin_bottom = 4
+		trait_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 특성 표시
+	for trait_data in active_traits:
+		var trait_label := Label.new()
+		var icon: String = trait_data.get("icon", "")
+		var trait_name: String = trait_data.get("name", "")
+		trait_label.text = "%s %s" % [icon, trait_name]
+		trait_label.add_theme_font_size_override("font_size", 9)
+		trait_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
+		trait_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		trait_label.add_theme_constant_override("outline_size", 2)
+		trait_label.tooltip_text = trait_data.get("description", "")
+		trait_vbox.add_child(trait_label)
+
+
+func _get_trait_effect_value(effect_type: String, condition: String = "") -> int:
+	## 특정 효과 타입의 총합 반환
+	var total: int = 0
+	for trait_data in active_traits:
+		var effect: Dictionary = trait_data.get("effect", {})
+		if effect.get("type", "") == effect_type:
+			var trait_condition: String = effect.get("condition", "")
+			if condition.is_empty() or trait_condition.is_empty() or trait_condition == condition:
+				total += int(effect.get("value", 0))
+	return total
+
+
+func _get_trait_effect_float(effect_type: String, condition: String = "") -> float:
+	## 특정 효과 타입의 총합 반환 (실수)
+	var total: float = 0.0
+	for trait_data in active_traits:
+		var effect: Dictionary = trait_data.get("effect", {})
+		if effect.get("type", "") == effect_type:
+			var trait_condition: String = effect.get("condition", "")
+			if condition.is_empty() or trait_condition.is_empty() or trait_condition == condition:
+				total += float(effect.get("value", 0.0))
+	return total
+
+
+func _check_trait_condition(condition: String) -> bool:
+	## 특성 조건 확인
+	match condition:
+		"enemies_gte_3":
+			return get_enemy_count() >= 3
+		"enemies_eq_1":
+			return get_enemy_count() == 1
+		_:
+			return true
+#endregion
 
 
 #region 전투창 모드 시스템

@@ -40,6 +40,9 @@ var tags: Array = []
 var portrait: String = ""
 var field_sprite: String = ""
 
+# 특성
+var trait_ids: Array = []
+
 
 static func create_from_id(hero_id: String) -> Hero:
 	var hero := Hero.new()
@@ -61,6 +64,7 @@ func _initialize(hero_id: String) -> void:
 	var class_data: Dictionary = DataManager.get_class_data(class_id)
 	hero_class_name = class_data.get("name", "Unknown")
 	tags = class_data.get("tags", []) + hero_data.get("tags", [])
+	trait_ids = hero_data.get("traits", [])
 	
 	var base_stats: Dictionary = DataManager.get_class_base_stats(class_id)
 	base_hp = int(base_stats.get("hp", 30))
@@ -310,6 +314,22 @@ func use_seed(stat: String, value: int) -> void:
 
 func get_hp_percent() -> float:
 	return float(current_hp) / float(get_max_hp())
+
+
+#region 특성
+func get_traits() -> Array:
+	## 영웅의 특성 데이터 목록 반환
+	var result: Array = []
+	for trait_id in trait_ids:
+		var trait_data := DataManager.get_trait(trait_id)
+		if not trait_data.is_empty():
+			result.append(trait_data)
+	return result
+
+
+func has_trait(trait_id: String) -> bool:
+	return trait_id in trait_ids
+#endregion
 
 
 func get_stat_summary() -> String:
