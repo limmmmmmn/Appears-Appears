@@ -88,8 +88,10 @@ func _init_skill_toggles() -> void:
 
 
 #region 스탯 계산
+const HP_MULTIPLIER: float = 4.0  # HP 배율
+
 func get_max_hp() -> int:
-	return base_hp + seed_bonus["hp"] + _get_equipment_stat("hp")
+	return int((base_hp + seed_bonus["hp"] + _get_equipment_stat("hp")) * HP_MULTIPLIER)
 
 func get_max_mp() -> int:
 	return base_mp + seed_bonus["mp"] + _get_equipment_stat("mp")

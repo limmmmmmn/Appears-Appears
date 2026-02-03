@@ -25,8 +25,8 @@ var enemies: Array = []
 var enemy_data_list: Array = []
 
 # === 비트 시스템 ===
-const BPM: float = 100.0
-const BEAT_INTERVAL: float = 60.0 / BPM  # 0.6초
+const BPM: float = 80.0
+const BEAT_INTERVAL: float = 60.0 / BPM  # 0.75초
 var beat_timer: float = 0.0
 var current_beat: int = 0
 

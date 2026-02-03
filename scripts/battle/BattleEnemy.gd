@@ -1,9 +1,11 @@
 extends Control
 class_name BattleEnemy
 ## BattleEnemy: 전투창 내 적 표시 및 상태 관리
-## 씬 구조: Sprite(Sprite2D), NameLabel, HPBar, ATBBar (인스펙터에서 visible 토글)
+## 씬 구조: Sprite(Sprite2D), NameLabel, HPBar
 
 signal defeated(enemy: BattleEnemy)
+
+const HP_MULTIPLIER: float = 4.0  # HP 배율
 
 var enemy_id: String = ""
 var enemy_name: String = ""
@@ -49,7 +51,7 @@ func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0
 
 	# 기본 스탯
 	var stats: Dictionary = data.get("stats", {})
-	max_hp = int(stats.get("hp", 10))
+	max_hp = int(int(stats.get("hp", 10)) * HP_MULTIPLIER)
 	base_str = int(stats.get("atk", 5))  # enemies.json uses "atk" not "str"
 	base_def = int(stats.get("def", 2))
 	base_int = int(stats.get("int", 1))
