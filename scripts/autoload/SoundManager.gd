@@ -76,7 +76,7 @@ func _preload_sounds() -> void:
 
 
 #region 효과음 재생
-func play_sfx(sound_name: String, volume_scale: float = 1.0) -> void:
+func play_sfx(sound_name: String, volume_scale: float = 1.0, pitch_scale: float = 1.0) -> void:
 	## 효과음 재생
 	var stream: AudioStream = _get_sound(sound_name)
 	if stream == null:
@@ -88,6 +88,7 @@ func play_sfx(sound_name: String, volume_scale: float = 1.0) -> void:
 	
 	player.stream = stream
 	player.volume_db = linear_to_db(sfx_volume * master_volume * volume_scale)
+	player.pitch_scale = pitch_scale
 	player.play()
 
 
@@ -129,6 +130,26 @@ func play_hit(is_crit: bool = false) -> void:
 func play_slash(is_crit: bool = false) -> void:
 	## 슬래시 이펙트 사운드
 	play_sfx("slash", 1.2 if is_crit else 1.0)
+
+
+const BASIC_ATTACK_SFX: Dictionary = {
+	"warrior": {"sound": "slash", "volume": 1.0, "pitch": 1.0},
+	"knight": {"sound": "slash", "volume": 1.05, "pitch": 0.92},
+	"thief": {"sound": "slash", "volume": 0.95, "pitch": 1.18},
+	"archer": {"sound": "slash", "volume": 0.9, "pitch": 1.1},
+	"mage": {"sound": "magic", "volume": 0.9, "pitch": 1.02},
+	"cleric": {"sound": "heal", "volume": 0.85, "pitch": 0.95}
+}
+
+
+func play_basic_attack(class_id: String, is_crit: bool = false) -> void:
+	## 클래스별 기본 공격 사운드
+	var config: Dictionary = BASIC_ATTACK_SFX.get(class_id, {})
+	var sound_name: String = config.get("sound", "slash")
+	var volume_scale: float = config.get("volume", 1.0)
+	var pitch_scale: float = config.get("pitch", 1.0)
+	var crit_scale: float = 1.1 if is_crit else 1.0
+	play_sfx(sound_name, volume_scale * crit_scale, pitch_scale)
 
 
 func play_miss() -> void:

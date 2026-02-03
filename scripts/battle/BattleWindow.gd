@@ -287,6 +287,14 @@ func _get_wounded_heroes() -> Array:
 	return result
 
 
+func _play_basic_attack_sfx_if_needed(hero: Hero, skill_id: String, is_crit: bool) -> void:
+	if skill_id != "basic_attack":
+		return
+	if SoundManager == null:
+		return
+	SoundManager.play_basic_attack(hero.class_id, is_crit)
+
+
 func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -> void:
 	## 단일 대상 공격 실행
 	if not has_alive_enemies():
@@ -305,6 +313,7 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var is_evaded: bool = randf() * 100 < effective_eva
 
 	if is_evaded:
+		_play_basic_attack_sfx_if_needed(hero, skill_id, false)
 		target.show_miss_text()
 		target.play_evade_effect()
 		_send_log("%s의 %s을(를) %s이(가) 회피!" % [hero.hero_name, skill_name, target.enemy_name], Color.GRAY)
@@ -314,6 +323,8 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var crit_bonus: float = _get_skill_effect_value(skill_data, "crit_bonus", 0.0)
 	var crit_chance: float = hero.get_crit() + crit_bonus
 	var is_crit: bool = randf() * 100 < crit_chance
+
+	_play_basic_attack_sfx_if_needed(hero, skill_id, is_crit)
 
 	# 데미지 계산
 	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
@@ -367,6 +378,8 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 
 		if not target.is_alive():
 			_on_enemy_defeated(target)
+
+	_play_basic_attack_sfx_if_needed(hero, skill_id, any_crit)
 	
 	# 크리티컬이 하나라도 있으면 진동
 	if any_crit:
