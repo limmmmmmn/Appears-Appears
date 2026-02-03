@@ -268,7 +268,7 @@ func clear_logs() -> void:
 
 #region 특성 시스템
 func _update_trait_display() -> void:
-	## 파티원 특성을 패널에 표시 (WoW 퀘스트 트래커 스타일)
+	## 파티원별 룬/특성을 패널에 표시
 	if trait_vbox == null:
 		return
 
@@ -276,21 +276,20 @@ func _update_trait_display() -> void:
 	for child in trait_vbox.get_children():
 		child.queue_free()
 
-	# 파티원 특성 수집
-	var all_traits: Array = []
+	# 룬을 가진 파티원 수집
+	var heroes_with_runes: Array = []
 	for hero in PartyManager.get_alive_heroes():
-		for trait_data in hero.get_traits():
-			if not trait_data.is_empty():
-				all_traits.append(trait_data)
+		if not hero.equipped_rune_id.is_empty():
+			heroes_with_runes.append(hero)
 
-	if all_traits.is_empty():
+	if heroes_with_runes.is_empty():
 		if trait_panel:
 			trait_panel.visible = false
 		return
 
 	if trait_panel:
 		trait_panel.visible = true
-		# 반투명 배경 스타일 (WoW 퀘스트 트래커 느낌)
+		# 반투명 배경 스타일
 		var panel_style := StyleBoxFlat.new()
 		panel_style.bg_color = Color(0, 0, 0, 0.5)
 		panel_style.corner_radius_top_left = 4
@@ -303,7 +302,7 @@ func _update_trait_display() -> void:
 
 	# 제목
 	var title_label := Label.new()
-	title_label.text = "[ 파티 특성 ]"
+	title_label.text = "[ 장착 룬 ]"
 	title_label.add_theme_font_size_override("font_size", 10)
 	title_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	trait_vbox.add_child(title_label)
@@ -313,39 +312,62 @@ func _update_trait_display() -> void:
 	separator.add_theme_constant_override("separation", 4)
 	trait_vbox.add_child(separator)
 
-	# 특성 표시
-	for trait_data in all_traits:
-		# 특성별 컨테이너 (세로 배치)
-		var trait_container := VBoxContainer.new()
-		trait_container.add_theme_constant_override("separation", 0)
-		trait_vbox.add_child(trait_container)
+	# 파티원별 특성 표시
+	for hero in heroes_with_runes:
+		var rune_data := hero.get_equipped_rune()
+		var trait_data := DataManager.get_rune_trait(hero.equipped_rune_id)
+		if trait_data.is_empty():
+			continue
 
-		# 상단: 아이콘 + 이름
+		# 파티원별 컨테이너
+		var hero_container := VBoxContainer.new()
+		hero_container.add_theme_constant_override("separation", 0)
+		trait_vbox.add_child(hero_container)
+
+		# 상단: 영웅 이름 + 룬 아이콘
+		var hero_hbox := HBoxContainer.new()
+		hero_hbox.add_theme_constant_override("separation", 4)
+		hero_container.add_child(hero_hbox)
+
+		# 영웅 이름
+		var hero_label := Label.new()
+		hero_label.text = hero.hero_name
+		hero_label.add_theme_font_size_override("font_size", 9)
+		hero_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+		hero_hbox.add_child(hero_label)
+
+		# 룬 아이콘
+		var rune_icon := Label.new()
+		rune_icon.text = rune_data.get("icon", "")
+		rune_icon.add_theme_font_size_override("font_size", 10)
+		hero_hbox.add_child(rune_icon)
+
+		# 중단: 특성 아이콘 + 이름
 		var trait_hbox := HBoxContainer.new()
 		trait_hbox.add_theme_constant_override("separation", 4)
-		trait_container.add_child(trait_hbox)
+		hero_container.add_child(trait_hbox)
 
-		# 아이콘
-		var icon_label := Label.new()
-		icon_label.text = trait_data.get("icon", "")
-		icon_label.add_theme_font_size_override("font_size", 11)
-		trait_hbox.add_child(icon_label)
+		# 특성 아이콘
+		var trait_icon := Label.new()
+		trait_icon.text = "  " + trait_data.get("icon", "")
+		trait_icon.add_theme_font_size_override("font_size", 10)
+		trait_hbox.add_child(trait_icon)
 
 		# 특성 이름
-		var name_label := Label.new()
-		name_label.text = trait_data.get("name", "")
-		name_label.add_theme_font_size_override("font_size", 10)
-		name_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
-		name_label.add_theme_color_override("font_outline_color", Color.BLACK)
-		name_label.add_theme_constant_override("outline_size", 2)
-		trait_hbox.add_child(name_label)
+		var trait_name := Label.new()
+		trait_name.text = trait_data.get("name", "")
+		trait_name.add_theme_font_size_override("font_size", 9)
+		trait_name.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
+		trait_name.add_theme_color_override("font_outline_color", Color.BLACK)
+		trait_name.add_theme_constant_override("outline_size", 2)
+		trait_hbox.add_child(trait_name)
 
 		# 하단: 설명
 		var desc_label := Label.new()
-		desc_label.text = "  " + trait_data.get("description", "")
+		desc_label.text = "    " + trait_data.get("description", "")
 		desc_label.add_theme_font_size_override("font_size", 8)
 		desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-		trait_container.add_child(desc_label)
+		hero_container.add_child(desc_label)
 
 
 func refresh_traits() -> void:

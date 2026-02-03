@@ -6,7 +6,6 @@
     "sprite_field": "roland_field",
     "sprite_face": "roland_face",
     "tags": ["human", "noble", "leader"],
-    "traits": ["bloodlust"],
     "description": "왕국의 젊은 기사. 강인한 체력과 검술로 파티를 이끈다."
   },
   "luna": {
@@ -16,7 +15,6 @@
     "sprite_field": "luna_field",
     "sprite_face": "luna_face",
     "tags": ["human", "scholar", "magic"],
-    "traits": ["exp_boost"],
     "description": "마법 학원 출신의 천재 마법사. 강력한 공격 마법을 구사한다."
   },
   "elena": {
@@ -26,7 +24,6 @@
     "sprite_field": "elena_field",
     "sprite_face": "elena_face",
     "tags": ["human", "devout", "healer"],
-    "traits": ["intimidating"],
     "description": "신전의 사제. 신성한 힘으로 동료를 치유한다."
   },
   "shadow": {
@@ -36,7 +33,6 @@
     "sprite_field": "shadow_field",
     "sprite_face": "shadow_face",
     "tags": ["human", "assassin", "loner"],
-    "traits": ["quick_battle", "lucky_looter"],
     "description": "과거를 숨긴 도적. 빠른 손과 이도류가 특기."
   },
   "aria": {
@@ -46,7 +42,6 @@
     "sprite_field": "aria_field",
     "sprite_face": "aria_face",
     "tags": ["elf", "hunter", "nature"],
-    "traits": ["gold_finder"],
     "description": "숲에서 온 엘프 궁수. 정확한 사격으로 적을 제압한다."
   },
   "gareth": {
@@ -56,7 +51,6 @@
     "sprite_field": "gareth_field",
     "sprite_face": "gareth_face",
     "tags": ["human", "veteran", "shield"],
-    "traits": ["grudge_collector", "berserker"],
     "description": "베테랑 중기사. 두꺼운 갑옷과 방패로 동료를 지킨다."
   }
 }

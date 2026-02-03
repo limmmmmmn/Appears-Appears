@@ -1,0 +1,66 @@
+{
+  "rune_bloodlust": {
+    "id": "rune_bloodlust",
+    "name": "광기의 룬",
+    "description": "붉은 빛이 맥동하는 룬",
+    "icon": "🔴",
+    "rarity": "rare",
+    "trait_id": "bloodlust"
+  },
+  "rune_intimidating": {
+    "id": "rune_intimidating",
+    "name": "위압의 룬",
+    "description": "서늘한 기운이 감도는 룬",
+    "icon": "🟣",
+    "rarity": "uncommon",
+    "trait_id": "intimidating"
+  },
+  "rune_grudge": {
+    "id": "rune_grudge",
+    "name": "원한의 룬",
+    "description": "원념을 흡수하는 어두운 룬",
+    "icon": "⚫",
+    "rarity": "rare",
+    "trait_id": "grudge_collector"
+  },
+  "rune_gold": {
+    "id": "rune_gold",
+    "name": "황금의 룬",
+    "description": "금빛으로 빛나는 룬",
+    "icon": "🟡",
+    "rarity": "uncommon",
+    "trait_id": "gold_finder"
+  },
+  "rune_growth": {
+    "id": "rune_growth",
+    "name": "성장의 룬",
+    "description": "생명력이 넘치는 초록빛 룬",
+    "icon": "🟢",
+    "rarity": "uncommon",
+    "trait_id": "exp_boost"
+  },
+  "rune_fortune": {
+    "id": "rune_fortune",
+    "name": "행운의 룬",
+    "description": "무지개빛으로 반짝이는 룬",
+    "icon": "🌈",
+    "rarity": "rare",
+    "trait_id": "lucky_looter"
+  },
+  "rune_rage": {
+    "id": "rune_rage",
+    "name": "분노의 룬",
+    "description": "불꽃이 이글거리는 룬",
+    "icon": "🔶",
+    "rarity": "epic",
+    "trait_id": "berserker"
+  },
+  "rune_speed": {
+    "id": "rune_speed",
+    "name": "신속의 룬",
+    "description": "번개가 감도는 푸른 룬",
+    "icon": "🔵",
+    "rarity": "uncommon",
+    "trait_id": "quick_battle"
+  }
+}

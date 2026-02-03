@@ -10,6 +10,7 @@ var items: Dictionary = {}
 var shops: Dictionary = {}
 var town_events: Dictionary = {}
 var traits: Dictionary = {}
+var runes: Dictionary = {}
 
 const DATA_PATH := "res://data/"
 
@@ -28,6 +29,7 @@ func _load_all_data() -> void:
 	shops = _load_json("shops.json")
 	town_events = _load_json("town_events.json")
 	traits = _load_json("traits.json")
+	runes = _load_json("runes.json")
 	
 
 
@@ -162,3 +164,19 @@ func get_hero_traits(hero_id: String) -> Array:
 	## 영웅의 특성 ID 목록 반환
 	var hero_data := get_hero(hero_id)
 	return hero_data.get("traits", [])
+
+
+# 룬
+func get_rune(rune_id: String) -> Dictionary:
+	return runes.get(rune_id, {})
+
+func get_all_rune_ids() -> Array:
+	return runes.keys()
+
+func get_rune_trait(rune_id: String) -> Dictionary:
+	## 룬에 부여된 특성 반환
+	var rune_data := get_rune(rune_id)
+	var trait_id: String = rune_data.get("trait_id", "")
+	if trait_id.is_empty():
+		return {}
+	return get_trait(trait_id)
