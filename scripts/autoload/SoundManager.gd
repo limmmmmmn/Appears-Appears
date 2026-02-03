@@ -17,7 +17,7 @@ const SOUND_PATH := "res://assets/audio/"
 
 # 효과음 매핑
 const SFX_FILES := {
-	# 전투
+	# 전투 - 기본
 	"hit": "hit.wav",
 	"hit_crit": "hit_crit.wav",
 	"slash": "slash.wav",
@@ -27,7 +27,18 @@ const SFX_FILES := {
 	"death": "death.wav",
 	"victory": "victory.wav",
 	"defeat": "defeat.wav",
-	
+
+	# 전투 - 클래스별 공격
+	"atk_warrior": "atk_warrior.wav",    # 용사: 묵직한 검격
+	"atk_knight": "atk_knight.wav",      # 기사: 방패 타격
+	"atk_thief": "atk_thief.wav",        # 도적: 빠른 단검
+	"atk_archer": "atk_archer.wav",      # 궁수: 활시위
+	"atk_mage": "atk_mage.wav",          # 마법사: 마법 발사
+	"atk_cleric": "atk_cleric.wav",      # 성직자: 신성한 타격
+
+	# 전투 - 적 공격
+	"atk_enemy": "atk_enemy.wav",        # 적 기본 공격
+
 	# UI
 	"select": "select.wav",
 	"confirm": "confirm.wav",
@@ -36,7 +47,7 @@ const SFX_FILES := {
 	"item_get": "item_get.wav",
 	"gold": "gold.wav",
 	"level_up": "level_up.wav",
-	
+
 	# 필드
 	"encounter": "encounter.wav",
 	"step": "step.wav",
@@ -164,6 +175,26 @@ func play_defeat() -> void:
 func play_encounter() -> void:
 	## 적 조우
 	play_sfx("encounter")
+
+
+func play_attack(class_id: String, is_crit: bool = false) -> void:
+	## 클래스별 공격 사운드
+	var sound_key: String = "atk_" + class_id
+	var volume: float = 1.2 if is_crit else 1.0
+
+	# 클래스별 사운드가 있으면 재생, 없으면 기본 슬래시
+	if _sound_cache.has(sound_key) or SFX_FILES.has(sound_key):
+		play_sfx(sound_key, volume)
+	else:
+		play_sfx("slash", volume)
+
+
+func play_enemy_attack() -> void:
+	## 적 공격 사운드
+	if _sound_cache.has("atk_enemy") or SFX_FILES.has("atk_enemy"):
+		play_sfx("atk_enemy")
+	else:
+		play_sfx("hit", 0.9)
 #endregion
 
 

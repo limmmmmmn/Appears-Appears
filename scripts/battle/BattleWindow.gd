@@ -552,10 +552,14 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	# 데미지 계산
 	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
 
+	# 클래스별 공격 사운드
+	if SoundManager:
+		SoundManager.play_attack(hero.class_id, is_crit)
+
 	target.take_damage(damage)
 	target.play_hit_effect(is_crit)
 	target.show_damage_number(damage, is_crit)
-	
+
 	# 크리티컬 시 진동 효과
 	if is_crit:
 		play_critical_shake()
@@ -566,7 +570,7 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	if skill_id == "basic_attack":
 		_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
 	else:
-		_send_log("%s [%s] → ⭐ %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
+		_send_log("%s [%s] → %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
 
 	if not target.is_alive():
 		_on_enemy_defeated(target)
@@ -585,7 +589,11 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 
 	# 전체 공격 플래시 효과
 	play_aoe_flash()
-	
+
+	# 클래스별 공격 사운드
+	if SoundManager:
+		SoundManager.play_attack(hero.class_id, false)
+
 	_send_log("%s [%s] 발동!" % [hero.hero_name, skill_name], Color.YELLOW)
 
 	var any_crit: bool = false
@@ -736,19 +744,23 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 		return
 	
 	_bring_to_front()
-	
+
 	var target: Hero = alive_heroes[randi() % alive_heroes.size()]
-	
+
 	enemy.play_attack_effect()
-	
+
+	# 적 공격 사운드
+	if SoundManager:
+		SoundManager.play_enemy_attack()
+
 	var is_evaded := randf() * 100 < target.get_eva()
 	if is_evaded:
 		_send_log("%s → %s 회피!" % [enemy.enemy_name, target.hero_name], Color.GRAY)
 		return
-	
+
 	var is_crit := randf() * 100 < enemy.get_crit()
 	var damage := _calc_enemy_damage(enemy, target, is_crit)
-	
+
 	PartyManager.on_hero_damaged(target, damage)
 	call_deferred("_emit_party_updated")
 	
