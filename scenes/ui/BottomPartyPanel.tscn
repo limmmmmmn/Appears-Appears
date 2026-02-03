@@ -94,7 +94,7 @@ layout_mode = 2
 theme_override_constants/separation = 3
 
 [node name="Face" type="TextureRect" parent="HBox/Slot0/VBox/TopRow"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(64, 64)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
@@ -158,7 +158,7 @@ layout_mode = 2
 theme_override_constants/separation = 3
 
 [node name="Face" type="TextureRect" parent="HBox/Slot1/VBox/TopRow"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(64, 64)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
@@ -222,7 +222,7 @@ layout_mode = 2
 theme_override_constants/separation = 3
 
 [node name="Face" type="TextureRect" parent="HBox/Slot2/VBox/TopRow"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(64, 64)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
@@ -286,7 +286,7 @@ layout_mode = 2
 theme_override_constants/separation = 3
 
 [node name="Face" type="TextureRect" parent="HBox/Slot3/VBox/TopRow"]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(64, 64)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5

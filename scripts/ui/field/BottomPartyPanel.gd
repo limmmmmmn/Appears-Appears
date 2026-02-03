@@ -122,12 +122,8 @@ func _setup_slots() -> void:
 
 				var bars = top_row.get_node_or_null("Bars")
 				if bars:
-					# HP바 숨기기
-					var hp_bar = bars.get_node_or_null("HPBar")
-					if hp_bar:
-						hp_bar.visible = false
-					slot.mp_bar = bars.get_node_or_null("MPBar")
-					slot.atb_bar = bars.get_node_or_null("ATBBar")
+					# 모든 바 숨기기 (발더스 게이트 스타일)
+					bars.visible = false
 
 			var bottom_row = vbox.get_node_or_null("BottomRow")
 			if bottom_row:
@@ -224,13 +220,6 @@ func update_display() -> void:
 			var hp_percent: float = float(hero.current_hp) / float(max_hp) if max_hp > 0 else 1.0
 			_update_damage_overlay(slot, hp_percent)
 			_update_hp_label(slot, hero.current_hp, max_hp)
-
-			# MP 바 업데이트
-			if slot.mp_bar:
-				var max_mp := hero.get_max_mp()
-				slot.mp_bar.max_value = max_mp
-				slot.mp_bar.value = hero.current_mp
-				_update_mp_color(slot, float(hero.current_mp) / float(max_mp) if max_mp > 0 else 1.0)
 
 			# 스킬 토글 업데이트
 			_update_skill_toggles(slot, hero)
