@@ -19,6 +19,9 @@ var rune_inventory_container: VBoxContainer = null
 var selected_hero: Hero = null
 var selected_slot: String = ""
 
+# 드래그 프리뷰 레이어
+var drag_preview: Control = null
+
 
 func _ready() -> void:
 	layer = 100
@@ -244,9 +247,9 @@ func _create_hero_full_card(hero: Hero) -> PanelContainer:
 
 	vbox.add_child(_create_separator())
 
-	# === 장비 슬롯 (6개) ===
+	# === 장비 슬롯 (6개) - 드래그 앤 드롭 지원 ===
 	var equip_label := Label.new()
-	equip_label.text = "[ 장비 ]"
+	equip_label.text = "[ 장비 ] (드래그로 이동)"
 	equip_label.add_theme_font_size_override("font_size", 9)
 	equip_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	vbox.add_child(equip_label)
@@ -256,50 +259,28 @@ func _create_hero_full_card(hero: Hero) -> PanelContainer:
 
 	for slot in slots:
 		var equip_id: String = hero.equipment.get(slot, "")
-		var equip_data: Dictionary = DataManager.get_equipment(equip_id) if not equip_id.is_empty() else {}
+		var slot_icon: String = slot_icons.get(slot, "?")
 
-		var slot_btn := Button.new()
-		slot_btn.custom_minimum_size = Vector2(0, 22)
-		slot_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		slot_btn.add_theme_font_size_override("font_size", 8)
-
-		if equip_data.is_empty():
-			slot_btn.text = "%s -" % slot_icons.get(slot, "?")
-			slot_btn.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
-		else:
-			var rarity: String = equip_data.get("rarity", "common")
-			slot_btn.text = "%s %s" % [slot_icons.get(slot, "?"), equip_data.get("name", "?")]
-			slot_btn.add_theme_color_override("font_color", _get_rarity_color(rarity))
-
-		slot_btn.pressed.connect(_on_equipment_slot_pressed.bind(hero, slot))
-		vbox.add_child(slot_btn)
+		var draggable := DraggableSlot.new()
+		draggable.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		draggable.setup(self, hero, slot, equip_id, slot_icon, false)
+		vbox.add_child(draggable)
 
 	vbox.add_child(_create_separator())
 
-	# === 룬 슬롯 ===
+	# === 룬 슬롯 - 드래그 앤 드롭 지원 ===
 	var rune_label := Label.new()
 	rune_label.text = "[ 룬 ]"
 	rune_label.add_theme_font_size_override("font_size", 9)
 	rune_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	vbox.add_child(rune_label)
 
-	var rune_data: Dictionary = hero.get_equipped_rune()
+	var rune_draggable := DraggableSlot.new()
+	rune_draggable.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rune_draggable.setup(self, hero, "rune", hero.equipped_rune_id, "🔮", true)
+	vbox.add_child(rune_draggable)
+
 	var trait_data: Dictionary = DataManager.get_rune_trait(hero.equipped_rune_id) if not hero.equipped_rune_id.is_empty() else {}
-
-	var rune_btn := Button.new()
-	rune_btn.custom_minimum_size = Vector2(0, 26)
-	rune_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rune_btn.add_theme_font_size_override("font_size", 9)
-
-	if rune_data.is_empty():
-		rune_btn.text = "🔮 -"
-		rune_btn.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
-	else:
-		rune_btn.text = "%s %s" % [rune_data.get("icon", "🔮"), rune_data.get("name", "?")]
-		rune_btn.add_theme_color_override("font_color", _get_rarity_color(rune_data.get("rarity", "common")))
-
-	rune_btn.pressed.connect(_on_rune_slot_pressed.bind(hero))
-	vbox.add_child(rune_btn)
 
 	# 특성 효과 표시
 	if not trait_data.is_empty():
@@ -460,15 +441,12 @@ func _refresh_equipment_inventory() -> void:
 		has_equip = true
 		var qty: int = inventory[item_id]
 		var rarity: String = equip_data.get("rarity", "common")
-		var slot: String = equip_data.get("slot", "")
-		var slot_icons: Dictionary = {"weapon": "⚔", "shield": "🛡", "head": "👒", "body": "👕", "accessory": "💍"}
-		var slot_icon: String = slot_icons.get(slot, "?")
 
-		var item_label := Label.new()
-		item_label.text = "%s %s x%d" % [slot_icon, equip_data.get("name", item_id), qty]
-		item_label.add_theme_font_size_override("font_size", 9)
-		item_label.add_theme_color_override("font_color", _get_rarity_color(rarity))
-		inventory_container.add_child(item_label)
+		# 드래그 가능한 인벤토리 아이템
+		var draggable := DraggableInventoryItem.new()
+		draggable.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		draggable.setup(self, item_id, qty, false)
+		inventory_container.add_child(draggable)
 
 		# 스탯 미리보기
 		var stats: Dictionary = equip_data.get("stats", {})
@@ -507,14 +485,13 @@ func _refresh_rune_inventory() -> void:
 
 		has_rune = true
 		var qty: int = inventory[item_id]
-		var rarity: String = rune_data.get("rarity", "common")
 		var trait_data: Dictionary = DataManager.get_rune_trait(item_id)
 
-		var rune_label := Label.new()
-		rune_label.text = "%s %s x%d" % [rune_data.get("icon", "🔮"), rune_data.get("name", item_id), qty]
-		rune_label.add_theme_font_size_override("font_size", 9)
-		rune_label.add_theme_color_override("font_color", _get_rarity_color(rarity))
-		rune_inventory_container.add_child(rune_label)
+		# 드래그 가능한 룬 아이템
+		var draggable := DraggableInventoryItem.new()
+		draggable.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		draggable.setup(self, item_id, qty, true)
+		rune_inventory_container.add_child(draggable)
 
 		if not trait_data.is_empty():
 			var trait_label := Label.new()
@@ -877,3 +854,282 @@ func close() -> void:
 
 func is_open() -> bool:
 	return is_showing
+
+
+#region 드래그 앤 드롭
+class DraggableSlot extends Control:
+	## 장비 슬롯 (드래그 앤 드롭 지원)
+	var pause_menu: PauseMenu = null
+	var hero: Hero = null
+	var slot: String = ""
+	var item_id: String = ""
+	var slot_icon: String = ""
+	var is_rune: bool = false
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(0, 24)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	func setup(p_menu: PauseMenu, p_hero: Hero, p_slot: String, p_item_id: String, p_icon: String, p_rune: bool = false) -> void:
+		pause_menu = p_menu
+		hero = p_hero
+		slot = p_slot
+		item_id = p_item_id
+		slot_icon = p_icon
+		is_rune = p_rune
+		queue_redraw()
+
+	func _draw() -> void:
+		var rect := Rect2(Vector2.ZERO, size)
+
+		# 배경
+		var bg_color := Color(0.15, 0.15, 0.18, 0.9)
+		if is_rune:
+			bg_color = Color(0.18, 0.15, 0.2, 0.9)
+		draw_rect(rect, bg_color, true)
+
+		# 테두리
+		var border_color := Color(0.3, 0.3, 0.35)
+		if not item_id.is_empty():
+			if is_rune:
+				var rune_data: Dictionary = DataManager.get_rune(item_id)
+				border_color = pause_menu._get_rarity_color(rune_data.get("rarity", "common"))
+			else:
+				var equip_data: Dictionary = DataManager.get_equipment(item_id)
+				border_color = pause_menu._get_rarity_color(equip_data.get("rarity", "common"))
+		draw_rect(rect, border_color, false, 1.0)
+
+		# 텍스트
+		var text := slot_icon + " -"
+		var text_color := Color(0.4, 0.4, 0.4)
+		if not item_id.is_empty():
+			if is_rune:
+				var rune_data: Dictionary = DataManager.get_rune(item_id)
+				text = "%s %s" % [rune_data.get("icon", slot_icon), rune_data.get("name", "?")]
+				text_color = pause_menu._get_rarity_color(rune_data.get("rarity", "common"))
+			else:
+				var equip_data: Dictionary = DataManager.get_equipment(item_id)
+				text = "%s %s" % [slot_icon, equip_data.get("name", "?")]
+				text_color = pause_menu._get_rarity_color(equip_data.get("rarity", "common"))
+
+		var font: Font = ThemeDB.fallback_font
+		var font_size: int = 9
+		var text_pos := Vector2(4, size.y / 2 + 4)
+		draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, size.x - 8, font_size, text_color)
+
+	func _get_drag_data(_pos: Vector2) -> Variant:
+		if item_id.is_empty():
+			return null
+
+		# 드래그 프리뷰 생성
+		var preview := Label.new()
+		if is_rune:
+			var rune_data: Dictionary = DataManager.get_rune(item_id)
+			preview.text = "%s %s" % [rune_data.get("icon", "🔮"), rune_data.get("name", "?")]
+			preview.add_theme_color_override("font_color", pause_menu._get_rarity_color(rune_data.get("rarity", "common")))
+		else:
+			var equip_data: Dictionary = DataManager.get_equipment(item_id)
+			preview.text = "%s %s" % [slot_icon, equip_data.get("name", "?")]
+			preview.add_theme_color_override("font_color", pause_menu._get_rarity_color(equip_data.get("rarity", "common")))
+		preview.add_theme_font_size_override("font_size", 10)
+		set_drag_preview(preview)
+
+		return {
+			"type": "rune" if is_rune else "equipment",
+			"item_id": item_id,
+			"source_hero": hero,
+			"source_slot": slot
+		}
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		if data == null or not data is Dictionary:
+			return false
+
+		var drag_data: Dictionary = data as Dictionary
+
+		# 룬 슬롯에는 룬만
+		if is_rune:
+			return drag_data.get("type", "") == "rune"
+
+		# 장비 슬롯에는 장비만
+		if drag_data.get("type", "") != "equipment":
+			return false
+
+		# 해당 슬롯에 장착 가능한 타입인지 확인
+		var drag_item_id: String = drag_data.get("item_id", "")
+		if drag_item_id.is_empty():
+			return false
+
+		var equip_data: Dictionary = DataManager.get_equipment(drag_item_id)
+		var equip_slot: String = equip_data.get("slot", "")
+		var slot_type_map: Dictionary = {"main_hand": "weapon", "off_hand": "shield", "head": "head", "body": "body", "acc1": "accessory", "acc2": "accessory"}
+		var target_type: String = slot_type_map.get(slot, "")
+
+		if equip_slot != target_type:
+			return false
+
+		# 영웅이 장착 가능한지
+		return hero.can_equip(drag_item_id)
+
+	func _drop_data(_pos: Vector2, data: Variant) -> void:
+		if data == null or not data is Dictionary:
+			return
+
+		var drag_data: Dictionary = data as Dictionary
+		var drag_item_id: String = drag_data.get("item_id", "")
+		var source_hero: Hero = drag_data.get("source_hero", null)
+		var source_slot: String = drag_data.get("source_slot", "")
+
+		if is_rune:
+			pause_menu._handle_rune_drop(hero, drag_item_id, source_hero, source_slot)
+		else:
+			pause_menu._handle_equipment_drop(hero, slot, drag_item_id, source_hero, source_slot)
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			var mb := event as InputEventMouseButton
+			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+				# 클릭으로도 팝업 열기 (드래그 아닐 때)
+				if is_rune:
+					pause_menu._on_rune_slot_pressed(hero)
+				else:
+					pause_menu._on_equipment_slot_pressed(hero, slot)
+
+
+class DraggableInventoryItem extends Control:
+	## 인벤토리 아이템 (드래그 앤 드롭 지원)
+	var pause_menu: PauseMenu = null
+	var item_id: String = ""
+	var is_rune: bool = false
+	var quantity: int = 1
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(0, 20)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	func setup(p_menu: PauseMenu, p_item_id: String, p_qty: int, p_rune: bool) -> void:
+		pause_menu = p_menu
+		item_id = p_item_id
+		quantity = p_qty
+		is_rune = p_rune
+		queue_redraw()
+
+	func _draw() -> void:
+		var text := ""
+		var text_color := Color.WHITE
+		var slot_icon := ""
+
+		if is_rune:
+			var rune_data: Dictionary = DataManager.get_rune(item_id)
+			text = "%s %s x%d" % [rune_data.get("icon", "🔮"), rune_data.get("name", item_id), quantity]
+			text_color = pause_menu._get_rarity_color(rune_data.get("rarity", "common"))
+		else:
+			var equip_data: Dictionary = DataManager.get_equipment(item_id)
+			var slot: String = equip_data.get("slot", "")
+			var slot_icons: Dictionary = {"weapon": "⚔", "shield": "🛡", "head": "👒", "body": "👕", "accessory": "💍"}
+			slot_icon = slot_icons.get(slot, "?")
+			text = "%s %s x%d" % [slot_icon, equip_data.get("name", item_id), quantity]
+			text_color = pause_menu._get_rarity_color(equip_data.get("rarity", "common"))
+
+		var font: Font = ThemeDB.fallback_font
+		var font_size: int = 9
+		var text_pos := Vector2(0, size.y / 2 + 4)
+		draw_string(font, text_pos, text, HORIZONTAL_ALIGNMENT_LEFT, size.x, font_size, text_color)
+
+	func _get_drag_data(_pos: Vector2) -> Variant:
+		if item_id.is_empty():
+			return null
+
+		# 드래그 프리뷰 생성
+		var preview := Label.new()
+		if is_rune:
+			var rune_data: Dictionary = DataManager.get_rune(item_id)
+			preview.text = "%s %s" % [rune_data.get("icon", "🔮"), rune_data.get("name", "?")]
+			preview.add_theme_color_override("font_color", pause_menu._get_rarity_color(rune_data.get("rarity", "common")))
+		else:
+			var equip_data: Dictionary = DataManager.get_equipment(item_id)
+			preview.text = "%s" % equip_data.get("name", "?")
+			preview.add_theme_color_override("font_color", pause_menu._get_rarity_color(equip_data.get("rarity", "common")))
+		preview.add_theme_font_size_override("font_size", 10)
+		set_drag_preview(preview)
+
+		return {
+			"type": "rune" if is_rune else "equipment",
+			"item_id": item_id,
+			"source_hero": null,
+			"source_slot": "inventory"
+		}
+
+
+func _handle_equipment_drop(target_hero: Hero, target_slot: String, drag_item_id: String, source_hero: Hero, source_slot: String) -> void:
+	## 장비 드롭 처리
+	# 현재 슬롯에 있는 아이템
+	var current_item: String = target_hero.equipment.get(target_slot, "")
+
+	if source_slot == "inventory":
+		# 인벤토리에서 슬롯으로
+		if not current_item.is_empty():
+			InventoryManager.add_item(current_item)
+		InventoryManager.remove_item(drag_item_id)
+		target_hero.equip_item(drag_item_id, target_slot)
+	else:
+		# 슬롯에서 슬롯으로
+		if source_hero == target_hero and source_slot == target_slot:
+			return  # 같은 슬롯이면 무시
+
+		# 소스 슬롯 해제
+		source_hero.unequip_slot(source_slot)
+
+		if source_hero == target_hero:
+			# 같은 영웅 내에서 슬롯 이동
+			if not current_item.is_empty():
+				source_hero.equip_item(current_item, source_slot)
+			target_hero.equip_item(drag_item_id, target_slot)
+		else:
+			# 다른 영웅에게 이동
+			if not current_item.is_empty():
+				# 소스 영웅이 현재 아이템을 장착할 수 있는지 확인
+				if source_hero.can_equip(current_item):
+					source_hero.equip_item(current_item, source_slot)
+				else:
+					InventoryManager.add_item(current_item)
+			target_hero.equip_item(drag_item_id, target_slot)
+
+	_refresh_all()
+
+
+func _handle_rune_drop(target_hero: Hero, drag_rune_id: String, source_hero: Hero, source_slot: String) -> void:
+	## 룬 드롭 처리
+	var current_rune: String = target_hero.equipped_rune_id
+
+	if source_slot == "inventory":
+		# 인벤토리에서 룬 슬롯으로
+		if not current_rune.is_empty():
+			InventoryManager.add_item(current_rune)
+		InventoryManager.remove_item(drag_rune_id)
+		target_hero.equip_rune(drag_rune_id)
+	else:
+		# 슬롯에서 슬롯으로
+		if source_hero == target_hero:
+			return  # 같은 슬롯이면 무시
+
+		source_hero.unequip_rune()
+		if not current_rune.is_empty():
+			source_hero.equip_rune(current_rune)
+		target_hero.equip_rune(drag_rune_id)
+
+	# FieldHUD 갱신
+	var field_hud = get_tree().get_first_node_in_group("field_hud")
+	if field_hud and field_hud.has_method("refresh_traits"):
+		field_hud.refresh_traits()
+
+	_refresh_all()
+
+
+func _refresh_all() -> void:
+	_refresh_hero_cards()
+	_refresh_equipment_inventory()
+	_refresh_rune_inventory()
+#endregion
