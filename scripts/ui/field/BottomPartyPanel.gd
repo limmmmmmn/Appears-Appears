@@ -23,7 +23,6 @@ const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
 const HP_COLOR_MID := Color(0.9, 0.7, 0.2)
 const HP_COLOR_LOW := Color(0.9, 0.2, 0.2)
-const MP_COLOR := Color(0.3, 0.5, 0.9)
 
 # 슬롯 데이터
 class SlotUI:
@@ -31,7 +30,6 @@ class SlotUI:
 	var face: TextureRect
 	var damage_overlay: ColorRect
 	var hp_label: Label
-	var mp_bar: ProgressBar
 	var tactic_btn: Button
 	var equip_grid: GridContainer
 	var equip_labels: Dictionary = {}  # slot_name -> Label
@@ -109,19 +107,6 @@ func _create_slot(index: int) -> SlotUI:
 	slot.hp_label.add_theme_constant_override("outline_size", 2)
 	slot.hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	face_container.add_child(slot.hp_label)
-
-	# MP 바 (얇게, 페이스 폭과 동일)
-	slot.mp_bar = ProgressBar.new()
-	slot.mp_bar.custom_minimum_size = Vector2(FACE_SIZE, 4)
-	slot.mp_bar.show_percentage = false
-	slot.mp_bar.value = 100
-	var mp_bg := StyleBoxFlat.new()
-	mp_bg.bg_color = Color(0.1, 0.1, 0.15)
-	slot.mp_bar.add_theme_stylebox_override("background", mp_bg)
-	var mp_fill := StyleBoxFlat.new()
-	mp_fill.bg_color = MP_COLOR
-	slot.mp_bar.add_theme_stylebox_override("fill", mp_fill)
-	slot.container.add_child(slot.mp_bar)
 
 	# 작전 버튼 (페이스 폭과 동일)
 	slot.tactic_btn = Button.new()
@@ -211,11 +196,6 @@ func update_display() -> void:
 			var hp_percent: float = float(hero.current_hp) / float(max_hp) if max_hp > 0 else 1.0
 			_update_damage_overlay(slot, hp_percent)
 			_update_hp_label(slot, hero.current_hp, max_hp)
-
-			# MP 바 업데이트
-			var max_mp := hero.get_max_mp()
-			slot.mp_bar.max_value = max_mp if max_mp > 0 else 1
-			slot.mp_bar.value = hero.current_mp
 
 			# 작전 버튼 업데이트
 			_update_tactic_button(slot)
@@ -351,6 +331,3 @@ func get_tactic_data(tactic_id: String) -> Dictionary:
 	return TACTICS.get(tactic_id, TACTICS["all_out"])
 
 
-func update_hero_atb(_hero_id: String, _atb_value: float) -> void:
-	# ATB 바 제거됨 - 빈 함수로 유지 (호환성)
-	pass

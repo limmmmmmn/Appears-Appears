@@ -22,7 +22,6 @@ const FOLLOW_DISTANCE: float = 18.0  # 팔로워 간 거리
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var collision: CollisionShape2D = $CollisionShape2D
 @onready var hp_bar: ProgressBar = $StatusBars/HPBar
-@onready var atb_bar: ProgressBar = $StatusBars/ATBBar
 
 var attack_icon: Label = null
 const ATTACK_ICONS: Dictionary = {
@@ -36,7 +35,6 @@ func _ready() -> void:
 	_create_attack_icon()
 	
 	if BattleManager:
-		BattleManager.hero_atb_changed.connect(_on_hero_atb_changed)
 		BattleManager.hero_attacked.connect(_on_hero_attacked)
 
 
@@ -229,15 +227,6 @@ func _update_hp_bar() -> void:
 		else:
 			fill_style.bg_color = Color(0.2, 0.8, 0.2)
 		hp_bar.add_theme_stylebox_override("fill", fill_style)
-
-
-func _on_hero_atb_changed(changed_hero_id: String, value: float) -> void:
-	if changed_hero_id == hero_id and atb_bar:
-		atb_bar.value = value * 100.0
-		
-		var fill_style: StyleBoxFlat = atb_bar.get_theme_stylebox("fill").duplicate()
-		fill_style.bg_color = Color(1.0, 1.0, 0.5) if value >= 0.9 else Color(1.0, 0.8, 0.2)
-		atb_bar.add_theme_stylebox_override("fill", fill_style)
 
 
 func get_current_direction() -> String:

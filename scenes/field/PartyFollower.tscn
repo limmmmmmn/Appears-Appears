@@ -18,7 +18,6 @@ var hero_data: Dictionary = {}
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var collision: CollisionShape2D = $CollisionShape2D
 @onready var hp_bar: ProgressBar = $StatusBars/HPBar
-@onready var atb_bar: ProgressBar = $StatusBars/ATBBar
 
 var attack_icon: Label = null
 const ATTACK_ICONS: Dictionary = {
@@ -37,7 +36,6 @@ func _ready() -> void:
 	_create_attack_icon()
 	
 	if BattleManager:
-		BattleManager.hero_atb_changed.connect(_on_hero_atb_changed)
 		BattleManager.hero_attacked.connect(_on_hero_attacked)
 
 
@@ -161,18 +159,6 @@ func _update_hp_bar() -> void:
 		hp_bar.add_theme_stylebox_override(\"fill\", fill_style)
 
 
-func _on_hero_atb_changed(changed_hero_id: String, value: float) -> void:
-	if changed_hero_id == hero_id and atb_bar:
-		atb_bar.value = value * 100.0
-		
-		var fill_style: StyleBoxFlat = atb_bar.get_theme_stylebox(\"fill\").duplicate()
-		if value >= 0.9:
-			fill_style.bg_color = Color(1.0, 1.0, 0.5)
-		else:
-			fill_style.bg_color = Color(1.0, 0.8, 0.2)
-		atb_bar.add_theme_stylebox_override(\"fill\", fill_style)
-
-
 func get_current_direction() -> String:
 	return current_direction
 
@@ -225,13 +211,6 @@ corner_radius_top_right = 1
 corner_radius_bottom_right = 1
 corner_radius_bottom_left = 1
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_atb_fill"]
-bg_color = Color(1, 0.8, 0.2, 1)
-corner_radius_top_left = 1
-corner_radius_top_right = 1
-corner_radius_bottom_right = 1
-corner_radius_bottom_left = 1
-
 [node name="PartyFollower" type="CharacterBody2D" unique_id=958290519]
 collision_layer = 2
 collision_mask = 4
@@ -263,11 +242,3 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="StatusBars" unique_id=1619428600]
-layout_mode = 0
-offset_top = 5.0
-offset_right = 24.0
-offset_bottom = 8.0
-theme_override_styles/background = SubResource("StyleBoxFlat_hp_bg")
-theme_override_styles/fill = SubResource("StyleBoxFlat_atb_fill")
-show_percentage = false

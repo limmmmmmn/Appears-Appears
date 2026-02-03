@@ -13,7 +13,7 @@ signal battle_log_received(message: String, color: Color)
 signal party_hp_changed
 signal elite_victory(battle_id: int)
 signal boss_victory(battle_id: int)
-signal hero_atb_changed(hero_id: String, value: float)
+signal beat_occurred(beat_index: int)  # 비트 발생 시그널
 signal battle_speed_changed(speed: float)
 signal hero_attacked(hero_id: String)
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
@@ -35,10 +35,6 @@ signal threshold_reached(window_count: int)   # 임계치 도달 시
 var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite}
 var _battle_id_counter: int = 0
 
-# === 전역 Hero ATB 시스템 ===
-var hero_atb: Dictionary = {}  # hero_id -> atb_value (0.0 ~ 1.0)
-var _atb_active: bool = false
-
 # === 전투 속도 ===
 var battle_speed: float = 1.0
 const BATTLE_SPEEDS: Array[float] = [1.0, 2.0, 3.0]
@@ -46,11 +42,6 @@ var _current_speed_index: int = 0
 
 # === Charm 효과 ===
 var extra_enemy_slots: int = 0  # 추가 적 슬롯 (charm1 효과)
-
-# ATB 설정
-const ATB_BASE_SPEED: float = 0.12
-const ATB_SPD_FACTOR: float = 0.01
-const ATB_MAX: float = 1.0
 
 # 전투창 배치 설정
 const WINDOW_SIZE := Vector2(280, 200)
@@ -61,43 +52,7 @@ var battle_container: CanvasLayer = null
 
 
 func _ready() -> void:
-	set_process(true)
-
-
-func _process(delta: float) -> void:
-	if active_battles.is_empty():
-		_update_hero_atb_for_hud(delta)
-
-
-#region HUD용 Hero ATB (비전투 시)
-func _update_hero_atb_for_hud(delta: float) -> void:
-	var speed_delta: float = delta * battle_speed
-	
-	for hero in PartyManager.get_alive_heroes():
-		if not hero_atb.has(hero.id):
-			hero_atb[hero.id] = 0.0
-		
-		var charge_rate: float = ATB_BASE_SPEED + (hero.get_spd() * ATB_SPD_FACTOR)
-		hero_atb[hero.id] = minf(hero_atb[hero.id] + charge_rate * speed_delta, ATB_MAX)
-		
-		hero_atb_changed.emit(hero.id, hero_atb[hero.id])
-
-
-func get_hero_atb(hero_id: String) -> float:
-	return hero_atb.get(hero_id, 0.0)
-
-
-func init_hero_atb() -> void:
-	hero_atb.clear()
-	for hero in PartyManager.get_alive_heroes():
-		hero_atb[hero.id] = 0.0
-		hero_atb_changed.emit(hero.id, 0.0)
-
-
-func on_hero_died(hero_id: String) -> void:
-	hero_atb.erase(hero_id)
-	hero_atb_changed.emit(hero_id, 0.0)
-#endregion
+	pass
 
 
 #region 전투창 증식 시스템 - 핵심 로직
@@ -184,9 +139,8 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 	if SoundManager:
 		SoundManager.play_encounter()
 	
-	# 첫 전투 시작 시 ATB 초기화
-	if active_battles.is_empty():
-		init_hero_atb()
+	# 첫 전투 시작 체크
+	var is_first_battle := active_battles.is_empty()
 	
 	# BattleWindow 씬 인스턴스 생성
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
@@ -229,10 +183,7 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 		"is_boss": is_boss,
 		"is_elite": is_elite
 	}
-	
-	# ATB 활성화
-	_atb_active = true
-	
+
 	# === 창 생성 효과 (비워둠) ===
 	var window_count := get_active_battle_count()
 	window_created.emit(window_count)
@@ -336,7 +287,6 @@ func end_battle(battle_id: int, victory: bool) -> void:
 	battle_ended.emit(battle_id, victory)
 	
 	if active_battles.is_empty():
-		_atb_active = false
 		all_battles_ended.emit()
 
 
@@ -367,11 +317,6 @@ func _on_battle_log(message: String, color: Color) -> void:
 
 func _on_party_updated() -> void:
 	party_hp_changed.emit()
-	
-	for hero_id in hero_atb.keys():
-		var hero = PartyManager.get_hero_by_id(hero_id)
-		if hero == null or hero.is_dead:
-			on_hero_died(hero_id)
 
 
 func _on_loot_drop_requested(item_id: String, start_pos: Vector2) -> void:
@@ -398,8 +343,6 @@ func clear_battle_container() -> void:
 		battle_container.queue_free()
 		battle_container = null
 	active_battles.clear()
-	_atb_active = false
-	hero_atb.clear()
 #endregion
 
 
@@ -567,9 +510,6 @@ func close_all_battles() -> void:
 		if window_ref != null and is_instance_valid(window_ref):
 			window_ref.queue_free()
 		active_battles.erase(battle_id)
-
-	_atb_active = false
-	hero_atb.clear()
 
 
 func toggle_battle_speed() -> float:

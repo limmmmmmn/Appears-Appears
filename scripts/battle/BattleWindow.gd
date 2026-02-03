@@ -1,13 +1,13 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: ATB 전투창 (전투창 증식 시스템)
-## - 각 전투창이 독립적인 영웅 ATB + 적 ATB 관리
+## BattleWindow: 비트 전투창 (100 BPM 비트 시스템)
+## - 각 전투창이 독립적인 비트 타이밍 관리
 ## - 전투 중 적 동적 추가 지원
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
-signal hero_atb_changed(battle_id: int, hero_id: String, value: float)
+signal beat_occurred(beat_index: int)
 signal loot_drop_requested(item_id: String, start_global_pos: Vector2)
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
@@ -24,9 +24,28 @@ var current_state: BattleState = BattleState.STARTING
 var enemies: Array = []
 var enemy_data_list: Array = []
 
-# === ATB 시스템 (전투창별 독립) ===
-var enemy_atb: Dictionary = {}
-var hero_atb: Dictionary = {}
+# === 비트 시스템 ===
+const BPM: float = 100.0
+const BEAT_INTERVAL: float = 60.0 / BPM  # 0.6초
+var beat_timer: float = 0.0
+var current_beat: int = 0
+
+# 클래스별 비트 패턴 (0=없음, 1=스킬1, 2=스킬2)
+const CLASS_PATTERNS := {
+	"warrior": [1, 1, 1, 1],                 # 용사: 매 비트 기본공격
+	"mage": [0, 0, 0, 2],                    # 마법사: 4비트마다 스킬2
+	"thief": [0, 1, 0, 2],                   # 도적: 2비트에 기본공격, 4비트에 스킬2
+	"cleric": [0, 0, 0, 1, 0, 0, 0, 2],      # 성직자: 4비트에 기본공격, 8비트에 힐
+	"archer": [0, 0, 1, 0, 0, 0, 1, 2],      # 궁수: 3비트에 공격, 7비트에 공격, 8비트에 스킬2
+	"knight": [2, 0, 0, 1, 0, 0, 0, 1],      # 기사: 1비트에 스킬2, 4비트/8비트에 공격
+}
+const DEFAULT_PATTERN := [1, 0, 1, 0]        # 기본 패턴
+
+# 영웅별 비트 인덱스 추적
+var hero_beat_index: Dictionary = {}
+
+# 적 비트 시스템 (2비트마다 공격)
+var enemy_beat_offset: Dictionary = {}  # 적별 시작 오프셋 (0 또는 1)
 
 # === 보상 ===
 var total_exp: int = 0
@@ -57,12 +76,7 @@ var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 @onready var loot_label: Label = %LootLabel
 @onready var kill_count_label: Label = %KillCountLabel
 
-# === ATB 설정 ===
-const ENEMY_ATB_BASE: float = 0.08
-const ENEMY_ATB_SPD_FACTOR: float = 0.008
-const HERO_ATB_BASE: float = 0.15
-const HERO_ATB_SPD_FACTOR: float = 0.012
-const ATB_MAX: float = 1.0
+# === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
 
 const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
@@ -130,8 +144,7 @@ func _process(delta: float) -> void:
 	if current_state != BattleState.RUNNING:
 		return
 
-	_update_hero_atb(delta)
-	_update_enemy_atb(delta)
+	_update_beat_system(delta)
 	_update_background_effect(delta)
 	_update_danger_border_pulse(delta)
 
@@ -207,7 +220,7 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
 
 	var idx: int = enemies.size() - 1
-	enemy_atb[idx] = randf() * 0.3
+	enemy_beat_offset[idx] = randi() % 2  # 랜덤 비트 오프셋
 
 	# 적이 추가되면 전투 재개
 	if current_state == BattleState.VICTORY:
@@ -244,7 +257,7 @@ func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
 	enemies.append(battle_enemy)
 
 	var idx: int = enemies.size() - 1
-	enemy_atb[idx] = randf() * 0.6
+	enemy_beat_offset[idx] = randi() % 2  # 랜덤 비트 오프셋 (0 또는 1)
 
 
 func get_local_danger_level() -> int:
@@ -296,44 +309,128 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 	return false
 
 
-func _init_hero_atb() -> void:
-	hero_atb.clear()
+func _init_beat_system() -> void:
+	## 비트 시스템 초기화
+	beat_timer = 0.0
+	current_beat = 0
+	hero_beat_index.clear()
+	enemy_beat_offset.clear()
+
+	# 영웅별 비트 인덱스 초기화
 	for hero in PartyManager.get_alive_heroes():
-		hero_atb[hero.id] = randf() * 0.4
+		hero_beat_index[hero.id] = 0
+
+	# 적별 시작 오프셋 (0 또는 1로 랜덤)
+	for i in range(enemies.size()):
+		enemy_beat_offset[i] = randi() % 2
 
 
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
-	_init_hero_atb()
+	_init_beat_system()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
 #endregion
 
 
-#region 영웅 ATB 시스템
-func _update_hero_atb(delta: float) -> void:
+#region 비트 시스템
+func _update_beat_system(delta: float) -> void:
+	## 비트 타이밍 업데이트
 	var speed_delta: float = delta * BattleManager.get_battle_speed()
-	
+	beat_timer += speed_delta
+
+	# 비트 발생 체크
+	if beat_timer >= BEAT_INTERVAL:
+		beat_timer -= BEAT_INTERVAL
+		_on_beat_occurred()
+
+
+func _on_beat_occurred() -> void:
+	## 비트 발생 시 영웅과 적의 행동 처리
+	current_beat += 1
+	beat_occurred.emit(current_beat)
+
+	# 비트 시각 효과
+	_play_beat_effect()
+
+	# 영웅 행동 처리
 	for hero in PartyManager.get_alive_heroes():
-		if not hero_atb.has(hero.id):
-			hero_atb[hero.id] = 0.0
-		
-		var charge_rate: float = HERO_ATB_BASE + (hero.get_spd() * HERO_ATB_SPD_FACTOR)
-		hero_atb[hero.id] = minf(hero_atb[hero.id] + charge_rate * speed_delta, ATB_MAX)
-		
-		# BattleManager 시그널로 HUD 업데이트
-		BattleManager.hero_atb_changed.emit(hero.id, hero_atb[hero.id])
-		
-		if hero_atb[hero.id] >= ATB_MAX:
-			_hero_attack(hero)
-			hero_atb[hero.id] = 0.0
-			BattleManager.hero_atb_changed.emit(hero.id, 0.0)
-			
-			if _check_battle_end():
-				return
+		if hero.is_dead:
+			continue
+		_process_hero_beat(hero)
+		if _check_battle_end():
+			return
+
+	# 적 행동 처리 (2비트마다)
+	for i in range(enemies.size()):
+		var enemy: BattleEnemy = enemies[i]
+		if not enemy.is_alive():
+			continue
+		_process_enemy_beat(enemy, i)
+		if _check_battle_end():
+			return
 
 
-func _hero_attack(hero: Hero) -> void:
+func _process_hero_beat(hero: Hero) -> void:
+	## 영웅의 비트 패턴 처리
+	if not hero_beat_index.has(hero.id):
+		hero_beat_index[hero.id] = 0
+
+	var pattern: Array = CLASS_PATTERNS.get(hero.class_id, DEFAULT_PATTERN)
+	var beat_idx: int = hero_beat_index[hero.id]
+	var action: int = pattern[beat_idx]
+
+	# 다음 비트로 이동
+	hero_beat_index[hero.id] = (beat_idx + 1) % pattern.size()
+
+	# 행동 실행
+	if action == 0:
+		return  # 대기
+	elif action == 1:
+		_hero_attack(hero, "basic_attack")
+	elif action >= 2:
+		_hero_attack(hero, _get_hero_skill(hero, action))
+
+
+func _process_enemy_beat(enemy: BattleEnemy, enemy_index: int) -> void:
+	## 적의 비트 패턴 처리 (2비트마다 공격)
+	if not enemy_beat_offset.has(enemy_index):
+		enemy_beat_offset[enemy_index] = randi() % 2
+
+	var offset: int = enemy_beat_offset[enemy_index]
+	# 2비트마다 공격 (오프셋 적용)
+	if (current_beat + offset) % 2 == 0:
+		_enemy_attack(enemy)
+
+
+func _get_hero_skill(hero: Hero, skill_num: int) -> String:
+	## 영웅의 스킬 번호에 해당하는 스킬 ID 반환
+	var skills := hero.get_available_skills()
+	# 기본 공격 제외한 스킬 목록
+	var non_basic: Array = []
+	for s in skills:
+		if s != "basic_attack":
+			non_basic.append(s)
+
+	if non_basic.is_empty():
+		return "basic_attack"
+
+	# skill_num 2 = 첫 번째 스킬, 3 = 두 번째 스킬...
+	var idx: int = skill_num - 2
+	if idx >= 0 and idx < non_basic.size():
+		return non_basic[idx]
+	return non_basic[0]
+
+
+func _play_beat_effect() -> void:
+	## 비트 시각 효과
+	if background:
+		var tween := create_tween()
+		tween.tween_property(background, "modulate", Color(1.2, 1.2, 1.2), 0.05)
+		tween.tween_property(background, "modulate", Color.WHITE, 0.1)
+
+
+func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 	if hero == null or hero.is_dead:
 		return
 
@@ -343,8 +440,6 @@ func _hero_attack(hero: Hero) -> void:
 	_bring_to_front()
 	BattleManager.hero_attacked.emit(hero.id)
 
-	# 스킬 선택
-	var skill_id: String = _select_skill_for_hero(hero)
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 
 	# 스킬 데이터가 없으면 기본 공격으로 폴백
@@ -354,12 +449,6 @@ func _hero_attack(hero: Hero) -> void:
 
 	var target_type: String = skill_data.get("target", "single_enemy")
 
-	# MP 소모
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	if mp_cost > 0:
-		hero.use_mp(mp_cost)
-		call_deferred("_emit_party_updated")
-
 	# 타겟 타입에 따른 처리
 	match target_type:
 		"single_ally", "all_allies":
@@ -368,25 +457,6 @@ func _hero_attack(hero: Hero) -> void:
 			_execute_aoe_attack(hero, skill_id, skill_data)
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
-
-
-func _select_skill_for_hero(hero: Hero) -> String:
-	## 영웅이 사용할 스킬 선택 - 토글된 스킬 우선 사용
-	var usable_skills: Array = hero.get_usable_skills()
-	
-	# 힐러인 경우 아군 체력 확인
-	if hero.is_skill_enabled("heal") and hero.can_use_skill("heal"):
-		var wounded := _get_wounded_heroes()
-		if not wounded.is_empty():
-			return "heal"
-	
-	# 토글 ON이고 MP 충분한 스킬이 있으면 우선 사용
-	if not usable_skills.is_empty():
-		# 랜덤하게 선택
-		return usable_skills[randi() % usable_skills.size()]
-	
-	# 토글된 스킬이 없거나 MP 부족하면 기본 공격
-	return "basic_attack"
 
 
 func _get_wounded_heroes() -> Array:
@@ -595,10 +665,6 @@ func _select_smart_target(hero: Hero) -> BattleEnemy:
 	return alive[randi() % alive.size()]
 
 
-func get_hero_atb_value(hero_id: String) -> float:
-	return hero_atb.get(hero_id, 0.0)
-
-
 func has_alive_enemies() -> bool:
 	for e in enemies:
 		if e != null and e.is_alive():
@@ -607,31 +673,7 @@ func has_alive_enemies() -> bool:
 #endregion
 
 
-#region 적 ATB 시스템
-func _update_enemy_atb(delta: float) -> void:
-	var speed_delta: float = delta * BattleManager.get_battle_speed()
-	
-	for i in range(enemies.size()):
-		var enemy: BattleEnemy = enemies[i]
-		if not enemy.is_alive():
-			continue
-		
-		if not enemy_atb.has(i):
-			enemy_atb[i] = randf() * 0.4
-		
-		var charge_rate: float = ENEMY_ATB_BASE + (enemy.get_spd() * ENEMY_ATB_SPD_FACTOR)
-		enemy_atb[i] = minf(enemy_atb[i] + charge_rate * speed_delta, ATB_MAX)
-		
-		enemy.update_atb_bar(enemy_atb[i])
-		
-		if enemy_atb[i] >= ATB_MAX:
-			_enemy_attack(enemy)
-			enemy_atb[i] = 0.0
-			
-			if _check_battle_end():
-				return
-
-
+#region 적 공격 시스템
 func _enemy_attack(enemy: BattleEnemy) -> void:
 	if not enemy.is_alive():
 		return
@@ -710,7 +752,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	var idx := enemies.find(enemy)
 	if idx >= 0:
-		enemy_atb.erase(idx)
+		enemy_beat_offset.erase(idx)
 
 	enemy.play_death_effect()
 
