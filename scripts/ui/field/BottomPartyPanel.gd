@@ -56,7 +56,9 @@ const TACTIC_ORDER := ["all_out", "no_mp", "heal_first", "conserve_mp", "defend"
 class SlotUI:
 	var container: PanelContainer
 	var face: TextureRect
-	var hp_bar: ProgressBar
+	var face_container: Control  # 페이스 + 오버레이 컨테이너
+	var damage_overlay: ColorRect  # 발더스 게이트 스타일 데미지 오버레이
+	var hp_label: Label  # HP 숫자 표시
 	var mp_bar: ProgressBar
 	var atb_bar: ProgressBar
 	var skill_row: HBoxContainer
@@ -103,32 +105,77 @@ func _setup_slots() -> void:
 		var slot_node = hbox.get_node_or_null("Slot%d" % i)
 		if not slot_node:
 			continue
-		
+
 		var slot := SlotUI.new()
 		slot.container = slot_node
 		slot.hero_index = i
-		
+
 		var vbox = slot_node.get_node_or_null("VBox")
 		if vbox:
 			var top_row = vbox.get_node_or_null("TopRow")
 			if top_row:
 				slot.face = top_row.get_node_or_null("Face")
+
+				# HP바 제거하고 발더스 게이트 스타일로 변경
+				if slot.face:
+					_setup_baldurs_gate_style(slot)
+
 				var bars = top_row.get_node_or_null("Bars")
 				if bars:
-					slot.hp_bar = bars.get_node_or_null("HPBar")
+					# HP바 숨기기
+					var hp_bar = bars.get_node_or_null("HPBar")
+					if hp_bar:
+						hp_bar.visible = false
 					slot.mp_bar = bars.get_node_or_null("MPBar")
 					slot.atb_bar = bars.get_node_or_null("ATBBar")
-			
+
 			var bottom_row = vbox.get_node_or_null("BottomRow")
 			if bottom_row:
 				slot.skill_row = bottom_row.get_node_or_null("SkillRow")
 				slot.tactic_btn = bottom_row.get_node_or_null("TacticBtn")
-				
+
 				if slot.tactic_btn:
 					slot.tactic_btn.pressed.connect(_on_tactic_btn_pressed.bind(i))
 					_update_tactic_button(slot)
-		
+
 		slots.append(slot)
+
+
+func _setup_baldurs_gate_style(slot: SlotUI) -> void:
+	## 발더스 게이트 스타일 HP 표시 설정
+	## - 데미지 오버레이: 빨간색이 아래에서 위로 차오름
+	## - HP 숫자: 페이스 하단 중앙에 표시
+
+	var face := slot.face
+
+	# 페이스에 클리핑 컨테이너 설정
+	face.clip_contents = true
+
+	# 데미지 오버레이 (빨간색, 아래에서 위로 차오름)
+	var overlay := ColorRect.new()
+	overlay.name = "DamageOverlay"
+	overlay.color = Color(0.8, 0.1, 0.1, 0.6)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 초기에는 보이지 않음 (HP 100%)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.anchor_top = 1.0  # 아래에서 시작
+	overlay.anchor_bottom = 1.0
+	face.add_child(overlay)
+	slot.damage_overlay = overlay
+
+	# HP 숫자 라벨 (하단 중앙)
+	var hp_lbl := Label.new()
+	hp_lbl.name = "HPLabel"
+	hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hp_lbl.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	hp_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hp_lbl.add_theme_font_size_override("font_size", 8)
+	hp_lbl.add_theme_color_override("font_color", Color.WHITE)
+	hp_lbl.add_theme_color_override("font_outline_color", Color.BLACK)
+	hp_lbl.add_theme_constant_override("outline_size", 2)
+	hp_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.add_child(hp_lbl)
+	slot.hp_label = hp_lbl
 
 
 func _setup_tactic_popup() -> void:
@@ -160,52 +207,77 @@ func _connect_signals() -> void:
 
 func update_display() -> void:
 	var party: Array = PartyManager.get_party() if PartyManager else []
-	
+
 	for i in range(slots.size()):
 		var slot := slots[i]
-		
+
 		if i < party.size() and party[i] != null:
 			var hero: Hero = party[i]
 			slot.container.visible = true
-			
+
 			# 페이스 업데이트
 			if SpriteManager and slot.face:
 				slot.face.texture = SpriteManager.get_hero_face_sprite(hero.id)
-			
-			# HP 바 업데이트
-			if slot.hp_bar:
-				var max_hp := hero.get_max_hp()
-				slot.hp_bar.max_value = max_hp
-				slot.hp_bar.value = hero.current_hp
-				_update_hp_color(slot, float(hero.current_hp) / float(max_hp))
-			
+
+			# 발더스 게이트 스타일 HP 업데이트
+			var max_hp := hero.get_max_hp()
+			var hp_percent: float = float(hero.current_hp) / float(max_hp) if max_hp > 0 else 1.0
+			_update_damage_overlay(slot, hp_percent)
+			_update_hp_label(slot, hero.current_hp, max_hp)
+
 			# MP 바 업데이트
 			if slot.mp_bar:
 				var max_mp := hero.get_max_mp()
 				slot.mp_bar.max_value = max_mp
 				slot.mp_bar.value = hero.current_mp
 				_update_mp_color(slot, float(hero.current_mp) / float(max_mp) if max_mp > 0 else 1.0)
-			
+
 			# 스킬 토글 업데이트
 			_update_skill_toggles(slot, hero)
-			
+
 			# 작전 버튼 업데이트
 			_update_tactic_button(slot)
 		else:
 			slot.container.visible = false
 
 
-func _update_hp_color(slot: SlotUI, hp_percent: float) -> void:
-	var fill_style: StyleBoxFlat = slot.hp_bar.get_theme_stylebox("fill")
-	if fill_style:
-		fill_style = fill_style.duplicate()
-		if hp_percent <= 0.25:
-			fill_style.bg_color = HP_COLOR_LOW
-		elif hp_percent <= 0.5:
-			fill_style.bg_color = HP_COLOR_MID
-		else:
-			fill_style.bg_color = HP_COLOR_HIGH
-		slot.hp_bar.add_theme_stylebox_override("fill", fill_style)
+func _update_damage_overlay(slot: SlotUI, hp_percent: float) -> void:
+	## 발더스 게이트 스타일: 데미지 오버레이 (빨간색이 아래에서 위로 차오름)
+	if not slot.damage_overlay:
+		return
+
+	# HP가 줄어들수록 빨간 오버레이가 아래에서 위로 차오름
+	# hp_percent = 1.0 -> 오버레이 없음 (anchor_top = 1.0)
+	# hp_percent = 0.5 -> 절반 (anchor_top = 0.5)
+	# hp_percent = 0.0 -> 전체 (anchor_top = 0.0)
+	var damage_percent: float = 1.0 - hp_percent
+	slot.damage_overlay.anchor_top = hp_percent
+	slot.damage_overlay.anchor_bottom = 1.0
+
+	# HP에 따라 오버레이 색상 조절
+	if hp_percent <= 0.25:
+		slot.damage_overlay.color = Color(0.9, 0.1, 0.1, 0.7)  # 위험 - 더 진한 빨강
+	elif hp_percent <= 0.5:
+		slot.damage_overlay.color = Color(0.85, 0.2, 0.1, 0.6)  # 주의
+	else:
+		slot.damage_overlay.color = Color(0.8, 0.3, 0.2, 0.5)  # 일반
+
+
+func _update_hp_label(slot: SlotUI, current_hp: int, max_hp: int) -> void:
+	## HP 숫자 표시 업데이트
+	if not slot.hp_label:
+		return
+
+	slot.hp_label.text = "%d/%d" % [current_hp, max_hp]
+
+	# HP 비율에 따라 색상 변경
+	var hp_percent: float = float(current_hp) / float(max_hp) if max_hp > 0 else 1.0
+	if hp_percent <= 0.25:
+		slot.hp_label.add_theme_color_override("font_color", HP_COLOR_LOW)
+	elif hp_percent <= 0.5:
+		slot.hp_label.add_theme_color_override("font_color", HP_COLOR_MID)
+	else:
+		slot.hp_label.add_theme_color_override("font_color", Color.WHITE)
 
 
 func _update_mp_color(slot: SlotUI, mp_percent: float) -> void:
