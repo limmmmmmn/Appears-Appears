@@ -27,12 +27,9 @@ signal menu_pressed
 @onready var minimap_viewport: SubViewportContainer = %MinimapViewport
 @onready var minimap_camera: Camera2D = %MinimapCamera
 
-# === Charm 슬롯 (우측 상단) ===
-@onready var charm_slots_panel: PanelContainer = %CharmSlotsPanel
-@onready var charm_slot1: Button = %CharmSlot1
-@onready var charm_slot2: Button = %CharmSlot2
-@onready var charm_slot3: Button = %CharmSlot3
-@onready var charm_slot4: Button = %CharmSlot4
+# === 특성 패널 (우측) ===
+@onready var trait_panel: PanelContainer = %TraitPanel
+@onready var trait_vbox: VBoxContainer = %TraitVBox
 
 # === 컴포넌트 ===
 var battle_log: BattleLogUI = null
@@ -46,6 +43,7 @@ func _ready() -> void:
 	_setup_components()
 	_connect_signals()
 	update_all()
+	_update_trait_display()
 
 
 func _process(_delta: float) -> void:
@@ -90,10 +88,6 @@ func _connect_signals() -> void:
 		menu_button.pressed.connect(func(): menu_pressed.emit())
 	if speed_button:
 		speed_button.pressed.connect(_on_speed_button_pressed)
-
-	# Charm 슬롯 이벤트 연결
-	if charm_slot1:
-		charm_slot1.toggled.connect(_on_charm1_toggled)
 
 	if GameManager:
 		GameManager.gold_changed.connect(func(_g): update_top_bar())
@@ -272,14 +266,77 @@ func clear_logs() -> void:
 #endregion
 
 
-#region Charm 시스템
-func _on_charm1_toggled(button_pressed: bool) -> void:
-	## Charm 1: 적 최대 숫자 +1
-	if BattleManager:
-		BattleManager.set_extra_enemy_slots(1 if button_pressed else 0)
+#region 특성 시스템
+func _update_trait_display() -> void:
+	## 파티원 특성을 패널에 표시 (WoW 퀘스트 트래커 스타일)
+	if trait_vbox == null:
+		return
 
-	if button_pressed:
-		add_log("👹 Charm 장착: 적 슬롯 +1", Color.PURPLE)
-	else:
-		add_log("👹 Charm 해제", Color.GRAY)
+	# 기존 자식 제거
+	for child in trait_vbox.get_children():
+		child.queue_free()
+
+	# 파티원 특성 수집
+	var all_traits: Array = []
+	for hero in PartyManager.get_alive_heroes():
+		for trait_data in hero.get_traits():
+			if not trait_data.is_empty():
+				all_traits.append(trait_data)
+
+	if all_traits.is_empty():
+		if trait_panel:
+			trait_panel.visible = false
+		return
+
+	if trait_panel:
+		trait_panel.visible = true
+		# 반투명 배경 스타일 (WoW 퀘스트 트래커 느낌)
+		var panel_style := StyleBoxFlat.new()
+		panel_style.bg_color = Color(0, 0, 0, 0.5)
+		panel_style.corner_radius_top_left = 4
+		panel_style.corner_radius_bottom_left = 4
+		panel_style.content_margin_left = 8
+		panel_style.content_margin_right = 8
+		panel_style.content_margin_top = 6
+		panel_style.content_margin_bottom = 6
+		trait_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 제목
+	var title_label := Label.new()
+	title_label.text = "[ 파티 특성 ]"
+	title_label.add_theme_font_size_override("font_size", 10)
+	title_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	trait_vbox.add_child(title_label)
+
+	# 구분선
+	var separator := HSeparator.new()
+	separator.add_theme_constant_override("separation", 4)
+	trait_vbox.add_child(separator)
+
+	# 특성 표시
+	for trait_data in all_traits:
+		var trait_hbox := HBoxContainer.new()
+		trait_hbox.add_theme_constant_override("separation", 4)
+		trait_vbox.add_child(trait_hbox)
+
+		# 아이콘
+		var icon_label := Label.new()
+		icon_label.text = trait_data.get("icon", "")
+		icon_label.add_theme_font_size_override("font_size", 11)
+		trait_hbox.add_child(icon_label)
+
+		# 특성 이름
+		var name_label := Label.new()
+		name_label.text = trait_data.get("name", "")
+		name_label.add_theme_font_size_override("font_size", 10)
+		name_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
+		name_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		name_label.add_theme_constant_override("outline_size", 2)
+		name_label.tooltip_text = trait_data.get("description", "")
+		trait_hbox.add_child(name_label)
+
+
+func refresh_traits() -> void:
+	## 외부에서 특성 갱신 요청 시 호출
+	_update_trait_display()
 #endregion

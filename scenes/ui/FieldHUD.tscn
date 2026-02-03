@@ -131,59 +131,24 @@ theme_override_constants/separation = 0
 unique_name_in_owner = true
 layout_mode = 1
 
-[node name="CharmSlotsPanel" type="PanelContainer" parent="Control"]
+[node name="TraitPanel" type="PanelContainer" parent="Control"]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -108.0
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -120.0
 offset_top = 28.0
-offset_right = 108.0
-offset_bottom = 76.0
-grow_horizontal = 2
-mouse_filter = 1
+offset_right = -4.0
+offset_bottom = 150.0
+grow_horizontal = 0
+mouse_filter = 2
 
-[node name="CharmSlotsHBox" type="HBoxContainer" parent="Control/CharmSlotsPanel"]
-layout_mode = 2
-mouse_filter = 1
-theme_override_constants/separation = 4
-alignment = 1
-
-[node name="CharmSlot1" type="Button" parent="Control/CharmSlotsPanel/CharmSlotsHBox"]
+[node name="TraitVBox" type="VBoxContainer" parent="Control/TraitPanel"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(48, 40)
 layout_mode = 2
-mouse_filter = 0
-toggle_mode = true
-text = "👹+1"
-
-[node name="CharmSlot2" type="Button" parent="Control/CharmSlotsPanel/CharmSlotsHBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(48, 40)
-layout_mode = 2
-mouse_filter = 0
-toggle_mode = true
-disabled = true
-text = "?"
-
-[node name="CharmSlot3" type="Button" parent="Control/CharmSlotsPanel/CharmSlotsHBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(48, 40)
-layout_mode = 2
-mouse_filter = 0
-toggle_mode = true
-disabled = true
-text = "?"
-
-[node name="CharmSlot4" type="Button" parent="Control/CharmSlotsPanel/CharmSlotsHBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(48, 40)
-layout_mode = 2
-mouse_filter = 0
-toggle_mode = true
-disabled = true
-text = "?"
+mouse_filter = 2
+theme_override_constants/separation = 2
 
 [node name="MinimapPanel" type="PanelContainer" parent="Control"]
 unique_name_in_owner = true

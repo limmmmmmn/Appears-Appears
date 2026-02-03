@@ -44,8 +44,6 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var run_button: Button = %RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
-@onready var trait_panel: PanelContainer = %TraitPanel
-@onready var trait_vbox: VBoxContainer = %TraitVBox
 
 # === 동적 생성 UI ===
 var claim_reward_button: Button = null
@@ -185,10 +183,9 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	# 위험도 테두리 초기화
 	_setup_danger_border()
 
-	# 파티 특성 수집 및 표시
+	# 파티 특성 수집 및 적용
 	_collect_party_traits()
 	_apply_trait_bonuses()
-	_display_trait_panel()
 
 	await get_tree().create_timer(0.3).timeout
 	_start_battle()
@@ -1091,49 +1088,6 @@ func _apply_trait_bonuses() -> void:
 	var loot_trait_mult: float = _get_trait_effect_float("loot_mult")
 	if loot_trait_mult > 0:
 		loot_multiplier += loot_multiplier * loot_trait_mult
-
-
-func _display_trait_panel() -> void:
-	## 특성 패널에 활성 특성 표시
-	if trait_vbox == null:
-		return
-
-	# 기존 자식 제거
-	for child in trait_vbox.get_children():
-		child.queue_free()
-
-	if active_traits.is_empty():
-		if trait_panel:
-			trait_panel.visible = false
-		return
-
-	if trait_panel:
-		trait_panel.visible = true
-		# 반투명 배경 스타일
-		var panel_style := StyleBoxFlat.new()
-		panel_style.bg_color = Color(0, 0, 0, 0.6)
-		panel_style.corner_radius_top_left = 4
-		panel_style.corner_radius_top_right = 4
-		panel_style.corner_radius_bottom_left = 4
-		panel_style.corner_radius_bottom_right = 4
-		panel_style.content_margin_left = 6
-		panel_style.content_margin_right = 6
-		panel_style.content_margin_top = 4
-		panel_style.content_margin_bottom = 4
-		trait_panel.add_theme_stylebox_override("panel", panel_style)
-
-	# 특성 표시
-	for trait_data in active_traits:
-		var trait_label := Label.new()
-		var icon: String = trait_data.get("icon", "")
-		var trait_name: String = trait_data.get("name", "")
-		trait_label.text = "%s %s" % [icon, trait_name]
-		trait_label.add_theme_font_size_override("font_size", 9)
-		trait_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
-		trait_label.add_theme_color_override("font_outline_color", Color.BLACK)
-		trait_label.add_theme_constant_override("outline_size", 2)
-		trait_label.tooltip_text = trait_data.get("description", "")
-		trait_vbox.add_child(trait_label)
 
 
 func _get_trait_effect_value(effect_type: String, condition: String = "") -> int:
