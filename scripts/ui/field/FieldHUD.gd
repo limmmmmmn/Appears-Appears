@@ -404,21 +404,12 @@ func _setup_grudge_panel() -> void:
 	## 상단 중앙에 원념/보상 패널 생성
 	var ctrl := get_node_or_null("Control")
 	if not ctrl:
+		push_error("[FieldHUD] Control 노드를 찾을 수 없음")
 		return
 
 	grudge_panel = PanelContainer.new()
 	grudge_panel.name = "GrudgePanel"
-	grudge_panel.visible = false  # 처음엔 숨김
-
-	# 앵커: 상단 중앙
-	grudge_panel.anchor_left = 0.5
-	grudge_panel.anchor_right = 0.5
-	grudge_panel.anchor_top = 0.0
-	grudge_panel.anchor_bottom = 0.0
-	grudge_panel.offset_left = -100
-	grudge_panel.offset_right = 100
-	grudge_panel.offset_top = 28  # TopBar 아래
-	grudge_panel.offset_bottom = 80
+	grudge_panel.visible = true  # 항상 표시
 
 	# 스타일
 	var style := StyleBoxFlat.new()
@@ -432,8 +423,8 @@ func _setup_grudge_panel() -> void:
 	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_left = 4
 	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 8
-	style.content_margin_right = 8
+	style.content_margin_left = 10
+	style.content_margin_right = 10
 	style.content_margin_top = 4
 	style.content_margin_bottom = 4
 	grudge_panel.add_theme_stylebox_override("panel", style)
@@ -474,19 +465,17 @@ func _setup_grudge_panel() -> void:
 	grudge_items_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(grudge_items_container)
 
+	# 먼저 트리에 추가
 	ctrl.add_child(grudge_panel)
+
+	# 위치 설정 (트리에 추가된 후)
+	grudge_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	grudge_panel.position.y = 26  # TopBar 아래
 
 
 func _update_grudge_panel(exp: int, gold: int, items: Array) -> void:
 	## 원념/보상 패널 업데이트
 	if not grudge_panel:
-		return
-
-	# 보상이 있으면 표시
-	var has_rewards: bool = exp > 0 or gold > 0 or items.size() > 0
-	grudge_panel.visible = has_rewards
-
-	if not has_rewards:
 		return
 
 	var danger_level: int = BattleManager.get_danger_level()
