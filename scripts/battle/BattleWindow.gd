@@ -81,6 +81,12 @@ var window_mode: WindowMode = WindowMode.NORMAL
 # === 동적 생성 UI ===
 var claim_reward_button: Button = null
 
+# === 고/스톱 시스템 ===
+var go_stop_panel: PanelContainer = null
+var go_button: Button = null
+var stop_button: Button = null
+var is_go_stop_active: bool = false  # 고/스톱 선택 대기 중
+
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 
@@ -139,8 +145,10 @@ func _ready() -> void:
 	visible = false
 	set_process(false)
 
+	# Run 버튼 숨기기 (고/스톱 시스템으로 대체)
 	if run_button:
-		run_button.pressed.connect(_on_run_pressed)
+		run_button.visible = false
+
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
 
@@ -153,9 +161,17 @@ func _ready() -> void:
 	# 보상 UI 초기화
 	_update_rewards_ui()
 
+	# 고/스톱 UI 생성
+	_setup_go_stop_ui()
+
 
 func _process(delta: float) -> void:
 	if current_state != BattleState.RUNNING:
+		return
+
+	# 고/스톱 선택 대기 중이면 전투 일시정지
+	if is_go_stop_active:
+		_update_background_effect(delta)
 		return
 
 	_update_beat_system(delta)
@@ -184,11 +200,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 		loot_multiplier = 2.0
 	else:
 		loot_multiplier = 1.0
-
-	# 버튼 초기화
-	if run_button:
-		run_button.disabled = is_boss_battle
-		run_button.visible = true
 
 	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
@@ -257,10 +268,8 @@ func _hide_claim_reward_button() -> void:
 
 
 func _update_buttons_for_enemies() -> void:
-	## 적이 있을 때 버튼 상태 업데이트
-	if run_button:
-		run_button.disabled = is_boss_battle
-		run_button.tooltip_text = "즉시 도주 (보상 50%)"
+	## 적이 있을 때 버튼 상태 업데이트 (현재 고/스톱 시스템 사용)
+	pass
 
 
 func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
@@ -826,7 +835,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 
 func _show_danger_level_up_message(new_level: int) -> void:
-	## 위험도 상승 시 드라마틱 메시지 표시
+	## 위험도 상승 시 고/스톱 선택 표시
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
 		"적들의 원념이 깨어나기 시작한다...",
@@ -843,11 +852,11 @@ func _show_danger_level_up_message(new_level: int) -> void:
 	_send_log("━━━ 원념 %d단계 ━━━" % new_level, Color.ORANGE_RED)
 	_send_log(message, Color.ORANGE)
 
-	# 전투창 중앙에 큰 텍스트 표시
-	_show_popup_text("원념 %d단계" % new_level, message, DANGER_BORDER_COLORS[mini(new_level, DANGER_BORDER_COLORS.size() - 1)])
-
 	# 화면 흔들림 효과
 	_shake_window()
+
+	# 고/스톱 선택 UI 표시
+	_show_go_stop_choice(new_level, message)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -956,10 +965,8 @@ func _check_battle_end() -> bool:
 
 
 func _update_buttons_for_no_enemies() -> void:
-	## 적이 없을 때 버튼 상태 업데이트
-	if run_button:
-		run_button.disabled = true
-		run_button.tooltip_text = "적이 없습니다"
+	## 적이 없을 때 버튼 상태 업데이트 (현재 고/스톱 시스템 사용)
+	pass
 
 
 func _show_claim_reward_button() -> void:
@@ -1101,20 +1108,10 @@ func _end_battle_defeat() -> void:
 #endregion
 
 
-#region 도주 시스템
+#region 도주 시스템 (미사용 - 고/스톱 시스템으로 대체)
 func _on_run_pressed() -> void:
-	## Run 버튼: 50% 보상만 받고 즉시 도주
-	if is_boss_battle:
-		_send_log("보스전에서는 도주할 수 없습니다!", Color.RED)
-		return
-
-	if current_state != BattleState.RUNNING and current_state != BattleState.VICTORY:
-		return
-
-	run_button.disabled = true
-
-	# 즉시 도주 (확률 판정 없음, 대신 50% 보상만)
-	_run_with_partial_rewards()
+	## Run 버튼: 현재 사용 안함 (고/스톱 시스템 사용)
+	pass
 
 
 func _calculate_escape_chance() -> float:
@@ -1402,6 +1399,167 @@ func play_aoe_flash() -> void:
 			else:
 				background.color = original_color
 		)
+#endregion
+
+
+#region 고/스톱 시스템
+func _setup_go_stop_ui() -> void:
+	## 고/스톱 UI 생성 (숨겨진 상태로)
+	go_stop_panel = PanelContainer.new()
+	go_stop_panel.visible = false
+	go_stop_panel.z_index = 50
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.1, 0.05, 0.15, 0.95)
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color.ORANGE_RED
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	panel_style.content_margin_left = 20
+	panel_style.content_margin_right = 20
+	panel_style.content_margin_top = 15
+	panel_style.content_margin_bottom = 15
+	go_stop_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	go_stop_panel.add_child(vbox)
+
+	# 제목
+	var title_label := Label.new()
+	title_label.text = "⚠ 적이 더 강해집니다!"
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 14)
+	title_label.add_theme_color_override("font_color", Color.ORANGE)
+	vbox.add_child(title_label)
+
+	# 설명
+	var desc_label := Label.new()
+	desc_label.text = "계속 하시겠습니까?"
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.add_theme_font_size_override("font_size", 11)
+	desc_label.add_theme_color_override("font_color", Color.WHITE)
+	vbox.add_child(desc_label)
+
+	# 버튼 컨테이너
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.add_theme_constant_override("separation", 20)
+	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(btn_hbox)
+
+	# 고 버튼
+	go_button = Button.new()
+	go_button.text = "◀ 고 (계속)"
+	go_button.custom_minimum_size = Vector2(90, 35)
+	go_button.add_theme_font_size_override("font_size", 12)
+	var go_style := StyleBoxFlat.new()
+	go_style.bg_color = Color(0.2, 0.5, 0.2)
+	go_style.corner_radius_top_left = 4
+	go_style.corner_radius_top_right = 4
+	go_style.corner_radius_bottom_left = 4
+	go_style.corner_radius_bottom_right = 4
+	go_button.add_theme_stylebox_override("normal", go_style)
+	go_button.add_theme_stylebox_override("hover", go_style)
+	go_button.pressed.connect(_on_go_pressed)
+	btn_hbox.add_child(go_button)
+
+	# 스톱 버튼
+	stop_button = Button.new()
+	stop_button.text = "스톱 (보상) ▶"
+	stop_button.custom_minimum_size = Vector2(90, 35)
+	stop_button.add_theme_font_size_override("font_size", 12)
+	var stop_style := StyleBoxFlat.new()
+	stop_style.bg_color = Color(0.5, 0.2, 0.2)
+	stop_style.corner_radius_top_left = 4
+	stop_style.corner_radius_top_right = 4
+	stop_style.corner_radius_bottom_left = 4
+	stop_style.corner_radius_bottom_right = 4
+	stop_button.add_theme_stylebox_override("normal", stop_style)
+	stop_button.add_theme_stylebox_override("hover", stop_style)
+	stop_button.pressed.connect(_on_stop_pressed)
+	btn_hbox.add_child(stop_button)
+
+	# 키 힌트
+	var hint_label := Label.new()
+	hint_label.text = "[← / →] 또는 [Z / X]"
+	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint_label.add_theme_font_size_override("font_size", 9)
+	hint_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	vbox.add_child(hint_label)
+
+	add_child(go_stop_panel)
+
+
+func _show_go_stop_choice(new_level: int, _message: String) -> void:
+	## 고/스톱 선택 UI 표시
+	if not go_stop_panel:
+		return
+
+	is_go_stop_active = true
+
+	# 패널 위치 (전투창 중앙)
+	go_stop_panel.visible = true
+	await get_tree().process_frame
+	go_stop_panel.position = (size - go_stop_panel.size) / 2
+
+	# 제목 업데이트
+	var title := go_stop_panel.get_child(0).get_child(0) as Label
+	if title:
+		title.text = "⚠ 원념 %d단계! 적이 더 강해집니다!" % new_level
+
+
+func _on_go_pressed() -> void:
+	## '고' 선택 - 전투 계속
+	is_go_stop_active = false
+	go_stop_panel.visible = false
+	_send_log("계속 싸운다!", Color.GREEN)
+
+
+func _on_stop_pressed() -> void:
+	## '스톱' 선택 - 보상 받고 종료
+	is_go_stop_active = false
+	go_stop_panel.visible = false
+	_send_log("여기서 멈춘다!", Color.YELLOW)
+	_stop_and_claim_rewards()
+
+
+func _stop_and_claim_rewards() -> void:
+	## 스톱 선택 시 보상 지급 및 종료
+	current_state = BattleState.VICTORY
+	set_process(false)
+
+	_send_log("보상 획득! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
+
+	PartyManager.distribute_exp(total_exp)
+	GameManager.add_gold(total_gold)
+
+	if not drop_items.is_empty():
+		_start_loot_animations()
+
+	call_deferred("_emit_party_updated")
+	battle_ended.emit(battle_id, true)
+
+	_play_close_effect()
+
+
+func _input(event: InputEvent) -> void:
+	## 키보드 입력으로 고/스톱 선택
+	if not is_go_stop_active:
+		return
+
+	if event is InputEventKey and event.pressed:
+		match event.keycode:
+			KEY_LEFT, KEY_Z:
+				_on_go_pressed()
+				get_viewport().set_input_as_handled()
+			KEY_RIGHT, KEY_X:
+				_on_stop_pressed()
+				get_viewport().set_input_as_handled()
 #endregion
 
 
