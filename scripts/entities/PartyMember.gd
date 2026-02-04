@@ -50,7 +50,7 @@ func _physics_process(delta: float) -> void:
 	# 보스전 중에는 이동 정지
 	if is_in_boss_battle:
 		velocity = Vector2.ZERO
-		_update_animation("idle")
+		_play_idle_animation()
 		return
 
 	if is_leader:
