@@ -7,7 +7,7 @@ class_name EnemySpawner
 #=============================================================================
 # 스폰 설정
 #=============================================================================
-const MAX_ENEMIES: int = 5                            # 최대 동시 적 수
+const MAX_ENEMIES: int = 2                            # 최대 동시 적 수 (카메라 내 2마리)
 const MIN_SPAWN_DISTANCE_BETWEEN: float = 32.0        # 적들 사이 최소 거리
 const MIN_DISTANCE_FROM_PLAYER: float = 40.0          # 플레이어로부터 최소 거리
 const MAX_DISTANCE_FROM_PLAYER: float = 120.0         # 플레이어로부터 최대 거리 (카메라 내)

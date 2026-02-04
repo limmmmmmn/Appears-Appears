@@ -31,6 +31,10 @@ var current_move_style: MoveStyle = MoveStyle.RANDOM
 # 보스전 모드 (이동 정지)
 var is_in_boss_battle: bool = false
 
+# 잠시 멈춤 (적 조우 시)
+var is_stunned: bool = false
+var stun_timer: float = 0.0
+
 # 스네이크 무브먼트용
 var path_history: Array[Vector2] = []  # 리더만 사용
 var leader_ref: PartyMember = null  # 팔로워만 사용
@@ -49,6 +53,15 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	# 보스전 중에는 이동 정지
 	if is_in_boss_battle:
+		velocity = Vector2.ZERO
+		_play_idle_animation()
+		return
+
+	# 잠시 멈춤 처리 (적 조우 시)
+	if is_stunned:
+		stun_timer -= delta
+		if stun_timer <= 0:
+			is_stunned = false
 		velocity = Vector2.ZERO
 		_play_idle_animation()
 		return
@@ -236,6 +249,13 @@ func set_boss_battle_mode(enabled: bool) -> void:
 		velocity = Vector2.ZERO
 		has_click_target = false
 		is_mouse_held = false
+
+
+func brief_pause(duration: float = 0.15) -> void:
+	## 잠시 멈춤 (적 조우 시 호출)
+	is_stunned = true
+	stun_timer = duration
+	velocity = Vector2.ZERO
 
 
 func _change_random_direction() -> void:
