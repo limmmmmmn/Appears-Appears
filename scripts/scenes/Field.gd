@@ -239,12 +239,12 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	## 필드 적 1마리 = 전투창 적 1마리
 	var enemy_data: Dictionary = DataManager.get_enemy(field_enemy.enemy_id)
 	var enemy_name: String = str(enemy_data.get("name", field_enemy.enemy_id))
-	
+
 	# 충돌 위치 계산
 	var collision_pos: Vector2 = field_enemy.global_position
 	if party_leader:
 		collision_pos = (field_enemy.global_position + party_leader.global_position) / 2
-	
+
 	# 로그
 	if hud:
 		var msg: String
@@ -253,17 +253,23 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 		else:
 			msg = "%s이(가) 나타났다!" % enemy_name
 		hud.add_battle_log(msg)
-	
+
 	var was_elite: bool = field_enemy.is_elite
 	var enemy_id: String = field_enemy.enemy_id
-	
+	var tile_type: String = field_enemy.tile_type
+	var enemy_pos: Vector2 = field_enemy.global_position
+
+	# 리스폰 큐에 추가 (보스가 아닌 경우)
+	if spawner and not field_enemy.is_boss:
+		spawner.on_enemy_killed(tile_type, enemy_pos)
+
 	field_enemies.erase(field_enemy)
 	field_enemy.despawn()
-	
+
 	# 새 시스템: 적 1마리씩 전투에 추가 (기존 창에 추가되거나 새 창 생성)
 	if BattleManager:
 		BattleManager.add_enemy_to_battle(enemy_id, self, was_elite, collision_pos)
-	
+
 	battle_triggered.emit([enemy_id])
 
 
