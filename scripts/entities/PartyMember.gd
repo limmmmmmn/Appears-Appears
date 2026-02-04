@@ -13,6 +13,11 @@ var hero_data: Dictionary = {}
 var facing_right: bool = false
 var current_direction: String = "down"
 
+# 클릭 이동용
+var click_target: Vector2 = Vector2.ZERO
+var has_click_target: bool = false
+const CLICK_ARRIVE_DISTANCE: float = 5.0  # 도착 판정 거리
+
 # 스네이크 무브먼트용
 var path_history: Array[Vector2] = []  # 리더만 사용
 var leader_ref: PartyMember = null  # 팔로워만 사용
@@ -41,21 +46,61 @@ func _physics_process(delta: float) -> void:
 # 리더 로직
 #=============================================================================
 func _process_leader(_delta: float) -> void:
+	# 키보드 입력 체크
 	var input_dir := Vector2(
 		Input.get_axis("ui_left", "ui_right"),
 		Input.get_axis("ui_up", "ui_down")
 	).normalized()
-	
+
+	# 키보드 입력이 있으면 클릭 이동 취소
 	if input_dir != Vector2.ZERO:
+		has_click_target = false
 		velocity = input_dir * move_speed
 		_update_direction(input_dir)
 		_play_walk_animation()
-		
 		move_and_slide()
 		_record_path()
-	else:
-		velocity = Vector2.ZERO
-		_play_idle_animation()
+		return
+
+	# 클릭 이동 처리
+	if has_click_target:
+		var to_target: Vector2 = click_target - global_position
+		var distance: float = to_target.length()
+
+		if distance <= CLICK_ARRIVE_DISTANCE:
+			# 목표 도착
+			has_click_target = false
+			velocity = Vector2.ZERO
+			_play_idle_animation()
+		else:
+			# 목표를 향해 이동
+			var move_dir: Vector2 = to_target.normalized()
+			velocity = move_dir * move_speed
+			_update_direction(move_dir)
+			_play_walk_animation()
+			move_and_slide()
+			_record_path()
+		return
+
+	# 입력 없음
+	velocity = Vector2.ZERO
+	_play_idle_animation()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	## 클릭 이동 입력 처리
+	if not is_leader:
+		return
+
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			# 월드 좌표로 변환
+			var camera := get_viewport().get_camera_2d()
+			if camera:
+				click_target = camera.get_global_mouse_position()
+			else:
+				click_target = get_global_mouse_position()
+			has_click_target = true
 
 
 func _record_path() -> void:
