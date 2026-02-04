@@ -1325,7 +1325,7 @@ func _play_reward_fly_animation() -> void:
 		fly_nodes.append({"node": item_node, "delay": delay, "start": start_pos})
 		delay += delay_interval
 
-	# 날아가는 애니메이션
+	# 날아가는 애니메이션 (get_tree().create_tween() 사용 - BattleWindow가 닫혀도 계속 실행)
 	var total_duration: float = 0.5
 	for fly_data in fly_nodes:
 		var node: Control = fly_data.node
@@ -1336,8 +1336,8 @@ func _play_reward_fly_animation() -> void:
 		node.modulate.a = 1.0
 		node.scale = Vector2(0.5, 0.5)
 
-		# 애니메이션 시작
-		var tween := create_tween()
+		# 애니메이션 시작 (SceneTree에서 생성하여 BattleWindow 종료와 무관하게 실행)
+		var tween := get_tree().create_tween()
 		tween.tween_interval(node_delay)
 
 		# 팝업 효과로 나타나기
@@ -1353,7 +1353,7 @@ func _play_reward_fly_animation() -> void:
 
 	# 모든 애니메이션 완료 후 정리 및 닫기
 	var cleanup_delay: float = delay + total_duration + 0.2
-	var cleanup_tween := create_tween()
+	var cleanup_tween := get_tree().create_tween()
 	cleanup_tween.tween_interval(cleanup_delay)
 	cleanup_tween.tween_callback(func():
 		fly_container.queue_free()
