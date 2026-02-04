@@ -96,6 +96,12 @@ func add_enemy_to_battle(enemy_id: String, parent_node: Node = null, is_elite: b
 		return _create_new_battle([enemy_id], parent_node, is_elite, false, collision_pos)
 
 
+func start_boss_battle(enemy_id: String, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
+	## 보스 전투 시작 (Field에서 직접 호출)
+	force_end_all_non_boss()
+	return _create_new_battle([enemy_id], parent_node, is_elite, true, collision_pos)
+
+
 func _find_available_window() -> BattleWindow:
 	## 적을 추가할 수 있는 전투창 찾기 (보스 제외, 여유 있는 창)
 	for battle_id in active_battles:

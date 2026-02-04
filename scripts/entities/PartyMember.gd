@@ -28,6 +28,9 @@ var idle_timer: float = 0.0  # 가만히 있는 시간
 enum MoveStyle { RANDOM, HUNT_ENEMY, OFF, TO_TOWN, TO_BOSS }
 var current_move_style: MoveStyle = MoveStyle.RANDOM
 
+# 보스전 모드 (이동 정지)
+var is_in_boss_battle: bool = false
+
 # 스네이크 무브먼트용
 var path_history: Array[Vector2] = []  # 리더만 사용
 var leader_ref: PartyMember = null  # 팔로워만 사용
@@ -44,6 +47,12 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# 보스전 중에는 이동 정지
+	if is_in_boss_battle:
+		velocity = Vector2.ZERO
+		_update_animation("idle")
+		return
+
 	if is_leader:
 		_process_leader(delta)
 	else:
@@ -218,6 +227,15 @@ func set_move_style(style: int) -> void:
 	## 이동 스타일 설정 (외부에서 호출)
 	current_move_style = style as MoveStyle
 	idle_timer = 0.0  # 타이머 리셋
+
+
+func set_boss_battle_mode(enabled: bool) -> void:
+	## 보스전 모드 설정 (이동 정지/복귀)
+	is_in_boss_battle = enabled
+	if enabled:
+		velocity = Vector2.ZERO
+		has_click_target = false
+		is_mouse_held = false
 
 
 func _change_random_direction() -> void:

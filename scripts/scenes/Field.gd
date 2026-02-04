@@ -17,6 +17,10 @@ var field_enemies: Array[FieldEnemy] = []
 var hud: FieldHUD
 var game_over_ui: GameOverUI
 
+# 보스전 대기 데이터
+var pending_boss_data: Dictionary = {}
+var boss_reward_popup: CanvasLayer = null
+
 # 씬 리소스
 var party_leader_scene: PackedScene
 var party_follower_scene: PackedScene
@@ -244,6 +248,17 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	if party_leader:
 		collision_pos = (field_enemy.global_position + party_leader.global_position) / 2
 
+	var was_elite: bool = field_enemy.is_elite
+	var was_boss: bool = field_enemy.is_boss
+	var enemy_id: String = field_enemy.enemy_id
+	var tile_type: String = field_enemy.tile_type
+	var enemy_pos: Vector2 = field_enemy.global_position
+
+	# 보스 접촉 시 특별 처리
+	if was_boss:
+		_handle_boss_contact(enemy_id, was_elite, collision_pos, field_enemy)
+		return
+
 	# 로그
 	if hud:
 		var msg: String
@@ -253,13 +268,8 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 			msg = "%s이(가) 나타났다!" % enemy_name
 		hud.add_battle_log(msg)
 
-	var was_elite: bool = field_enemy.is_elite
-	var enemy_id: String = field_enemy.enemy_id
-	var tile_type: String = field_enemy.tile_type
-	var enemy_pos: Vector2 = field_enemy.global_position
-
 	# 리스폰 큐에 추가 (보스가 아닌 경우)
-	if spawner and not field_enemy.is_boss:
+	if spawner:
 		spawner.on_enemy_killed(tile_type, enemy_pos)
 
 	field_enemies.erase(field_enemy)
@@ -269,6 +279,226 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	if BattleManager:
 		BattleManager.add_enemy_to_battle(enemy_id, self, was_elite, collision_pos)
 
+	battle_triggered.emit([enemy_id])
+
+
+#=============================================================================
+# 보스 접촉 처리
+#=============================================================================
+func _handle_boss_contact(enemy_id: String, is_elite: bool, collision_pos: Vector2, field_enemy: FieldEnemy) -> void:
+	## 보스 접촉 시 처리
+	# 플레이어 이동 정지
+	if party_leader:
+		party_leader.set_boss_battle_mode(true)
+
+	# 보스 데이터 저장
+	pending_boss_data = {
+		"enemy_id": enemy_id,
+		"is_elite": is_elite,
+		"collision_pos": collision_pos,
+		"field_enemy": field_enemy
+	}
+
+	# 누적 보상이 있으면 확인 팝업 표시
+	if hud and hud.has_unclaimed_rewards():
+		_show_boss_reward_popup()
+	else:
+		# 보상이 없으면 바로 보스전 시작
+		_start_boss_battle()
+
+
+func _show_boss_reward_popup() -> void:
+	## 보스전 전 보상 확인 팝업 표시
+	if boss_reward_popup:
+		boss_reward_popup.queue_free()
+
+	boss_reward_popup = CanvasLayer.new()
+	boss_reward_popup.layer = 100
+	boss_reward_popup.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(boss_reward_popup)
+
+	get_tree().paused = true
+
+	# 전체 화면 컨테이너
+	var full_screen := Control.new()
+	full_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	full_screen.process_mode = Node.PROCESS_MODE_ALWAYS
+	boss_reward_popup.add_child(full_screen)
+
+	# 어둡게 처리
+	var dimmer := ColorRect.new()
+	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dimmer.color = Color(0, 0, 0, 0.7)
+	full_screen.add_child(dimmer)
+
+	# 중앙 패널
+	var center_panel := PanelContainer.new()
+	center_panel.set_anchors_preset(Control.PRESET_CENTER)
+	center_panel.offset_left = -160
+	center_panel.offset_right = 160
+	center_panel.offset_top = -100
+	center_panel.offset_bottom = 100
+	center_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.15, 0.1, 0.2, 0.95)
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(1.0, 0.5, 0.3)
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	panel_style.content_margin_left = 20
+	panel_style.content_margin_right = 20
+	panel_style.content_margin_top = 15
+	panel_style.content_margin_bottom = 15
+	center_panel.add_theme_stylebox_override("panel", panel_style)
+	full_screen.add_child(center_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	center_panel.add_child(vbox)
+
+	# 제목
+	var title := Label.new()
+	title.text = "👑 보스 발견!"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
+	vbox.add_child(title)
+
+	# 설명
+	var desc := Label.new()
+	desc.text = "누적된 보상이 있습니다.\n보상을 받고 보스전에 돌입하시겠습니까?"
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.add_theme_font_size_override("font_size", 11)
+	desc.add_theme_color_override("font_color", Color.WHITE)
+	vbox.add_child(desc)
+
+	# 보상 정보
+	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
+	var reward_hbox := HBoxContainer.new()
+	reward_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	reward_hbox.add_theme_constant_override("separation", 20)
+	vbox.add_child(reward_hbox)
+
+	var exp_lbl := Label.new()
+	exp_lbl.text = "EXP: %d" % rewards.exp
+	exp_lbl.add_theme_font_size_override("font_size", 11)
+	exp_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
+	reward_hbox.add_child(exp_lbl)
+
+	var gold_lbl := Label.new()
+	gold_lbl.text = "Gold: %d" % rewards.gold
+	gold_lbl.add_theme_font_size_override("font_size", 11)
+	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	reward_hbox.add_child(gold_lbl)
+
+	# 버튼
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_hbox.add_theme_constant_override("separation", 20)
+	vbox.add_child(btn_hbox)
+
+	var claim_btn := Button.new()
+	claim_btn.text = "보상 받기"
+	claim_btn.custom_minimum_size = Vector2(100, 35)
+	claim_btn.add_theme_font_size_override("font_size", 12)
+	claim_btn.focus_mode = Control.FOCUS_NONE
+	var claim_style := StyleBoxFlat.new()
+	claim_style.bg_color = Color(0.3, 0.5, 0.3)
+	claim_style.corner_radius_top_left = 4
+	claim_style.corner_radius_top_right = 4
+	claim_style.corner_radius_bottom_left = 4
+	claim_style.corner_radius_bottom_right = 4
+	claim_style.border_width_left = 2
+	claim_style.border_width_top = 2
+	claim_style.border_width_right = 2
+	claim_style.border_width_bottom = 2
+	claim_style.border_color = Color.WHITE
+	claim_btn.add_theme_stylebox_override("normal", claim_style)
+	claim_btn.pressed.connect(_on_boss_reward_claim)
+	btn_hbox.add_child(claim_btn)
+
+	var skip_btn := Button.new()
+	skip_btn.text = "포기하고 전투"
+	skip_btn.custom_minimum_size = Vector2(100, 35)
+	skip_btn.add_theme_font_size_override("font_size", 12)
+	skip_btn.focus_mode = Control.FOCUS_NONE
+	var skip_style := StyleBoxFlat.new()
+	skip_style.bg_color = Color(0.4, 0.2, 0.2)
+	skip_style.corner_radius_top_left = 4
+	skip_style.corner_radius_top_right = 4
+	skip_style.corner_radius_bottom_left = 4
+	skip_style.corner_radius_bottom_right = 4
+	skip_btn.add_theme_stylebox_override("normal", skip_style)
+	skip_btn.add_theme_color_override("font_color", Color(0.8, 0.6, 0.6))
+	skip_btn.pressed.connect(_on_boss_reward_skip)
+	btn_hbox.add_child(skip_btn)
+
+
+func _on_boss_reward_claim() -> void:
+	## 보상 받고 보스전 시작
+	get_tree().paused = false
+	if boss_reward_popup:
+		boss_reward_popup.queue_free()
+		boss_reward_popup = null
+
+	# 보상 수령
+	BattleManager.claim_accumulated_rewards()
+	if hud:
+		hud.add_system_log("보상을 획득했다!")
+
+	_start_boss_battle()
+
+
+func _on_boss_reward_skip() -> void:
+	## 보상 포기하고 보스전 시작
+	get_tree().paused = false
+	if boss_reward_popup:
+		boss_reward_popup.queue_free()
+		boss_reward_popup = null
+
+	# 보상 초기화
+	BattleManager.reset_accumulated_rewards()
+	if hud:
+		hud.add_system_log("보상을 포기했다...")
+
+	_start_boss_battle()
+
+
+func _start_boss_battle() -> void:
+	## 실제 보스전 시작
+	if pending_boss_data.is_empty():
+		return
+
+	var enemy_id: String = pending_boss_data.get("enemy_id", "")
+	var is_elite: bool = pending_boss_data.get("is_elite", false)
+	var collision_pos: Vector2 = pending_boss_data.get("collision_pos", Vector2.ZERO)
+	var field_enemy: FieldEnemy = pending_boss_data.get("field_enemy")
+
+	# 로그
+	var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
+	var enemy_name: String = str(enemy_data.get("name", enemy_id))
+	if hud:
+		hud.add_system_log("👑 %s와(과)의 보스전 시작!" % enemy_name)
+
+	# 필드 적 제거
+	if is_instance_valid(field_enemy):
+		field_enemies.erase(field_enemy)
+		field_enemy.despawn()
+
+	# 기존 전투창 모두 닫기
+	BattleManager.close_all_battles()
+
+	# 보스 전투 시작
+	if BattleManager:
+		BattleManager.start_boss_battle(enemy_id, self, is_elite, collision_pos)
+
+	pending_boss_data.clear()
 	battle_triggered.emit([enemy_id])
 
 
@@ -407,7 +637,12 @@ func _on_boss_battle_started(_battle_id: int) -> void:
 
 
 func _on_boss_battle_ended(_battle_id: int) -> void:
-	## 보스전 종료 - 모든 필드 적이 원래 행동으로 복귀
+	## 보스전 종료 - 모든 필드 적이 원래 행동으로 복귀, 플레이어 이동 복구
+	# 플레이어 이동 복구
+	if party_leader:
+		party_leader.set_boss_battle_mode(false)
+
+	# 필드 적 관전 종료
 	for enemy in field_enemies:
 		if is_instance_valid(enemy) and enemy.has_method("stop_spectating"):
 			enemy.stop_spectating()
