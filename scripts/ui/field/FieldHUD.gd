@@ -111,8 +111,6 @@ func _connect_signals() -> void:
 			BattleManager.battle_log_received.connect(_on_battle_log_received)
 		if not BattleManager.party_hp_changed.is_connected(update_party_display):
 			BattleManager.party_hp_changed.connect(update_party_display)
-		if not BattleManager.battle_speed_changed.is_connected(_on_battle_speed_changed):
-			BattleManager.battle_speed_changed.connect(_on_battle_speed_changed)
 		if not BattleManager.loot_animation_requested.is_connected(_on_loot_animation_requested):
 			BattleManager.loot_animation_requested.connect(_on_loot_animation_requested)
 		# 누적 보상 시스템 연결
@@ -173,23 +171,14 @@ func get_minimap_viewport() -> SubViewport:
 
 #region 이벤트 핸들러
 func _on_speed_button_pressed() -> void:
-	if BattleManager:
-		BattleManager.toggle_battle_speed()
-		_update_speed_button()
-
-
-func _on_battle_speed_changed(_bpm: float, _tempo_name: String) -> void:
-	_update_speed_button()
+	## 턴제 전투에서는 배속 버튼 미사용
+	pass
 
 
 func _update_speed_button() -> void:
-	## 템포 버튼 텍스트 업데이트 (BPM + 템포 이름)
-	if not speed_button or not BattleManager:
-		return
-	var bpm: int = BattleManager.get_current_bpm()
-	var tempo: String = BattleManager.get_tempo_name()
-	speed_button.text = "%d♪" % bpm
-	speed_button.tooltip_text = "%s (%d BPM) - %s" % [tempo, bpm, BattleManager.get_tempo_korean()]
+	## 턴제 전투 - 배속 버튼 숨김
+	if speed_button:
+		speed_button.visible = false
 
 
 func _on_battle_log_received(message: String, color: Color) -> void:
