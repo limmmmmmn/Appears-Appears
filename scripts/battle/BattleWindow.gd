@@ -56,6 +56,8 @@ var window_mode: WindowMode = WindowMode.NORMAL
 
 # === 동적 생성 UI ===
 var claim_reward_button: Button = null
+var auto_claim_toggle: Button = null
+var auto_claim_enabled: bool = false  # 자동 보상 받기 토글
 
 # === 고/스톱 시스템 ===
 var go_stop_panel: PanelContainer = null
@@ -147,6 +149,9 @@ func _ready() -> void:
 
 	# 고/스톱 UI 생성
 	_setup_go_stop_ui()
+
+	# 자동 보상 토글 버튼 생성
+	_setup_auto_claim_toggle()
 
 
 func _process(delta: float) -> void:
@@ -1202,6 +1207,12 @@ func _update_buttons_for_no_enemies() -> void:
 
 func _show_claim_reward_button() -> void:
 	## 보상 받기 버튼을 전투 영역 중앙에 표시
+	## 자동 보상이 활성화되어 있으면 즉시 보상 획득
+	if auto_claim_enabled:
+		# 자동 보상 모드 - 버튼 없이 바로 보상 획득
+		call_deferred("_on_claim_reward_pressed")
+		return
+
 	if claim_reward_button != null:
 		return  # 이미 생성됨
 
@@ -1765,6 +1776,75 @@ func play_aoe_flash() -> void:
 			else:
 				background.color = original_color
 		)
+#endregion
+
+
+#region 자동 보상 토글
+func _setup_auto_claim_toggle() -> void:
+	## 좌하단에 자동 보상 토글 버튼 생성
+	var bottom_bar := get_node_or_null("MainVBox/BottomBar")
+	if not bottom_bar:
+		return
+
+	auto_claim_toggle = Button.new()
+	auto_claim_toggle.name = "AutoClaimToggle"
+	auto_claim_toggle.text = "자동"
+	auto_claim_toggle.toggle_mode = true
+	auto_claim_toggle.button_pressed = false
+	auto_claim_toggle.custom_minimum_size = Vector2(50, 26)
+	auto_claim_toggle.tooltip_text = "ON: 적 처치 후 자동 보상\nOFF: 수동 보상"
+
+	# 스타일 - OFF 상태
+	var off_style := StyleBoxFlat.new()
+	off_style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
+	off_style.corner_radius_top_left = 4
+	off_style.corner_radius_top_right = 4
+	off_style.corner_radius_bottom_left = 4
+	off_style.corner_radius_bottom_right = 4
+	off_style.border_width_bottom = 2
+	off_style.border_color = Color(0.4, 0.4, 0.5)
+	auto_claim_toggle.add_theme_stylebox_override("normal", off_style)
+
+	# 스타일 - ON 상태 (pressed)
+	var on_style := StyleBoxFlat.new()
+	on_style.bg_color = Color(0.2, 0.4, 0.3, 0.95)
+	on_style.corner_radius_top_left = 4
+	on_style.corner_radius_top_right = 4
+	on_style.corner_radius_bottom_left = 4
+	on_style.corner_radius_bottom_right = 4
+	on_style.border_width_bottom = 2
+	on_style.border_color = Color(0.3, 0.8, 0.4)
+	auto_claim_toggle.add_theme_stylebox_override("pressed", on_style)
+
+	# hover 스타일
+	var hover_style := off_style.duplicate()
+	hover_style.bg_color = Color(0.25, 0.25, 0.3, 0.95)
+	auto_claim_toggle.add_theme_stylebox_override("hover", hover_style)
+
+	auto_claim_toggle.add_theme_font_size_override("font_size", 10)
+	auto_claim_toggle.toggled.connect(_on_auto_claim_toggled)
+
+	# 좌측에 배치하기 위해 맨 앞에 추가
+	bottom_bar.add_child(auto_claim_toggle)
+	bottom_bar.move_child(auto_claim_toggle, 0)
+
+	# Spacer 추가 (좌측 버튼과 우측 도주 버튼 분리)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_bar.add_child(spacer)
+	bottom_bar.move_child(spacer, 1)
+
+
+func _on_auto_claim_toggled(toggled_on: bool) -> void:
+	## 자동 보상 토글 상태 변경
+	auto_claim_enabled = toggled_on
+	if auto_claim_toggle:
+		auto_claim_toggle.text = "자동" if toggled_on else "자동"
+		# ON 상태면 테두리 강조
+		if toggled_on:
+			auto_claim_toggle.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
+		else:
+			auto_claim_toggle.remove_theme_color_override("font_color")
 #endregion
 
 
