@@ -106,6 +106,10 @@ func add_system(message: String) -> void:
 	add_log(message, Color.GRAY)
 
 
+func add_level_up(hero_name: String, new_level: int) -> void:
+	add_log("🎉%s 레벨업! Lv.%d" % [hero_name, new_level], Color.GOLD)
+
+
 func add_stat_info(stat_name: String, value: String) -> void:
 	add_log("[%s] %s" % [stat_name, value], Color.LIGHT_BLUE)
 

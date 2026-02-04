@@ -5,6 +5,7 @@ signal party_changed
 signal inventory_changed
 signal hero_died(hero: Hero)
 signal party_wiped
+signal hero_leveled_up(hero: Hero, new_level: int)
 
 const MAX_PARTY_SIZE: int = 4
 var party: Array[Hero] = []
@@ -115,7 +116,9 @@ func distribute_exp(total_exp: int) -> void:
 		return
 	var exp_each := total_exp / alive.size()
 	for hero in alive:
-		hero.add_exp(exp_each)
+		var leveled_up := hero.add_exp(exp_each)
+		if leveled_up:
+			hero_leveled_up.emit(hero, hero.level)
 
 
 func full_restore_party() -> void:

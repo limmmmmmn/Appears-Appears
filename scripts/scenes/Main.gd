@@ -81,17 +81,11 @@ func _start_new_game() -> void:
 	# 게임 초기화
 	GameManager.start_new_game()
 
-	# 용사(롤랜드)를 파티에 자동 추가
+	# 용사(롤랜드)만 파티에 추가 (첫 스테이지는 혼자 시작)
 	PartyManager.add_hero_by_id("roland")
-
-	# 랜덤 동료 3명 추가하여 파티 4명 채우기
-	_add_random_companions(3)
 
 	# 시작 아이템: 포션만 지급 (장비는 파밍)
 	PartyManager.add_item("potion_small", 3)
-
-	# 랜덤 룬 2개 지급
-	_add_random_runes(2)
 
 	# 선술집 초기화 (영웅 5명 배치) - 이미 파티에 있는 영웅은 제외됨
 	TownManager.init_new_game()

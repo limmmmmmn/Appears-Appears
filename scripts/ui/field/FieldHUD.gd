@@ -259,6 +259,10 @@ func _connect_signals() -> void:
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 
+	if PartyManager:
+		if not PartyManager.hero_leveled_up.is_connected(_on_hero_leveled_up):
+			PartyManager.hero_leveled_up.connect(_on_hero_leveled_up)
+
 
 #region 미니맵
 func _update_minimap() -> void:
@@ -412,9 +416,19 @@ func add_system_log(msg: String) -> void:
 	if battle_log:
 		battle_log.add_system(msg)
 
+func add_level_up_log(hero_name: String, new_level: int) -> void:
+	if battle_log:
+		battle_log.add_level_up(hero_name, new_level)
+
 func clear_logs() -> void:
 	if battle_log:
 		battle_log.clear()
+
+
+func _on_hero_leveled_up(hero: Hero, new_level: int) -> void:
+	## 영웅 레벨업 알림
+	add_level_up_log(hero.hero_name, new_level)
+	update_party_display()
 #endregion
 
 
