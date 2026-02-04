@@ -13,6 +13,8 @@ signal battle_log_received(message: String, color: Color)
 signal party_hp_changed
 signal elite_victory(battle_id: int)
 signal boss_victory(battle_id: int)
+signal boss_battle_started(battle_id: int)  # 보스전 시작 시그널 (관전 시스템용)
+signal boss_battle_ended(battle_id: int)  # 보스전 종료 시그널
 signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
@@ -49,6 +51,7 @@ var extra_enemy_slots: int = 0  # 추가 적 슬롯 (charm1 효과)
 
 # 전투창 배치 설정
 const WINDOW_SIZE := Vector2(280, 200)
+const BOSS_WINDOW_SIZE := Vector2(420, 300)  # 보스전 전투창 (약 2배 크기)
 const CENTER_SAFE_SIZE: float = 100.0
 const WINDOW_MARGIN: float = 20.0  # 화면 가장자리 여유
 
@@ -138,49 +141,57 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 	## 새 전투창 생성
 	_battle_id_counter += 1
 	var battle_id := _battle_id_counter
-	
+
 	# 적 조우 사운드 재생
 	if SoundManager:
 		SoundManager.play_encounter()
-	
+
 	# 첫 전투 시작 체크
 	var is_first_battle := active_battles.is_empty()
-	
+
 	# BattleWindow 씬 인스턴스 생성
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
-	
+
 	# 컨테이너 설정
 	if battle_container == null:
 		_create_battle_container(parent_node)
-	
+
 	battle_container.add_child(window)
-	
-	# 최종 목표 위치
-	var target_pos := _calculate_window_position()
-	
+
 	# 시작 위치: 화면 중앙
 	var viewport_size := Vector2(480, 270)
 	var tree := get_tree()
 	if tree:
 		viewport_size = tree.root.get_visible_rect().size
-	
-	var start_pos: Vector2 = viewport_size / 2 - WINDOW_SIZE / 2
-	
+
+	# 보스전은 크게, 가운데 고정
+	var window_size: Vector2
+	var target_pos: Vector2
+	if is_boss:
+		window_size = BOSS_WINDOW_SIZE
+		target_pos = viewport_size / 2 - window_size / 2
+		window.custom_minimum_size = window_size
+	else:
+		window_size = WINDOW_SIZE
+		target_pos = _calculate_window_position()
+
+	var start_pos: Vector2 = viewport_size / 2 - window_size / 2
+
 	# 시작 위치에 배치 (중앙, 투명, 작은 크기)
 	window.position = start_pos
 	window.modulate.a = 0.0
 	window.scale = Vector2(0.5, 0.5)
-	
+
 	# 전투 초기화 (새 시스템용)
 	window.setup_new(battle_id, enemy_ids, is_elite, is_boss)
 	window.battle_ended.connect(_on_battle_window_ended)
 	window.battle_log.connect(_on_battle_log)
 	window.party_updated.connect(_on_party_updated)
 	window.loot_drop_requested.connect(_on_loot_drop_requested)
-	
+
 	# 등장 애니메이션
 	_animate_window_appear(window, target_pos)
-	
+
 	# 등록
 	active_battles[battle_id] = {
 		"window": window,
@@ -192,11 +203,16 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 	var window_count := get_active_battle_count()
 	window_created.emit(window_count)
 	_on_window_created_effect(window_count)
-	
+
 	# 임계치 체크
 	_check_threshold(window_count)
-	
+
 	battle_started.emit(battle_id)
+
+	# 보스전 시작 시그널 (관전 시스템용)
+	if is_boss:
+		boss_battle_started.emit(battle_id)
+
 	return battle_id
 
 
@@ -300,11 +316,13 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	if active_battles.has(battle_id):
 		was_elite = active_battles[battle_id].get("is_elite", false)
 		was_boss = active_battles[battle_id].get("is_boss", false)
-	
+
 	end_battle(battle_id, victory)
-	
-	if victory and was_boss:
-		boss_victory.emit(battle_id)
+
+	if was_boss:
+		boss_battle_ended.emit(battle_id)
+		if victory:
+			boss_victory.emit(battle_id)
 	elif victory and was_elite:
 		elite_victory.emit(battle_id)
 	

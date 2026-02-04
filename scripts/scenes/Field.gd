@@ -115,15 +115,20 @@ func _setup_systems() -> void:
 func _connect_signals() -> void:
 	if PartyManager and not PartyManager.party_wiped.is_connected(_on_party_wiped):
 		PartyManager.party_wiped.connect(_on_party_wiped)
-	
+
 	if GameManager and not GameManager.game_over.is_connected(_on_party_wiped):
 		GameManager.game_over.connect(_on_party_wiped)
-	
+
 	if BattleManager:
 		if not BattleManager.elite_victory.is_connected(_on_elite_victory):
 			BattleManager.elite_victory.connect(_on_elite_victory)
 		if not BattleManager.boss_victory.is_connected(_on_boss_victory):
 			BattleManager.boss_victory.connect(_on_boss_victory)
+		# 보스전 관전 시스템
+		if not BattleManager.boss_battle_started.is_connected(_on_boss_battle_started):
+			BattleManager.boss_battle_started.connect(_on_boss_battle_started)
+		if not BattleManager.boss_battle_ended.is_connected(_on_boss_battle_ended):
+			BattleManager.boss_battle_ended.connect(_on_boss_battle_ended)
 
 
 #=============================================================================
@@ -387,6 +392,38 @@ func _on_boss_victory(_battle_id: int) -> void:
 
 	spawner.stop_respawn()
 	# 보스 보상은 누적 보상 시스템으로 처리됨
+
+
+func _on_boss_battle_started(_battle_id: int) -> void:
+	## 보스전 시작 - 모든 필드 적이 관전 모드로 전환
+	var camera_rect := _get_camera_rect()
+
+	for enemy in field_enemies:
+		if is_instance_valid(enemy) and enemy.has_method("start_spectating"):
+			enemy.start_spectating(camera_rect)
+
+	if hud:
+		hud.add_system_log("⚔️ 보스전 시작! 필드의 적들이 지켜보고 있다...")
+
+
+func _on_boss_battle_ended(_battle_id: int) -> void:
+	## 보스전 종료 - 모든 필드 적이 원래 행동으로 복귀
+	for enemy in field_enemies:
+		if is_instance_valid(enemy) and enemy.has_method("stop_spectating"):
+			enemy.stop_spectating()
+
+
+func _get_camera_rect() -> Rect2:
+	## 현재 카메라 뷰 영역 반환
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var camera: Camera2D = get_viewport().get_camera_2d()
+	var player_pos: Vector2 = party_leader.global_position if party_leader else Vector2.ZERO
+
+	if camera:
+		var view_size: Vector2 = viewport_size / camera.zoom
+		return Rect2(camera.global_position - view_size / 2, view_size)
+
+	return Rect2(player_pos - viewport_size / 2, viewport_size)
 
 
 #=============================================================================

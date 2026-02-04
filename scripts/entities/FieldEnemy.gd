@@ -4,7 +4,7 @@ class_name FieldEnemy
 
 signal player_contacted(field_enemy: FieldEnemy)
 
-enum State { IDLE, WANDER, ALERT, CHASE }
+enum State { IDLE, WANDER, ALERT, CHASE, SPECTATE }
 
 @export var enemy_id: String = "slime"
 @export var tile_type: String = "grass"
@@ -27,6 +27,12 @@ var target_player: Node2D = null
 var wander_target: Vector2 = Vector2.ZERO
 var wander_timer: float = 0.0
 var is_contacted: bool = false
+
+# 관전 모드
+var is_spectating: bool = false
+var spectate_target_pos: Vector2 = Vector2.ZERO
+var pre_spectate_state: State = State.IDLE
+var spectate_speed: float = 80.0
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var alert_icon: Sprite2D = $AlertIcon
@@ -97,6 +103,8 @@ func _physics_process(delta: float) -> void:
 			pass
 		State.CHASE:
 			_process_chase(delta)
+		State.SPECTATE:
+			_process_spectate(delta)
 
 
 func _process_idle(delta: float) -> void:
@@ -197,3 +205,80 @@ func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2, p_is_elite: bo
 
 func despawn() -> void:
 	queue_free()
+
+
+#region 관전 시스템
+func _process_spectate(_delta: float) -> void:
+	## 관전 위치로 이동
+	if not is_spectating:
+		return
+
+	var distance := global_position.distance_to(spectate_target_pos)
+	if distance < 5.0:
+		velocity = Vector2.ZERO
+		return
+
+	var direction := (spectate_target_pos - global_position).normalized()
+	velocity = direction * spectate_speed
+	move_and_slide()
+	_update_sprite_direction(direction.x)
+
+
+func start_spectating(camera_rect: Rect2) -> void:
+	## 보스전 관전 시작 - 카메라 가장자리로 이동
+	if is_boss:
+		return  # 보스는 관전하지 않음
+
+	is_spectating = true
+	pre_spectate_state = current_state
+
+	# 화면 가장자리 중 가장 가까운 곳으로 이동
+	spectate_target_pos = _find_spectate_position(camera_rect)
+	_set_state(State.SPECTATE)
+
+	# 느낌표 숨김
+	if alert_icon:
+		alert_icon.visible = false
+
+
+func stop_spectating() -> void:
+	## 관전 종료 - 원래 행동으로 복귀
+	if not is_spectating:
+		return
+
+	is_spectating = false
+	_set_state(State.IDLE)
+
+
+func _find_spectate_position(camera_rect: Rect2) -> Vector2:
+	## 카메라 가장자리 중 가장 가까운 위치 계산
+	var my_pos := global_position
+	var edge_margin: float = 20.0
+
+	# 4개 가장자리 중 가장 가까운 곳 계산
+	var left_edge := Vector2(camera_rect.position.x + edge_margin, my_pos.y)
+	var right_edge := Vector2(camera_rect.end.x - edge_margin, my_pos.y)
+	var top_edge := Vector2(my_pos.x, camera_rect.position.y + edge_margin)
+	var bottom_edge := Vector2(my_pos.x, camera_rect.end.y - edge_margin)
+
+	# Y 위치 제한 (화면 안에 있도록)
+	left_edge.y = clampf(left_edge.y, camera_rect.position.y + edge_margin, camera_rect.end.y - edge_margin)
+	right_edge.y = clampf(right_edge.y, camera_rect.position.y + edge_margin, camera_rect.end.y - edge_margin)
+	top_edge.x = clampf(top_edge.x, camera_rect.position.x + edge_margin, camera_rect.end.x - edge_margin)
+	bottom_edge.x = clampf(bottom_edge.x, camera_rect.position.x + edge_margin, camera_rect.end.x - edge_margin)
+
+	var edges: Array[Vector2] = [left_edge, right_edge, top_edge, bottom_edge]
+	var closest := edges[0]
+	var closest_dist := my_pos.distance_to(closest)
+
+	for edge in edges:
+		var dist := my_pos.distance_to(edge)
+		if dist < closest_dist:
+			closest = edge
+			closest_dist = dist
+
+	# 약간의 랜덤 오프셋 추가 (겹치지 않도록)
+	closest += Vector2(randf_range(-15, 15), randf_range(-15, 15))
+
+	return closest
+#endregion
