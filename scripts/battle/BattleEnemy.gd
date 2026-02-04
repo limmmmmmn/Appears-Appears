@@ -5,7 +5,7 @@ class_name BattleEnemy
 
 signal defeated(enemy: BattleEnemy)
 
-const HP_MULTIPLIER: float = 4.0  # HP 배율
+const HP_MULTIPLIER: float = 1.0  # HP 배율 (1/4로 축소)
 
 var enemy_id: String = ""
 var enemy_name: String = ""
