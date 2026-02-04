@@ -38,6 +38,10 @@ var grudge_exp_label: Label = null
 var grudge_gold_label: Label = null
 var grudge_items_container: HBoxContainer = null
 
+# === 킬카운트 표시 (원념 패널 옆) - 별도 표시 ===
+var kill_count_panel: PanelContainer = null
+var kill_count_label: Label = null
+
 # === 원념 선택 팝업 (전체 화면) ===
 var grudge_popup: CanvasLayer = null
 var is_grudge_popup_active: bool = false
@@ -59,6 +63,7 @@ func _ready() -> void:
 	add_to_group("field_hud")
 	_setup_components()
 	_setup_grudge_panel()
+	_setup_kill_count_panel()
 	_setup_grudge_popup()
 	_setup_town_popup()
 	_connect_signals()
@@ -124,6 +129,9 @@ func _connect_signals() -> void:
 			BattleManager.accumulated_rewards_changed.connect(_update_grudge_panel)
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
+		# 킬카운트 실시간 업데이트
+		if not BattleManager.global_kill_count_changed.is_connected(_on_kill_count_changed):
+			BattleManager.global_kill_count_changed.connect(_on_kill_count_changed)
 
 
 #region 미니맵
@@ -466,6 +474,100 @@ func _setup_grudge_panel() -> void:
 	# 위치 설정 (트리에 추가된 후)
 	grudge_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	grudge_panel.position.y = 26  # TopBar 아래
+
+
+func _setup_kill_count_panel() -> void:
+	## 킬카운트 패널 (원념 패널 오른쪽에 별도 표시)
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	kill_count_panel = PanelContainer.new()
+	kill_count_panel.name = "KillCountPanel"
+
+	# 스타일 - 붉은색 테두리
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.05, 0.05, 0.9)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.9, 0.3, 0.3)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	kill_count_panel.add_theme_stylebox_override("panel", style)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 6)
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	kill_count_panel.add_child(hbox)
+
+	# 해골 아이콘
+	var icon_label := Label.new()
+	icon_label.text = "💀"
+	icon_label.add_theme_font_size_override("font_size", 14)
+	hbox.add_child(icon_label)
+
+	# 킬카운트 숫자
+	kill_count_label = Label.new()
+	kill_count_label.text = "0"
+	kill_count_label.add_theme_font_size_override("font_size", 16)
+	kill_count_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+	kill_count_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	kill_count_label.add_theme_constant_override("outline_size", 3)
+	hbox.add_child(kill_count_label)
+
+	ctrl.add_child(kill_count_panel)
+
+	# 위치 설정 (화면 오른쪽 상단)
+	kill_count_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	kill_count_panel.position.x = -100  # 오른쪽에서 안쪽으로
+	kill_count_panel.position.y = 26  # TopBar 아래
+
+	# 초기값 설정
+	_update_kill_count_display(BattleManager.global_kill_count, BattleManager.get_danger_level())
+
+
+func _update_kill_count_display(count: int, danger_level: int) -> void:
+	## 킬카운트 표시 업데이트
+	if not kill_count_label:
+		return
+
+	kill_count_label.text = str(count)
+
+	# 위험도에 따라 색상 변경
+	var color: Color
+	match danger_level:
+		0: color = Color(0.8, 0.8, 0.8)  # 회색
+		1: color = Color(1.0, 1.0, 0.4)  # 노란색
+		2: color = Color(1.0, 0.6, 0.2)  # 주황색
+		3: color = Color(1.0, 0.3, 0.3)  # 빨간색
+		_: color = Color(1.0, 0.2, 0.8)  # 보라색 (4+)
+
+	kill_count_label.add_theme_color_override("font_color", color)
+
+	# 패널 테두리도 색상 변경
+	if kill_count_panel:
+		var style: StyleBoxFlat = kill_count_panel.get_theme_stylebox("panel").duplicate()
+		style.border_color = color.lightened(0.2)
+		kill_count_panel.add_theme_stylebox_override("panel", style)
+
+
+func _on_kill_count_changed(count: int, danger_level: int) -> void:
+	## 킬카운트 변경 시 호출 (실시간)
+	_update_kill_count_display(count, danger_level)
+
+	# 킬카운트 증가 애니메이션
+	if kill_count_label:
+		var tween := create_tween()
+		tween.tween_property(kill_count_label, "scale", Vector2(1.3, 1.3), 0.1)
+		tween.tween_property(kill_count_label, "scale", Vector2(1.0, 1.0), 0.15)
 
 
 func _update_grudge_panel(exp: int, gold: int, items: Array) -> void:

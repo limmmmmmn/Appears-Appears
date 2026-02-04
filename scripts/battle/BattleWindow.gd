@@ -1278,37 +1278,40 @@ func _end_battle_victory() -> void:
 
 func _play_reward_fly_animation() -> void:
 	## 보상이 원념 패널로 날아가는 연출
-	# 타겟 위치 찾기 (FieldHUD의 grudge_panel)
-	var target_pos: Vector2 = _get_grudge_panel_position()
-	var start_pos: Vector2 = global_position + size / 2
-
 	# 보상이 없으면 바로 닫기
 	if total_exp <= 0 and total_gold <= 0 and drop_items.is_empty():
 		_play_close_effect()
 		return
 
+	# 전투창의 화면상 위치 계산 (스크린 좌표)
+	var start_pos: Vector2 = get_global_rect().get_center()
+
+	# 타겟 위치 (화면 상단 중앙 - 원념 패널 위치)
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var target_pos: Vector2 = Vector2(viewport_size.x / 2, 60)
+
 	# 최상위 레이어에 보상 아이콘들 생성
 	var root := get_tree().root
 	var fly_container := CanvasLayer.new()
-	fly_container.layer = 90
+	fly_container.layer = 100  # 최상위
 	root.add_child(fly_container)
 
 	var fly_nodes: Array = []
 	var delay: float = 0.0
-	var delay_interval: float = 0.08
+	var delay_interval: float = 0.12
 
 	# EXP 아이콘 생성
 	if total_exp > 0:
-		var exp_node := _create_fly_reward_node("⭐ +%d" % total_exp, Color(0.5, 0.9, 0.5))
-		exp_node.position = start_pos
+		var exp_node := _create_fly_reward_node("⭐ +%d EXP" % total_exp, Color(0.4, 1.0, 0.4))
+		exp_node.global_position = start_pos
 		fly_container.add_child(exp_node)
 		fly_nodes.append({"node": exp_node, "delay": delay})
 		delay += delay_interval
 
 	# Gold 아이콘 생성
 	if total_gold > 0:
-		var gold_node := _create_fly_reward_node("💰 +%d" % total_gold, Color(1.0, 0.85, 0.3))
-		gold_node.position = start_pos
+		var gold_node := _create_fly_reward_node("💰 +%d G" % total_gold, Color(1.0, 0.9, 0.3))
+		gold_node.global_position = start_pos
 		fly_container.add_child(gold_node)
 		fly_nodes.append({"node": gold_node, "delay": delay})
 		delay += delay_interval
@@ -1316,40 +1319,40 @@ func _play_reward_fly_animation() -> void:
 	# 아이템 아이콘들 생성 (최대 3개)
 	var item_count: int = mini(drop_items.size(), 3)
 	for i in range(item_count):
-		var item_node := _create_fly_reward_node("🎁", Color(0.8, 0.6, 1.0))
-		item_node.position = start_pos
+		var item_node := _create_fly_reward_node("🎁 아이템!", Color(0.9, 0.6, 1.0))
+		item_node.global_position = start_pos
 		fly_container.add_child(item_node)
 		fly_nodes.append({"node": item_node, "delay": delay})
 		delay += delay_interval
 
 	# 날아가는 애니메이션
-	var total_duration: float = 0.5
+	var total_duration: float = 0.6
 	for fly_data in fly_nodes:
 		var node: Control = fly_data.node
 		var node_delay: float = fly_data.delay
 
-		# 초기 상태
-		node.modulate.a = 0.0
-		node.scale = Vector2(0.5, 0.5)
+		# 초기 상태 - 보이는 상태로 시작
+		node.modulate.a = 1.0
+		node.scale = Vector2(0.3, 0.3)
+		node.pivot_offset = node.size / 2
 
 		# 애니메이션 시작
 		var tween := create_tween()
 		tween.tween_interval(node_delay)
 
-		# 페이드 인 + 커지기
-		tween.tween_property(node, "modulate:a", 1.0, 0.1)
-		tween.parallel().tween_property(node, "scale", Vector2(1.2, 1.2), 0.1)
+		# 팝업 효과로 나타나기
+		tween.tween_property(node, "scale", Vector2(1.5, 1.5), 0.15).set_ease(Tween.EASE_OUT)
+		tween.tween_property(node, "scale", Vector2(1.0, 1.0), 0.1)
 
-		# 날아가기 (곡선 경로 - 약간 위로 올라갔다가 타겟으로)
-		var mid_pos: Vector2 = start_pos.lerp(target_pos, 0.5) + Vector2(0, -30)
-		tween.tween_property(node, "position", mid_pos, total_duration * 0.4).set_ease(Tween.EASE_OUT)
-		tween.parallel().tween_property(node, "scale", Vector2(1.0, 1.0), total_duration * 0.4)
-		tween.tween_property(node, "position", target_pos, total_duration * 0.6).set_ease(Tween.EASE_IN)
-		tween.parallel().tween_property(node, "scale", Vector2(0.3, 0.3), total_duration * 0.6)
-		tween.parallel().tween_property(node, "modulate:a", 0.0, total_duration * 0.3).set_delay(total_duration * 0.4)
+		# 날아가기 (곡선 경로)
+		var mid_pos: Vector2 = start_pos.lerp(target_pos, 0.4) + Vector2(0, -50)
+		tween.tween_property(node, "global_position", mid_pos, total_duration * 0.4).set_ease(Tween.EASE_OUT)
+		tween.tween_property(node, "global_position", target_pos, total_duration * 0.5).set_ease(Tween.EASE_IN_OUT)
+		tween.parallel().tween_property(node, "scale", Vector2(0.5, 0.5), total_duration * 0.5)
+		tween.parallel().tween_property(node, "modulate:a", 0.0, 0.2)
 
 	# 모든 애니메이션 완료 후 정리 및 닫기
-	var cleanup_delay: float = delay + total_duration + 0.1
+	var cleanup_delay: float = delay + total_duration + 0.2
 	var cleanup_tween := create_tween()
 	cleanup_tween.tween_interval(cleanup_delay)
 	cleanup_tween.tween_callback(func():
@@ -1362,33 +1365,41 @@ func _create_fly_reward_node(text: String, color: Color) -> Control:
 	## 날아가는 보상 노드 생성
 	var container := Control.new()
 	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.z_index = 100
+
+	# 배경 패널
+	var bg := PanelContainer.new()
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.8)
+	bg_style.border_width_left = 2
+	bg_style.border_width_top = 2
+	bg_style.border_width_right = 2
+	bg_style.border_width_bottom = 2
+	bg_style.border_color = color
+	bg_style.corner_radius_top_left = 6
+	bg_style.corner_radius_top_right = 6
+	bg_style.corner_radius_bottom_left = 6
+	bg_style.corner_radius_bottom_right = 6
+	bg_style.content_margin_left = 8
+	bg_style.content_margin_right = 8
+	bg_style.content_margin_top = 4
+	bg_style.content_margin_bottom = 4
+	bg.add_theme_stylebox_override("panel", bg_style)
+	container.add_child(bg)
 
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_font_size_override("font_size", 16)
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 4)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.position = Vector2(-30, -10)  # 중앙 정렬 오프셋
-	container.add_child(label)
+	bg.add_child(label)
+
+	# 컨테이너 위치 오프셋 (중앙 정렬)
+	container.position = Vector2(-60, -15)
 
 	return container
-
-
-func _get_grudge_panel_position() -> Vector2:
-	## FieldHUD의 grudge_panel 위치 반환
-	var field_huds := get_tree().get_nodes_in_group("field_hud")
-	if field_huds.size() > 0:
-		var hud: FieldHUD = field_huds[0]
-		if hud.grudge_panel and is_instance_valid(hud.grudge_panel):
-			# grudge_panel의 중앙 위치 계산
-			var panel_rect: Rect2 = hud.grudge_panel.get_global_rect()
-			return panel_rect.position + panel_rect.size / 2
-
-	# 기본값: 화면 상단 중앙
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	return Vector2(viewport_size.x / 2, 50)
 
 
 func _play_close_effect() -> void:
