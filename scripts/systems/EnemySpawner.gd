@@ -284,9 +284,12 @@ func spawn_field_boss(field_enemies: Array) -> void:
 	var enemy: Node2D = field_enemy_scene.instantiate()
 	field.add_child(enemy)
 
-	# 랜덤 위치 (플레이어에서 멀리)
-	var player_pos: Vector2 = _get_player_position()
-	var boss_pos: Vector2 = _find_random_far_position(player_pos)
+	# 맵 중앙 근처에 스폰 (찾기 쉽게)
+	var boss_pos: Vector2
+	if bounds_calculated:
+		boss_pos = map_bounds.get_center() + Vector2(randf_range(-100, 100), randf_range(-50, 50))
+	else:
+		boss_pos = Vector2(350, 200)
 
 	enemy.setup(boss_id, random_tile, boss_pos, false)
 	enemy.is_boss = true
@@ -302,6 +305,8 @@ func spawn_field_boss(field_enemies: Array) -> void:
 
 	field_enemies.append(enemy)
 	enemy_spawned.emit(enemy)
+
+	print("[EnemySpawner] 필드 보스 스폰: %s at %s" % [boss_id, boss_pos])
 
 
 func _find_random_far_position(player_pos: Vector2) -> Vector2:
