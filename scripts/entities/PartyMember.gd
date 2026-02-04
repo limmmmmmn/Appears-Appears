@@ -101,15 +101,34 @@ func _process_leader(delta: float) -> void:
 	# 입력 없음 - 자동 이동 타이머 증가
 	idle_timer += delta
 	if idle_timer >= AUTO_MOVE_DELAY:
-		# 자동 이동
+		# 자동 이동 (랜덤 방향)
 		velocity = auto_move_direction * move_speed
 		_update_direction(auto_move_direction)
 		_play_walk_animation()
 		move_and_slide()
 		_record_path()
+
+		# 랜덤하게 방향 변경 (약 2% 확률로 매 프레임)
+		if randf() < 0.02:
+			_change_random_direction()
 	else:
 		velocity = Vector2.ZERO
 		_play_idle_animation()
+
+
+func _change_random_direction() -> void:
+	## 랜덤한 방향으로 변경
+	var directions: Array[Vector2] = [
+		Vector2.UP,
+		Vector2.DOWN,
+		Vector2.LEFT,
+		Vector2.RIGHT,
+		Vector2(1, 1).normalized(),   # 우하
+		Vector2(1, -1).normalized(),  # 우상
+		Vector2(-1, 1).normalized(),  # 좌하
+		Vector2(-1, -1).normalized()  # 좌상
+	]
+	auto_move_direction = directions[randi() % directions.size()]
 
 
 func _input(event: InputEvent) -> void:
