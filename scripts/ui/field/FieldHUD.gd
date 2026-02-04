@@ -156,13 +156,22 @@ func get_minimap_viewport() -> SubViewport:
 #region 이벤트 핸들러
 func _on_speed_button_pressed() -> void:
 	if BattleManager:
-		var new_speed = BattleManager.toggle_battle_speed()
-		speed_button.text = "x%d" % int(new_speed)
+		BattleManager.toggle_battle_speed()
+		_update_speed_button()
 
 
-func _on_battle_speed_changed(speed: float) -> void:
-	if speed_button:
-		speed_button.text = "x%d" % int(speed)
+func _on_battle_speed_changed(_bpm: float, _tempo_name: String) -> void:
+	_update_speed_button()
+
+
+func _update_speed_button() -> void:
+	## 템포 버튼 텍스트 업데이트 (BPM + 템포 이름)
+	if not speed_button or not BattleManager:
+		return
+	var bpm: int = BattleManager.get_current_bpm()
+	var tempo: String = BattleManager.get_tempo_name()
+	speed_button.text = "%d♪" % bpm
+	speed_button.tooltip_text = "%s (%d BPM) - %s" % [tempo, bpm, BattleManager.get_tempo_korean()]
 
 
 func _on_battle_log_received(message: String, color: Color) -> void:
@@ -201,6 +210,7 @@ func _on_loot_animation_completed(_item_id: String) -> void:
 func update_all() -> void:
 	update_top_bar()
 	update_party_display()
+	_update_speed_button()
 
 
 func update_top_bar() -> void:
@@ -209,6 +219,7 @@ func update_top_bar() -> void:
 		stage_label.text = FieldManager.get_display_name() + (": " + fn if fn else "")
 	if gold_label and GameManager:
 		gold_label.text = "%d G" % GameManager.gold
+	_update_speed_button()
 
 
 func update_party_display() -> void:

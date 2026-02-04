@@ -14,7 +14,7 @@ signal party_hp_changed
 signal elite_victory(battle_id: int)
 signal boss_victory(battle_id: int)
 signal beat_occurred(beat_index: int)  # 비트 발생 시그널
-signal battle_speed_changed(speed: float)
+signal battle_speed_changed(bpm: float, tempo_name: String)
 signal hero_attacked(hero_id: String)
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal global_kill_count_changed(count: int, danger_level: int)
@@ -35,10 +35,25 @@ signal threshold_reached(window_count: int)   # 임계치 도달 시
 var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite}
 var _battle_id_counter: int = 0
 
-# === 전투 속도 ===
-var battle_speed: float = 1.0
-const BATTLE_SPEEDS: Array[float] = [1.0, 2.0, 3.0]
-var _current_speed_index: int = 0
+# === 전투 속도 (BPM 기반) ===
+# 음악적 템포: Largo → Andante → Moderato → Allegro → Presto
+const TEMPO_BPM: Array[int] = [60, 80, 110, 140, 180]
+const TEMPO_NAMES: Dictionary = {
+	60: "Largo",      # 느리게
+	80: "Andante",    # 걷는 속도 (기본)
+	110: "Moderato",  # 보통
+	140: "Allegro",   # 빠르게
+	180: "Presto"     # 매우 빠르게
+}
+const TEMPO_KOREAN: Dictionary = {
+	60: "느리게",
+	80: "보통",
+	110: "조금 빠르게",
+	140: "빠르게",
+	180: "매우 빠르게"
+}
+var current_bpm: int = 80  # 기본값: Andante
+var _current_tempo_index: int = 1  # Andante가 기본
 
 # === Charm 효과 ===
 var extra_enemy_slots: int = 0  # 추가 적 슬롯 (charm1 효과)
@@ -512,22 +527,44 @@ func close_all_battles() -> void:
 		active_battles.erase(battle_id)
 
 
-func toggle_battle_speed() -> float:
-	_current_speed_index = (_current_speed_index + 1) % BATTLE_SPEEDS.size()
-	battle_speed = BATTLE_SPEEDS[_current_speed_index]
-	battle_speed_changed.emit(battle_speed)
-	return battle_speed
+func toggle_battle_speed() -> int:
+	## 다음 템포로 전환, BPM 반환
+	_current_tempo_index = (_current_tempo_index + 1) % TEMPO_BPM.size()
+	current_bpm = TEMPO_BPM[_current_tempo_index]
+	battle_speed_changed.emit(current_bpm, get_tempo_name())
+	return current_bpm
 
 
-func set_battle_speed(speed: float) -> void:
-	battle_speed = speed
-	for i in range(BATTLE_SPEEDS.size()):
-		if is_equal_approx(BATTLE_SPEEDS[i], speed):
-			_current_speed_index = i
+func set_battle_bpm(bpm: int) -> void:
+	## 특정 BPM으로 설정
+	current_bpm = bpm
+	for i in range(TEMPO_BPM.size()):
+		if TEMPO_BPM[i] == bpm:
+			_current_tempo_index = i
 			break
-	battle_speed_changed.emit(battle_speed)
+	battle_speed_changed.emit(current_bpm, get_tempo_name())
+
+
+func get_current_bpm() -> int:
+	return current_bpm
+
+
+func get_tempo_name() -> String:
+	## 현재 템포의 영문 이름 반환
+	return TEMPO_NAMES.get(current_bpm, "Andante")
+
+
+func get_tempo_korean() -> String:
+	## 현재 템포의 한글 이름 반환
+	return TEMPO_KOREAN.get(current_bpm, "보통")
+
+
+func get_beat_interval() -> float:
+	## 현재 BPM에 따른 비트 간격 (초)
+	return 60.0 / float(current_bpm)
 
 
 func get_battle_speed() -> float:
-	return battle_speed
+	## 레거시 호환: 기본 80 BPM 대비 속도 배율
+	return float(current_bpm) / 80.0
 #endregion

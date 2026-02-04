@@ -1,6 +1,7 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: 비트 전투창 (100 BPM 비트 시스템)
+## BattleWindow: 비트 전투창 (템포 기반 비트 시스템)
+## - BPM은 BattleManager에서 관리 (Largo 60 ~ Presto 180)
 ## - 각 전투창이 독립적인 비트 타이밍 관리
 ## - 전투 중 적 동적 추가 지원
 
@@ -25,8 +26,7 @@ var enemies: Array = []
 var enemy_data_list: Array = []
 
 # === 비트 시스템 ===
-const BPM: float = 80.0
-const BEAT_INTERVAL: float = 60.0 / BPM  # 0.75초
+# BPM은 BattleManager에서 관리 (60/80/110/140/180 BPM)
 var beat_timer: float = 0.0
 var current_beat: int = 0
 
@@ -347,16 +347,16 @@ func _start_battle() -> void:
 
 #region 비트 시스템
 func _update_beat_system(delta: float) -> void:
-	## 비트 타이밍 업데이트
-	var speed_delta: float = delta * BattleManager.get_battle_speed()
-	beat_timer += speed_delta
+	## 비트 타이밍 업데이트 (BPM은 BattleManager에서 관리)
+	beat_timer += delta
 
 	# 엇박 대기 중인 액션 처리
-	_update_pending_actions(speed_delta)
+	_update_pending_actions(delta)
 
 	# 비트 발생 체크
-	if beat_timer >= BEAT_INTERVAL:
-		beat_timer -= BEAT_INTERVAL
+	var beat_interval: float = BattleManager.get_beat_interval()
+	if beat_timer >= beat_interval:
+		beat_timer -= beat_interval
 		_on_beat_occurred()
 
 
