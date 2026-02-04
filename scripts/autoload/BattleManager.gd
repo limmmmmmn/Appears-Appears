@@ -18,6 +18,8 @@ signal battle_speed_changed(bpm: float, tempo_name: String)
 signal hero_attacked(hero_id: String)
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal global_kill_count_changed(count: int, danger_level: int)
+signal accumulated_rewards_changed(exp: int, gold: int, items: Array)
+signal danger_level_up(new_level: int)  # 원념 레벨업 시 (선택창 표시용)
 
 # === 전투창 증식 시스템 설정 ===
 const MAX_ENEMIES_PER_WINDOW: int = 3  # 전투창 하나당 최대 적 수
@@ -27,6 +29,11 @@ const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
 var global_kill_count: int = 0  # 전체 적 처치 횟수
 const DANGER_LEVEL_INTERVAL: int = 10  # 위험도 1레벨당 킬 수
 const STAT_SCALE_PER_LEVEL: float = 0.05  # 위험도 1레벨당 스탯 증가율 (5%)
+
+# === 누적 보상 시스템 ===
+var accumulated_exp: int = 0
+var accumulated_gold: int = 0
+var accumulated_items: Array = []  # [{id, type, rarity, identified}]
 
 # === 창 생성 효과 (비워둠) ===
 signal window_created(window_count: int)      # 새 전투창 생성 시
@@ -336,6 +343,85 @@ func _on_party_updated() -> void:
 
 func _on_loot_drop_requested(item_id: String, start_pos: Vector2) -> void:
 	loot_animation_requested.emit(item_id, start_pos)
+#endregion
+
+
+#region 누적 보상 시스템
+func add_accumulated_reward(exp: int, gold: int, items: Array = []) -> void:
+	## 전투창에서 보상 누적
+	accumulated_exp += exp
+	accumulated_gold += gold
+
+	# 아이템은 미감정 상태로 추가
+	for item_id in items:
+		var item_data: Dictionary = DataManager.get_item(item_id)
+		if item_data.is_empty():
+			continue
+
+		var unidentified_item := {
+			"id": item_id,
+			"type": item_data.get("type", "unknown"),
+			"slot": item_data.get("slot", ""),
+			"rarity": item_data.get("rarity", "common"),
+			"identified": false
+		}
+		accumulated_items.append(unidentified_item)
+
+	accumulated_rewards_changed.emit(accumulated_exp, accumulated_gold, accumulated_items)
+
+
+func increment_global_kill_count() -> void:
+	## 글로벌 킬카운트 증가 및 원념 레벨 체크
+	var old_level: int = global_kill_count / DANGER_LEVEL_INTERVAL
+	global_kill_count += 1
+	var new_level: int = global_kill_count / DANGER_LEVEL_INTERVAL
+
+	global_kill_count_changed.emit(global_kill_count, new_level)
+
+	# 원념 레벨업 시 선택창 표시
+	if new_level > old_level and new_level > 0:
+		danger_level_up.emit(new_level)
+
+
+func get_danger_level() -> int:
+	return global_kill_count / DANGER_LEVEL_INTERVAL
+
+
+func claim_accumulated_rewards() -> void:
+	## 누적 보상 수령 (스톱 선택 시)
+	if accumulated_exp > 0:
+		PartyManager.distribute_exp(accumulated_exp)
+	if accumulated_gold > 0:
+		GameManager.add_gold(accumulated_gold)
+
+	# 아이템은 인벤토리에 추가 (미감정 상태)
+	for item in accumulated_items:
+		InventoryManager.add_unidentified_item(item.id, 1)
+
+	# 로그
+	battle_log_received.emit("보상 획득! EXP +%d, Gold +%d" % [accumulated_exp, accumulated_gold], Color.CYAN)
+
+	# 초기화
+	reset_accumulated_rewards()
+
+
+func reset_accumulated_rewards() -> void:
+	## 보상 및 원념 초기화
+	accumulated_exp = 0
+	accumulated_gold = 0
+	accumulated_items.clear()
+	global_kill_count = 0
+	accumulated_rewards_changed.emit(0, 0, [])
+	global_kill_count_changed.emit(0, 0)
+
+
+func get_accumulated_rewards() -> Dictionary:
+	return {
+		"exp": accumulated_exp,
+		"gold": accumulated_gold,
+		"items": accumulated_items,
+		"danger_level": get_danger_level()
+	}
 #endregion
 
 

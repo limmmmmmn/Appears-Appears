@@ -4,12 +4,46 @@ extends Node
 signal inventory_changed
 signal item_added(item_id: String, quantity: int)
 signal item_removed(item_id: String, quantity: int)
+signal item_identified(item_id: String)
 
 # 인벤토리: { item_id: quantity }
 var items: Dictionary = {}
 
+# 미감정 아이템: { item_id: quantity }
+var unidentified_items: Dictionary = {}
+
 # 인벤토리 최대 슬롯 (루프히어로처럼 제한 없이 하려면 크게)
 const MAX_SLOTS: int = 99
+
+# 장비 타입 -> 한글 이름 매핑
+const ITEM_TYPE_NAMES: Dictionary = {
+	"sword": "검",
+	"dagger": "단검",
+	"staff": "지팡이",
+	"bow": "활",
+	"axe": "도끼",
+	"mace": "철퇴",
+	"spear": "창",
+	"shield": "방패",
+	"armor": "갑옷",
+	"robe": "로브",
+	"light_armor": "경갑",
+	"helmet": "투구",
+	"hat": "모자",
+	"gloves": "장갑",
+	"boots": "신발",
+	"ring": "반지",
+	"amulet": "목걸이",
+}
+
+# 희귀도 -> 색상 매핑
+const RARITY_COLORS: Dictionary = {
+	"common": Color(0.7, 0.7, 0.7),      # 회색
+	"magic": Color(0.3, 0.5, 1.0),       # 파랑
+	"rare": Color(1.0, 0.85, 0.0),       # 노랑
+	"unique": Color(0.6, 0.2, 0.8),      # 보라
+	"legendary": Color(1.0, 0.5, 0.0),   # 주황
+}
 
 
 func _ready() -> void:
@@ -193,10 +227,107 @@ func get_total_item_count() -> int:
 #endregion
 
 
+#region 미감정 아이템
+func add_unidentified_item(item_id: String, quantity: int = 1) -> bool:
+	## 미감정 아이템 추가
+	if item_id.is_empty() or quantity <= 0:
+		return false
+
+	if unidentified_items.has(item_id):
+		unidentified_items[item_id] = int(unidentified_items[item_id]) + quantity
+	else:
+		unidentified_items[item_id] = quantity
+
+	item_added.emit(item_id, quantity)
+	inventory_changed.emit()
+	return true
+
+
+func identify_item(item_id: String) -> bool:
+	## 아이템 감정 (미감정 -> 감정됨)
+	if not unidentified_items.has(item_id):
+		return false
+
+	var qty: int = int(unidentified_items[item_id])
+	unidentified_items.erase(item_id)
+
+	# 일반 인벤토리로 이동
+	add_item(item_id, qty)
+	item_identified.emit(item_id)
+	return true
+
+
+func identify_all_items() -> int:
+	## 모든 미감정 아이템 감정
+	var count: int = 0
+	var items_to_identify: Array = unidentified_items.keys()
+
+	for item_id in items_to_identify:
+		if identify_item(item_id):
+			count += 1
+
+	return count
+
+
+func get_unidentified_items() -> Array:
+	## 미감정 아이템 목록 반환
+	var result: Array = []
+	for item_id in unidentified_items.keys():
+		var quantity: int = int(unidentified_items[item_id])
+		var data: Dictionary = DataManager.get_equipment(item_id)
+		if data.is_empty():
+			data = DataManager.get_item(item_id)
+
+		result.append({
+			"id": item_id,
+			"quantity": quantity,
+			"data": data,
+			"identified": false
+		})
+	return result
+
+
+func get_unidentified_count() -> int:
+	## 미감정 아이템 종류 수
+	return unidentified_items.size()
+
+
+func get_item_type_name(item_id: String) -> String:
+	## 아이템 타입의 한글 이름 반환 (미감정 표시용)
+	var data: Dictionary = DataManager.get_equipment(item_id)
+	if data.is_empty():
+		data = DataManager.get_item(item_id)
+
+	var item_type: String = data.get("type", "unknown")
+	var slot: String = data.get("slot", "")
+
+	# slot 기반으로 먼저 확인
+	if slot == "main_hand":
+		item_type = data.get("type", "weapon")
+	elif slot == "off_hand":
+		item_type = data.get("type", "shield")
+	elif slot in ["body", "head", "hands", "feet"]:
+		item_type = data.get("type", slot)
+
+	return ITEM_TYPE_NAMES.get(item_type, item_type)
+
+
+func get_rarity_color(item_id: String) -> Color:
+	## 아이템 희귀도 색상 반환
+	var data: Dictionary = DataManager.get_equipment(item_id)
+	if data.is_empty():
+		data = DataManager.get_item(item_id)
+
+	var rarity: String = data.get("rarity", "common")
+	return RARITY_COLORS.get(rarity, Color.WHITE)
+#endregion
+
+
 #region 유틸리티
 func clear() -> void:
 	## 인벤토리 초기화
 	items.clear()
+	unidentified_items.clear()
 	inventory_changed.emit()
 
 

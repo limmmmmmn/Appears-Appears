@@ -805,7 +805,7 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
-	# 원념 증가 (로컬만)
+	# 원념 증가 (로컬 - 전투창 종료 시 글로벌로 전송)
 	kill_count += 1
 
 	# 특성: 적 3마리 이상일 때 보너스 원념
@@ -814,14 +814,15 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		if bonus_kill > 0:
 			kill_count += bonus_kill
 
-	# 위험도 레벨 변경 시 테두리 업데이트 + 드라마틱 메시지
+	# 위험도 테두리 업데이트 (시각 효과만)
 	var new_danger: int = get_local_danger_level()
 	if new_danger > danger_level:
-		_show_danger_level_up_message(new_danger)
 		update_danger_level()
+		_shake_window()
 
 	# 보상 계산 (위험도 + 특성 적용)
-	var danger_reward_mult: float = 1.0 + (danger_level * 0.1)  # 위험도당 10% 보상 증가
+	var global_danger: int = BattleManager.get_danger_level()
+	var danger_reward_mult: float = 1.0 + (global_danger * 0.1)  # 위험도당 10% 보상 증가
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
 	var exp_trait_mult: float = 1.0 + _get_trait_effect_float("exp_mult")
 
@@ -842,7 +843,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 
 func _show_danger_level_up_message(new_level: int) -> void:
-	## 위험도 상승 시 고/스톱 선택 표시
+	## 위험도 상승 시 로그 메시지만 표시 (선택 UI는 FieldHUD에서 글로벌하게 처리)
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
 		"적들의 원념이 깨어나기 시작한다...",
@@ -861,9 +862,6 @@ func _show_danger_level_up_message(new_level: int) -> void:
 
 	# 화면 흔들림 효과
 	_shake_window()
-
-	# 고/스톱 선택 UI 표시
-	_show_go_stop_choice(new_level, message)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -957,16 +955,34 @@ func _check_battle_end() -> bool:
 	var alive_heroes := PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
-		# 적이 모두 사라짐 - 고/스톱 선택
-		if not is_go_stop_active:
-			_show_go_stop_for_clear()
-		return false
+		# 적이 모두 사라짐 - 보상 누적 후 자동 종료
+		_report_rewards_and_close()
+		return true
 
 	if alive_heroes.is_empty():
 		_end_battle_defeat()
 		return true
 
 	return false
+
+
+func _report_rewards_and_close() -> void:
+	## 보상을 BattleManager에 누적하고 전투창 닫기
+	# 보상 누적
+	BattleManager.add_accumulated_reward(total_exp, total_gold, drop_items)
+
+	# 킬카운트 증가 (원념 레벨 체크는 BattleManager에서)
+	for i in range(kill_count):
+		BattleManager.increment_global_kill_count()
+
+	_send_log("전투 종료! (EXP +%d, Gold +%d)" % [total_exp, total_gold], Color.LIME)
+
+	# 전투창 종료 (승리)
+	current_state = BattleState.VICTORY
+	set_process(false)
+	battle_ended.emit(battle_id, true)
+
+	_play_close_effect()
 
 
 func _update_buttons_for_no_enemies() -> void:
