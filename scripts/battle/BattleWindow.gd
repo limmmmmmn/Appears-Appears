@@ -125,9 +125,10 @@ func _ready() -> void:
 	set_process(false)
 	process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 입력 받기
 
-	# Run 버튼 숨기기 (고/스톱 시스템으로 대체)
+	# 도망 버튼 연결
 	if run_button:
-		run_button.visible = false
+		run_button.visible = true
+		run_button.pressed.connect(_on_run_button_pressed)
 
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
@@ -1159,8 +1160,8 @@ func _check_battle_end() -> bool:
 	var alive_heroes := PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
-		# 적이 모두 사라짐 - 보상 누적 후 자동 종료
-		_report_rewards_and_close()
+		# 적이 모두 사라짐 - 보상 버튼 표시 (각 전투창 독립 보상)
+		_show_claim_reward_button()
 		return true
 
 	if alive_heroes.is_empty():
@@ -1282,8 +1283,8 @@ func _end_battle_victory() -> void:
 
 func _play_reward_fly_animation() -> void:
 	## 보상이 원념 패널로 날아가는 연출
-	# 보상이 없으면 바로 닫기 (EXP는 자동 획득이므로 Gold/아이템만 체크)
-	if total_gold <= 0 and drop_items.is_empty():
+	# 보상이 없으면 바로 닫기
+	if total_exp <= 0 and total_gold <= 0 and drop_items.is_empty():
 		_play_close_effect()
 		return
 
@@ -1305,7 +1306,15 @@ func _play_reward_fly_animation() -> void:
 	var delay: float = 0.0
 	var delay_interval: float = 0.12
 
-	# Gold 아이콘 생성 (EXP는 자동 획득이므로 제외)
+	# EXP 아이콘 생성
+	if total_exp > 0:
+		var exp_node := _create_fly_reward_node("⭐ +%d EXP" % total_exp, Color(0.4, 1.0, 0.4))
+		exp_node.position = start_pos
+		fly_container.add_child(exp_node)
+		fly_nodes.append({"node": exp_node, "delay": delay, "start": start_pos})
+		delay += delay_interval
+
+	# Gold 아이콘 생성
 	if total_gold > 0:
 		var gold_node := _create_fly_reward_node("💰 +%d G" % total_gold, Color(1.0, 0.9, 0.3))
 		gold_node.position = start_pos
@@ -1654,6 +1663,13 @@ func _send_log(msg: String, color: Color = Color.WHITE) -> void:
 func _on_close_pressed() -> void:
 	current_state = BattleState.ENDED
 	queue_free()
+
+
+func _on_run_button_pressed() -> void:
+	## 도망 버튼 클릭 - 50% 보상만 받고 즉시 종료
+	if current_state != BattleState.RUNNING:
+		return
+	_run_with_partial_rewards()
 #endregion
 
 
