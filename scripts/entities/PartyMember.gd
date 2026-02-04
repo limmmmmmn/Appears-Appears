@@ -87,20 +87,35 @@ func _process_leader(_delta: float) -> void:
 	_play_idle_animation()
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	## 클릭 이동 입력 처리
 	if not is_leader:
 		return
 
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			# UI 클릭은 무시 (마우스가 UI 위에 있으면)
+			if _is_mouse_over_ui():
+				return
 			# 월드 좌표로 변환
-			var camera := get_viewport().get_camera_2d()
-			if camera:
-				click_target = camera.get_global_mouse_position()
-			else:
-				click_target = get_global_mouse_position()
+			click_target = get_global_mouse_position()
 			has_click_target = true
+
+
+func _is_mouse_over_ui() -> bool:
+	## 마우스가 UI 위에 있는지 확인
+	var mouse_pos := get_viewport().get_mouse_position()
+	# Control 노드들 중 마우스 아래에 있는 것 확인
+	var gui := get_tree().root.get_node_or_null("FieldScene/FieldHUD")
+	if gui:
+		# FieldHUD의 Control 자식들 확인
+		var ctrl := gui.get_node_or_null("Control")
+		if ctrl and ctrl is Control:
+			for child in ctrl.get_children():
+				if child is Control and child.visible:
+					if child.get_global_rect().has_point(mouse_pos):
+						return true
+	return false
 
 
 func _record_path() -> void:
