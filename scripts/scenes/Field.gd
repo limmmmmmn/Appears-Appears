@@ -16,7 +16,6 @@ var party_followers: Array[PartyMember] = []
 var field_enemies: Array[FieldEnemy] = []
 var hud: FieldHUD
 var game_over_ui: GameOverUI
-var loot_select_ui: LootSelectUI
 
 # 씬 리소스
 var party_leader_scene: PackedScene
@@ -100,11 +99,6 @@ func _setup_systems() -> void:
 	add_child(game_over_ui)
 	game_over_ui.restart_pressed.connect(_on_restart_game)
 	game_over_ui.quit_pressed.connect(_on_quit_game)
-	
-	# 루트 선택 UI
-	loot_select_ui = LootSelectUI.new()
-	add_child(loot_select_ui)
-	loot_select_ui.item_selected.connect(_on_loot_item_selected)
 	
 	# 스포너
 	spawner = EnemySpawner.new()
@@ -381,36 +375,18 @@ func _input(event: InputEvent) -> void:
 			pause_menu.show_menu()
 
 
-#=============================================================================
-# 루트 시스템
-#=============================================================================
-func _on_loot_item_selected(item_id: String) -> void:
-	InventoryManager.add_item(item_id)
-	
-	var item_data: Dictionary = DataManager.get_equipment(item_id)
-	if item_data.is_empty():
-		item_data = DataManager.get_item(item_id)
-	
-	if hud:
-		hud.add_log("🎁 %s 획득!" % item_data.get("name", item_id), Color.GOLD)
-
-
 func _on_elite_victory(_battle_id: int) -> void:
-	var loot: Array[String] = LootGenerator.generate_elite_loot()
-	if loot.size() >= 3 and loot_select_ui:
-		loot_select_ui.show_loot_selection(loot)
+	# 엘리트 보상은 누적 보상 시스템으로 처리됨
+	pass
 
 
 func _on_boss_victory(_battle_id: int) -> void:
 	if hud:
 		hud.add_system_log("🎉 보스를 처치했다!")
 		hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
-	
+
 	spawner.stop_respawn()
-	
-	var loot: Array[String] = LootGenerator.generate_boss_loot()
-	if loot.size() >= 3 and loot_select_ui:
-		loot_select_ui.show_loot_selection(loot)
+	# 보스 보상은 누적 보상 시스템으로 처리됨
 
 
 #=============================================================================
