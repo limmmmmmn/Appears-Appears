@@ -27,7 +27,7 @@ const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
 
 # === 글로벌 킬카운트 (원념) 시스템 ===
 var global_kill_count: int = 0  # 전체 적 처치 횟수
-const DANGER_LEVEL_INTERVAL: int = 10  # 위험도 1레벨당 킬 수
+const DANGER_LEVEL_INTERVAL: int = 5  # 위험도 1레벨당 킬 수 (5킬마다 레벨업)
 const STAT_SCALE_PER_LEVEL: float = 0.05  # 위험도 1레벨당 스탯 증가율 (5%)
 
 # === 누적 보상 시스템 ===
