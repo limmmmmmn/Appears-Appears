@@ -436,9 +436,9 @@ func _setup_grudge_panel() -> void:
 	vbox.add_theme_constant_override("separation", 2)
 	grudge_panel.add_child(vbox)
 
-	# 원념 레벨 + 킬카운트
+	# 원념 레벨
 	grudge_level_label = Label.new()
-	grudge_level_label.text = "원념 Lv.0 (0/5)"
+	grudge_level_label.text = "원념 Lv.0"
 	grudge_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	grudge_level_label.add_theme_font_size_override("font_size", 11)
 	grudge_level_label.add_theme_color_override("font_color", Color(0.9, 0.6, 1.0))
@@ -562,6 +562,10 @@ func _on_kill_count_changed(count: int, danger_level: int) -> void:
 	## 킬카운트 변경 시 호출 (실시간)
 	_update_kill_count_display(count, danger_level)
 
+	# 원념 레벨도 실시간 업데이트
+	if grudge_level_label:
+		grudge_level_label.text = "원념 Lv.%d" % danger_level
+
 	# 킬카운트 증가 애니메이션
 	if kill_count_label:
 		var tween := create_tween()
@@ -575,9 +579,7 @@ func _update_grudge_panel(exp: int, gold: int, items: Array) -> void:
 		return
 
 	var danger_level: int = BattleManager.get_danger_level()
-	var kill_count: int = BattleManager.global_kill_count
-	var kills_in_level: int = kill_count % BattleManager.DANGER_LEVEL_INTERVAL
-	grudge_level_label.text = "원념 Lv.%d (%d/%d)" % [danger_level, kills_in_level, BattleManager.DANGER_LEVEL_INTERVAL]
+	grudge_level_label.text = "원념 Lv.%d" % danger_level
 	grudge_exp_label.text = "EXP: %d" % exp
 	grudge_gold_label.text = "Gold: %d" % gold
 
