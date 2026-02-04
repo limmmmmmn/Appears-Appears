@@ -1303,53 +1303,53 @@ func _play_reward_fly_animation() -> void:
 	# EXP 아이콘 생성
 	if total_exp > 0:
 		var exp_node := _create_fly_reward_node("⭐ +%d EXP" % total_exp, Color(0.4, 1.0, 0.4))
-		exp_node.global_position = start_pos
+		exp_node.position = start_pos
 		fly_container.add_child(exp_node)
-		fly_nodes.append({"node": exp_node, "delay": delay})
+		fly_nodes.append({"node": exp_node, "delay": delay, "start": start_pos})
 		delay += delay_interval
 
 	# Gold 아이콘 생성
 	if total_gold > 0:
 		var gold_node := _create_fly_reward_node("💰 +%d G" % total_gold, Color(1.0, 0.9, 0.3))
-		gold_node.global_position = start_pos
+		gold_node.position = start_pos
 		fly_container.add_child(gold_node)
-		fly_nodes.append({"node": gold_node, "delay": delay})
+		fly_nodes.append({"node": gold_node, "delay": delay, "start": start_pos})
 		delay += delay_interval
 
 	# 아이템 아이콘들 생성 (최대 3개)
 	var item_count: int = mini(drop_items.size(), 3)
 	for i in range(item_count):
 		var item_node := _create_fly_reward_node("🎁 아이템!", Color(0.9, 0.6, 1.0))
-		item_node.global_position = start_pos
+		item_node.position = start_pos
 		fly_container.add_child(item_node)
-		fly_nodes.append({"node": item_node, "delay": delay})
+		fly_nodes.append({"node": item_node, "delay": delay, "start": start_pos})
 		delay += delay_interval
 
 	# 날아가는 애니메이션
-	var total_duration: float = 0.6
+	var total_duration: float = 0.5
 	for fly_data in fly_nodes:
 		var node: Control = fly_data.node
 		var node_delay: float = fly_data.delay
+		var node_start: Vector2 = fly_data.start
 
 		# 초기 상태 - 보이는 상태로 시작
 		node.modulate.a = 1.0
-		node.scale = Vector2(0.3, 0.3)
-		node.pivot_offset = node.size / 2
+		node.scale = Vector2(0.5, 0.5)
 
 		# 애니메이션 시작
 		var tween := create_tween()
 		tween.tween_interval(node_delay)
 
 		# 팝업 효과로 나타나기
-		tween.tween_property(node, "scale", Vector2(1.5, 1.5), 0.15).set_ease(Tween.EASE_OUT)
-		tween.tween_property(node, "scale", Vector2(1.0, 1.0), 0.1)
+		tween.tween_property(node, "scale", Vector2(1.2, 1.2), 0.1).set_ease(Tween.EASE_OUT)
+		tween.tween_property(node, "scale", Vector2(1.0, 1.0), 0.08)
 
-		# 날아가기 (곡선 경로)
-		var mid_pos: Vector2 = start_pos.lerp(target_pos, 0.4) + Vector2(0, -50)
-		tween.tween_property(node, "global_position", mid_pos, total_duration * 0.4).set_ease(Tween.EASE_OUT)
-		tween.tween_property(node, "global_position", target_pos, total_duration * 0.5).set_ease(Tween.EASE_IN_OUT)
-		tween.parallel().tween_property(node, "scale", Vector2(0.5, 0.5), total_duration * 0.5)
-		tween.parallel().tween_property(node, "modulate:a", 0.0, 0.2)
+		# 날아가기 (곡선 경로) - position 사용
+		var mid_pos: Vector2 = node_start.lerp(target_pos, 0.5) + Vector2(0, -40)
+		tween.tween_property(node, "position", mid_pos, total_duration * 0.4).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tween.tween_property(node, "position", target_pos, total_duration * 0.5).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		tween.parallel().tween_property(node, "scale", Vector2(0.4, 0.4), total_duration * 0.5)
+		tween.parallel().tween_property(node, "modulate:a", 0.0, 0.15)
 
 	# 모든 애니메이션 완료 후 정리 및 닫기
 	var cleanup_delay: float = delay + total_duration + 0.2

@@ -477,7 +477,7 @@ func _setup_grudge_panel() -> void:
 
 
 func _setup_kill_count_panel() -> void:
-	## 킬카운트 패널 (원념 패널 오른쪽에 별도 표시)
+	## 킬카운트 패널 (원념 패널 왼쪽에 별도 표시)
 	var ctrl := get_node_or_null("Control")
 	if not ctrl:
 		return
@@ -525,9 +525,8 @@ func _setup_kill_count_panel() -> void:
 
 	ctrl.add_child(kill_count_panel)
 
-	# 위치 설정 (화면 오른쪽 상단)
-	kill_count_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	kill_count_panel.position.x = -100  # 오른쪽에서 안쪽으로
+	# 위치 설정 (화면 왼쪽 상단 - 스테이지 표시 옆)
+	kill_count_panel.position.x = 200  # 왼쪽에서 200px
 	kill_count_panel.position.y = 26  # TopBar 아래
 
 	# 초기값 설정
