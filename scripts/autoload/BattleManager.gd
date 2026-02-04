@@ -383,10 +383,6 @@ func increment_global_kill_count() -> void:
 		danger_level_up.emit(new_level)
 
 
-func get_danger_level() -> int:
-	return global_kill_count / DANGER_LEVEL_INTERVAL
-
-
 func claim_accumulated_rewards() -> void:
 	## 누적 보상 수령 (스톱 선택 시)
 	if accumulated_exp > 0:
