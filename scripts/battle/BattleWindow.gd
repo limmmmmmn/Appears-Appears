@@ -86,6 +86,7 @@ var go_stop_panel: PanelContainer = null
 var go_button: Button = null
 var stop_button: Button = null
 var is_go_stop_active: bool = false  # 고/스톱 선택 대기 중
+var go_stop_selection: int = 0  # 0 = 고, 1 = 스톱
 
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
@@ -144,6 +145,7 @@ const DANGER_BORDER_COLORS: Array = [
 func _ready() -> void:
 	visible = false
 	set_process(false)
+	process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 입력 받기
 
 	# Run 버튼 숨기기 (고/스톱 시스템으로 대체)
 	if run_button:
@@ -1406,6 +1408,7 @@ func _setup_go_stop_ui() -> void:
 	go_stop_panel = PanelContainer.new()
 	go_stop_panel.visible = false
 	go_stop_panel.z_index = 50
+	go_stop_panel.process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 동작
 
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.1, 0.05, 0.15, 0.95)
@@ -1452,39 +1455,23 @@ func _setup_go_stop_ui() -> void:
 
 	# 고 버튼
 	go_button = Button.new()
-	go_button.text = "◀ 고 (계속)"
+	go_button.text = "▶ 고 (계속)"
 	go_button.custom_minimum_size = Vector2(90, 35)
 	go_button.add_theme_font_size_override("font_size", 12)
-	var go_style := StyleBoxFlat.new()
-	go_style.bg_color = Color(0.2, 0.5, 0.2)
-	go_style.corner_radius_top_left = 4
-	go_style.corner_radius_top_right = 4
-	go_style.corner_radius_bottom_left = 4
-	go_style.corner_radius_bottom_right = 4
-	go_button.add_theme_stylebox_override("normal", go_style)
-	go_button.add_theme_stylebox_override("hover", go_style)
-	go_button.pressed.connect(_on_go_pressed)
+	go_button.focus_mode = Control.FOCUS_NONE  # 마우스 포커스 비활성화
 	btn_hbox.add_child(go_button)
 
 	# 스톱 버튼
 	stop_button = Button.new()
-	stop_button.text = "스톱 (보상) ▶"
+	stop_button.text = "스톱 (보상)"
 	stop_button.custom_minimum_size = Vector2(90, 35)
 	stop_button.add_theme_font_size_override("font_size", 12)
-	var stop_style := StyleBoxFlat.new()
-	stop_style.bg_color = Color(0.5, 0.2, 0.2)
-	stop_style.corner_radius_top_left = 4
-	stop_style.corner_radius_top_right = 4
-	stop_style.corner_radius_bottom_left = 4
-	stop_style.corner_radius_bottom_right = 4
-	stop_button.add_theme_stylebox_override("normal", stop_style)
-	stop_button.add_theme_stylebox_override("hover", stop_style)
-	stop_button.pressed.connect(_on_stop_pressed)
+	stop_button.focus_mode = Control.FOCUS_NONE  # 마우스 포커스 비활성화
 	btn_hbox.add_child(stop_button)
 
 	# 키 힌트
 	var hint_label := Label.new()
-	hint_label.text = "[← / →] 또는 [Z / X]"
+	hint_label.text = "[← →] 선택  [Enter] 결정"
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint_label.add_theme_font_size_override("font_size", 9)
 	hint_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
@@ -1499,10 +1486,12 @@ func _show_go_stop_choice(new_level: int, _message: String) -> void:
 		return
 
 	is_go_stop_active = true
+	go_stop_selection = 0  # 기본 선택: 고
+	get_tree().paused = true  # 게임 일시정지
 
 	# 패널 위치 (전투창 중앙)
 	go_stop_panel.visible = true
-	await get_tree().process_frame
+	await get_tree().create_timer(0.01).timeout
 	go_stop_panel.position = (size - go_stop_panel.size) / 2
 
 	# 제목 업데이트
@@ -1515,6 +1504,8 @@ func _show_go_stop_choice(new_level: int, _message: String) -> void:
 	if desc:
 		desc.text = "계속 하시겠습니까?"
 
+	_update_go_stop_selection_visual()
+
 
 func _show_go_stop_for_clear() -> void:
 	## 적이 모두 사라졌을 때 고/스톱 선택 UI 표시
@@ -1522,10 +1513,12 @@ func _show_go_stop_for_clear() -> void:
 		return
 
 	is_go_stop_active = true
+	go_stop_selection = 0  # 기본 선택: 고
+	get_tree().paused = true  # 게임 일시정지
 
 	# 패널 위치 (전투창 중앙)
 	go_stop_panel.visible = true
-	await get_tree().process_frame
+	await get_tree().create_timer(0.01).timeout
 	go_stop_panel.position = (size - go_stop_panel.size) / 2
 
 	# 제목 업데이트
@@ -1538,11 +1531,83 @@ func _show_go_stop_for_clear() -> void:
 	if desc:
 		desc.text = "더 싸우시겠습니까?"
 
+	_update_go_stop_selection_visual()
+
+
+func _update_go_stop_selection_visual() -> void:
+	## 선택된 버튼 시각적 강조 업데이트
+	if not go_button or not stop_button:
+		return
+
+	# 선택됨 스타일 (밝고 테두리)
+	var selected_go := StyleBoxFlat.new()
+	selected_go.bg_color = Color(0.3, 0.7, 0.3)
+	selected_go.border_width_left = 3
+	selected_go.border_width_top = 3
+	selected_go.border_width_right = 3
+	selected_go.border_width_bottom = 3
+	selected_go.border_color = Color.WHITE
+	selected_go.corner_radius_top_left = 4
+	selected_go.corner_radius_top_right = 4
+	selected_go.corner_radius_bottom_left = 4
+	selected_go.corner_radius_bottom_right = 4
+
+	var selected_stop := StyleBoxFlat.new()
+	selected_stop.bg_color = Color(0.7, 0.3, 0.3)
+	selected_stop.border_width_left = 3
+	selected_stop.border_width_top = 3
+	selected_stop.border_width_right = 3
+	selected_stop.border_width_bottom = 3
+	selected_stop.border_color = Color.WHITE
+	selected_stop.corner_radius_top_left = 4
+	selected_stop.corner_radius_top_right = 4
+	selected_stop.corner_radius_bottom_left = 4
+	selected_stop.corner_radius_bottom_right = 4
+
+	# 비선택 스타일 (어둡게)
+	var unselected_go := StyleBoxFlat.new()
+	unselected_go.bg_color = Color(0.15, 0.3, 0.15)
+	unselected_go.corner_radius_top_left = 4
+	unselected_go.corner_radius_top_right = 4
+	unselected_go.corner_radius_bottom_left = 4
+	unselected_go.corner_radius_bottom_right = 4
+
+	var unselected_stop := StyleBoxFlat.new()
+	unselected_stop.bg_color = Color(0.3, 0.15, 0.15)
+	unselected_stop.corner_radius_top_left = 4
+	unselected_stop.corner_radius_top_right = 4
+	unselected_stop.corner_radius_bottom_left = 4
+	unselected_stop.corner_radius_bottom_right = 4
+
+	if go_stop_selection == 0:
+		# 고 선택됨
+		go_button.text = "▶ 고 (계속) ◀"
+		go_button.add_theme_stylebox_override("normal", selected_go)
+		go_button.add_theme_stylebox_override("hover", selected_go)
+		go_button.add_theme_color_override("font_color", Color.WHITE)
+
+		stop_button.text = "스톱 (보상)"
+		stop_button.add_theme_stylebox_override("normal", unselected_stop)
+		stop_button.add_theme_stylebox_override("hover", unselected_stop)
+		stop_button.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	else:
+		# 스톱 선택됨
+		go_button.text = "고 (계속)"
+		go_button.add_theme_stylebox_override("normal", unselected_go)
+		go_button.add_theme_stylebox_override("hover", unselected_go)
+		go_button.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+
+		stop_button.text = "▶ 스톱 (보상) ◀"
+		stop_button.add_theme_stylebox_override("normal", selected_stop)
+		stop_button.add_theme_stylebox_override("hover", selected_stop)
+		stop_button.add_theme_color_override("font_color", Color.WHITE)
+
 
 func _on_go_pressed() -> void:
 	## '고' 선택 - 전투 계속 (적 대기)
 	is_go_stop_active = false
 	go_stop_panel.visible = false
+	get_tree().paused = false  # 게임 재개
 	current_state = BattleState.RUNNING
 	set_process(true)
 	_send_log("계속 싸운다!", Color.GREEN)
@@ -1552,6 +1617,7 @@ func _on_stop_pressed() -> void:
 	## '스톱' 선택 - 보상 받고 종료
 	is_go_stop_active = false
 	go_stop_panel.visible = false
+	get_tree().paused = false  # 게임 재개
 	_send_log("여기서 멈춘다!", Color.YELLOW)
 	_stop_and_claim_rewards()
 
@@ -1576,17 +1642,30 @@ func _stop_and_claim_rewards() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	## 키보드 입력으로 고/스톱 선택
+	## 키보드 입력으로 고/스톱 선택 (좌우 이동 + 엔터 확정)
 	if not is_go_stop_active:
 		return
 
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
-			KEY_LEFT, KEY_Z:
-				_on_go_pressed()
+			KEY_LEFT:
+				# 왼쪽: 고 선택
+				if go_stop_selection != 0:
+					go_stop_selection = 0
+					_update_go_stop_selection_visual()
 				get_viewport().set_input_as_handled()
-			KEY_RIGHT, KEY_X:
-				_on_stop_pressed()
+			KEY_RIGHT:
+				# 오른쪽: 스톱 선택
+				if go_stop_selection != 1:
+					go_stop_selection = 1
+					_update_go_stop_selection_visual()
+				get_viewport().set_input_as_handled()
+			KEY_ENTER, KEY_KP_ENTER:
+				# 엔터: 현재 선택 확정
+				if go_stop_selection == 0:
+					_on_go_pressed()
+				else:
+					_on_stop_pressed()
 				get_viewport().set_input_as_handled()
 #endregion
 
