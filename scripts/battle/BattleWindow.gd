@@ -950,11 +950,9 @@ func _check_battle_end() -> bool:
 	var alive_heroes := PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
-		# 적이 없으면 도주 버튼 비활성화 + 보상 받기 버튼 표시
-		set_process(false)
-		current_state = BattleState.VICTORY
-		_update_buttons_for_no_enemies()
-		_show_claim_reward_button()
+		# 적이 모두 사라짐 - 고/스톱 선택
+		if not is_go_stop_active:
+			_show_go_stop_for_clear()
 		return false
 
 	if alive_heroes.is_empty():
@@ -1496,7 +1494,7 @@ func _setup_go_stop_ui() -> void:
 
 
 func _show_go_stop_choice(new_level: int, _message: String) -> void:
-	## 고/스톱 선택 UI 표시
+	## 원념 레벨업 시 고/스톱 선택 UI 표시
 	if not go_stop_panel:
 		return
 
@@ -1512,11 +1510,41 @@ func _show_go_stop_choice(new_level: int, _message: String) -> void:
 	if title:
 		title.text = "⚠ 원념 %d단계! 적이 더 강해집니다!" % new_level
 
+	# 설명 업데이트
+	var desc := go_stop_panel.get_child(0).get_child(1) as Label
+	if desc:
+		desc.text = "계속 하시겠습니까?"
+
+
+func _show_go_stop_for_clear() -> void:
+	## 적이 모두 사라졌을 때 고/스톱 선택 UI 표시
+	if not go_stop_panel:
+		return
+
+	is_go_stop_active = true
+
+	# 패널 위치 (전투창 중앙)
+	go_stop_panel.visible = true
+	await get_tree().process_frame
+	go_stop_panel.position = (size - go_stop_panel.size) / 2
+
+	# 제목 업데이트
+	var title := go_stop_panel.get_child(0).get_child(0) as Label
+	if title:
+		title.text = "✓ 적을 모두 처치했습니다!"
+
+	# 설명 업데이트
+	var desc := go_stop_panel.get_child(0).get_child(1) as Label
+	if desc:
+		desc.text = "더 싸우시겠습니까?"
+
 
 func _on_go_pressed() -> void:
-	## '고' 선택 - 전투 계속
+	## '고' 선택 - 전투 계속 (적 대기)
 	is_go_stop_active = false
 	go_stop_panel.visible = false
+	current_state = BattleState.RUNNING
+	set_process(true)
 	_send_log("계속 싸운다!", Color.GREEN)
 
 
