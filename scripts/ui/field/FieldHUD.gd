@@ -36,7 +36,7 @@ var grudge_panel: PanelContainer = null
 var grudge_level_label: Label = null
 var grudge_exp_label: Label = null
 var grudge_gold_label: Label = null
-var grudge_items_container: HBoxContainer = null
+var grudge_items_container: VBoxContainer = null
 
 # === 킬카운트 표시 (원념 패널 옆) - 별도 표시 ===
 var kill_count_panel: PanelContainer = null
@@ -462,10 +462,9 @@ func _setup_grudge_panel() -> void:
 	grudge_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	reward_hbox.add_child(grudge_gold_label)
 
-	# 아이템 행 (미감정 아이템 색상 표시)
-	grudge_items_container = HBoxContainer.new()
-	grudge_items_container.add_theme_constant_override("separation", 4)
-	grudge_items_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	# 아이템 열 (미감정 아이템 색상 표시) - 세로 배열
+	grudge_items_container = VBoxContainer.new()
+	grudge_items_container.add_theme_constant_override("separation", 2)
 	vbox.add_child(grudge_items_container)
 
 	# 먼저 트리에 추가
