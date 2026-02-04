@@ -262,6 +262,8 @@ func _spawn_boss(field_enemies: Array) -> void:
 	var boss_pos: Vector2 = map_bounds.get_center() if bounds_calculated else Vector2(350, 135)
 	enemy.setup(boss_id, "grass", boss_pos, false)
 	enemy.is_boss = true
+	enemy.add_to_group("field_boss")
+	enemy.add_to_group("field_enemy")
 	field_enemies.append(enemy)
 	enemy_spawned.emit(enemy)
 
@@ -289,14 +291,14 @@ func spawn_field_boss(field_enemies: Array) -> void:
 	enemy.setup(boss_id, random_tile, boss_pos, false)
 	enemy.is_boss = true
 	enemy.add_to_group("field_boss")
+	enemy.add_to_group("field_enemy")
 
 	# 10배 크기로 확대
 	enemy.scale = Vector2(10, 10)
 
-	# 보스는 움직이지 않음 - 상태를 IDLE로 고정
-	enemy.current_state = enemy.State.IDLE
-	enemy.wander_speed = 0
-	enemy.chase_speed = 0
+	# 보스는 움직이지 않음 - _ready 이후에 적용되도록 deferred
+	enemy.set_deferred("wander_speed", 0.0)
+	enemy.set_deferred("chase_speed", 0.0)
 
 	field_enemies.append(enemy)
 	enemy_spawned.emit(enemy)
@@ -337,6 +339,7 @@ func _spawn_enemy_at(tile_data: Dictionary, field_enemies: Array, force_elite: b
 	var is_elite: bool = force_elite or (randf() < ELITE_SPAWN_CHANCE)
 
 	enemy.setup(enemy_id, tile_type, tile_data.get("position", Vector2.ZERO), is_elite)
+	enemy.add_to_group("field_enemy")
 	field_enemies.append(enemy)
 
 	if is_respawn:

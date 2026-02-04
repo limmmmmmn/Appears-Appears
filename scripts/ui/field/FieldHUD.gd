@@ -175,9 +175,17 @@ func _setup_move_style_panel() -> void:
 
 	ctrl.add_child(move_style_panel)
 
-	# 우측 중단 위치
-	move_style_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	move_style_panel.position.x = -move_style_panel.size.x - 10
+	# 우측 중단 위치 (앵커 사용)
+	move_style_panel.anchor_left = 1.0
+	move_style_panel.anchor_right = 1.0
+	move_style_panel.anchor_top = 0.5
+	move_style_panel.anchor_bottom = 0.5
+	move_style_panel.offset_left = -90
+	move_style_panel.offset_right = -10
+	move_style_panel.offset_top = -90
+	move_style_panel.offset_bottom = 90
+	move_style_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	move_style_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 
 	# 초기 스타일 표시 업데이트
 	call_deferred("_update_move_style_buttons")
