@@ -1,8 +1,8 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: 턴제 전투창
-## - 속도(SPD) 기반 턴 순서 결정
-## - 각 전투창이 독립적인 턴 관리
+## BattleWindow: ATB 전투창
+## - 속도(SPD) 기반 ATB 게이지 충전
+## - 게이지가 가득 차면 행동 (실시간 전투)
 ## - 전투 중 적 동적 추가 지원
 
 signal battle_ended(battle_id: int, victory: bool)
@@ -25,18 +25,19 @@ var current_state: BattleState = BattleState.STARTING
 var enemies: Array = []
 var enemy_data_list: Array = []
 
-# === 턴제 시스템 ===
-# 턴 순서는 속도(SPD) 기반으로 결정
-var turn_order: Array = []  # [{type: "hero"/"enemy", ref: Hero/BattleEnemy, spd: int}]
-var current_turn_index: int = 0
-var is_processing_turn: bool = false
-var turn_delay_timer: float = 0.0
-const TURN_DELAY: float = 0.6  # 턴 사이 딜레이
+# === ATB 시스템 ===
+# ATB (Active Time Battle) - 속도(SPD) 기반 게이지 충전
+var atb_units: Array = []  # [{type: "hero"/"enemy", ref: Hero/BattleEnemy, atb: float, spd: int}]
+var is_processing_action: bool = false
+var action_delay_timer: float = 0.0
+const ATB_FILL_RATE: float = 30.0  # 기본 ATB 충전 속도
+const ATB_MAX: float = 100.0  # ATB 최대값
+const ACTION_DELAY: float = 0.3  # 액션 후 딜레이
 
-# 턴 순서 UI
-var turn_panel: PanelContainer = null
-var turn_order_panel: HBoxContainer = null
-var turn_order_labels: Array = []
+# ATB UI
+var atb_panel: PanelContainer = null
+var atb_bars_container: VBoxContainer = null
+var atb_bars: Dictionary = {}  # ref -> ProgressBar
 
 # === 보상 ===
 var total_exp: int = 0
@@ -145,8 +146,8 @@ func _ready() -> void:
 	# 보상 UI 초기화
 	_update_rewards_ui()
 
-	# 턴 순서 UI 생성
-	_setup_turn_order_ui()
+	# ATB UI 생성
+	_setup_atb_ui()
 
 	# 고/스톱 UI 생성
 	_setup_go_stop_ui()
@@ -164,7 +165,7 @@ func _process(delta: float) -> void:
 		_update_background_effect(delta)
 		return
 
-	_update_turn_system(delta)
+	_update_atb_system(delta)
 	_update_background_effect(delta)
 	_update_danger_border_pulse(delta)
 
@@ -234,8 +235,8 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	else:
 		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
 
-	# 턴 순서에 새 적 추가
-	_refresh_turn_order_on_enemy_added()
+	# ATB에 새 적 추가
+	_add_enemy_to_atb(enemies.back())
 
 	# 대기 모드에서 적이 추가되면 활성화
 	if is_waiting_for_enemies:
@@ -257,13 +258,12 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 func _cancel_claim_waiting() -> void:
 	## 보상 대기 상태 취소 (적이 추가되었을 때)
 	is_waiting_for_claim = false
-	is_processing_turn = false  # 턴 처리 상태 초기화
+	is_processing_action = false  # 액션 처리 상태 초기화
 	_update_auto_claim_button_style()
-	# 턴 순서 UI 다시 표시
-	if turn_panel:
-		turn_panel.visible = true
-	# 새 적이 추가되었으므로 턴 순서 갱신
-	_start_new_round()
+	# ATB UI 다시 표시
+	if atb_panel:
+		atb_panel.visible = true
+	_update_atb_ui()
 
 
 func _update_buttons_for_enemies() -> void:
@@ -328,219 +328,231 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 	return false
 
 
-func _init_turn_system() -> void:
-	## 턴제 시스템 초기화 - 속도 기반 턴 순서 결정
-	turn_order.clear()
-	current_turn_index = 0
-	is_processing_turn = false
-	turn_delay_timer = 0.0
+func _init_atb_system() -> void:
+	## ATB 시스템 초기화
+	atb_units.clear()
+	is_processing_action = false
+	action_delay_timer = 0.0
 
-	# 영웅들을 턴 순서에 추가
+	# 영웅들을 ATB에 추가
 	for hero in PartyManager.get_alive_heroes():
-		turn_order.append({
+		var initial_atb: float = randf_range(0, 30) + hero.get_spd() * 0.5  # SPD에 따른 초기 ATB
+		atb_units.append({
 			"type": "hero",
 			"ref": hero,
+			"atb": minf(initial_atb, ATB_MAX - 1),
 			"spd": hero.get_spd()
 		})
 
-	# 적들을 턴 순서에 추가
+	# 적들을 ATB에 추가
 	for enemy in enemies:
 		if enemy != null and enemy.is_alive():
-			turn_order.append({
+			var initial_atb: float = randf_range(0, 20) + enemy.get_spd() * 0.3
+			atb_units.append({
 				"type": "enemy",
 				"ref": enemy,
+				"atb": minf(initial_atb, ATB_MAX - 1),
 				"spd": enemy.get_spd()
 			})
 
-	# 속도 기준 내림차순 정렬 (빠른 순서대로)
-	turn_order.sort_custom(_compare_by_speed)
-
-	# 턴 순서 로그
-	_log_turn_order()
+	_send_log("ATB 전투 시작!", Color.LIGHT_GRAY)
+	_update_atb_ui()
 
 
-func _compare_by_speed(a: Dictionary, b: Dictionary) -> bool:
-	## 속도 비교 함수 (내림차순)
-	if a["spd"] != b["spd"]:
-		return a["spd"] > b["spd"]
-	# 속도가 같으면 영웅 우선
-	if a["type"] == "hero" and b["type"] == "enemy":
-		return true
-	return false
-
-
-func _log_turn_order() -> void:
-	## 턴 순서 로그 출력
-	var order_text: String = "턴 순서: "
-	for i in range(turn_order.size()):
-		var unit: Dictionary = turn_order[i]
-		var name: String = ""
-		if unit["type"] == "hero":
-			name = unit["ref"].hero_name
-		else:
-			name = unit["ref"].enemy_name
-		if i > 0:
-			order_text += " → "
-		order_text += "%s(%d)" % [name, unit["spd"]]
-	_send_log(order_text, Color.LIGHT_GRAY)
-
-	# UI 업데이트
-	_update_turn_order_ui()
-
-
-func _setup_turn_order_ui() -> void:
-	## 턴 순서 UI 패널 생성
+func _setup_atb_ui() -> void:
+	## ATB UI 패널 생성
 	var main_vbox = get_node_or_null("MainVBox")
 	if not main_vbox:
 		return
 
-	# 턴 순서 패널 컨테이너
-	turn_panel = PanelContainer.new()
-	turn_panel.name = "TurnOrderPanel"
+	# ATB 패널 컨테이너
+	atb_panel = PanelContainer.new()
+	atb_panel.name = "ATBPanel"
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.1, 0.1, 0.15, 0.9)
 	panel_style.content_margin_left = 6
 	panel_style.content_margin_right = 6
 	panel_style.content_margin_top = 3
 	panel_style.content_margin_bottom = 3
-	turn_panel.add_theme_stylebox_override("panel", panel_style)
+	atb_panel.add_theme_stylebox_override("panel", panel_style)
 
-	# 가로 컨테이너
-	turn_order_panel = HBoxContainer.new()
-	turn_order_panel.name = "TurnOrderHBox"
-	turn_order_panel.add_theme_constant_override("separation", 4)
-	turn_order_panel.alignment = BoxContainer.ALIGNMENT_CENTER
-	turn_panel.add_child(turn_order_panel)
-
-	# "턴:" 라벨
-	var turn_label := Label.new()
-	turn_label.text = "턴:"
-	turn_label.add_theme_font_size_override("font_size", 10)
-	turn_label.add_theme_color_override("font_color", Color.GRAY)
-	turn_order_panel.add_child(turn_label)
+	# 세로 컨테이너 (ATB 바들)
+	atb_bars_container = VBoxContainer.new()
+	atb_bars_container.name = "ATBBarsVBox"
+	atb_bars_container.add_theme_constant_override("separation", 2)
+	atb_panel.add_child(atb_bars_container)
 
 	# RewardsPanel 다음에 삽입 (인덱스 1)
-	main_vbox.add_child(turn_panel)
-	main_vbox.move_child(turn_panel, 1)
+	main_vbox.add_child(atb_panel)
+	main_vbox.move_child(atb_panel, 1)
 
 
-func _update_turn_order_ui() -> void:
-	## 턴 순서 UI 업데이트
-	if turn_order_panel == null:
+func _update_atb_ui() -> void:
+	## ATB UI 업데이트
+	if atb_bars_container == null:
 		return
 
-	# 기존 라벨들 제거 (첫 번째 "턴:" 라벨 제외)
-	for label in turn_order_labels:
-		if is_instance_valid(label):
-			label.queue_free()
-	turn_order_labels.clear()
-
-	# 최대 표시 개수 (현재 턴 + 앞으로 4개)
-	var max_display: int = 5
-	var displayed: int = 0
-
-	for i in range(current_turn_index, turn_order.size()):
-		if displayed >= max_display:
-			break
-
-		var unit: Dictionary = turn_order[i]
+	# 기존 바들 업데이트 또는 생성
+	for unit in atb_units:
+		var unit_ref = unit["ref"]
 		var is_valid: bool = false
 		var unit_name: String = ""
 		var is_hero: bool = unit["type"] == "hero"
 
 		if is_hero:
-			var hero: Hero = unit["ref"]
+			var hero: Hero = unit_ref
 			is_valid = hero != null and not hero.is_dead
 			if is_valid:
 				unit_name = hero.hero_name
 		else:
-			var enemy: BattleEnemy = unit["ref"]
+			var enemy: BattleEnemy = unit_ref
 			is_valid = enemy != null and enemy.is_alive()
 			if is_valid:
 				unit_name = enemy.enemy_name
 
 		if not is_valid:
+			# 죽은 유닛의 바 제거
+			if atb_bars.has(unit_ref):
+				var bar_container = atb_bars[unit_ref].get_parent()
+				if bar_container:
+					bar_container.queue_free()
+				atb_bars.erase(unit_ref)
 			continue
 
-		# 구분자 추가 (첫 번째 아닌 경우)
-		if displayed > 0:
-			var arrow := Label.new()
-			arrow.text = "→"
-			arrow.add_theme_font_size_override("font_size", 9)
-			arrow.add_theme_color_override("font_color", Color.DARK_GRAY)
-			turn_order_panel.add_child(arrow)
-			turn_order_labels.append(arrow)
+		# 바가 없으면 생성
+		if not atb_bars.has(unit_ref):
+			_create_atb_bar(unit_ref, unit_name, is_hero)
 
-		# 이름 라벨 생성
-		var name_label := Label.new()
-		# 이름이 너무 길면 축약
-		if unit_name.length() > 4:
-			name_label.text = unit_name.substr(0, 3) + ".."
-		else:
-			name_label.text = unit_name
-		name_label.add_theme_font_size_override("font_size", 10)
-
-		# 현재 턴인 경우 강조
-		if i == current_turn_index:
-			name_label.text = "▶" + name_label.text
-			if is_hero:
-				name_label.add_theme_color_override("font_color", Color.CYAN)
+		# 바 값 업데이트
+		if atb_bars.has(unit_ref):
+			var bar: ProgressBar = atb_bars[unit_ref]
+			bar.value = unit["atb"]
+			# 게이지가 가득 차면 색상 변경
+			if unit["atb"] >= ATB_MAX:
+				bar.modulate = Color.YELLOW
 			else:
-				name_label.add_theme_color_override("font_color", Color.ORANGE_RED)
-		else:
-			if is_hero:
-				name_label.add_theme_color_override("font_color", Color.LIGHT_BLUE)
-			else:
-				name_label.add_theme_color_override("font_color", Color.INDIAN_RED)
+				bar.modulate = Color.WHITE
 
-		turn_order_panel.add_child(name_label)
-		turn_order_labels.append(name_label)
-		displayed += 1
+
+func _create_atb_bar(unit_ref, unit_name: String, is_hero: bool) -> void:
+	## 개별 ATB 바 생성
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 4)
+
+	# 이름 라벨
+	var name_label := Label.new()
+	if unit_name.length() > 5:
+		name_label.text = unit_name.substr(0, 4) + ".."
+	else:
+		name_label.text = unit_name
+	name_label.add_theme_font_size_override("font_size", 9)
+	name_label.custom_minimum_size.x = 40
+	if is_hero:
+		name_label.add_theme_color_override("font_color", Color.LIGHT_BLUE)
+	else:
+		name_label.add_theme_color_override("font_color", Color.INDIAN_RED)
+	hbox.add_child(name_label)
+
+	# ATB 바
+	var bar := ProgressBar.new()
+	bar.min_value = 0
+	bar.max_value = ATB_MAX
+	bar.value = 0
+	bar.show_percentage = false
+	bar.custom_minimum_size = Vector2(60, 8)
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	# 바 스타일
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.2, 0.2, 0.25)
+	bar.add_theme_stylebox_override("background", bg_style)
+
+	var fill_style := StyleBoxFlat.new()
+	if is_hero:
+		fill_style.bg_color = Color(0.3, 0.6, 0.9)
+	else:
+		fill_style.bg_color = Color(0.9, 0.4, 0.3)
+	bar.add_theme_stylebox_override("fill", fill_style)
+
+	hbox.add_child(bar)
+	atb_bars_container.add_child(hbox)
+	atb_bars[unit_ref] = bar
 
 
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
-	_init_turn_system()
+	_init_atb_system()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
-
-	# 첫 턴 시작
-	turn_delay_timer = 0.3  # 첫 턴 전 짧은 대기
 #endregion
 
 
-#region 턴제 시스템
-func _update_turn_system(delta: float) -> void:
-	## 턴 진행 처리
-	if is_processing_turn:
+#region ATB 시스템
+func _update_atb_system(delta: float) -> void:
+	## ATB 게이지 충전 및 액션 처리
+	if is_processing_action:
 		return
 
-	# 턴 딜레이 처리
-	if turn_delay_timer > 0:
-		turn_delay_timer -= delta
+	# 액션 딜레이 처리
+	if action_delay_timer > 0:
+		action_delay_timer -= delta
 		return
 
-	# 현재 턴 실행
-	_execute_current_turn()
+	# 모든 유닛의 ATB 게이지 충전
+	var ready_units: Array = []
+	for unit in atb_units:
+		var unit_ref = unit["ref"]
+		var is_valid: bool = _is_unit_valid(unit)
+
+		if not is_valid:
+			continue
+
+		# 아직 행동 준비 안 된 유닛은 게이지 충전
+		if unit["atb"] < ATB_MAX:
+			var spd: float = float(unit["spd"])
+			var fill_amount: float = ATB_FILL_RATE * (spd / 10.0) * delta
+			unit["atb"] = minf(unit["atb"] + fill_amount, ATB_MAX)
+
+		# 게이지가 가득 찬 유닛은 준비 목록에 추가
+		if unit["atb"] >= ATB_MAX:
+			ready_units.append(unit)
+
+	# UI 업데이트
+	_update_atb_ui()
+
+	# 준비된 유닛 중 가장 먼저 찬 유닛이 행동
+	if not ready_units.is_empty():
+		# SPD가 높은 유닛 우선 (동일 시 영웅 우선)
+		ready_units.sort_custom(_compare_atb_priority)
+		_execute_atb_action(ready_units[0])
 
 
-func _execute_current_turn() -> void:
-	## 현재 턴의 유닛 행동 실행
-	if turn_order.is_empty():
-		return
+func _compare_atb_priority(a: Dictionary, b: Dictionary) -> bool:
+	## ATB 우선순위 비교 (SPD 높은 순, 동일 시 영웅 우선)
+	if a["spd"] != b["spd"]:
+		return a["spd"] > b["spd"]
+	if a["type"] == "hero" and b["type"] == "enemy":
+		return true
+	return false
 
-	# 유효한 턴 찾기 (죽은 유닛 건너뛰기)
-	var valid_turn: Dictionary = _get_next_valid_turn()
-	if valid_turn.is_empty():
-		# 모든 유닛이 행동 완료, 다음 라운드
-		_start_new_round()
-		return
 
-	is_processing_turn = true
-	var unit_type: String = valid_turn["type"]
-	var unit_ref = valid_turn["ref"]
+func _is_unit_valid(unit: Dictionary) -> bool:
+	## 유닛이 유효한지 확인
+	if unit["type"] == "hero":
+		var hero: Hero = unit["ref"]
+		return hero != null and not hero.is_dead
+	else:
+		var enemy: BattleEnemy = unit["ref"]
+		return enemy != null and enemy.is_alive()
 
-	# 턴 시작 시그널 및 효과
+
+func _execute_atb_action(unit: Dictionary) -> void:
+	## ATB 액션 실행
+	is_processing_action = true
+	var unit_type: String = unit["type"]
+	var unit_ref = unit["ref"]
+
+	# 액션 시작
 	var unit_name: String = ""
 	if unit_type == "hero":
 		unit_name = unit_ref.hero_name
@@ -553,45 +565,39 @@ func _execute_current_turn() -> void:
 		_play_turn_effect()
 		await _process_enemy_turn(unit_ref)
 
+	# ATB 게이지 리셋
+	unit["atb"] = 0.0
+
 	# 전투 종료 체크
 	if _check_battle_end():
 		return
 
-	# 다음 턴 준비
-	current_turn_index += 1
-	is_processing_turn = false
-	turn_delay_timer = TURN_DELAY
+	# 다음 액션 준비
+	is_processing_action = false
+	action_delay_timer = ACTION_DELAY
 
-	# 턴 순서 UI 업데이트
-	_update_turn_order_ui()
-
-
-func _get_next_valid_turn() -> Dictionary:
-	## 다음 유효한 턴 반환 (죽은 유닛 건너뛰기)
-	while current_turn_index < turn_order.size():
-		var unit: Dictionary = turn_order[current_turn_index]
-		var is_valid: bool = false
-
-		if unit["type"] == "hero":
-			var hero: Hero = unit["ref"]
-			is_valid = hero != null and not hero.is_dead
-		else:
-			var enemy: BattleEnemy = unit["ref"]
-			is_valid = enemy != null and enemy.is_alive()
-
-		if is_valid:
-			return unit
-		else:
-			current_turn_index += 1
-
-	return {}
+	# UI 업데이트
+	_update_atb_ui()
 
 
-func _start_new_round() -> void:
-	## 새 라운드 시작 (턴 순서 재계산)
-	_send_log("━━ 새 라운드 ━━", Color.DARK_GRAY)
-	_init_turn_system()
-	turn_delay_timer = 0.3
+func _add_enemy_to_atb(enemy: BattleEnemy) -> void:
+	## 새로운 적을 ATB 시스템에 추가
+	if enemy == null or not enemy.is_alive():
+		return
+
+	# 이미 추가되어 있는지 확인
+	for unit in atb_units:
+		if unit["ref"] == enemy:
+			return
+
+	var initial_atb: float = randf_range(0, 15) + enemy.get_spd() * 0.2
+	atb_units.append({
+		"type": "enemy",
+		"ref": enemy,
+		"atb": minf(initial_atb, ATB_MAX - 1),
+		"spd": enemy.get_spd()
+	})
+	_update_atb_ui()
 
 
 func _process_hero_turn(hero: Hero) -> void:
@@ -687,40 +693,6 @@ func _play_turn_effect() -> void:
 		var tween := create_tween()
 		tween.tween_property(background, "modulate", Color(1.2, 1.2, 1.2), 0.08)
 		tween.tween_property(background, "modulate", Color.WHITE, 0.15)
-
-
-func _refresh_turn_order_on_enemy_added() -> void:
-	## 새 적이 추가되었을 때 턴 순서 갱신
-	# 현재 턴을 진행 중인 유닛 이후에 새 적 삽입
-	var new_enemies: Array = []
-	for enemy in enemies:
-		if enemy == null or not enemy.is_alive():
-			continue
-		# 이미 턴 순서에 있는지 확인
-		var already_in_order: bool = false
-		for unit in turn_order:
-			if unit["type"] == "enemy" and unit["ref"] == enemy:
-				already_in_order = true
-				break
-		if not already_in_order:
-			new_enemies.append({
-				"type": "enemy",
-				"ref": enemy,
-				"spd": enemy.get_spd()
-			})
-
-	# 새 적들을 턴 순서에 추가 (현재 인덱스 이후에 속도순으로 삽입)
-	for new_enemy in new_enemies:
-		var insert_idx: int = current_turn_index + 1
-		for i in range(current_turn_index + 1, turn_order.size()):
-			if turn_order[i]["spd"] < new_enemy["spd"]:
-				insert_idx = i
-				break
-			insert_idx = i + 1
-		turn_order.insert(insert_idx, new_enemy)
-
-	if not new_enemies.is_empty():
-		_send_log("턴 순서 갱신!", Color.YELLOW)
 
 
 func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
@@ -1219,9 +1191,9 @@ func _show_claim_reward_button() -> void:
 	is_waiting_for_claim = true
 	_update_auto_claim_button_style()
 
-	# 턴 순서 UI 숨기기
-	if turn_panel:
-		turn_panel.visible = false
+	# ATB UI 숨기기
+	if atb_panel:
+		atb_panel.visible = false
 
 	if auto_claim_enabled:
 		# 자동 보상 모드 - 바로 보상 획득
