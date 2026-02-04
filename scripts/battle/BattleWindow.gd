@@ -510,7 +510,8 @@ func _update_atb_system(delta: float) -> void:
 		# 아직 행동 준비 안 된 유닛은 게이지 충전
 		if unit["atb"] < ATB_MAX:
 			var spd: float = float(unit["spd"])
-			var fill_amount: float = ATB_FILL_RATE * (spd / 10.0) * delta
+			var speed_mult: float = 1.3 if unit["type"] == "hero" else 1.0  # 아군 30% 빠르게
+			var fill_amount: float = ATB_FILL_RATE * (spd / 10.0) * speed_mult * delta
 			unit["atb"] = minf(unit["atb"] + fill_amount, ATB_MAX)
 
 		# 게이지가 가득 찬 유닛은 준비 목록에 추가
