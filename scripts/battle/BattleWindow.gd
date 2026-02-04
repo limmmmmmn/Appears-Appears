@@ -1,14 +1,14 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: 비트 전투창 (템포 기반 비트 시스템)
-## - BPM은 BattleManager에서 관리 (Largo 60 ~ Presto 180)
-## - 각 전투창이 독립적인 비트 타이밍 관리
+## BattleWindow: 턴제 전투창
+## - 속도(SPD) 기반 턴 순서 결정
+## - 각 전투창이 독립적인 턴 관리
 ## - 전투 중 적 동적 추가 지원
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
-signal beat_occurred(beat_index: int)
+signal turn_started(unit_name: String, is_hero: bool)
 signal loot_drop_requested(item_id: String, start_global_pos: Vector2)
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
@@ -25,41 +25,17 @@ var current_state: BattleState = BattleState.STARTING
 var enemies: Array = []
 var enemy_data_list: Array = []
 
-# === 비트 시스템 ===
-# BPM은 BattleManager에서 관리 (60/80/110/140/180 BPM)
-var beat_timer: float = 0.0
-var current_beat: int = 0
+# === 턴제 시스템 ===
+# 턴 순서는 속도(SPD) 기반으로 결정
+var turn_order: Array = []  # [{type: "hero"/"enemy", ref: Hero/BattleEnemy, spd: int}]
+var current_turn_index: int = 0
+var is_processing_turn: bool = false
+var turn_delay_timer: float = 0.0
+const TURN_DELAY: float = 0.6  # 턴 사이 딜레이
 
-# 클래스별 비트 패턴 (0=없음, 1=스킬1, 2=스킬2)
-# 파티를 드럼 키트처럼 구성 - 8비트 사이클
-# 리듬: 쿵 딱 쿵쿵 딱 - 쿵 (필)
-#       1  2  3 4  5 6 7  8
-const CLASS_PATTERNS := {
-	"warrior": [1, 0, 1, 1, 0, 0, 1, 0],   # 킥드럼: 쿵 - 쿵쿵 - - 쿵 -
-	"knight": [0, 1, 0, 0, 2, 0, 0, 1],    # 스네어: - 딱 - - 방패 - - 딱
-	"thief": [0, 0, 1, 0, 0, 1, 0, 2],     # 하이햇: - - 치 - - 치 - 급소!
-	"archer": [0, 0, 0, 1, 0, 0, 1, 0],    # 탐탐: - - - 둥 - - 둥 -
-	"mage": [0, 0, 0, 0, 0, 0, 0, 2],      # 크래시: - - - - - - - 쾅!
-	"cleric": [0, 0, 0, 0, 1, 0, 0, 2],    # 라이드: - - - - 축복 - - 힐
-}
-const DEFAULT_PATTERN := [1, 0, 1, 0, 1, 0, 1, 0]  # 기본 패턴
-
-# 클래스별 엇박 오프셋 (초 단위) - 드럼처럼 자연스러운 그루브
-const CLASS_OFFBEAT := {
-	"warrior": 0.0,    # 킥드럼 - 정박 (기준)
-	"knight": 0.02,    # 스네어 - 거의 정박 (살짝 뒤)
-	"thief": 0.05,     # 하이햇 - 약간 앞서감
-	"archer": 0.03,    # 탐탐 - 약간 느긋
-	"mage": 0.08,      # 크래시 - 여유있게
-	"cleric": 0.06,    # 라이드 - 부드럽게
-}
-
-# 영웅별 비트 인덱스 추적
-var hero_beat_index: Dictionary = {}
-var hero_pending_action: Dictionary = {}  # 엇박 대기 중인 액션 {hero_id: {action, skill_id, timer}}
-
-# 적 비트 시스템 (2비트마다 공격)
-var enemy_beat_offset: Dictionary = {}  # 적별 시작 오프셋 (0 또는 1)
+# 턴 순서 UI
+var turn_order_panel: HBoxContainer = null
+var turn_order_labels: Array = []
 
 # === 보상 ===
 var total_exp: int = 0
@@ -165,6 +141,9 @@ func _ready() -> void:
 	# 보상 UI 초기화
 	_update_rewards_ui()
 
+	# 턴 순서 UI 생성
+	_setup_turn_order_ui()
+
 	# 고/스톱 UI 생성
 	_setup_go_stop_ui()
 
@@ -178,7 +157,7 @@ func _process(delta: float) -> void:
 		_update_background_effect(delta)
 		return
 
-	_update_beat_system(delta)
+	_update_turn_system(delta)
 	_update_background_effect(delta)
 	_update_danger_border_pulse(delta)
 
@@ -248,8 +227,8 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	else:
 		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
 
-	var idx: int = enemies.size() - 1
-	enemy_beat_offset[idx] = randi() % 2  # 랜덤 비트 오프셋
+	# 턴 순서에 새 적 추가
+	_refresh_turn_order_on_enemy_added()
 
 	# 대기 모드에서 적이 추가되면 활성화
 	if is_waiting_for_enemies:
@@ -285,9 +264,6 @@ func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
 	# 전투창별 위험도를 적에게 전달
 	battle_enemy.setup(enemy_id, make_elite, get_local_danger_level())
 	enemies.append(battle_enemy)
-
-	var idx: int = enemies.size() - 1
-	enemy_beat_offset[idx] = randi() % 2  # 랜덤 비트 오프셋 (0 또는 1)
 
 
 func get_local_danger_level() -> int:
@@ -339,167 +315,399 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 	return false
 
 
-func _init_beat_system() -> void:
-	## 비트 시스템 초기화
-	beat_timer = 0.0
-	current_beat = 0
-	hero_beat_index.clear()
-	hero_pending_action.clear()
-	enemy_beat_offset.clear()
+func _init_turn_system() -> void:
+	## 턴제 시스템 초기화 - 속도 기반 턴 순서 결정
+	turn_order.clear()
+	current_turn_index = 0
+	is_processing_turn = false
+	turn_delay_timer = 0.0
 
-	# 영웅별 비트 인덱스 초기화
+	# 영웅들을 턴 순서에 추가
 	for hero in PartyManager.get_alive_heroes():
-		hero_beat_index[hero.id] = 0
+		turn_order.append({
+			"type": "hero",
+			"ref": hero,
+			"spd": hero.get_spd()
+		})
 
-	# 적별 시작 오프셋 (0 또는 1로 랜덤)
-	for i in range(enemies.size()):
-		enemy_beat_offset[i] = randi() % 2
+	# 적들을 턴 순서에 추가
+	for enemy in enemies:
+		if enemy != null and enemy.is_alive():
+			turn_order.append({
+				"type": "enemy",
+				"ref": enemy,
+				"spd": enemy.get_spd()
+			})
+
+	# 속도 기준 내림차순 정렬 (빠른 순서대로)
+	turn_order.sort_custom(_compare_by_speed)
+
+	# 턴 순서 로그
+	_log_turn_order()
+
+
+func _compare_by_speed(a: Dictionary, b: Dictionary) -> bool:
+	## 속도 비교 함수 (내림차순)
+	if a["spd"] != b["spd"]:
+		return a["spd"] > b["spd"]
+	# 속도가 같으면 영웅 우선
+	if a["type"] == "hero" and b["type"] == "enemy":
+		return true
+	return false
+
+
+func _log_turn_order() -> void:
+	## 턴 순서 로그 출력
+	var order_text: String = "턴 순서: "
+	for i in range(turn_order.size()):
+		var unit: Dictionary = turn_order[i]
+		var name: String = ""
+		if unit["type"] == "hero":
+			name = unit["ref"].hero_name
+		else:
+			name = unit["ref"].enemy_name
+		if i > 0:
+			order_text += " → "
+		order_text += "%s(%d)" % [name, unit["spd"]]
+	_send_log(order_text, Color.LIGHT_GRAY)
+
+	# UI 업데이트
+	_update_turn_order_ui()
+
+
+func _setup_turn_order_ui() -> void:
+	## 턴 순서 UI 패널 생성
+	var main_vbox = get_node_or_null("MainVBox")
+	if not main_vbox:
+		return
+
+	# 턴 순서 패널 컨테이너
+	var turn_panel := PanelContainer.new()
+	turn_panel.name = "TurnOrderPanel"
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.1, 0.1, 0.15, 0.9)
+	panel_style.content_margin_left = 6
+	panel_style.content_margin_right = 6
+	panel_style.content_margin_top = 3
+	panel_style.content_margin_bottom = 3
+	turn_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 가로 컨테이너
+	turn_order_panel = HBoxContainer.new()
+	turn_order_panel.name = "TurnOrderHBox"
+	turn_order_panel.add_theme_constant_override("separation", 4)
+	turn_order_panel.alignment = BoxContainer.ALIGNMENT_CENTER
+	turn_panel.add_child(turn_order_panel)
+
+	# "턴:" 라벨
+	var turn_label := Label.new()
+	turn_label.text = "턴:"
+	turn_label.add_theme_font_size_override("font_size", 10)
+	turn_label.add_theme_color_override("font_color", Color.GRAY)
+	turn_order_panel.add_child(turn_label)
+
+	# RewardsPanel 다음에 삽입 (인덱스 1)
+	main_vbox.add_child(turn_panel)
+	main_vbox.move_child(turn_panel, 1)
+
+
+func _update_turn_order_ui() -> void:
+	## 턴 순서 UI 업데이트
+	if turn_order_panel == null:
+		return
+
+	# 기존 라벨들 제거 (첫 번째 "턴:" 라벨 제외)
+	for label in turn_order_labels:
+		if is_instance_valid(label):
+			label.queue_free()
+	turn_order_labels.clear()
+
+	# 최대 표시 개수 (현재 턴 + 앞으로 4개)
+	var max_display: int = 5
+	var displayed: int = 0
+
+	for i in range(current_turn_index, turn_order.size()):
+		if displayed >= max_display:
+			break
+
+		var unit: Dictionary = turn_order[i]
+		var is_valid: bool = false
+		var unit_name: String = ""
+		var is_hero: bool = unit["type"] == "hero"
+
+		if is_hero:
+			var hero: Hero = unit["ref"]
+			is_valid = hero != null and not hero.is_dead
+			if is_valid:
+				unit_name = hero.hero_name
+		else:
+			var enemy: BattleEnemy = unit["ref"]
+			is_valid = enemy != null and enemy.is_alive()
+			if is_valid:
+				unit_name = enemy.enemy_name
+
+		if not is_valid:
+			continue
+
+		# 구분자 추가 (첫 번째 아닌 경우)
+		if displayed > 0:
+			var arrow := Label.new()
+			arrow.text = "→"
+			arrow.add_theme_font_size_override("font_size", 9)
+			arrow.add_theme_color_override("font_color", Color.DARK_GRAY)
+			turn_order_panel.add_child(arrow)
+			turn_order_labels.append(arrow)
+
+		# 이름 라벨 생성
+		var name_label := Label.new()
+		# 이름이 너무 길면 축약
+		if unit_name.length() > 4:
+			name_label.text = unit_name.substr(0, 3) + ".."
+		else:
+			name_label.text = unit_name
+		name_label.add_theme_font_size_override("font_size", 10)
+
+		# 현재 턴인 경우 강조
+		if i == current_turn_index:
+			name_label.text = "▶" + name_label.text
+			if is_hero:
+				name_label.add_theme_color_override("font_color", Color.CYAN)
+			else:
+				name_label.add_theme_color_override("font_color", Color.ORANGE_RED)
+		else:
+			if is_hero:
+				name_label.add_theme_color_override("font_color", Color.LIGHT_BLUE)
+			else:
+				name_label.add_theme_color_override("font_color", Color.INDIAN_RED)
+
+		turn_order_panel.add_child(name_label)
+		turn_order_labels.append(name_label)
+		displayed += 1
 
 
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
-	_init_beat_system()
+	_init_turn_system()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
+
+	# 첫 턴 시작
+	turn_delay_timer = 0.3  # 첫 턴 전 짧은 대기
 #endregion
 
 
-#region 비트 시스템
-func _update_beat_system(delta: float) -> void:
-	## 비트 타이밍 업데이트 (BPM은 BattleManager에서 관리)
-	beat_timer += delta
+#region 턴제 시스템
+func _update_turn_system(delta: float) -> void:
+	## 턴 진행 처리
+	if is_processing_turn:
+		return
 
-	# 엇박 대기 중인 액션 처리
-	_update_pending_actions(delta)
+	# 턴 딜레이 처리
+	if turn_delay_timer > 0:
+		turn_delay_timer -= delta
+		return
 
-	# 비트 발생 체크
-	var beat_interval: float = BattleManager.get_beat_interval()
-	if beat_timer >= beat_interval:
-		beat_timer -= beat_interval
-		_on_beat_occurred()
-
-
-func _update_pending_actions(delta: float) -> void:
-	## 엇박 타이밍으로 대기 중인 액션 처리
-	var to_execute: Array = []
-
-	for hero_id in hero_pending_action.keys():
-		var pending: Dictionary = hero_pending_action[hero_id]
-		pending["timer"] -= delta
-
-		if pending["timer"] <= 0:
-			to_execute.append(hero_id)
-
-	for hero_id in to_execute:
-		var pending: Dictionary = hero_pending_action[hero_id]
-		var hero: Hero = PartyManager.get_hero_by_id(hero_id)
-		if hero and not hero.is_dead:
-			_hero_attack(hero, pending["skill_id"])
-		hero_pending_action.erase(hero_id)
-
-		if _check_battle_end():
-			return
+	# 현재 턴 실행
+	_execute_current_turn()
 
 
-func _on_beat_occurred() -> void:
-	## 비트 발생 시 영웅과 적의 행동 처리
-	current_beat += 1
-	beat_occurred.emit(current_beat)
+func _execute_current_turn() -> void:
+	## 현재 턴의 유닛 행동 실행
+	if turn_order.is_empty():
+		return
 
-	# 비트 시각 효과
-	_play_beat_effect()
+	# 유효한 턴 찾기 (죽은 유닛 건너뛰기)
+	var valid_turn: Dictionary = _get_next_valid_turn()
+	if valid_turn.is_empty():
+		# 모든 유닛이 행동 완료, 다음 라운드
+		_start_new_round()
+		return
 
-	# 영웅 행동 처리 (용사는 즉시, 나머지는 엇박으로 지연)
-	for hero in PartyManager.get_alive_heroes():
-		if hero.is_dead:
-			continue
-		_process_hero_beat(hero)
+	is_processing_turn = true
+	var unit_type: String = valid_turn["type"]
+	var unit_ref = valid_turn["ref"]
 
-	# 용사 공격 후 전투 종료 체크
+	# 턴 시작 시그널 및 효과
+	var unit_name: String = ""
+	if unit_type == "hero":
+		unit_name = unit_ref.hero_name
+		turn_started.emit(unit_name, true)
+		_play_turn_effect()
+		await _process_hero_turn(unit_ref)
+	else:
+		unit_name = unit_ref.enemy_name
+		turn_started.emit(unit_name, false)
+		_play_turn_effect()
+		await _process_enemy_turn(unit_ref)
+
+	# 전투 종료 체크
 	if _check_battle_end():
 		return
 
-	# 적 행동 처리 (2비트마다)
-	for i in range(enemies.size()):
-		var enemy: BattleEnemy = enemies[i]
-		if not enemy.is_alive():
-			continue
-		_process_enemy_beat(enemy, i)
-		if _check_battle_end():
-			return
+	# 다음 턴 준비
+	current_turn_index += 1
+	is_processing_turn = false
+	turn_delay_timer = TURN_DELAY
+
+	# 턴 순서 UI 업데이트
+	_update_turn_order_ui()
 
 
-func _process_hero_beat(hero: Hero) -> void:
-	## 영웅의 비트 패턴 처리
-	if not hero_beat_index.has(hero.id):
-		hero_beat_index[hero.id] = 0
+func _get_next_valid_turn() -> Dictionary:
+	## 다음 유효한 턴 반환 (죽은 유닛 건너뛰기)
+	while current_turn_index < turn_order.size():
+		var unit: Dictionary = turn_order[current_turn_index]
+		var is_valid: bool = false
 
-	var pattern: Array = CLASS_PATTERNS.get(hero.class_id, DEFAULT_PATTERN)
-	var beat_idx: int = hero_beat_index[hero.id]
-	var action: int = pattern[beat_idx]
+		if unit["type"] == "hero":
+			var hero: Hero = unit["ref"]
+			is_valid = hero != null and not hero.is_dead
+		else:
+			var enemy: BattleEnemy = unit["ref"]
+			is_valid = enemy != null and enemy.is_alive()
 
-	# 다음 비트로 이동
-	hero_beat_index[hero.id] = (beat_idx + 1) % pattern.size()
+		if is_valid:
+			return unit
+		else:
+			current_turn_index += 1
 
-	# 행동 없음
-	if action == 0:
+	return {}
+
+
+func _start_new_round() -> void:
+	## 새 라운드 시작 (턴 순서 재계산)
+	_send_log("━━ 새 라운드 ━━", Color.DARK_GRAY)
+	_init_turn_system()
+	turn_delay_timer = 0.3
+
+
+func _process_hero_turn(hero: Hero) -> void:
+	## 영웅의 턴 처리
+	if hero == null or hero.is_dead:
 		return
 
-	# 스킬 ID 결정
-	var skill_id: String = "basic_attack"
-	if action >= 2:
-		skill_id = _get_hero_skill(hero, action)
+	_bring_to_front()
 
-	# 엇박 오프셋 적용
-	var offbeat: float = CLASS_OFFBEAT.get(hero.class_id, 0.0)
+	# 클래스별 스킬 선택 (간단한 AI)
+	var skill_id: String = _select_hero_skill(hero)
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 
-	if offbeat <= 0.0:
-		# 정박 (용사) - 즉시 실행
-		_hero_attack(hero, skill_id)
-	else:
-		# 엇박 - 지연 실행
-		hero_pending_action[hero.id] = {
-			"skill_id": skill_id,
-			"timer": offbeat
-		}
+	if skill_data.is_empty():
+		skill_id = "basic_attack"
+		skill_data = DataManager.get_skill("basic_attack")
+
+	var target_type: String = skill_data.get("target", "single_enemy")
+
+	# 로그에 누구의 턴인지 표시
+	_send_log("▶ %s의 턴" % hero.hero_name, Color.CYAN)
+
+	# 짧은 대기 (연출)
+	await get_tree().create_timer(0.2).timeout
+
+	# 타겟 타입에 따른 처리
+	match target_type:
+		"single_ally", "all_allies":
+			_execute_ally_skill(hero, skill_id, skill_data, target_type)
+		"all_enemies":
+			_execute_aoe_attack(hero, skill_id, skill_data)
+		_:  # single_enemy
+			_execute_single_attack(hero, skill_id, skill_data)
+
+	# 행동 후 잠시 대기
+	await get_tree().create_timer(0.3).timeout
 
 
-func _process_enemy_beat(enemy: BattleEnemy, enemy_index: int) -> void:
-	## 적의 비트 패턴 처리 (2비트마다 공격)
-	if not enemy_beat_offset.has(enemy_index):
-		enemy_beat_offset[enemy_index] = randi() % 2
+func _process_enemy_turn(enemy: BattleEnemy) -> void:
+	## 적의 턴 처리
+	if enemy == null or not enemy.is_alive():
+		return
 
-	var offset: int = enemy_beat_offset[enemy_index]
-	# 2비트마다 공격 (오프셋 적용)
-	if (current_beat + offset) % 2 == 0:
-		_enemy_attack(enemy)
+	_bring_to_front()
+
+	# 로그에 누구의 턴인지 표시
+	_send_log("▶ %s의 턴" % enemy.enemy_name, Color.ORANGE_RED)
+
+	# 짧은 대기 (연출)
+	await get_tree().create_timer(0.2).timeout
+
+	_enemy_attack(enemy)
+
+	# 행동 후 잠시 대기
+	await get_tree().create_timer(0.3).timeout
 
 
-func _get_hero_skill(hero: Hero, skill_num: int) -> String:
-	## 영웅의 스킬 번호에 해당하는 스킬 ID 반환
+func _select_hero_skill(hero: Hero) -> String:
+	## 영웅의 스킬 선택 (간단한 AI)
 	var skills := hero.get_available_skills()
-	# 기본 공격 제외한 스킬 목록
-	var non_basic: Array = []
-	for s in skills:
-		if s != "basic_attack":
-			non_basic.append(s)
 
-	if non_basic.is_empty():
-		return "basic_attack"
+	# 클레릭은 체력이 낮은 아군이 있으면 힐 우선
+	if hero.class_id == "cleric":
+		var wounded := _get_wounded_heroes()
+		if not wounded.is_empty():
+			for s in skills:
+				var data: Dictionary = DataManager.get_skill(s)
+				if data.get("type", "") == "heal":
+					return s
 
-	# skill_num 2 = 첫 번째 스킬, 3 = 두 번째 스킬...
-	var idx: int = skill_num - 2
-	if idx >= 0 and idx < non_basic.size():
-		return non_basic[idx]
-	return non_basic[0]
+	# 마법사는 적이 2마리 이상이면 전체 공격 우선
+	if hero.class_id == "mage":
+		if get_enemy_count() >= 2:
+			for s in skills:
+				var data: Dictionary = DataManager.get_skill(s)
+				if data.get("target", "") == "all_enemies":
+					return s
+
+	# 도적은 확률적으로 특수 스킬 사용
+	if hero.class_id == "thief":
+		if randf() < 0.3:  # 30% 확률로 특수 스킬
+			for s in skills:
+				if s != "basic_attack":
+					return s
+
+	# 기본: 기본 공격
+	return "basic_attack"
 
 
-func _play_beat_effect() -> void:
-	## 비트 시각 효과
+func _play_turn_effect() -> void:
+	## 턴 시작 시각 효과
 	if background:
 		var tween := create_tween()
-		tween.tween_property(background, "modulate", Color(1.2, 1.2, 1.2), 0.05)
-		tween.tween_property(background, "modulate", Color.WHITE, 0.1)
+		tween.tween_property(background, "modulate", Color(1.2, 1.2, 1.2), 0.08)
+		tween.tween_property(background, "modulate", Color.WHITE, 0.15)
+
+
+func _refresh_turn_order_on_enemy_added() -> void:
+	## 새 적이 추가되었을 때 턴 순서 갱신
+	# 현재 턴을 진행 중인 유닛 이후에 새 적 삽입
+	var new_enemies: Array = []
+	for enemy in enemies:
+		if enemy == null or not enemy.is_alive():
+			continue
+		# 이미 턴 순서에 있는지 확인
+		var already_in_order: bool = false
+		for unit in turn_order:
+			if unit["type"] == "enemy" and unit["ref"] == enemy:
+				already_in_order = true
+				break
+		if not already_in_order:
+			new_enemies.append({
+				"type": "enemy",
+				"ref": enemy,
+				"spd": enemy.get_spd()
+			})
+
+	# 새 적들을 턴 순서에 추가 (현재 인덱스 이후에 속도순으로 삽입)
+	for new_enemy in new_enemies:
+		var insert_idx: int = current_turn_index + 1
+		for i in range(current_turn_index + 1, turn_order.size()):
+			if turn_order[i]["spd"] < new_enemy["spd"]:
+				insert_idx = i
+				break
+			insert_idx = i + 1
+		turn_order.insert(insert_idx, new_enemy)
+
+	if not new_enemies.is_empty():
+		_send_log("턴 순서 갱신!", Color.YELLOW)
 
 
 func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
@@ -834,10 +1042,6 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	total_gold += gold_reward
 	drop_items.append_array(items)
 	_update_rewards_ui()
-
-	var idx := enemies.find(enemy)
-	if idx >= 0:
-		enemy_beat_offset.erase(idx)
 
 	enemy.play_death_effect()
 
@@ -1350,8 +1554,7 @@ func _setup_background_shader() -> void:
 
 
 func _update_background_effect(delta: float) -> void:
-	var speed_mult: float = BattleManager.get_battle_speed()
-	effect_time += delta * speed_mult
+	effect_time += delta
 	
 	# 셰이더 시간 업데이트
 	if bg_material:
@@ -1753,7 +1956,7 @@ func _update_danger_border_pulse(delta: float) -> void:
 	if danger_level < 2 or border_style == null:
 		return
 
-	border_pulse_time += delta * BattleManager.get_battle_speed()
+	border_pulse_time += delta
 
 	# 펄스 속도는 위험도에 따라 증가
 	var pulse_speed: float = 2.0 + (danger_level * 0.5)
