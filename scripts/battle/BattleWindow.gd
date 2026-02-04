@@ -256,7 +256,10 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 func _cancel_claim_waiting() -> void:
 	## 보상 대기 상태 취소 (적이 추가되었을 때)
 	is_waiting_for_claim = false
+	is_processing_turn = false  # 턴 처리 상태 초기화
 	_update_auto_claim_button_style()
+	# 새 적이 추가되었으므로 턴 순서 갱신
+	_start_new_round()
 
 
 func _update_buttons_for_enemies() -> void:
