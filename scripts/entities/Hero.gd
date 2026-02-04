@@ -9,7 +9,7 @@ var hero_class_name: String = ""  # class_name은 Godot 예약어
 
 var level: int = 1
 var exp: int = 0
-var exp_to_next: int = 100
+var exp_to_next: int = 40  # 레벨업 속도 상향
 
 # 기본 스탯
 var base_hp: int = 0
@@ -151,7 +151,7 @@ func add_exp(amount: int) -> bool:
 func _level_up() -> void:
 	level += 1
 	exp -= exp_to_next
-	exp_to_next = int(100 * pow(level, 1.5))
+	exp_to_next = int(40 * pow(level, 1.2))  # 레벨업 속도 상향
 	
 	var growth: Dictionary = DataManager.get_class_growth(class_id)
 	base_hp += int(growth.get("hp", 1))
