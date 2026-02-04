@@ -87,6 +87,8 @@ var go_button: Button = null
 var stop_button: Button = null
 var is_go_stop_active: bool = false  # 고/스톱 선택 대기 중
 var go_stop_selection: int = 0  # 0 = 고, 1 = 스톱
+var go_stop_from_clear: bool = false  # 적 전멸로 인한 고/스톱인지
+var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
@@ -249,8 +251,11 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	var idx: int = enemies.size() - 1
 	enemy_beat_offset[idx] = randi() % 2  # 랜덤 비트 오프셋
 
+	# 대기 모드에서 적이 추가되면 활성화
+	if is_waiting_for_enemies:
+		_exit_waiting_mode()
 	# 적이 추가되면 전투 재개
-	if current_state == BattleState.VICTORY:
+	elif current_state == BattleState.VICTORY:
 		current_state = BattleState.RUNNING
 		set_process(true)
 		_send_log("전투 재개!", Color.GREEN)
@@ -1487,6 +1492,7 @@ func _show_go_stop_choice(new_level: int, _message: String) -> void:
 
 	is_go_stop_active = true
 	go_stop_selection = 0  # 기본 선택: 고
+	go_stop_from_clear = false  # 원념 레벨업으로 인한 고/스톱
 	get_tree().paused = true  # 게임 일시정지
 
 	# 패널 위치 (전투창 중앙)
@@ -1514,6 +1520,7 @@ func _show_go_stop_for_clear() -> void:
 
 	is_go_stop_active = true
 	go_stop_selection = 0  # 기본 선택: 고
+	go_stop_from_clear = true  # 적 전멸로 인한 고/스톱
 	get_tree().paused = true  # 게임 일시정지
 
 	# 패널 위치 (전투창 중앙)
@@ -1608,9 +1615,33 @@ func _on_go_pressed() -> void:
 	is_go_stop_active = false
 	go_stop_panel.visible = false
 	get_tree().paused = false  # 게임 재개
+
+	if go_stop_from_clear:
+		# 적 전멸 후 '고' 선택 시 대기 모드로 전환
+		is_waiting_for_enemies = true
+		_enter_waiting_mode()
+		_send_log("적을 기다린다...", Color.GRAY)
+	else:
+		# 일반적인 '고' 선택 (원념 레벨업 등)
+		current_state = BattleState.RUNNING
+		set_process(true)
+		_send_log("계속 싸운다!", Color.GREEN)
+
+
+func _enter_waiting_mode() -> void:
+	## 적 대기 모드 진입 (반투명 + 비활성화)
+	current_state = BattleState.VICTORY  # 임시 상태
+	set_process(false)
+	modulate.a = 0.4  # 반투명
+
+
+func _exit_waiting_mode() -> void:
+	## 적 대기 모드 해제 (활성화)
+	is_waiting_for_enemies = false
+	modulate.a = 1.0  # 불투명
 	current_state = BattleState.RUNNING
 	set_process(true)
-	_send_log("계속 싸운다!", Color.GREEN)
+	_send_log("전투 재개!", Color.GREEN)
 
 
 func _on_stop_pressed() -> void:
