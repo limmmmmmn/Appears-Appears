@@ -9,7 +9,7 @@
 	  "str": 12,
 	  "def": 10,
 	  "int": 4,
-	  "spd": 8,
+	  "spd": 12,
 	  "luk": 6
 	},
 	"growth": {
@@ -38,7 +38,7 @@
 	  "str": 4,
 	  "def": 4,
 	  "int": 14,
-	  "spd": 8,
+	  "spd": 11,
 	  "luk": 8
 	},
 	"growth": {
@@ -67,7 +67,7 @@
 	  "str": 6,
 	  "def": 8,
 	  "int": 12,
-	  "spd": 6,
+	  "spd": 10,
 	  "luk": 8
 	},
 	"growth": {
@@ -96,7 +96,7 @@
 	  "str": 8,
 	  "def": 6,
 	  "int": 6,
-	  "spd": 14,
+	  "spd": 18,
 	  "luk": 12
 	},
 	"growth": {
@@ -125,7 +125,7 @@
 	  "str": 10,
 	  "def": 6,
 	  "int": 6,
-	  "spd": 12,
+	  "spd": 16,
 	  "luk": 10
 	},
 	"growth": {
@@ -154,7 +154,7 @@
 	  "str": 10,
 	  "def": 14,
 	  "int": 4,
-	  "spd": 4,
+	  "spd": 8,
 	  "luk": 6
 	},
 	"growth": {
