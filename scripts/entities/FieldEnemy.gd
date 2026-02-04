@@ -27,6 +27,7 @@ var target_player: Node2D = null
 var wander_target: Vector2 = Vector2.ZERO
 var wander_timer: float = 0.0
 var is_contacted: bool = false
+var is_despawning: bool = false  # 사라지는 중
 
 # 관전 모드
 var is_spectating: bool = false
@@ -94,6 +95,11 @@ func _setup_from_data() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# 사라지는 중에는 이동 정지
+	if is_despawning:
+		velocity = Vector2.ZERO
+		return
+
 	match current_state:
 		State.IDLE:
 			_process_idle(delta)
@@ -204,7 +210,24 @@ func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2, p_is_elite: bo
 
 
 func despawn() -> void:
-	queue_free()
+	## 반짝이며 사라지는 효과
+	if is_despawning:
+		return
+	is_despawning = true
+	velocity = Vector2.ZERO
+
+	# 트윈으로 반짝임 효과
+	var tween := create_tween()
+	tween.set_loops(3)  # 3번 반복
+
+	# 반짝임: 투명 → 불투명 → 투명
+	tween.tween_property(sprite, "modulate:a", 0.2, 0.04)
+	tween.tween_property(sprite, "modulate:a", 1.0, 0.04)
+
+	# 반짝임 후 사라짐
+	tween.set_loops(1)
+	tween.tween_property(sprite, "modulate:a", 0.0, 0.05)
+	tween.tween_callback(queue_free)
 
 
 #region 관전 시스템
