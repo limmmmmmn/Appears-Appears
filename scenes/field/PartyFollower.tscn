@@ -19,24 +19,10 @@ var hero_data: Dictionary = {}
 @onready var collision: CollisionShape2D = $CollisionShape2D
 @onready var hp_bar: ProgressBar = $StatusBars/HPBar
 
-var attack_icon: Label = null
-const ATTACK_ICONS: Dictionary = {
-	\"warrior\": \"⚔️\",
-	\"knight\": \"🗡️\",
-	\"thief\": \"🔪\",
-	\"archer\": \"🏹\",
-	\"mage\": \"✨\",
-	\"cleric\": \"✝️\"
-}
-
 
 func _ready() -> void:
 	add_to_group(\"party_follower\")
 	add_to_group(\"party\")
-	_create_attack_icon()
-	
-	if BattleManager:
-		BattleManager.hero_attacked.connect(_on_hero_attacked)
 
 
 func _physics_process(_delta: float) -> void:
@@ -96,48 +82,6 @@ func _play_idle_animation() -> void:
 		animated_sprite.stop()
 		animated_sprite.animation = anim_name
 		animated_sprite.frame = 1
-
-
-func _create_attack_icon() -> void:
-	attack_icon = Label.new()
-	attack_icon.text = \"⚔️\"
-	attack_icon.add_theme_font_size_override(\"font_size\", 16)
-	attack_icon.position = Vector2(-8, -32)
-	attack_icon.z_index = 20
-	attack_icon.visible = false
-	add_child(attack_icon)
-
-
-func _on_hero_attacked(attacked_hero_id: String) -> void:
-	if attacked_hero_id == hero_id:
-		_play_attack_effect()
-
-
-func _play_attack_effect() -> void:
-	if not attack_icon:
-		return
-	
-	var class_id: String = hero_data.get(\"class_id\", \"warrior\")
-	attack_icon.text = ATTACK_ICONS.get(class_id, \"⚔️\")
-	
-	var start_x: float = -12.0 if not facing_right else 12.0
-	var end_x: float = 12.0 if not facing_right else -12.0
-	var start_rot: float = -45.0 if not facing_right else 45.0
-	var end_rot: float = 45.0 if not facing_right else -45.0
-	
-	attack_icon.position = Vector2(start_x, -28)
-	attack_icon.rotation_degrees = start_rot
-	attack_icon.visible = true
-	attack_icon.modulate = Color.WHITE
-	
-	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(attack_icon, \"position:x\", end_x, 0.15).set_ease(Tween.EASE_OUT)
-	tween.tween_property(attack_icon, \"position:y\", -35, 0.07).set_ease(Tween.EASE_OUT)
-	tween.tween_property(attack_icon, \"rotation_degrees\", end_rot, 0.15).set_ease(Tween.EASE_OUT)
-	tween.chain().tween_property(attack_icon, \"position:y\", -28, 0.08).set_ease(Tween.EASE_IN)
-	tween.chain().tween_property(attack_icon, \"modulate:a\", 0.0, 0.1)
-	tween.chain().tween_callback(func(): attack_icon.visible = false)
 
 
 func _update_hp_bar() -> void:
