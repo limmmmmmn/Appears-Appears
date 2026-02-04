@@ -31,14 +31,7 @@ signal menu_pressed
 @onready var trait_panel: PanelContainer = %TraitPanel
 @onready var trait_vbox: VBoxContainer = %TraitVBox
 
-# === 원념/보상 패널 (상단 중앙) - 동적 생성 ===
-var grudge_panel: PanelContainer = null
-var grudge_level_label: Label = null
-var grudge_exp_label: Label = null
-var grudge_gold_label: Label = null
-var grudge_items_container: VBoxContainer = null
-
-# === 킬카운트 표시 (원념 패널 옆) - 별도 표시 ===
+# === 킬카운트 표시 (상단) - 동적 생성 ===
 var kill_count_panel: PanelContainer = null
 var kill_count_label: Label = null
 
@@ -62,7 +55,6 @@ var minimap_target: Node2D = null  # 추적할 대상 (파티 리더)
 func _ready() -> void:
 	add_to_group("field_hud")
 	_setup_components()
-	_setup_grudge_panel()
 	_setup_kill_count_panel()
 	_setup_grudge_popup()
 	_setup_town_popup()
@@ -124,9 +116,6 @@ func _connect_signals() -> void:
 			BattleManager.party_hp_changed.connect(update_party_display)
 		if not BattleManager.loot_animation_requested.is_connected(_on_loot_animation_requested):
 			BattleManager.loot_animation_requested.connect(_on_loot_animation_requested)
-		# 누적 보상 시스템 연결
-		if not BattleManager.accumulated_rewards_changed.is_connected(_update_grudge_panel):
-			BattleManager.accumulated_rewards_changed.connect(_update_grudge_panel)
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 		# 킬카운트 실시간 업데이트
@@ -402,81 +391,9 @@ func refresh_traits() -> void:
 #endregion
 
 
-#region 원념/보상 패널
-func _setup_grudge_panel() -> void:
-	## 상단 중앙에 원념/보상 패널 생성
-	var ctrl := get_node_or_null("Control")
-	if not ctrl:
-		push_error("[FieldHUD] Control 노드를 찾을 수 없음")
-		return
-
-	grudge_panel = PanelContainer.new()
-	grudge_panel.name = "GrudgePanel"
-	grudge_panel.visible = true  # 항상 표시
-
-	# 스타일
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.05, 0.15, 0.9)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(0.6, 0.3, 0.8)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-	grudge_panel.add_theme_stylebox_override("panel", style)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	grudge_panel.add_child(vbox)
-
-	# 원념 레벨
-	grudge_level_label = Label.new()
-	grudge_level_label.text = "원념 Lv.0"
-	grudge_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	grudge_level_label.add_theme_font_size_override("font_size", 11)
-	grudge_level_label.add_theme_color_override("font_color", Color(0.9, 0.6, 1.0))
-	vbox.add_child(grudge_level_label)
-
-	# EXP/Gold 행
-	var reward_hbox := HBoxContainer.new()
-	reward_hbox.add_theme_constant_override("separation", 12)
-	reward_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(reward_hbox)
-
-	grudge_exp_label = Label.new()
-	grudge_exp_label.text = "EXP: 0"
-	grudge_exp_label.add_theme_font_size_override("font_size", 9)
-	grudge_exp_label.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
-	reward_hbox.add_child(grudge_exp_label)
-
-	grudge_gold_label = Label.new()
-	grudge_gold_label.text = "Gold: 0"
-	grudge_gold_label.add_theme_font_size_override("font_size", 9)
-	grudge_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	reward_hbox.add_child(grudge_gold_label)
-
-	# 아이템 열 (미감정 아이템 색상 표시) - 세로 배열
-	grudge_items_container = VBoxContainer.new()
-	grudge_items_container.add_theme_constant_override("separation", 2)
-	vbox.add_child(grudge_items_container)
-
-	# 먼저 트리에 추가
-	ctrl.add_child(grudge_panel)
-
-	# 위치 설정 (트리에 추가된 후)
-	grudge_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	grudge_panel.position.y = 26  # TopBar 아래
-
-
+#region 킬카운트 패널
 func _setup_kill_count_panel() -> void:
-	## 킬카운트 패널 (원념 패널 왼쪽에 별도 표시)
+	## 킬카운트 패널 (상단 좌측)
 	var ctrl := get_node_or_null("Control")
 	if not ctrl:
 		return
@@ -561,41 +478,11 @@ func _on_kill_count_changed(count: int, danger_level: int) -> void:
 	## 킬카운트 변경 시 호출 (실시간)
 	_update_kill_count_display(count, danger_level)
 
-	# 원념 레벨도 실시간 업데이트
-	if grudge_level_label:
-		grudge_level_label.text = "원념 Lv.%d" % danger_level
-
 	# 킬카운트 증가 애니메이션
 	if kill_count_label:
 		var tween := create_tween()
 		tween.tween_property(kill_count_label, "scale", Vector2(1.3, 1.3), 0.1)
 		tween.tween_property(kill_count_label, "scale", Vector2(1.0, 1.0), 0.15)
-
-
-func _update_grudge_panel(exp: int, gold: int, items: Array) -> void:
-	## 원념/보상 패널 업데이트
-	if not grudge_panel:
-		return
-
-	var danger_level: int = BattleManager.get_danger_level()
-	grudge_level_label.text = "원념 Lv.%d" % danger_level
-	grudge_exp_label.text = "EXP: %d" % exp
-	grudge_gold_label.text = "Gold: %d" % gold
-
-	# 아이템 아이콘 업데이트
-	for child in grudge_items_container.get_children():
-		child.queue_free()
-
-	for item in items:
-		var item_label := Label.new()
-		# 타입만 표시 (예: 검, 방패, 갑옷)
-		var type_name: String = InventoryManager.get_item_type_name(item.id)
-		item_label.text = "?" + type_name
-		item_label.add_theme_font_size_override("font_size", 8)
-		# 희귀도 색상
-		var rarity_color: Color = InventoryManager.get_rarity_color(item.id)
-		item_label.add_theme_color_override("font_color", rarity_color)
-		grudge_items_container.add_child(item_label)
 #endregion
 
 
