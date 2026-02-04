@@ -384,37 +384,19 @@ func _calculate_window_position() -> Vector2:
 	safe_right = maxf(safe_right, safe_left)
 	safe_bottom = maxf(safe_bottom, safe_top)
 
-	# 우선순위 위치: 좌상단, 우상단 순으로 배치
-	var priority_positions: Array[Vector2] = [
-		Vector2(safe_left, safe_top),  # 좌상단
-		Vector2(safe_right, safe_top),  # 우상단
-	]
+	# 현재 전투창 개수
+	var window_count: int = active_battles.size()
 
-	# 우선순위 위치 중 비어있는 곳 찾기
-	for priority_pos in priority_positions:
-		if _is_position_available(priority_pos):
-			return priority_pos
+	# 첫 2개는 고정 위치 (좌상단, 우상단)
+	if window_count == 0:
+		return Vector2(safe_left, safe_top)  # 좌상단
+	elif window_count == 1:
+		return Vector2(safe_right, safe_top)  # 우상단
 
-	# 우선순위 위치가 모두 사용 중이면 빈 공간 찾기
-	var center := viewport_size / 2
-	var center_safe_rect := Rect2(
-		center.x - 50, center.y - 50, 100, 100
-	)
-
-	for _i in range(20):
-		var x := randf_range(safe_left, safe_right)
-		var y := randf_range(safe_top, safe_bottom)
-		var candidate := Vector2(x, y)
-
-		var window_rect := Rect2(candidate, WINDOW_SIZE)
-		if window_rect.intersects(center_safe_rect):
-			continue
-
-		if _is_position_available(candidate):
-			return candidate
-
-	# 기본 위치: 안전 영역 내 좌상단
-	return Vector2(safe_left, safe_top)
+	# 3개째부터는 랜덤 위치 (겹쳐도 됨)
+	var x := randf_range(safe_left, safe_right)
+	var y := randf_range(safe_top, safe_bottom)
+	return Vector2(x, y)
 
 
 func _is_position_available(pos: Vector2) -> bool:
