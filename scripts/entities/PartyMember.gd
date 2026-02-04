@@ -16,6 +16,7 @@ var current_direction: String = "down"
 # 클릭 이동용
 var click_target: Vector2 = Vector2.ZERO
 var has_click_target: bool = false
+var is_mouse_held: bool = false  # 마우스 버튼 누르고 있는지
 const CLICK_ARRIVE_DISTANCE: float = 5.0  # 도착 판정 거리
 
 # 스네이크 무브먼트용
@@ -62,13 +63,18 @@ func _process_leader(_delta: float) -> void:
 		_record_path()
 		return
 
+	# 마우스 누르고 있으면 계속 해당 위치로 이동
+	if is_mouse_held and not _is_mouse_over_ui():
+		click_target = get_global_mouse_position()
+		has_click_target = true
+
 	# 클릭 이동 처리
 	if has_click_target:
 		var to_target: Vector2 = click_target - global_position
 		var distance: float = to_target.length()
 
-		if distance <= CLICK_ARRIVE_DISTANCE:
-			# 목표 도착
+		# 마우스 누르고 있지 않고 목표 도착
+		if not is_mouse_held and distance <= CLICK_ARRIVE_DISTANCE:
 			has_click_target = false
 			velocity = Vector2.ZERO
 			_play_idle_animation()
@@ -93,13 +99,18 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			# UI 클릭은 무시 (마우스가 UI 위에 있으면)
-			if _is_mouse_over_ui():
-				return
-			# 월드 좌표로 변환
-			click_target = get_global_mouse_position()
-			has_click_target = true
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				# UI 클릭은 무시
+				if _is_mouse_over_ui():
+					return
+				# 클릭 시작
+				is_mouse_held = true
+				click_target = get_global_mouse_position()
+				has_click_target = true
+			else:
+				# 클릭 해제
+				is_mouse_held = false
 
 
 func _is_mouse_over_ui() -> bool:
