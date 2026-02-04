@@ -210,24 +210,10 @@ func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2, p_is_elite: bo
 
 
 func despawn() -> void:
-	## 반짝이며 사라지는 효과
-	if is_despawning:
-		return
+	## 적 사라짐 (전투 진입)
 	is_despawning = true
 	velocity = Vector2.ZERO
-
-	# 트윈으로 반짝임 효과
-	var tween := create_tween()
-	tween.set_loops(3)  # 3번 반복
-
-	# 반짝임: 투명 → 불투명 → 투명
-	tween.tween_property(sprite, "modulate:a", 0.2, 0.04)
-	tween.tween_property(sprite, "modulate:a", 1.0, 0.04)
-
-	# 반짝임 후 사라짐
-	tween.set_loops(1)
-	tween.tween_property(sprite, "modulate:a", 0.0, 0.05)
-	tween.tween_callback(queue_free)
+	queue_free()
 
 
 #region 관전 시스템
