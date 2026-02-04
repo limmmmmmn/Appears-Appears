@@ -752,9 +752,9 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 
 	enemy.play_attack_effect()
 
-	# 적 공격 사운드 (비활성화)
-	# if SoundManager:
-	# 	SoundManager.play_enemy_attack()
+	# 적 공격 사운드
+	if SoundManager:
+		SoundManager.play_enemy_attack()
 
 	var is_evaded := randf() * 100 < target.get_eva()
 	if is_evaded:

@@ -9,7 +9,7 @@ const MAX_SFX_PLAYERS: int = 12
 
 # === 볼륨 설정 ===
 var master_volume: float = 1.0
-var sfx_volume: float = 0.8
+var sfx_volume: float = 0.08  # 아주 작게 (들릴랑 말랑)
 var bgm_volume: float = 0.6
 
 # === 사운드 파일 경로 ===
