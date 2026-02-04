@@ -55,9 +55,9 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
 
 # === 동적 생성 UI ===
-var claim_reward_button: Button = null
 var auto_claim_toggle: Button = null
 var auto_claim_enabled: bool = false  # 자동 보상 받기 토글
+var is_waiting_for_claim: bool = false  # 보상 대기 상태 (적 전멸 후)
 
 # === 고/스톱 시스템 ===
 var go_stop_panel: PanelContainer = null
@@ -244,19 +244,16 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 		current_state = BattleState.RUNNING
 		set_process(true)
 		_send_log("전투 재개!", Color.GREEN)
-		_hide_claim_reward_button()
+		_cancel_claim_waiting()
 		_update_buttons_for_enemies()
 
 	_shake_window()
 
 
-func _hide_claim_reward_button() -> void:
-	## 보상 받기 버튼 제거
-	if claim_reward_button != null and is_instance_valid(claim_reward_button):
-		var parent = claim_reward_button.get_parent()
-		if parent:
-			parent.queue_free()  # CenterContainer도 함께 제거
-		claim_reward_button = null
+func _cancel_claim_waiting() -> void:
+	## 보상 대기 상태 취소 (적이 추가되었을 때)
+	is_waiting_for_claim = false
+	_update_auto_claim_button_style()
 
 
 func _update_buttons_for_enemies() -> void:
@@ -1206,65 +1203,23 @@ func _update_buttons_for_no_enemies() -> void:
 
 
 func _show_claim_reward_button() -> void:
-	## 보상 받기 버튼을 전투 영역 중앙에 표시
+	## 적이 모두 처치됨 - 보상 대기 상태로 전환
 	## 자동 보상이 활성화되어 있으면 즉시 보상 획득
+	## 아니면 자동 버튼 클릭 대기
+	is_waiting_for_claim = true
+	_update_auto_claim_button_style()
+
 	if auto_claim_enabled:
-		# 자동 보상 모드 - 버튼 없이 바로 보상 획득
-		call_deferred("_on_claim_reward_pressed")
+		# 자동 보상 모드 - 바로 보상 획득
+		call_deferred("_claim_rewards_now")
+
+
+func _claim_rewards_now() -> void:
+	## 즉시 보상 획득
+	if not is_waiting_for_claim:
 		return
-
-	if claim_reward_button != null:
-		return  # 이미 생성됨
-
-	claim_reward_button = Button.new()
-	claim_reward_button.text = "보상 받기"
-	claim_reward_button.custom_minimum_size = Vector2(100, 36)
-	claim_reward_button.pressed.connect(_on_claim_reward_pressed)
-
-	# 스타일 설정
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.6, 0.3, 0.95)
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.border_color = Color(0.4, 0.8, 0.5)
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	claim_reward_button.add_theme_stylebox_override("normal", style)
-
-	var hover_style := style.duplicate()
-	hover_style.bg_color = Color(0.3, 0.7, 0.4, 0.95)
-	claim_reward_button.add_theme_stylebox_override("hover", hover_style)
-
-	claim_reward_button.add_theme_font_size_override("font_size", 14)
-
-	# CenterContainer로 중앙 배치
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center.add_child(claim_reward_button)
-
-	if battle_area:
-		battle_area.add_child(center)
-
-	# 등장 애니메이션
-	claim_reward_button.modulate.a = 0.0
-	claim_reward_button.scale = Vector2(0.8, 0.8)
-	claim_reward_button.pivot_offset = claim_reward_button.size / 2
-
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(claim_reward_button, "modulate:a", 1.0, 0.2)
-	tween.tween_property(claim_reward_button, "scale", Vector2(1.0, 1.0), 0.2).set_ease(Tween.EASE_OUT)
-
-
-func _on_claim_reward_pressed() -> void:
-	## 보상 받기 버튼 클릭
-	if claim_reward_button:
-		claim_reward_button.disabled = true
+	is_waiting_for_claim = false
+	_update_auto_claim_button_style()
 	_end_battle_victory()
 
 
@@ -1838,10 +1793,35 @@ func _setup_auto_claim_toggle() -> void:
 func _on_auto_claim_toggled(toggled_on: bool) -> void:
 	## 자동 보상 토글 상태 변경
 	auto_claim_enabled = toggled_on
-	if auto_claim_toggle:
-		auto_claim_toggle.text = "자동" if toggled_on else "자동"
-		# ON 상태면 테두리 강조
-		if toggled_on:
+
+	# 보상 대기 중이면 즉시 보상 획득
+	if is_waiting_for_claim:
+		call_deferred("_claim_rewards_now")
+		return
+
+	_update_auto_claim_button_style()
+
+
+func _update_auto_claim_button_style() -> void:
+	## 자동 버튼 스타일 업데이트
+	if not auto_claim_toggle:
+		return
+
+	if is_waiting_for_claim:
+		# 보상 대기 중 - 강조 스타일 (초록색 깜빡임)
+		auto_claim_toggle.text = "보상!"
+		auto_claim_toggle.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
+
+		# 깜빡임 애니메이션
+		var tween := create_tween()
+		tween.set_loops()
+		tween.tween_property(auto_claim_toggle, "modulate", Color(1.2, 1.2, 1.2), 0.4)
+		tween.tween_property(auto_claim_toggle, "modulate", Color(1.0, 1.0, 1.0), 0.4)
+	else:
+		# 일반 상태
+		auto_claim_toggle.text = "자동"
+		auto_claim_toggle.modulate = Color(1.0, 1.0, 1.0)
+		if auto_claim_enabled:
 			auto_claim_toggle.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
 		else:
 			auto_claim_toggle.remove_theme_color_override("font_color")
