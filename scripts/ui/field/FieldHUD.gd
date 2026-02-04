@@ -42,6 +42,11 @@ var grudge_items_container: HBoxContainer = null
 var grudge_popup: CanvasLayer = null
 var is_grudge_popup_active: bool = false
 
+# === 마을 진입 확인 팝업 ===
+var town_popup: CanvasLayer = null
+var is_town_popup_active: bool = false
+signal town_enter_confirmed(claim_rewards: bool)  # 마을 진입 확정 시그널
+
 # === 컴포넌트 ===
 var battle_log: BattleLogUI = null
 
@@ -55,6 +60,7 @@ func _ready() -> void:
 	_setup_components()
 	_setup_grudge_panel()
 	_setup_grudge_popup()
+	_setup_town_popup()
 	_connect_signals()
 	update_all()
 	_update_trait_display()
@@ -733,4 +739,252 @@ func _on_grudge_stop_selected() -> void:
 	BattleManager.close_all_battles()
 
 	BattleManager.battle_log_received.emit("보상을 획득했다!", Color.CYAN)
+#endregion
+
+
+#region 마을 진입 확인 팝업
+func _setup_town_popup() -> void:
+	## 마을 진입 확인 팝업 초기화
+	town_popup = CanvasLayer.new()
+	town_popup.name = "TownPopup"
+	town_popup.layer = 100
+	town_popup.visible = false
+	town_popup.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(town_popup)
+
+
+func show_town_enter_popup() -> void:
+	## 마을 진입 시 누적 보상 확인 팝업 표시
+	if is_town_popup_active:
+		return
+
+	is_town_popup_active = true
+	get_tree().paused = true
+	town_popup.visible = true
+
+	# 기존 내용 제거
+	for child in town_popup.get_children():
+		child.queue_free()
+
+	# 전체 화면 컨테이너
+	var full_screen := Control.new()
+	full_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	full_screen.process_mode = Node.PROCESS_MODE_ALWAYS
+	town_popup.add_child(full_screen)
+
+	# 어둡게 처리
+	var dimmer := ColorRect.new()
+	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dimmer.color = Color(0, 0, 0, 0.7)
+	full_screen.add_child(dimmer)
+
+	# 중앙 패널
+	var center_panel := PanelContainer.new()
+	center_panel.set_anchors_preset(Control.PRESET_CENTER)
+	center_panel.offset_left = -180
+	center_panel.offset_right = 180
+	center_panel.offset_top = -140
+	center_panel.offset_bottom = 140
+	center_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.12, 0.18, 0.95)
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.4, 0.7, 1.0)
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	panel_style.content_margin_left = 20
+	panel_style.content_margin_right = 20
+	panel_style.content_margin_top = 15
+	panel_style.content_margin_bottom = 15
+	center_panel.add_theme_stylebox_override("panel", panel_style)
+	full_screen.add_child(center_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	center_panel.add_child(vbox)
+
+	# 제목
+	var title := Label.new()
+	title.text = "🏠 마을로 돌아가시겠습니까?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+	vbox.add_child(title)
+
+	# 설명
+	var desc := Label.new()
+	desc.text = "받지 않은 보상이 있습니다.\n보상을 받고 마을로 들어가시겠습니까?"
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.add_theme_font_size_override("font_size", 11)
+	desc.add_theme_color_override("font_color", Color.WHITE)
+	vbox.add_child(desc)
+
+	# 구분선
+	var sep := HSeparator.new()
+	vbox.add_child(sep)
+
+	# 현재 보상 목록
+	var reward_title := Label.new()
+	reward_title.text = "[ 누적 보상 ]"
+	reward_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reward_title.add_theme_font_size_override("font_size", 10)
+	reward_title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(reward_title)
+
+	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
+
+	# EXP/Gold
+	var reward_info := HBoxContainer.new()
+	reward_info.alignment = BoxContainer.ALIGNMENT_CENTER
+	reward_info.add_theme_constant_override("separation", 20)
+	vbox.add_child(reward_info)
+
+	var exp_lbl := Label.new()
+	exp_lbl.text = "EXP: %d" % rewards.exp
+	exp_lbl.add_theme_font_size_override("font_size", 12)
+	exp_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
+	reward_info.add_child(exp_lbl)
+
+	var gold_lbl := Label.new()
+	gold_lbl.text = "Gold: %d" % rewards.gold
+	gold_lbl.add_theme_font_size_override("font_size", 12)
+	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	reward_info.add_child(gold_lbl)
+
+	# 아이템 목록
+	if rewards.items.size() > 0:
+		var items_hbox := HBoxContainer.new()
+		items_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		items_hbox.add_theme_constant_override("separation", 8)
+		vbox.add_child(items_hbox)
+
+		for item in rewards.items:
+			var item_lbl := Label.new()
+			var type_name: String = InventoryManager.get_item_type_name(item.id)
+			item_lbl.text = "?" + type_name
+			item_lbl.add_theme_font_size_override("font_size", 10)
+			var rarity_color: Color = InventoryManager.get_rarity_color(item.id)
+			item_lbl.add_theme_color_override("font_color", rarity_color)
+			items_hbox.add_child(item_lbl)
+
+	# 구분선
+	var sep2 := HSeparator.new()
+	vbox.add_child(sep2)
+
+	# 선택 버튼
+	var btn_vbox := VBoxContainer.new()
+	btn_vbox.add_theme_constant_override("separation", 8)
+	vbox.add_child(btn_vbox)
+
+	# 보상 받고 들어가기 버튼
+	var claim_btn := Button.new()
+	claim_btn.text = "✓ 보상을 받고 마을로"
+	claim_btn.custom_minimum_size = Vector2(200, 35)
+	claim_btn.add_theme_font_size_override("font_size", 12)
+	claim_btn.focus_mode = Control.FOCUS_NONE
+	var claim_style := StyleBoxFlat.new()
+	claim_style.bg_color = Color(0.2, 0.5, 0.3)
+	claim_style.border_width_left = 2
+	claim_style.border_width_top = 2
+	claim_style.border_width_right = 2
+	claim_style.border_width_bottom = 2
+	claim_style.border_color = Color.WHITE
+	claim_style.corner_radius_top_left = 4
+	claim_style.corner_radius_top_right = 4
+	claim_style.corner_radius_bottom_left = 4
+	claim_style.corner_radius_bottom_right = 4
+	claim_btn.add_theme_stylebox_override("normal", claim_style)
+	var claim_hover := claim_style.duplicate()
+	claim_hover.bg_color = Color(0.3, 0.6, 0.4)
+	claim_btn.add_theme_stylebox_override("hover", claim_hover)
+	claim_btn.pressed.connect(_on_town_claim_and_enter)
+	btn_vbox.add_child(claim_btn)
+
+	# 그냥 들어가기 버튼
+	var skip_btn := Button.new()
+	skip_btn.text = "보상 포기하고 마을로"
+	skip_btn.custom_minimum_size = Vector2(200, 30)
+	skip_btn.add_theme_font_size_override("font_size", 11)
+	skip_btn.focus_mode = Control.FOCUS_NONE
+	var skip_style := StyleBoxFlat.new()
+	skip_style.bg_color = Color(0.25, 0.2, 0.2)
+	skip_style.corner_radius_top_left = 4
+	skip_style.corner_radius_top_right = 4
+	skip_style.corner_radius_bottom_left = 4
+	skip_style.corner_radius_bottom_right = 4
+	skip_btn.add_theme_stylebox_override("normal", skip_style)
+	skip_btn.add_theme_color_override("font_color", Color(0.7, 0.6, 0.6))
+	skip_btn.pressed.connect(_on_town_skip_and_enter)
+	btn_vbox.add_child(skip_btn)
+
+	# 취소 버튼
+	var cancel_btn := Button.new()
+	cancel_btn.text = "돌아가기"
+	cancel_btn.custom_minimum_size = Vector2(200, 28)
+	cancel_btn.add_theme_font_size_override("font_size", 10)
+	cancel_btn.focus_mode = Control.FOCUS_NONE
+	var cancel_style := StyleBoxFlat.new()
+	cancel_style.bg_color = Color(0.2, 0.2, 0.25)
+	cancel_style.corner_radius_top_left = 4
+	cancel_style.corner_radius_top_right = 4
+	cancel_style.corner_radius_bottom_left = 4
+	cancel_style.corner_radius_bottom_right = 4
+	cancel_btn.add_theme_stylebox_override("normal", cancel_style)
+	cancel_btn.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	cancel_btn.pressed.connect(_on_town_cancel)
+	btn_vbox.add_child(cancel_btn)
+
+
+func _on_town_claim_and_enter() -> void:
+	## 보상 받고 마을로
+	is_town_popup_active = false
+	town_popup.visible = false
+	get_tree().paused = false
+
+	for child in town_popup.get_children():
+		child.queue_free()
+
+	# 보상 수령
+	BattleManager.claim_accumulated_rewards()
+	BattleManager.battle_log_received.emit("보상을 획득했다!", Color.CYAN)
+
+	town_enter_confirmed.emit(true)
+
+
+func _on_town_skip_and_enter() -> void:
+	## 보상 포기하고 마을로
+	is_town_popup_active = false
+	town_popup.visible = false
+	get_tree().paused = false
+
+	for child in town_popup.get_children():
+		child.queue_free()
+
+	# 보상 초기화 (포기)
+	BattleManager.reset_accumulated_rewards()
+	BattleManager.battle_log_received.emit("보상을 포기했다...", Color.GRAY)
+
+	town_enter_confirmed.emit(false)
+
+
+func _on_town_cancel() -> void:
+	## 마을 진입 취소
+	is_town_popup_active = false
+	town_popup.visible = false
+	get_tree().paused = false
+
+	for child in town_popup.get_children():
+		child.queue_free()
+
+
+func has_unclaimed_rewards() -> bool:
+	## 받지 않은 보상이 있는지 확인
+	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
+	return rewards.exp > 0 or rewards.gold > 0 or rewards.items.size() > 0
 #endregion

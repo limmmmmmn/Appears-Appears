@@ -299,13 +299,31 @@ func _on_exit_body_entered(body: Node2D) -> void:
 func _on_town_body_entered(body: Node2D) -> void:
 	if not body.is_in_group("party_leader"):
 		return
-	
+
 	if BattleManager and BattleManager.get_active_battle_count() > 0:
 		return
-	
+
+	# 누적 보상이 있으면 확인 팝업 표시
+	if hud and hud.has_unclaimed_rewards():
+		if not hud.town_enter_confirmed.is_connected(_on_town_enter_confirmed):
+			hud.town_enter_confirmed.connect(_on_town_enter_confirmed, CONNECT_ONE_SHOT)
+		hud.show_town_enter_popup()
+		return
+
+	# 보상이 없으면 바로 마을로
+	_enter_town()
+
+
+func _on_town_enter_confirmed(_claimed_rewards: bool) -> void:
+	## 마을 진입 확인 팝업에서 선택 완료
+	_enter_town()
+
+
+func _enter_town() -> void:
+	## 실제 마을 진입 처리
 	if hud:
 		hud.add_system_log("마을로 향한다...")
-	
+
 	town_entered.emit()
 	GameManager.advance_to_next_field()
 	if GameManager:
