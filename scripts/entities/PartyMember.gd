@@ -19,6 +19,11 @@ var has_click_target: bool = false
 var is_mouse_held: bool = false  # 마우스 버튼 누르고 있는지
 const CLICK_ARRIVE_DISTANCE: float = 5.0  # 도착 판정 거리
 
+# 자동 이동용
+var auto_move_direction: Vector2 = Vector2.DOWN  # 자동 이동 방향
+const AUTO_MOVE_DELAY: float = 1.5  # 입력 없으면 자동 이동까지 대기 시간
+var idle_timer: float = 0.0  # 가만히 있는 시간
+
 # 스네이크 무브먼트용
 var path_history: Array[Vector2] = []  # 리더만 사용
 var leader_ref: PartyMember = null  # 팔로워만 사용
@@ -46,16 +51,18 @@ func _physics_process(delta: float) -> void:
 #=============================================================================
 # 리더 로직
 #=============================================================================
-func _process_leader(_delta: float) -> void:
+func _process_leader(delta: float) -> void:
 	# 키보드 입력 체크
 	var input_dir := Vector2(
 		Input.get_axis("ui_left", "ui_right"),
 		Input.get_axis("ui_up", "ui_down")
 	).normalized()
 
-	# 키보드 입력이 있으면 클릭 이동 취소
+	# 키보드 입력이 있으면 클릭 이동 취소 + 자동 이동 방향 갱신
 	if input_dir != Vector2.ZERO:
 		has_click_target = false
+		idle_timer = 0.0
+		auto_move_direction = input_dir
 		velocity = input_dir * move_speed
 		_update_direction(input_dir)
 		_play_walk_animation()
@@ -73,6 +80,9 @@ func _process_leader(_delta: float) -> void:
 		var to_target: Vector2 = click_target - global_position
 		var distance: float = to_target.length()
 
+		idle_timer = 0.0
+		auto_move_direction = to_target.normalized()
+
 		# 마우스 누르고 있지 않고 목표 도착
 		if not is_mouse_held and distance <= CLICK_ARRIVE_DISTANCE:
 			has_click_target = false
@@ -88,9 +98,18 @@ func _process_leader(_delta: float) -> void:
 			_record_path()
 		return
 
-	# 입력 없음
-	velocity = Vector2.ZERO
-	_play_idle_animation()
+	# 입력 없음 - 자동 이동 타이머 증가
+	idle_timer += delta
+	if idle_timer >= AUTO_MOVE_DELAY:
+		# 자동 이동
+		velocity = auto_move_direction * move_speed
+		_update_direction(auto_move_direction)
+		_play_walk_animation()
+		move_and_slide()
+		_record_path()
+	else:
+		velocity = Vector2.ZERO
+		_play_idle_animation()
 
 
 func _input(event: InputEvent) -> void:
