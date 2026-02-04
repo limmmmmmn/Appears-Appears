@@ -393,10 +393,21 @@ func _calculate_window_position() -> Vector2:
 	elif window_count == 1:
 		return Vector2(safe_right, safe_top)  # 우상단
 
-	# 3개째부터는 랜덤 위치 (겹쳐도 됨)
-	var x := randf_range(safe_left, safe_right)
-	var y := randf_range(safe_top, safe_bottom)
-	return Vector2(x, y)
+	# 3개째부터는 랜덤 위치 (겹쳐도 됨, 단 중앙은 피함)
+	var center := viewport_size / 2
+	var center_avoid := Rect2(center.x - 50, center.y - 30, 100, 60)  # 가로100 세로60 영역
+
+	for _i in range(20):
+		var x := randf_range(safe_left, safe_right)
+		var y := randf_range(safe_top, safe_bottom)
+		var window_rect := Rect2(x, y, WINDOW_SIZE.x, WINDOW_SIZE.y)
+
+		# 중앙 영역과 겹치지 않으면 사용
+		if not window_rect.intersects(center_avoid):
+			return Vector2(x, y)
+
+	# 못 찾으면 상단 영역에 배치
+	return Vector2(randf_range(safe_left, safe_right), safe_top)
 
 
 func _is_position_available(pos: Vector2) -> bool:
