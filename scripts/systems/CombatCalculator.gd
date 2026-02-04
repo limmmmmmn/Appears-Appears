@@ -51,13 +51,13 @@ static func perform_attack(attacker_atk: int, attacker_crit: float, defender_p_d
 	return {"result": DamageResult.NORMAL, "damage": damage}
 
 
-static func calculate_escape_chance(party_avg_spd: float, enemy_avg_spd: float, base_rate: float = 30.0) -> float:
+static func calculate_escape_chance(party_avg_dex: float, enemy_avg_dex: float, base_rate: float = 30.0) -> float:
 	## 도주 확률 계산
-	var chance := base_rate + (party_avg_spd - enemy_avg_spd) * 2.0
+	var chance := base_rate + (party_avg_dex - enemy_avg_dex) * 2.0
 	return clampf(chance, 5.0, 95.0)
 
 
-static func roll_escape(party_avg_spd: float, enemy_avg_spd: float) -> bool:
+static func roll_escape(party_avg_dex: float, enemy_avg_dex: float) -> bool:
 	## 도주 판정
-	var chance := calculate_escape_chance(party_avg_spd, enemy_avg_spd)
+	var chance := calculate_escape_chance(party_avg_dex, enemy_avg_dex)
 	return randf() * 100.0 < chance

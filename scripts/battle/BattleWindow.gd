@@ -1,7 +1,7 @@
 extends PanelContainer
 class_name BattleWindow
 ## BattleWindow: ATB 전투창
-## - 속도(SPD) 기반 ATB 게이지 충전
+## - 물리: DEX 기반, 마법: INT 기반 ATB 게이지 충전
 ## - 게이지가 가득 차면 행동 (실시간 전투)
 ## - 전투 중 적 동적 추가 지원
 
@@ -26,8 +26,8 @@ var enemies: Array = []
 var enemy_data_list: Array = []
 
 # === ATB 시스템 ===
-# ATB (Active Time Battle) - 속도(SPD) 기반 게이지 충전
-var atb_units: Array = []  # [{type: "hero"/"enemy", ref: Hero/BattleEnemy, atb: float, spd: int}]
+# ATB (Active Time Battle) - 물리: DEX, 마법: INT 기반 게이지 충전
+var atb_units: Array = []  # [{type: "hero"/"enemy", ref: Hero/BattleEnemy, atb: float, speed: int}]
 var is_processing_action: bool = false
 var action_delay_timer: float = 0.0
 const ATB_FILL_RATE: float = 30.0  # 기본 ATB 충전 속도
@@ -334,25 +334,27 @@ func _init_atb_system() -> void:
 	is_processing_action = false
 	action_delay_timer = 0.0
 
-	# 영웅들을 ATB에 추가
+	# 영웅들을 ATB에 추가 (DEX 기반)
 	for hero in PartyManager.get_alive_heroes():
-		var initial_atb: float = randf_range(0, 30) + hero.get_spd() * 0.5  # SPD에 따른 초기 ATB
+		var hero_dex: int = hero.get_dex()
+		var initial_atb: float = randf_range(0, 30) + hero_dex * 0.5
 		atb_units.append({
 			"type": "hero",
 			"ref": hero,
 			"atb": minf(initial_atb, ATB_MAX - 1),
-			"spd": hero.get_spd()
+			"speed": hero_dex
 		})
 
-	# 적들을 ATB에 추가
+	# 적들을 ATB에 추가 (물리형: DEX, 마법형: INT)
 	for enemy in enemies:
 		if enemy != null and enemy.is_alive():
-			var initial_atb: float = randf_range(0, 20) + enemy.get_spd() * 0.3
+			var enemy_spd: int = enemy.get_atb_speed()
+			var initial_atb: float = randf_range(0, 20) + enemy_spd * 0.3
 			atb_units.append({
 				"type": "enemy",
 				"ref": enemy,
 				"atb": minf(initial_atb, ATB_MAX - 1),
-				"spd": enemy.get_spd()
+				"speed": enemy_spd
 			})
 
 	_send_log("ATB 전투 시작!", Color.LIGHT_GRAY)
@@ -509,8 +511,8 @@ func _update_atb_system(delta: float) -> void:
 
 		# 아직 행동 준비 안 된 유닛은 게이지 충전
 		if unit["atb"] < ATB_MAX:
-			var spd: float = float(unit["spd"])
-			var fill_amount: float = ATB_FILL_RATE * (spd / 10.0) * delta
+			var unit_speed: float = float(unit["speed"])
+			var fill_amount: float = ATB_FILL_RATE * (unit_speed / 10.0) * delta
 			unit["atb"] = minf(unit["atb"] + fill_amount, ATB_MAX)
 
 		# 게이지가 가득 찬 유닛은 준비 목록에 추가
@@ -522,15 +524,15 @@ func _update_atb_system(delta: float) -> void:
 
 	# 준비된 유닛 중 가장 먼저 찬 유닛이 행동
 	if not ready_units.is_empty():
-		# SPD가 높은 유닛 우선 (동일 시 영웅 우선)
+		# 속도가 높은 유닛 우선 (동일 시 영웅 우선)
 		ready_units.sort_custom(_compare_atb_priority)
 		_execute_atb_action(ready_units[0])
 
 
 func _compare_atb_priority(a: Dictionary, b: Dictionary) -> bool:
-	## ATB 우선순위 비교 (SPD 높은 순, 동일 시 영웅 우선)
-	if a["spd"] != b["spd"]:
-		return a["spd"] > b["spd"]
+	## ATB 우선순위 비교 (속도 높은 순, 동일 시 영웅 우선)
+	if a["speed"] != b["speed"]:
+		return a["speed"] > b["speed"]
 	if a["type"] == "hero" and b["type"] == "enemy":
 		return true
 	return false
@@ -590,12 +592,13 @@ func _add_enemy_to_atb(enemy: BattleEnemy) -> void:
 		if unit["ref"] == enemy:
 			return
 
-	var initial_atb: float = randf_range(0, 15) + enemy.get_spd() * 0.2
+	var enemy_spd: int = enemy.get_atb_speed()
+	var initial_atb: float = randf_range(0, 15) + enemy_spd * 0.2
 	atb_units.append({
 		"type": "enemy",
 		"ref": enemy,
 		"atb": minf(initial_atb, ATB_MAX - 1),
-		"spd": enemy.get_spd()
+		"speed": enemy_spd
 	})
 	_update_atb_ui()
 
@@ -876,7 +879,7 @@ func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary,
 		"str": stat_value = hero.get_str()
 		"int": stat_value = hero.get_int()
 		"def": stat_value = hero.get_def()
-		"spd": stat_value = hero.get_spd()
+		"dex": stat_value = hero.get_dex()
 		"luk": stat_value = hero.get_luk()
 
 	var base_damage: int = damage_base + int(stat_value * multiplier)
@@ -1427,17 +1430,17 @@ func _on_run_pressed() -> void:
 
 
 func _calculate_escape_chance() -> float:
-	var party_avg_spd := PartyManager.get_party_average_spd()
-	
-	var enemy_total_spd: float = 0.0
+	var party_avg_dex := PartyManager.get_party_average_dex()
+
+	var enemy_total_dex: float = 0.0
 	var alive_count: int = 0
 	for enemy in enemies:
 		if enemy.is_alive():
-			enemy_total_spd += enemy.get_spd()
+			enemy_total_dex += enemy.get_dex()
 			alive_count += 1
-	var enemy_avg_spd: float = enemy_total_spd / maxf(1.0, float(alive_count))
-	
-	var chance := BASE_ESCAPE_RATE + (party_avg_spd - enemy_avg_spd) * 2.0
+	var enemy_avg_dex: float = enemy_total_dex / maxf(1.0, float(alive_count))
+
+	var chance := BASE_ESCAPE_RATE + (party_avg_dex - enemy_avg_dex) * 2.0
 	return clampf(chance, 5.0, 95.0)
 #endregion
 

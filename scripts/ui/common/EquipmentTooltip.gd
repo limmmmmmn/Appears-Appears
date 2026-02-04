@@ -15,7 +15,7 @@ const STAT_NAMES: Dictionary = {
 	"str": "STR",
 	"def": "DEF",
 	"int": "INT",
-	"spd": "SPD",
+	"dex": "DEX",
 	"luk": "LUK",
 	"atk": "ATK"
 }

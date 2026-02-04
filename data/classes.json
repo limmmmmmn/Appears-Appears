@@ -9,7 +9,7 @@
 	  "str": 12,
 	  "def": 10,
 	  "int": 4,
-	  "spd": 12,
+	  "dex": 12,
 	  "luk": 6
 	},
 	"growth": {
@@ -18,7 +18,7 @@
 	  "str": 3,
 	  "def": 2,
 	  "int": 1,
-	  "spd": 1,
+	  "dex": 1,
 	  "luk": 1
 	},
 	"equip_restrictions": {
@@ -38,7 +38,7 @@
 	  "str": 4,
 	  "def": 4,
 	  "int": 14,
-	  "spd": 11,
+	  "dex": 11,
 	  "luk": 8
 	},
 	"growth": {
@@ -47,7 +47,7 @@
 	  "str": 1,
 	  "def": 1,
 	  "int": 4,
-	  "spd": 1,
+	  "dex": 1,
 	  "luk": 1
 	},
 	"equip_restrictions": {
@@ -67,7 +67,7 @@
 	  "str": 6,
 	  "def": 8,
 	  "int": 12,
-	  "spd": 10,
+	  "dex": 10,
 	  "luk": 8
 	},
 	"growth": {
@@ -76,7 +76,7 @@
 	  "str": 1,
 	  "def": 2,
 	  "int": 3,
-	  "spd": 1,
+	  "dex": 1,
 	  "luk": 1
 	},
 	"equip_restrictions": {
@@ -96,7 +96,7 @@
 	  "str": 8,
 	  "def": 6,
 	  "int": 6,
-	  "spd": 18,
+	  "dex": 18,
 	  "luk": 12
 	},
 	"growth": {
@@ -105,7 +105,7 @@
 	  "str": 2,
 	  "def": 1,
 	  "int": 1,
-	  "spd": 4,
+	  "dex": 4,
 	  "luk": 3
 	},
 	"equip_restrictions": {
@@ -125,7 +125,7 @@
 	  "str": 10,
 	  "def": 6,
 	  "int": 6,
-	  "spd": 16,
+	  "dex": 16,
 	  "luk": 10
 	},
 	"growth": {
@@ -134,7 +134,7 @@
 	  "str": 3,
 	  "def": 1,
 	  "int": 1,
-	  "spd": 3,
+	  "dex": 3,
 	  "luk": 2
 	},
 	"equip_restrictions": {
@@ -154,7 +154,7 @@
 	  "str": 10,
 	  "def": 14,
 	  "int": 4,
-	  "spd": 8,
+	  "dex": 8,
 	  "luk": 6
 	},
 	"growth": {
@@ -163,7 +163,7 @@
 	  "str": 2,
 	  "def": 4,
 	  "int": 1,
-	  "spd": 1,
+	  "dex": 1,
 	  "luk": 1
 	},
 	"equip_restrictions": {

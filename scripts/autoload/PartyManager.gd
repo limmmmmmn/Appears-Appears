@@ -80,13 +80,13 @@ func is_party_wiped() -> bool:
 
 
 #region 파티 스탯
-func get_party_average_spd() -> float:
+func get_party_average_dex() -> float:
 	var alive := get_alive_heroes()
 	if alive.is_empty():
 		return 0.0
 	var total: float = 0.0
 	for hero in alive:
-		total += hero.get_spd()
+		total += hero.get_dex()
 	return total / alive.size()
 
 

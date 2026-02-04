@@ -17,8 +17,9 @@ var current_hp: int = 1
 var base_str: int = 0
 var base_def: int = 0
 var base_int: int = 0
-var base_spd: int = 0
+var base_dex: int = 0
 var base_luk: int = 0
+var damage_type: String = "physical"  # physical or magic
 
 # 보상
 var exp_reward: int = 0
@@ -55,8 +56,9 @@ func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0
 	base_str = int(stats.get("atk", 5))  # enemies.json uses "atk" not "str"
 	base_def = int(stats.get("def", 2))
 	base_int = int(stats.get("int", 1))
-	base_spd = int(stats.get("spd", 5))
+	base_dex = int(stats.get("dex", 5))
 	base_luk = int(stats.get("luk", 2))
+	damage_type = str(data.get("damage_type", "physical"))
 
 	# 전투창별 위험도에 따른 스탯 스케일링 (레벨당 5%)
 	if p_danger_level > 0:
@@ -119,14 +121,23 @@ func get_p_def() -> int:
 func get_m_def() -> int:
 	return base_int
 
-func get_spd() -> int:
-	return base_spd
+func get_dex() -> int:
+	return base_dex
+
+func get_int() -> int:
+	return base_int
 
 func get_luk() -> int:
 	return base_luk
 
 func get_eva() -> float:
-	return base_spd * 0.3 + base_luk * 0.1
+	return base_dex * 0.3 + base_luk * 0.1
+
+func get_atb_speed() -> int:
+	## ATB 속도: 물리형은 DEX, 마법형은 INT
+	if damage_type == "magic":
+		return base_int
+	return base_dex
 
 func get_crit() -> float:
 	return base_luk * 0.3

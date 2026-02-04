@@ -330,8 +330,8 @@ func _show_equipment_comparison(item_id: String) -> void:
 		stat_text += "DEF +%d  " % def_val
 	if stats.has("int"):
 		stat_text += "INT +%d  " % int(stats["int"])
-	if stats.has("spd"):
-		stat_text += "SPD +%d  " % int(stats["spd"])
+	if stats.has("dex"):
+		stat_text += "DEX +%d  " % int(stats["dex"])
 	if stats.has("str"):
 		stat_text += "STR +%d  " % int(stats["str"])
 	if stats.has("luk"):
@@ -431,20 +431,20 @@ func _show_equipment_comparison(item_id: String) -> void:
 				else:
 					compare_text += "INT: %d → %d  " % [current_int, new_int]
 			
-			# SPD 비교
-			if new_stats.has("spd") or current_stats.has("spd"):
-				var current_spd := hero.get_spd()
-				var old_spd_bonus: int = int(current_stats.get("spd", 0))
-				var new_spd_bonus: int = int(new_stats.get("spd", 0))
-				var new_spd := current_spd - old_spd_bonus + new_spd_bonus
-				var spd_diff := new_spd - current_spd
-				
-				if spd_diff > 0:
-					compare_text += "SPD: %d → %d ([color=lime]+%d[/color])  " % [current_spd, new_spd, spd_diff]
-				elif spd_diff < 0:
-					compare_text += "SPD: %d → %d ([color=red]%d[/color])  " % [current_spd, new_spd, spd_diff]
+			# DEX 비교
+			if new_stats.has("dex") or current_stats.has("dex"):
+				var current_dex := hero.get_dex()
+				var old_dex_bonus: int = int(current_stats.get("dex", 0))
+				var new_dex_bonus: int = int(new_stats.get("dex", 0))
+				var new_dex := current_dex - old_dex_bonus + new_dex_bonus
+				var dex_diff := new_dex - current_dex
+
+				if dex_diff > 0:
+					compare_text += "DEX: %d → %d ([color=lime]+%d[/color])  " % [current_dex, new_dex, dex_diff]
+				elif dex_diff < 0:
+					compare_text += "DEX: %d → %d ([color=red]%d[/color])  " % [current_dex, new_dex, dex_diff]
 				else:
-					compare_text += "SPD: %d → %d  " % [current_spd, new_spd]
+					compare_text += "DEX: %d → %d  " % [current_dex, new_dex]
 			
 			# LUK 비교
 			if new_stats.has("luk") or current_stats.has("luk"):

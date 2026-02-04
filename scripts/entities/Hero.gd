@@ -17,11 +17,11 @@ var base_mp: int = 0
 var base_str: int = 0
 var base_def: int = 0
 var base_int: int = 0
-var base_spd: int = 0
+var base_dex: int = 0
 var base_luk: int = 0
 
 # 씨앗 보너스
-var seed_bonus: Dictionary = {"hp": 0, "mp": 0, "str": 0, "def": 0, "int": 0, "spd": 0, "luk": 0}
+var seed_bonus: Dictionary = {"hp": 0, "mp": 0, "str": 0, "def": 0, "int": 0, "dex": 0, "luk": 0}
 
 # 현재 상태
 var current_hp: int = 0
@@ -71,7 +71,7 @@ func _initialize(hero_id: String) -> void:
 	base_str = int(base_stats.get("str", 5))
 	base_def = int(base_stats.get("def", 5))
 	base_int = int(base_stats.get("int", 5))
-	base_spd = int(base_stats.get("spd", 5))
+	base_dex = int(base_stats.get("dex", 5))
 	base_luk = int(base_stats.get("luk", 5))
 	
 	current_hp = get_max_hp()
@@ -105,8 +105,8 @@ func get_def() -> int:
 func get_int() -> int:
 	return base_int + seed_bonus["int"] + _get_equipment_stat("int")
 
-func get_spd() -> int:
-	return base_spd + seed_bonus["spd"] + _get_equipment_stat("spd")
+func get_dex() -> int:
+	return base_dex + seed_bonus["dex"] + _get_equipment_stat("dex")
 
 func get_luk() -> int:
 	return base_luk + seed_bonus["luk"] + _get_equipment_stat("luk")
@@ -121,7 +121,7 @@ func get_m_def() -> int:
 	return get_int()
 
 func get_eva() -> float:
-	return get_spd() * 0.5 + get_luk() * 0.2
+	return get_dex() * 0.5 + get_luk() * 0.2
 
 func get_crit() -> float:
 	return get_luk() * 0.5 + 5.0
@@ -159,7 +159,7 @@ func _level_up() -> void:
 	base_str += int(growth.get("str", 1))
 	base_def += int(growth.get("def", 1))
 	base_int += int(growth.get("int", 1))
-	base_spd += int(growth.get("spd", 1))
+	base_dex += int(growth.get("dex", 1))
 	base_luk += int(growth.get("luk", 1))
 	
 	current_hp = get_max_hp()
@@ -358,8 +358,8 @@ func unequip_rune() -> String:
 
 
 func get_stat_summary() -> String:
-	return "[%s] Lv.%d %s | HP:%d/%d MP:%d/%d | STR:%d DEF:%d INT:%d SPD:%d LUK:%d" % [
+	return "[%s] Lv.%d %s | HP:%d/%d MP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
 		hero_name, level, hero_class_name,
 		current_hp, get_max_hp(), current_mp, get_max_mp(),
-		get_str(), get_def(), get_int(), get_spd(), get_luk()
+		get_str(), get_def(), get_int(), get_dex(), get_luk()
 	]

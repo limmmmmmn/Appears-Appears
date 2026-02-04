@@ -13,7 +13,7 @@ const STAT_NAMES: Dictionary = {
 	"str": "힘",
 	"def": "방어력",
 	"int": "지능",
-	"spd": "스피드",
+	"dex": "민첩",
 	"luk": "행운",
 	"atk": "공격력"
 }

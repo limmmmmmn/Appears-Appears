@@ -241,7 +241,7 @@ func _create_hero_full_card(hero: Hero) -> PanelContainer:
 	_add_stat_label(stats_grid, "STR", hero.get_str())
 	_add_stat_label(stats_grid, "DEF", hero.get_def())
 	_add_stat_label(stats_grid, "INT", hero.get_int())
-	_add_stat_label(stats_grid, "SPD", hero.get_spd())
+	_add_stat_label(stats_grid, "DEX", hero.get_dex())
 	_add_stat_label(stats_grid, "LUK", hero.get_luk())
 	_add_stat_label(stats_grid, "ATK", hero.get_atk(), Color(1.0, 0.7, 0.7))
 

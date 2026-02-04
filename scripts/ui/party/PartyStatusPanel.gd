@@ -105,7 +105,7 @@ func _build_ui() -> void:
 	stat_grid.add_theme_constant_override("v_separation", 2)
 	left.add_child(stat_grid)
 	
-	for stat_name in ["HP", "MP", "STR", "DEF", "INT", "SPD", "LUK", "ATK"]:
+	for stat_name in ["HP", "MP", "STR", "DEF", "INT", "DEX", "LUK", "ATK"]:
 		var lbl := Label.new()
 		lbl.text = "%s: ---" % stat_name
 		stat_grid.add_child(lbl)
@@ -219,7 +219,7 @@ func _refresh_hero_info() -> void:
 	stat_labels["STR"].text = "STR: %d" % hero.get_str()
 	stat_labels["DEF"].text = "DEF: %d" % hero.get_def()
 	stat_labels["INT"].text = "INT: %d" % hero.get_int()
-	stat_labels["SPD"].text = "SPD: %d" % hero.get_spd()
+	stat_labels["DEX"].text = "DEX: %d" % hero.get_dex()
 	stat_labels["LUK"].text = "LUK: %d" % hero.get_luk()
 	stat_labels["ATK"].text = "ATK: %d" % hero.get_atk()
 	
@@ -408,14 +408,14 @@ func _update_preview(item_id: String) -> void:
 		var diff := new_val - cur
 		changes += _format_stat_change("INT", cur, new_val, diff)
 	
-	# SPD
-	if new_stats.has("spd") or current_stats.has("spd"):
-		var cur := hero.get_spd()
-		var old_bonus: int = int(current_stats.get("spd", 0))
-		var new_bonus: int = int(new_stats.get("spd", 0))
+	# DEX
+	if new_stats.has("dex") or current_stats.has("dex"):
+		var cur := hero.get_dex()
+		var old_bonus: int = int(current_stats.get("dex", 0))
+		var new_bonus: int = int(new_stats.get("dex", 0))
 		var new_val := cur - old_bonus + new_bonus
 		var diff := new_val - cur
-		changes += _format_stat_change("SPD", cur, new_val, diff)
+		changes += _format_stat_change("DEX", cur, new_val, diff)
 	
 	# LUK
 	if new_stats.has("luk") or current_stats.has("luk"):

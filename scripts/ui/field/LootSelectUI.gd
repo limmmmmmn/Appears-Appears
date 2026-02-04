@@ -116,8 +116,8 @@ func _get_stats_text(data: Dictionary) -> String:
 		parts.append("STR +%d" % int(stats.get("str", 0)))
 	if stats.has("int") and int(stats.get("int", 0)) > 0:
 		parts.append("INT +%d" % int(stats.get("int", 0)))
-	if stats.has("spd") and int(stats.get("spd", 0)) > 0:
-		parts.append("SPD +%d" % int(stats.get("spd", 0)))
+	if stats.has("dex") and int(stats.get("dex", 0)) > 0:
+		parts.append("DEX +%d" % int(stats.get("dex", 0)))
 	if stats.has("luk") and int(stats.get("luk", 0)) > 0:
 		parts.append("LUK +%d" % int(stats.get("luk", 0)))
 	
