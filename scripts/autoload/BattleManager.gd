@@ -354,7 +354,10 @@ func add_accumulated_reward(exp: int, gold: int, items: Array = []) -> void:
 
 	# 아이템은 미감정 상태로 추가
 	for item_id in items:
-		var item_data: Dictionary = DataManager.get_item(item_id)
+		# 장비 데이터 먼저 확인, 없으면 일반 아이템 확인
+		var item_data: Dictionary = DataManager.get_equipment(item_id)
+		if item_data.is_empty():
+			item_data = DataManager.get_item(item_id)
 		if item_data.is_empty():
 			continue
 
