@@ -9,14 +9,17 @@ class_name EnemySpawner
 #=============================================================================
 const MAX_ENEMIES: int = 5                            # 최대 동시 적 수
 const MIN_SPAWN_DISTANCE_BETWEEN: float = 32.0        # 적들 사이 최소 거리
-const MIN_DISTANCE_FROM_PLAYER: float = 80.0          # 플레이어로부터 최소 거리
-const MAX_DISTANCE_FROM_PLAYER: float = 180.0         # 플레이어로부터 최대 거리
+const MIN_DISTANCE_FROM_PLAYER: float = 40.0          # 플레이어로부터 최소 거리
+const MAX_DISTANCE_FROM_PLAYER: float = 120.0         # 플레이어로부터 최대 거리 (카메라 내)
 const ELITE_SPAWN_CHANCE: float = 0.15
 const MAX_SPAWN_ATTEMPTS: int = 50
 
 # 리스폰 설정
 const RESPAWN_DELAY_MIN: float = 2.0   # 최소 리스폰 대기 시간
 const RESPAWN_DELAY_MAX: float = 4.0   # 최대 리스폰 대기 시간
+
+# 적 재배치 설정
+const MAX_DISTANCE_FROM_CAMERA: float = 250.0  # 카메라에서 이 거리 이상이면 재배치
 
 # 타일 타입 매핑
 var tile_type_map: Dictionary = {
@@ -81,18 +84,32 @@ func setup_respawn_timer(parent: Node) -> void:
 
 
 func update_movement_spawn(field_enemies: Array) -> void:
-	## 리스폰 큐 처리 (Field._process에서 호출)
+	## 리스폰 큐 처리 및 멀리 떨어진 적 재배치 (Field._process에서 호출)
 	if FieldManager.is_boss_field():
 		return
 
 	var delta: float = field.get_process_delta_time() if field else 0.016
 	var player_pos: Vector2 = _get_player_position()
 	var camera_rect: Rect2 = _get_camera_rect()
+	var camera_center: Vector2 = camera_rect.get_center()
 
-	# 기존 적 위치 수집
+	# 기존 적 위치 수집 및 멀리 떨어진 적 재배치
 	var existing_positions: Array[Vector2] = []
 	for enemy in field_enemies:
-		if is_instance_valid(enemy):
+		if is_instance_valid(enemy) and not enemy.is_boss:
+			var dist_from_camera: float = enemy.global_position.distance_to(camera_center)
+
+			# 카메라에서 너무 멀리 떨어진 적은 카메라 근처로 재배치
+			if dist_from_camera > MAX_DISTANCE_FROM_CAMERA:
+				var new_pos: Vector2 = _find_spawn_position_near_camera(camera_rect, player_pos, existing_positions)
+				if new_pos != Vector2.ZERO:
+					enemy.global_position = new_pos
+					existing_positions.append(new_pos)
+				else:
+					existing_positions.append(enemy.global_position)
+			else:
+				existing_positions.append(enemy.global_position)
+		elif is_instance_valid(enemy):
 			existing_positions.append(enemy.global_position)
 
 	# 리스폰 큐 처리
@@ -106,8 +123,8 @@ func update_movement_spawn(field_enemies: Array) -> void:
 			if field_enemies.size() >= MAX_ENEMIES:
 				continue
 
-			# 카메라 밖에서 스폰 위치 찾기
-			var spawn_pos: Vector2 = _find_respawn_position(camera_rect, player_pos, existing_positions)
+			# 카메라 근처에서 스폰 위치 찾기
+			var spawn_pos: Vector2 = _find_spawn_position_near_camera(camera_rect, player_pos, existing_positions)
 			if spawn_pos != Vector2.ZERO:
 				to_respawn.append(i)
 				var tile_type: String = entry.get("tile_type", "grass")
@@ -161,9 +178,11 @@ func _calculate_map_data() -> void:
 # 스폰 위치 찾기
 #=============================================================================
 func _find_spawn_position_around_player(player_pos: Vector2, existing: Array[Vector2]) -> Vector2:
-	## 플레이어 주변 (카메라 바로 바깥)에서 스폰 위치 찾기
+	## 플레이어 주변 (카메라 내부)에서 스폰 위치 찾기
+	var camera_rect: Rect2 = _get_camera_rect()
+
 	for _i in range(MAX_SPAWN_ATTEMPTS):
-		# 랜덤 방향, 플레이어 근처 거리
+		# 랜덤 방향, 플레이어 근처 거리 (카메라 안)
 		var angle: float = randf() * TAU
 		var distance: float = randf_range(MIN_DISTANCE_FROM_PLAYER, MAX_DISTANCE_FROM_PLAYER)
 		var offset: Vector2 = Vector2(cos(angle), sin(angle)) * distance
@@ -191,17 +210,41 @@ func _find_spawn_position_around_player(player_pos: Vector2, existing: Array[Vec
 	return Vector2.ZERO
 
 
-func _find_respawn_position(camera_rect: Rect2, player_pos: Vector2, existing: Array[Vector2]) -> Vector2:
-	## 카메라 밖, 플레이어 근처에서 리스폰 위치 찾기
-	for _i in range(MAX_SPAWN_ATTEMPTS):
-		# 랜덤 방향, 플레이어 근처 거리
-		var angle: float = randf() * TAU
-		var distance: float = randf_range(MIN_DISTANCE_FROM_PLAYER, MAX_DISTANCE_FROM_PLAYER)
-		var offset: Vector2 = Vector2(cos(angle), sin(angle)) * distance
-		var pos: Vector2 = player_pos + offset
+func _find_spawn_position_near_camera(camera_rect: Rect2, player_pos: Vector2, existing: Array[Vector2]) -> Vector2:
+	## 카메라 가장자리 또는 바로 바깥에서 스폰 위치 찾기
+	var camera_center: Vector2 = camera_rect.get_center()
+	var half_width: float = camera_rect.size.x / 2
+	var half_height: float = camera_rect.size.y / 2
 
-		# 카메라 안이면 스킵
-		if camera_rect.has_point(pos):
+	for _i in range(MAX_SPAWN_ATTEMPTS):
+		# 카메라 가장자리 근처에서 스폰 (안쪽 또는 바깥쪽 약간)
+		var edge: int = randi() % 4  # 0: 상, 1: 하, 2: 좌, 3: 우
+		var pos: Vector2
+
+		match edge:
+			0:  # 상단
+				pos = Vector2(
+					camera_center.x + randf_range(-half_width * 0.8, half_width * 0.8),
+					camera_center.y - half_height * randf_range(0.5, 1.2)
+				)
+			1:  # 하단
+				pos = Vector2(
+					camera_center.x + randf_range(-half_width * 0.8, half_width * 0.8),
+					camera_center.y + half_height * randf_range(0.5, 1.2)
+				)
+			2:  # 좌측
+				pos = Vector2(
+					camera_center.x - half_width * randf_range(0.5, 1.2),
+					camera_center.y + randf_range(-half_height * 0.8, half_height * 0.8)
+				)
+			3:  # 우측
+				pos = Vector2(
+					camera_center.x + half_width * randf_range(0.5, 1.2),
+					camera_center.y + randf_range(-half_height * 0.8, half_height * 0.8)
+				)
+
+		# 플레이어에서 너무 가까우면 스킵
+		if pos.distance_to(player_pos) < MIN_DISTANCE_FROM_PLAYER:
 			continue
 
 		# 맵 경계 체크
