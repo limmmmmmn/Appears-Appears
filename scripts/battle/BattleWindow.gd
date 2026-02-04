@@ -34,6 +34,7 @@ var turn_delay_timer: float = 0.0
 const TURN_DELAY: float = 0.6  # 턴 사이 딜레이
 
 # 턴 순서 UI
+var turn_panel: PanelContainer = null
 var turn_order_panel: HBoxContainer = null
 var turn_order_labels: Array = []
 
@@ -258,6 +259,9 @@ func _cancel_claim_waiting() -> void:
 	is_waiting_for_claim = false
 	is_processing_turn = false  # 턴 처리 상태 초기화
 	_update_auto_claim_button_style()
+	# 턴 순서 UI 다시 표시
+	if turn_panel:
+		turn_panel.visible = true
 	# 새 적이 추가되었으므로 턴 순서 갱신
 	_start_new_round()
 
@@ -391,7 +395,7 @@ func _setup_turn_order_ui() -> void:
 		return
 
 	# 턴 순서 패널 컨테이너
-	var turn_panel := PanelContainer.new()
+	turn_panel = PanelContainer.new()
 	turn_panel.name = "TurnOrderPanel"
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.1, 0.1, 0.15, 0.9)
@@ -1214,6 +1218,10 @@ func _show_claim_reward_button() -> void:
 	## 아니면 자동 버튼 클릭 대기
 	is_waiting_for_claim = true
 	_update_auto_claim_button_style()
+
+	# 턴 순서 UI 숨기기
+	if turn_panel:
+		turn_panel.visible = false
 
 	if auto_claim_enabled:
 		# 자동 보상 모드 - 바로 보상 획득
