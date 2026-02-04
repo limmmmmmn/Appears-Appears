@@ -239,12 +239,15 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	# 대기 모드에서 적이 추가되면 활성화
 	if is_waiting_for_enemies:
 		_exit_waiting_mode()
-	# 적이 추가되면 전투 재개
+	# 보상 대기 중 적이 추가되면 전투 재개
+	elif is_waiting_for_claim:
+		_cancel_claim_waiting()
+		_send_log("전투 재개!", Color.GREEN)
+	# 승리 상태에서 적이 추가되면 전투 재개
 	elif current_state == BattleState.VICTORY:
 		current_state = BattleState.RUNNING
 		set_process(true)
 		_send_log("전투 재개!", Color.GREEN)
-		_cancel_claim_waiting()
 		_update_buttons_for_enemies()
 
 	_shake_window()
