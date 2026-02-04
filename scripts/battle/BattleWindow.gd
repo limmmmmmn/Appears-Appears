@@ -1290,10 +1290,11 @@ func _play_reward_fly_animation() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var target_pos: Vector2 = Vector2(viewport_size.x / 2, 60)
 
-	# 최상위 레이어에 보상 아이콘들 생성
+	# 최상위 레이어에 보상 아이콘들 생성 (일시정지 중에도 실행)
 	var root := get_tree().root
 	var fly_container := CanvasLayer.new()
 	fly_container.layer = 100  # 최상위
+	fly_container.process_mode = Node.PROCESS_MODE_ALWAYS  # 일시정지 중에도 애니메이션 실행
 	root.add_child(fly_container)
 
 	var fly_nodes: Array = []
@@ -1336,8 +1337,9 @@ func _play_reward_fly_animation() -> void:
 		node.modulate.a = 1.0
 		node.scale = Vector2(0.5, 0.5)
 
-		# 애니메이션 시작 (SceneTree에서 생성하여 BattleWindow 종료와 무관하게 실행)
+		# 애니메이션 시작 (SceneTree에서 생성, 일시정지 중에도 실행)
 		var tween := get_tree().create_tween()
+		tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)  # 일시정지 중에도 실행
 		tween.tween_interval(node_delay)
 
 		# 팝업 효과로 나타나기
@@ -1354,6 +1356,7 @@ func _play_reward_fly_animation() -> void:
 	# 모든 애니메이션 완료 후 정리 및 닫기
 	var cleanup_delay: float = delay + total_duration + 0.2
 	var cleanup_tween := get_tree().create_tween()
+	cleanup_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)  # 일시정지 중에도 실행
 	cleanup_tween.tween_interval(cleanup_delay)
 	cleanup_tween.tween_callback(func():
 		fly_container.queue_free()
