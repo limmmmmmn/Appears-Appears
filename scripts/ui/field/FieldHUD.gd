@@ -7,6 +7,12 @@ class_name FieldHUD
 ## - MinimapPanel: 미니맵 (우측 하단)
 
 signal menu_pressed
+signal move_style_changed(style: int)  # 이동 스타일 변경 시그널
+
+# === 이동 스타일 ===
+enum MoveStyle { RANDOM, HUNT_ENEMY, OFF, TO_TOWN, TO_BOSS }
+var current_move_style: MoveStyle = MoveStyle.RANDOM
+var move_style_panel: PanelContainer = null
 
 # === 상단 바 ===
 @onready var stage_label: Label = %StageLabel
@@ -64,13 +70,14 @@ func _process(_delta: float) -> void:
 
 func _setup_components() -> void:
 	_setup_speed_button()
-	
+	_setup_move_style_panel()
+
 	# 배틀 로그
 	battle_log = BattleLogUI.new()
 	battle_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if log_container:
 		log_container.add_child(battle_log)
-	
+
 	# 미니맵 카메라 초기 설정
 	if minimap_camera:
 		minimap_camera.zoom = Vector2(minimap_zoom, minimap_zoom)
@@ -93,6 +100,136 @@ func _setup_speed_button() -> void:
 	var hover := style.duplicate()
 	hover.bg_color = Color(0.25, 0.25, 0.3, 0.95)
 	speed_button.add_theme_stylebox_override("hover", hover)
+
+
+func _setup_move_style_panel() -> void:
+	## 우측 중단에 이동 스타일 패널 생성
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	move_style_panel = PanelContainer.new()
+	move_style_panel.name = "MoveStylePanel"
+
+	# 스타일
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.1, 0.1, 0.15, 0.9)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = Color(0.3, 0.5, 0.7)
+	panel_style.corner_radius_top_left = 4
+	panel_style.corner_radius_top_right = 4
+	panel_style.corner_radius_bottom_left = 4
+	panel_style.corner_radius_bottom_right = 4
+	panel_style.content_margin_left = 8
+	panel_style.content_margin_right = 8
+	panel_style.content_margin_top = 6
+	panel_style.content_margin_bottom = 6
+	move_style_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	move_style_panel.add_child(vbox)
+
+	# 제목
+	var title := Label.new()
+	title.text = "[ 이동 ]"
+	title.add_theme_font_size_override("font_size", 10)
+	title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	# 버튼들
+	var styles: Array[Dictionary] = [
+		{"text": "랜덤", "style": MoveStyle.RANDOM},
+		{"text": "적 사냥", "style": MoveStyle.HUNT_ENEMY},
+		{"text": "끄기", "style": MoveStyle.OFF},
+		{"text": "마을로", "style": MoveStyle.TO_TOWN},
+		{"text": "보스에게", "style": MoveStyle.TO_BOSS},
+	]
+
+	for item in styles:
+		var btn := Button.new()
+		btn.text = item["text"]
+		btn.custom_minimum_size = Vector2(70, 24)
+		btn.add_theme_font_size_override("font_size", 10)
+		btn.focus_mode = Control.FOCUS_NONE
+
+		var btn_style := StyleBoxFlat.new()
+		btn_style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+		btn_style.corner_radius_top_left = 3
+		btn_style.corner_radius_top_right = 3
+		btn_style.corner_radius_bottom_left = 3
+		btn_style.corner_radius_bottom_right = 3
+		btn.add_theme_stylebox_override("normal", btn_style)
+
+		var btn_hover := btn_style.duplicate()
+		btn_hover.bg_color = Color(0.25, 0.25, 0.35, 0.95)
+		btn.add_theme_stylebox_override("hover", btn_hover)
+
+		var style_value: int = item["style"]
+		btn.pressed.connect(_on_move_style_button_pressed.bind(style_value))
+		vbox.add_child(btn)
+
+	ctrl.add_child(move_style_panel)
+
+	# 우측 중단 위치
+	move_style_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	move_style_panel.position.x = -move_style_panel.size.x - 10
+
+	# 초기 스타일 표시 업데이트
+	call_deferred("_update_move_style_buttons")
+
+
+func _on_move_style_button_pressed(style: int) -> void:
+	## 이동 스타일 버튼 클릭
+	current_move_style = style as MoveStyle
+	_update_move_style_buttons()
+	move_style_changed.emit(style)
+
+	# 파티 리더에게 직접 전달
+	var leader := get_tree().get_first_node_in_group("party_leader")
+	if leader and leader.has_method("set_move_style"):
+		leader.set_move_style(style)
+
+
+func _update_move_style_buttons() -> void:
+	## 현재 선택된 스타일 버튼 강조
+	if not move_style_panel:
+		return
+
+	var vbox := move_style_panel.get_child(0)
+	if not vbox:
+		return
+
+	var idx: int = 0
+	for child in vbox.get_children():
+		if child is Button:
+			var is_selected: bool = (idx == current_move_style)
+			if is_selected:
+				child.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
+				var sel_style := StyleBoxFlat.new()
+				sel_style.bg_color = Color(0.2, 0.4, 0.3, 0.95)
+				sel_style.corner_radius_top_left = 3
+				sel_style.corner_radius_top_right = 3
+				sel_style.corner_radius_bottom_left = 3
+				sel_style.corner_radius_bottom_right = 3
+				sel_style.border_width_left = 2
+				sel_style.border_width_right = 2
+				sel_style.border_color = Color(0.4, 0.8, 0.5)
+				child.add_theme_stylebox_override("normal", sel_style)
+			else:
+				child.remove_theme_color_override("font_color")
+				var norm_style := StyleBoxFlat.new()
+				norm_style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+				norm_style.corner_radius_top_left = 3
+				norm_style.corner_radius_top_right = 3
+				norm_style.corner_radius_bottom_left = 3
+				norm_style.corner_radius_bottom_right = 3
+				child.add_theme_stylebox_override("normal", norm_style)
+			idx += 1
 
 
 func _connect_signals() -> void:

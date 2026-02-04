@@ -71,6 +71,9 @@ func spawn_initial_enemies(field_enemies: Array) -> void:
 			_spawn_enemy_at({"position": pos, "tile_type": tile_type}, field_enemies)
 			spawned_positions.append(pos)
 
+	# 필드 보스 스폰 (일반 필드에도 하나씩)
+	spawn_field_boss(field_enemies)
+
 
 func setup_respawn_timer(parent: Node) -> void:
 	## 리스폰 타이머는 _process에서 처리
@@ -261,6 +264,68 @@ func _spawn_boss(field_enemies: Array) -> void:
 	enemy.is_boss = true
 	field_enemies.append(enemy)
 	enemy_spawned.emit(enemy)
+
+
+func spawn_field_boss(field_enemies: Array) -> void:
+	## 필드 보스 스폰 (일반 필드에도 하나씩)
+	if not bounds_calculated:
+		_calculate_map_data()
+
+	# 랜덤 적 선택
+	var tile_types: Array = ["grass", "forest", "mountain"]
+	var random_tile: String = tile_types[randi() % tile_types.size()]
+	var boss_id: String = FieldManager.select_field_enemy_for_tile(random_tile)
+
+	if boss_id.is_empty():
+		boss_id = "slime"  # 기본값
+
+	var enemy: Node2D = field_enemy_scene.instantiate()
+	field.add_child(enemy)
+
+	# 랜덤 위치 (플레이어에서 멀리)
+	var player_pos: Vector2 = _get_player_position()
+	var boss_pos: Vector2 = _find_random_far_position(player_pos)
+
+	enemy.setup(boss_id, random_tile, boss_pos, false)
+	enemy.is_boss = true
+	enemy.add_to_group("field_boss")
+
+	# 10배 크기로 확대
+	enemy.scale = Vector2(10, 10)
+
+	# 보스는 움직이지 않음 - 상태를 IDLE로 고정
+	enemy.current_state = enemy.State.IDLE
+	enemy.wander_speed = 0
+	enemy.chase_speed = 0
+
+	field_enemies.append(enemy)
+	enemy_spawned.emit(enemy)
+
+
+func _find_random_far_position(player_pos: Vector2) -> Vector2:
+	## 플레이어에서 먼 랜덤 위치 찾기
+	var attempts: int = 0
+	while attempts < MAX_SPAWN_ATTEMPTS:
+		var random_pos: Vector2
+		if bounds_calculated:
+			random_pos = Vector2(
+				randf_range(map_bounds.position.x + 50, map_bounds.end.x - 50),
+				randf_range(map_bounds.position.y + 50, map_bounds.end.y - 50)
+			)
+		else:
+			random_pos = Vector2(
+				randf_range(100, 600),
+				randf_range(100, 400)
+			)
+
+		# 플레이어에서 최소 200픽셀 떨어진 곳
+		if player_pos.distance_to(random_pos) >= 200:
+			return random_pos
+
+		attempts += 1
+
+	# 실패 시 맵 구석
+	return map_bounds.end - Vector2(100, 100) if bounds_calculated else Vector2(500, 300)
 
 
 func _spawn_enemy_at(tile_data: Dictionary, field_enemies: Array, force_elite: bool = false, is_respawn: bool = false) -> void:
