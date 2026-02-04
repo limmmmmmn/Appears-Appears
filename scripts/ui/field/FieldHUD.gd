@@ -34,7 +34,6 @@ signal menu_pressed
 # === 원념/보상 패널 (상단 중앙) - 동적 생성 ===
 var grudge_panel: PanelContainer = null
 var grudge_level_label: Label = null
-var grudge_exp_label: Label = null
 var grudge_gold_label: Label = null
 var grudge_items_container: VBoxContainer = null
 
@@ -444,23 +443,13 @@ func _setup_grudge_panel() -> void:
 	grudge_level_label.add_theme_color_override("font_color", Color(0.9, 0.6, 1.0))
 	vbox.add_child(grudge_level_label)
 
-	# EXP/Gold 행
-	var reward_hbox := HBoxContainer.new()
-	reward_hbox.add_theme_constant_override("separation", 12)
-	reward_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(reward_hbox)
-
-	grudge_exp_label = Label.new()
-	grudge_exp_label.text = "EXP: 0"
-	grudge_exp_label.add_theme_font_size_override("font_size", 9)
-	grudge_exp_label.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
-	reward_hbox.add_child(grudge_exp_label)
-
+	# Gold 표시 (EXP는 자동 획득이므로 표시 안함)
 	grudge_gold_label = Label.new()
 	grudge_gold_label.text = "Gold: 0"
-	grudge_gold_label.add_theme_font_size_override("font_size", 9)
+	grudge_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	grudge_gold_label.add_theme_font_size_override("font_size", 10)
 	grudge_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	reward_hbox.add_child(grudge_gold_label)
+	vbox.add_child(grudge_gold_label)
 
 	# 아이템 열 (미감정 아이템 색상 표시) - 세로 배열
 	grudge_items_container = VBoxContainer.new()
@@ -572,14 +561,13 @@ func _on_kill_count_changed(count: int, danger_level: int) -> void:
 		tween.tween_property(kill_count_label, "scale", Vector2(1.0, 1.0), 0.15)
 
 
-func _update_grudge_panel(exp: int, gold: int, items: Array) -> void:
-	## 원념/보상 패널 업데이트
+func _update_grudge_panel(_exp: int, gold: int, items: Array) -> void:
+	## 원념/보상 패널 업데이트 (EXP는 자동 획득이므로 무시)
 	if not grudge_panel:
 		return
 
 	var danger_level: int = BattleManager.get_danger_level()
 	grudge_level_label.text = "원념 Lv.%d" % danger_level
-	grudge_exp_label.text = "EXP: %d" % exp
 	grudge_gold_label.text = "Gold: %d" % gold
 
 	# 아이템 아이콘 업데이트
@@ -696,23 +684,13 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
 
-	# EXP/Gold
-	var reward_info := HBoxContainer.new()
-	reward_info.alignment = BoxContainer.ALIGNMENT_CENTER
-	reward_info.add_theme_constant_override("separation", 20)
-	vbox.add_child(reward_info)
-
-	var exp_lbl := Label.new()
-	exp_lbl.text = "EXP: %d" % rewards.exp
-	exp_lbl.add_theme_font_size_override("font_size", 11)
-	exp_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
-	reward_info.add_child(exp_lbl)
-
+	# Gold 표시 (EXP는 자동 획득)
 	var gold_lbl := Label.new()
 	gold_lbl.text = "Gold: %d" % rewards.gold
+	gold_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	gold_lbl.add_theme_font_size_override("font_size", 11)
 	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	reward_info.add_child(gold_lbl)
+	vbox.add_child(gold_lbl)
 
 	# 아이템 목록 (타입 + 희귀도 색상)
 	if rewards.items.size() > 0:
@@ -941,23 +919,13 @@ func show_town_enter_popup() -> void:
 
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
 
-	# EXP/Gold
-	var reward_info := HBoxContainer.new()
-	reward_info.alignment = BoxContainer.ALIGNMENT_CENTER
-	reward_info.add_theme_constant_override("separation", 20)
-	vbox.add_child(reward_info)
-
-	var exp_lbl := Label.new()
-	exp_lbl.text = "EXP: %d" % rewards.exp
-	exp_lbl.add_theme_font_size_override("font_size", 12)
-	exp_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
-	reward_info.add_child(exp_lbl)
-
+	# Gold 표시 (EXP는 자동 획득)
 	var gold_lbl := Label.new()
 	gold_lbl.text = "Gold: %d" % rewards.gold
+	gold_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	gold_lbl.add_theme_font_size_override("font_size", 12)
 	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	reward_info.add_child(gold_lbl)
+	vbox.add_child(gold_lbl)
 
 	# 아이템 목록
 	if rewards.items.size() > 0:
@@ -1086,7 +1054,7 @@ func _on_town_cancel() -> void:
 
 
 func has_unclaimed_rewards() -> bool:
-	## 받지 않은 보상이 있는지 확인
+	## 받지 않은 보상이 있는지 확인 (EXP는 자동 획득이므로 제외)
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
-	return rewards.exp > 0 or rewards.gold > 0 or rewards.items.size() > 0
+	return rewards.gold > 0 or rewards.items.size() > 0
 #endregion

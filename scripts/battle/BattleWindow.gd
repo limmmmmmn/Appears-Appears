@@ -1172,14 +1172,18 @@ func _check_battle_end() -> bool:
 
 func _report_rewards_and_close() -> void:
 	## 보상을 BattleManager에 누적하고 전투창 닫기
-	# 보상 누적
-	BattleManager.add_accumulated_reward(total_exp, total_gold, drop_items)
+	# EXP는 즉시 자동 획득
+	if total_exp > 0:
+		PartyManager.distribute_exp(total_exp)
+
+	# Gold와 아이템만 누적 (EXP는 0으로)
+	BattleManager.add_accumulated_reward(0, total_gold, drop_items)
 
 	# 킬카운트 증가 (원념 레벨 체크는 BattleManager에서)
 	for i in range(kill_count):
 		BattleManager.increment_global_kill_count()
 
-	_send_log("전투 종료! (EXP +%d, Gold +%d)" % [total_exp, total_gold], Color.LIME)
+	_send_log("전투 종료! (EXP +%d 획득, Gold +%d)" % [total_exp, total_gold], Color.LIME)
 
 	# 전투창 종료 (승리)
 	current_state = BattleState.VICTORY
@@ -1278,8 +1282,8 @@ func _end_battle_victory() -> void:
 
 func _play_reward_fly_animation() -> void:
 	## 보상이 원념 패널로 날아가는 연출
-	# 보상이 없으면 바로 닫기
-	if total_exp <= 0 and total_gold <= 0 and drop_items.is_empty():
+	# 보상이 없으면 바로 닫기 (EXP는 자동 획득이므로 Gold/아이템만 체크)
+	if total_gold <= 0 and drop_items.is_empty():
 		_play_close_effect()
 		return
 
@@ -1301,15 +1305,7 @@ func _play_reward_fly_animation() -> void:
 	var delay: float = 0.0
 	var delay_interval: float = 0.12
 
-	# EXP 아이콘 생성
-	if total_exp > 0:
-		var exp_node := _create_fly_reward_node("⭐ +%d EXP" % total_exp, Color(0.4, 1.0, 0.4))
-		exp_node.position = start_pos
-		fly_container.add_child(exp_node)
-		fly_nodes.append({"node": exp_node, "delay": delay, "start": start_pos})
-		delay += delay_interval
-
-	# Gold 아이콘 생성
+	# Gold 아이콘 생성 (EXP는 자동 획득이므로 제외)
 	if total_gold > 0:
 		var gold_node := _create_fly_reward_node("💰 +%d G" % total_gold, Color(1.0, 0.9, 0.3))
 		gold_node.position = start_pos
