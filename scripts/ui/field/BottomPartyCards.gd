@@ -23,7 +23,8 @@ signal equipment_dropped(hero_index: int, item_id: String)
 
 # 카드 데이터
 class HeroCard:
-	var panel: PanelContainer
+	var wrapper: Control  # 래퍼 (HBoxContainer 자식, 클리핑용)
+	var panel: PanelContainer  # 실제 카드 패널 (wrapper 자식, 애니메이션 대상)
 	var drop_target: Control  # 드롭 영역
 	var name_label: Label
 	var hp_bar: ProgressBar
@@ -55,9 +56,9 @@ func _build_ui() -> void:
 	anchor_bottom = 1.0
 	offset_left = 0
 	offset_right = 0
-	# 카드가 화면 아래로 숨겨지도록 위치 조정
-	offset_top = -CARD_VISIBLE_HEIGHT
-	offset_bottom = CARD_HEIGHT - CARD_VISIBLE_HEIGHT
+	# 카드 래퍼가 화면 하단에 위치하도록 (래퍼 전체 높이만큼)
+	offset_top = -CARD_HEIGHT
+	offset_bottom = 0
 
 	# HBoxContainer로 카드들을 가로로 배치 (중앙 정렬)
 	cards_container = HBoxContainer.new()
@@ -92,11 +93,11 @@ func _rebuild_cards() -> void:
 	# 기존 카드 데이터 초기화
 	hero_cards.clear()
 
-	# cards_container의 모든 자식 즉시 제거
+	# cards_container의 모든 자식 즉시 제거 (free 사용으로 즉시 삭제)
 	if cards_container:
 		for child in cards_container.get_children():
 			cards_container.remove_child(child)
-			child.queue_free()
+			child.free()  # queue_free 대신 free로 즉시 삭제
 
 	var party: Array = PartyManager.get_party() if PartyManager else []
 
@@ -106,17 +107,24 @@ func _rebuild_cards() -> void:
 			continue
 		var card := _create_hero_card(i)
 		hero_cards.append(card)
-		cards_container.add_child(card.panel)
+		cards_container.add_child(card.wrapper)
 
 
 func _create_hero_card(index: int) -> HeroCard:
 	var card := HeroCard.new()
 	card.hero_index = index
 
-	# 메인 패널
+	# 래퍼 컨트롤 (HBoxContainer의 자식으로 들어감, 클리핑 담당)
+	card.wrapper = Control.new()
+	card.wrapper.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
+	card.wrapper.clip_contents = true  # 패널이 래퍼 밖으로 나가면 잘림
+
+	# 메인 패널 (래퍼 안에서 움직임)
 	card.panel = PanelContainer.new()
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
+	card.panel.position.y = HOVER_OFFSET  # 초기 위치: 아래로 내려가 있음
 	_style_card_panel(card.panel)
+	card.wrapper.add_child(card.panel)
 
 	# 드롭 타겟 (전체 카드 영역) + hover 처리
 	card.drop_target = _EquipDropTarget.new()
@@ -336,7 +344,8 @@ func _on_card_mouse_entered(card: HeroCard) -> void:
 	var tween := create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_BACK)
-	tween.tween_property(card.panel, "position:y", -HOVER_OFFSET, 0.2)
+	# 래퍼 안에서 패널을 위로 올림 (HOVER_OFFSET -> 0)
+	tween.tween_property(card.panel, "position:y", 0.0, 0.2)
 
 
 func _on_card_mouse_exited(card: HeroCard) -> void:
@@ -347,7 +356,8 @@ func _on_card_mouse_exited(card: HeroCard) -> void:
 	var tween := create_tween()
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(card.panel, "position:y", 0.0, 0.15)
+	# 래퍼 안에서 패널을 아래로 내림 (0 -> HOVER_OFFSET)
+	tween.tween_property(card.panel, "position:y", float(HOVER_OFFSET), 0.15)
 #endregion
 
 
