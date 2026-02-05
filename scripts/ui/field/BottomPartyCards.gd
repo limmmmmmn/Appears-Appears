@@ -1,17 +1,14 @@
 extends Control
 class_name BottomPartyCards
-## 하단 파티 카드 UI - 파티원당 개별 카드
-## 평소에는 상단만 보이고, 마우스 hover시 위로 올라옴
+## 하단 파티 카드 UI - 마우스 hover시 위로 슬라이드
 
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
 const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 
 # 카드 크기
 const CARD_WIDTH := 105
-const CARD_HEIGHT := 140  # 줄인 높이
-const CARD_VISIBLE_HEIGHT := 55  # 평소 보이는 높이 (이름 + HP + 공격바)
-const CARD_SPACING := 6
-const HOVER_OFFSET := 85  # 마우스 hover시 올라가는 높이
+const CARD_HEIGHT := 140
+const CARD_HIDDEN_OFFSET := 90  # 숨겨질 때 아래로 이동하는 양
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
@@ -26,9 +23,7 @@ signal equipment_dropped(hero_index: int, item_id: String)
 
 # 카드 데이터
 class HeroCard:
-	var wrapper: Control  # 마우스 감지용 (항상 큰 크기)
-	var clip_container: Control  # 클리핑용 (크기 변경)
-	var panel: PanelContainer  # 실제 카드 패널
+	var panel: PanelContainer
 	var name_label: Label
 	var hp_bar: ProgressBar
 	var hp_label: Label
@@ -39,12 +34,15 @@ class HeroCard:
 	var equip_rows: Dictionary = {}
 	var hero_index: int = -1
 	var hero_id: String = ""
-	var is_hovered: bool = false
+	var tween: Tween = null
 
 var hero_cards: Array[HeroCard] = []
 
 
 func _ready() -> void:
+	# 컨테이너를 아래로 이동시켜 카드 일부만 보이게
+	if cards_container:
+		cards_container.position.y = CARD_HIDDEN_OFFSET
 	_connect_signals()
 	call_deferred("_initial_setup")
 
@@ -77,7 +75,6 @@ func _on_party_changed() -> void:
 
 
 func _rebuild_cards() -> void:
-	## 파티원 수에 맞게 카드 재구성
 	hero_cards.clear()
 
 	if cards_container:
@@ -92,35 +89,22 @@ func _rebuild_cards() -> void:
 			continue
 		var card := _create_hero_card(i)
 		hero_cards.append(card)
-		cards_container.add_child(card.wrapper)
+		cards_container.add_child(card.panel)
 
 
 func _create_hero_card(index: int) -> HeroCard:
 	var card := HeroCard.new()
 	card.hero_index = index
 
-	# 외부 래퍼 (마우스 감지용 - 항상 큰 크기, 투명)
-	card.wrapper = Control.new()
-	card.wrapper.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
-	card.wrapper.set_meta("card_index", index)
-
-	# 클리핑 컨테이너 (하단에 위치, 크기 변경됨)
-	card.clip_container = Control.new()
-	card.clip_container.clip_contents = true
-	card.clip_container.custom_minimum_size = Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT)
-	card.clip_container.position = Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT)
-	card.wrapper.add_child(card.clip_container)
-
-	# 메인 패널 (클리핑 컨테이너 안)
+	# 메인 패널
 	card.panel = PanelContainer.new()
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
-	card.panel.position = Vector2(0, -(CARD_HEIGHT - CARD_VISIBLE_HEIGHT))
+	card.panel.set_meta("card_index", index)
 	_style_card_panel(card.panel)
-	card.clip_container.add_child(card.panel)
 
 	# 마우스 이벤트 연결
-	card.wrapper.mouse_entered.connect(_on_card_mouse_entered.bind(card))
-	card.wrapper.mouse_exited.connect(_on_card_mouse_exited.bind(card))
+	card.panel.mouse_entered.connect(_on_card_mouse_entered.bind(card))
+	card.panel.mouse_exited.connect(_on_card_mouse_exited.bind(card))
 
 	# 내부 VBox
 	var vbox := VBoxContainer.new()
@@ -168,7 +152,6 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.atb_section.add_theme_constant_override("separation", 1)
 	vbox.add_child(card.atb_section)
 
-	# 기본 공격 ATB
 	var basic_row := _create_atb_row("공격")
 	card.basic_atb_bar = basic_row.get_node("Bar")
 	card.atb_section.add_child(basic_row)
@@ -192,37 +175,22 @@ func _create_hero_card(index: int) -> HeroCard:
 
 
 func _on_card_mouse_entered(card: HeroCard) -> void:
-	card.is_hovered = true
 	_animate_card(card, true)
 
 
 func _on_card_mouse_exited(card: HeroCard) -> void:
-	card.is_hovered = false
 	_animate_card(card, false)
 
 
-func _animate_card(card: HeroCard, expand: bool) -> void:
+func _animate_card(card: HeroCard, show_full: bool) -> void:
 	# 기존 tween 취소
-	if card.panel.has_meta("tween"):
-		var old_tween = card.panel.get_meta("tween")
-		if old_tween and old_tween.is_valid():
-			old_tween.kill()
+	if card.tween and card.tween.is_valid():
+		card.tween.kill()
 
-	var tween := create_tween()
-	tween.set_parallel(true)
+	card.tween = create_tween()
 
-	if expand:
-		# 클리핑 영역 확장 + 패널 위치 조정
-		tween.tween_property(card.clip_container, "position", Vector2(0, 0), 0.1)
-		tween.tween_property(card.clip_container, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_HEIGHT), 0.1)
-		tween.tween_property(card.panel, "position", Vector2(0, 0), 0.1)
-	else:
-		# 클리핑 영역 축소 + 패널 위치 조정
-		tween.tween_property(card.clip_container, "position", Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.12)
-		tween.tween_property(card.clip_container, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT), 0.12)
-		tween.tween_property(card.panel, "position", Vector2(0, -(CARD_HEIGHT - CARD_VISIBLE_HEIGHT)), 0.12)
-
-	card.panel.set_meta("tween", tween)
+	var target_y: float = 0.0 if show_full else CARD_HIDDEN_OFFSET
+	card.tween.tween_property(cards_container, "position:y", target_y, 0.12)
 
 
 func _style_card_panel(panel: PanelContainer) -> void:

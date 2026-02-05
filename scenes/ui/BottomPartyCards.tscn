@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://scripts/ui/field/BottomPartyCards.gd" id="1_script"]
 
 [node name="BottomPartyCards" type="Control"]
+clip_contents = true
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
