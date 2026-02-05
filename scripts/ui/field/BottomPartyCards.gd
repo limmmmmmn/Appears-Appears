@@ -34,7 +34,6 @@ class HeroCard:
 	var equip_rows: Dictionary = {}
 	var hero_index: int = -1
 	var hero_id: String = ""
-	var tween: Tween = null
 
 var hero_cards: Array[HeroCard] = []
 
@@ -174,23 +173,34 @@ func _create_hero_card(index: int) -> HeroCard:
 	return card
 
 
-func _on_card_mouse_entered(card: HeroCard) -> void:
-	_animate_card(card, true)
+var _hover_count: int = 0  # 현재 hover 중인 카드 수
+var _exit_pending: bool = false  # exit 대기 중인지
+
+func _on_card_mouse_entered(_card: HeroCard) -> void:
+	_hover_count += 1
+	_exit_pending = false
+	_animate_container(true)
 
 
-func _on_card_mouse_exited(card: HeroCard) -> void:
-	_animate_card(card, false)
+func _on_card_mouse_exited(_card: HeroCard) -> void:
+	_hover_count = maxi(0, _hover_count - 1)
+	if _hover_count == 0:
+		_exit_pending = true
+		# 짧은 딜레이 후 실제로 나갔는지 확인
+		await get_tree().create_timer(0.03).timeout
+		if _exit_pending and _hover_count == 0:
+			_animate_container(false)
 
 
-func _animate_card(card: HeroCard, show_full: bool) -> void:
-	# 기존 tween 취소
-	if card.tween and card.tween.is_valid():
-		card.tween.kill()
-
-	card.tween = create_tween()
-
+func _animate_container(show_full: bool) -> void:
 	var target_y: float = 0.0 if show_full else CARD_HIDDEN_OFFSET
-	card.tween.tween_property(cards_container, "position:y", target_y, 0.12)
+
+	# 이미 목표 위치면 스킵
+	if abs(cards_container.position.y - target_y) < 1.0:
+		return
+
+	var tween := create_tween()
+	tween.tween_property(cards_container, "position:y", target_y, 0.1).set_ease(Tween.EASE_OUT)
 
 
 func _style_card_panel(panel: PanelContainer) -> void:
