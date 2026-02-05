@@ -276,10 +276,9 @@ func _open_inn() -> void:
 	var party := PartyManager.get_party()
 	for hero in party:
 		var status := Label.new()
-		status.text = "%s: HP %d/%d, MP %d/%d" % [
+		status.text = "%s: HP %d/%d" % [
 			hero.hero_name,
-			hero.current_hp, hero.get_max_hp(),
-			hero.current_mp, hero.get_max_mp()
+			hero.current_hp, hero.get_max_hp()
 		]
 		sub_content.add_child(status)
 	
@@ -305,7 +304,7 @@ func _open_inn() -> void:
 func _on_rest(cost: int) -> void:
 	if GameManager.spend_gold(cost):
 		PartyManager.full_restore_party()
-		_show_message("푹 쉬었습니다. HP/MP가 완전히 회복되었습니다!")
+		_show_message("푹 쉬었습니다. HP가 완전히 회복되었습니다!")
 		_open_inn()
 #endregion
 

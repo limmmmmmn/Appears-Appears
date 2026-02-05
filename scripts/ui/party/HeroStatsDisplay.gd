@@ -31,7 +31,7 @@ func _build_ui() -> void:
 	stat_grid.add_theme_constant_override("v_separation", 2)
 	add_child(stat_grid)
 	
-	for stat_name in ["HP", "MP", "STR", "DEF", "INT", "DEX", "LUK", "ATK"]:
+	for stat_name in ["HP", "STR", "DEF", "INT", "DEX", "LUK", "ATK"]:
 		var lbl := Label.new()
 		lbl.text = "%s: ---" % stat_name
 		stat_grid.add_child(lbl)
@@ -85,7 +85,6 @@ func update_display(hero: Hero) -> void:
 	
 	# 스탯 업데이트
 	stat_labels["HP"].text = "HP: %d/%d" % [hero.current_hp, hero.get_max_hp()]
-	stat_labels["MP"].text = "MP: %d/%d" % [hero.current_mp, hero.get_max_mp()]
 	stat_labels["STR"].text = "STR: %d" % hero.get_str()
 	stat_labels["DEF"].text = "DEF: %d" % hero.get_def()
 	stat_labels["INT"].text = "INT: %d" % hero.get_int()

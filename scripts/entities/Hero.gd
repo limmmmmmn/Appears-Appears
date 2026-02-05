@@ -13,7 +13,6 @@ var exp_to_next: int = 40  # 레벨업 속도 상향
 
 # 기본 스탯
 var base_hp: int = 0
-var base_mp: int = 0
 var base_str: int = 0
 var base_def: int = 0
 var base_int: int = 0
@@ -21,11 +20,10 @@ var base_dex: int = 0
 var base_luk: int = 0
 
 # 씨앗 보너스
-var seed_bonus: Dictionary = {"hp": 0, "mp": 0, "str": 0, "def": 0, "int": 0, "dex": 0, "luk": 0}
+var seed_bonus: Dictionary = {"hp": 0, "str": 0, "def": 0, "int": 0, "dex": 0, "luk": 0}
 
 # 현재 상태
 var current_hp: int = 0
-var current_mp: int = 0
 var is_dead: bool = false
 
 # 장비
@@ -67,15 +65,13 @@ func _initialize(hero_id: String) -> void:
 	
 	var base_stats: Dictionary = DataManager.get_class_base_stats(class_id)
 	base_hp = int(base_stats.get("hp", 30))
-	base_mp = int(base_stats.get("mp", 10))
 	base_str = int(base_stats.get("str", 5))
 	base_def = int(base_stats.get("def", 5))
 	base_int = int(base_stats.get("int", 5))
 	base_dex = int(base_stats.get("dex", 5))
 	base_luk = int(base_stats.get("luk", 5))
-	
+
 	current_hp = get_max_hp()
-	current_mp = get_max_mp()
 	_init_skill_toggles()
 
 
@@ -92,9 +88,6 @@ const HP_MULTIPLIER: float = 1.0  # HP 배율 (1/4로 축소)
 
 func get_max_hp() -> int:
 	return int((base_hp + seed_bonus["hp"] + _get_equipment_stat("hp")) * HP_MULTIPLIER)
-
-func get_max_mp() -> int:
-	return base_mp + seed_bonus["mp"] + _get_equipment_stat("mp")
 
 func get_str() -> int:
 	return base_str + seed_bonus["str"] + _get_equipment_stat("str")
@@ -152,18 +145,16 @@ func _level_up() -> void:
 	level += 1
 	exp -= exp_to_next
 	exp_to_next = int(40 * pow(level, 1.2))  # 레벨업 속도 상향
-	
+
 	var growth: Dictionary = DataManager.get_class_growth(class_id)
 	base_hp += int(growth.get("hp", 1))
-	base_mp += int(growth.get("mp", 1))
 	base_str += int(growth.get("str", 1))
 	base_def += int(growth.get("def", 1))
 	base_int += int(growth.get("int", 1))
 	base_dex += int(growth.get("dex", 1))
 	base_luk += int(growth.get("luk", 1))
-	
+
 	current_hp = get_max_hp()
-	current_mp = get_max_mp()
 #endregion
 
 
@@ -184,13 +175,6 @@ func heal(amount: int) -> int:
 	return actual
 
 
-func use_mp(amount: int) -> bool:
-	if current_mp < amount:
-		return false
-	current_mp -= amount
-	return true
-
-
 func revive(hp_percent: float = 0.3) -> void:
 	if not is_dead:
 		return
@@ -198,28 +182,18 @@ func revive(hp_percent: float = 0.3) -> void:
 	current_hp = int(get_max_hp() * hp_percent)
 
 
-func restore_mp(amount: int) -> int:
-	## MP 회복 - 회복된 양 반환
-	var actual := mini(amount, get_max_mp() - current_mp)
-	current_mp += actual
-	return actual
-
-
 func apply_seed_bonus(stat: String, value: int) -> void:
 	## 씨앗으로 영구 스탯 증가
 	if seed_bonus.has(stat):
 		seed_bonus[stat] += value
-	
-	# HP/MP 증가 시 현재 값도 증가
+
+	# HP 증가 시 현재 값도 증가
 	if stat == "hp":
 		current_hp = mini(current_hp + value, get_max_hp())
-	elif stat == "mp":
-		current_mp = mini(current_mp + value, get_max_mp())
 
 
 func full_restore() -> void:
 	current_hp = get_max_hp()
-	current_mp = get_max_mp()
 	is_dead = false
 #endregion
 
@@ -286,7 +260,7 @@ func get_available_skills() -> Array:
 
 
 func get_usable_skills() -> Array:
-	## 토글 ON이고 MP가 충분한 스킬 목록 반환 (기본 공격 제외)
+	## 토글 ON이고 쿨타임이 없는 스킬 목록 반환 (기본 공격 제외)
 	var result: Array = []
 	var skills := get_available_skills()
 	for skill_id in skills:
@@ -295,16 +269,15 @@ func get_usable_skills() -> Array:
 		# 토글이 OFF면 스킵
 		if not is_skill_enabled(skill_id):
 			continue
-		var mp_cost: int = DataManager.get_skill_mp_cost(skill_id)
-		if current_mp >= mp_cost:
+		# 쿨타임 체크
+		if CooldownManager.is_skill_ready(id, skill_id):
 			result.append(skill_id)
 	return result
 
 
 func can_use_skill(skill_id: String) -> bool:
-	## 해당 스킬을 사용할 수 있는지 확인
-	var mp_cost: int = DataManager.get_skill_mp_cost(skill_id)
-	return current_mp >= mp_cost
+	## 해당 스킬을 사용할 수 있는지 확인 (쿨타임 체크)
+	return CooldownManager.is_skill_ready(id, skill_id)
 #endregion
 
 
@@ -358,8 +331,8 @@ func unequip_rune() -> String:
 
 
 func get_stat_summary() -> String:
-	return "[%s] Lv.%d %s | HP:%d/%d MP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
+	return "[%s] Lv.%d %s | HP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
 		hero_name, level, hero_class_name,
-		current_hp, get_max_hp(), current_mp, get_max_mp(),
+		current_hp, get_max_hp(),
 		get_str(), get_def(), get_int(), get_dex(), get_luk()
 	]

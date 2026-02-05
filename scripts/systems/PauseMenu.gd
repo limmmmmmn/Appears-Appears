@@ -225,9 +225,8 @@ func _create_hero_full_card(hero: Hero) -> PanelContainer:
 
 	vbox.add_child(_create_separator())
 
-	# === HP/MP 바 ===
+	# === HP 바 ===
 	_add_stat_bar(vbox, "HP", hero.current_hp, hero.get_max_hp(), Color(0.2, 0.7, 0.2))
-	_add_stat_bar(vbox, "MP", hero.current_mp, hero.get_max_mp(), Color(0.3, 0.4, 0.9))
 
 	vbox.add_child(_create_separator())
 

@@ -94,8 +94,8 @@ func get_enemies_by_type(enemy_type: String) -> Array:
 func get_skill(skill_id: String) -> Dictionary:
 	return skills.get(skill_id, {})
 
-func get_skill_mp_cost(skill_id: String) -> int:
-	return int(get_skill(skill_id).get("mp_cost", 0))
+func get_skill_cooldown(skill_id: String) -> float:
+	return float(get_skill(skill_id).get("cooldown", 2.0))
 
 func get_class_skills(class_id: String) -> Array:
 	## 클래스의 스킬 목록 반환

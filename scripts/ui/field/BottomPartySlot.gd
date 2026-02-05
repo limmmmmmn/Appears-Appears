@@ -246,18 +246,18 @@ func _create_skill_button(skill_id: String) -> Button:
 	btn.text = icon
 	btn.add_theme_font_size_override("font_size", 10)
 	
-	# 스킬 이름으로 툴팁
+	# 스킬 이름과 쿨타임 툴팁
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	var skill_name: String = skill_data.get("name", skill_id)
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	btn.tooltip_text = "%s (MP %d)" % [skill_name, mp_cost] if mp_cost > 0 else skill_name
-	
+	var cooldown: float = float(skill_data.get("cooldown", 0))
+	btn.tooltip_text = "%s (CD %.1fs)" % [skill_name, cooldown] if cooldown > 0 else skill_name
+
 	# 토글 시그널 연결
 	btn.toggled.connect(_on_skill_toggled.bind(skill_id))
-	
+
 	# 초기 스타일 설정
 	_update_skill_button_state(btn, skill_id)
-	
+
 	return btn
 
 
@@ -265,16 +265,15 @@ func _update_skill_button_state(btn: Button, skill_id: String) -> void:
 	## 스킬 버튼 상태 업데이트
 	if not hero:
 		return
-	
+
 	var is_enabled: bool = hero.is_skill_enabled(skill_id)
 	btn.button_pressed = is_enabled
-	
-	# MP 부족 시 빨간 틴트
-	var mp_cost: int = DataManager.get_skill_mp_cost(skill_id)
-	var has_mp: bool = hero.current_mp >= mp_cost
-	
+
+	# 쿨타임 중이면 빨간 틴트
+	var is_ready: bool = CooldownManager.is_skill_ready(hero.id, skill_id)
+
 	if is_enabled:
-		if has_mp:
+		if is_ready:
 			btn.modulate = Color.WHITE
 		else:
 			btn.modulate = Color(1.0, 0.5, 0.5, 0.8)

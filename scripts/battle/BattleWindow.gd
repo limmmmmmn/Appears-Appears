@@ -635,6 +635,9 @@ func _process_hero_turn(hero: Hero) -> void:
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
 
+	# 스킬 쿨타임 시작
+	CooldownManager.start_cooldown(hero.id, skill_id)
+
 	# 행동 후 잠시 대기
 	await get_tree().create_timer(0.3).timeout
 
@@ -725,6 +728,9 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 			_execute_aoe_attack(hero, skill_id, skill_data)
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
+
+	# 스킬 쿨타임 시작
+	CooldownManager.start_cooldown(hero.id, skill_id)
 
 
 func _get_wounded_heroes() -> Array:

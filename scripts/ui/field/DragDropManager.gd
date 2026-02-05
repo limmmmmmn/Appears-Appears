@@ -373,28 +373,12 @@ func _try_use_consumable(item_id: String, hero: Hero) -> bool:
 				log_message.emit("%s: HP가 이미 가득 참" % hero.hero_name)
 				return false
 		
-		"restore_mp_percent":
-			# MP 퍼센트 회복
-			if hero.is_dead:
-				log_message.emit("%s: 사망한 대상에게 사용 불가" % item_name)
-				return false
-			var mp_percent: float = float(effect.get("value", 0.5))
-			var mp_amount: int = int(hero.get_max_mp() * mp_percent)
-			var actual_mp: int = hero.restore_mp(mp_amount)
-			if actual_mp > 0:
-				log_message.emit("%s: %s MP +%d" % [hero.hero_name, item_name, actual_mp])
-				success = true
-			else:
-				log_message.emit("%s: MP가 이미 가득 참" % hero.hero_name)
-				return false
-		
 		"full_restore":
-			# HP + MP 완전 회복
+			# HP 완전 회복
 			if hero.is_dead:
 				log_message.emit("%s: 사망한 대상에게 사용 불가" % item_name)
 				return false
 			hero.heal(hero.get_max_hp())
-			hero.restore_mp(hero.get_max_mp())
 			log_message.emit("%s: %s 사용 - 완전 회복!" % [hero.hero_name, item_name])
 			success = true
 		
@@ -425,7 +409,6 @@ func _try_use_consumable(item_id: String, hero: Hero) -> bool:
 			for member in all_party:
 				if not member.is_dead:
 					member.heal(member.get_max_hp())
-					member.restore_mp(member.get_max_mp())
 			log_message.emit("%s 사용 - 파티 전원 완전 회복!" % item_name)
 			success = true
 		

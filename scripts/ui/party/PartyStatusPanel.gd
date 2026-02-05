@@ -105,7 +105,7 @@ func _build_ui() -> void:
 	stat_grid.add_theme_constant_override("v_separation", 2)
 	left.add_child(stat_grid)
 	
-	for stat_name in ["HP", "MP", "STR", "DEF", "INT", "DEX", "LUK", "ATK"]:
+	for stat_name in ["HP", "STR", "DEF", "INT", "DEX", "LUK", "ATK"]:
 		var lbl := Label.new()
 		lbl.text = "%s: ---" % stat_name
 		stat_grid.add_child(lbl)
@@ -215,7 +215,6 @@ func _refresh_hero_info() -> void:
 	var hero: Hero = party[selected_hero_index]
 	
 	stat_labels["HP"].text = "HP: %d/%d" % [hero.current_hp, hero.get_max_hp()]
-	stat_labels["MP"].text = "MP: %d/%d" % [hero.current_mp, hero.get_max_mp()]
 	stat_labels["STR"].text = "STR: %d" % hero.get_str()
 	stat_labels["DEF"].text = "DEF: %d" % hero.get_def()
 	stat_labels["INT"].text = "INT: %d" % hero.get_int()
@@ -434,16 +433,7 @@ func _update_preview(item_id: String) -> void:
 		var new_val := cur - old_bonus + new_bonus
 		var diff := new_val - cur
 		changes += _format_stat_change("HP", cur, new_val, diff)
-	
-	# MP
-	if new_stats.has("mp") or current_stats.has("mp"):
-		var cur := hero.get_max_mp()
-		var old_bonus: int = int(current_stats.get("mp", 0))
-		var new_bonus: int = int(new_stats.get("mp", 0))
-		var new_val := cur - old_bonus + new_bonus
-		var diff := new_val - cur
-		changes += _format_stat_change("MP", cur, new_val, diff)
-	
+
 	if changes.is_empty():
 		changes = "(스탯 변화 없음)"
 	
