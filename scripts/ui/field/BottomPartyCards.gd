@@ -322,7 +322,6 @@ func update_display() -> void:
 		var card := hero_cards[i]
 		var hero: Hero = party[i]
 		card.hero_id = hero.id
-		print("[BottomPartyCards] set hero_id: ", hero.id, " for card ", i)
 
 		card.name_label.text = hero.hero_name
 
@@ -483,17 +482,12 @@ func _find_card_by_hero_id(hero_id: String) -> HeroCard:
 
 
 func _on_hero_attacked(hero_id: String) -> void:
-	print("[BottomPartyCards] hero_attacked: ", hero_id)
 	var card := _find_card_by_hero_id(hero_id)
-	print("[BottomPartyCards] found card: ", card != null, " cards: ", hero_cards.size())
-	if card:
-		print("[BottomPartyCards] card.hero_id: ", card.hero_id)
 	if card and is_instance_valid(card.panel):
 		_play_attack_animation(card)
 
 
 func _on_hero_damaged(hero_id: String) -> void:
-	print("[BottomPartyCards] hero_damaged: ", hero_id)
 	var card := _find_card_by_hero_id(hero_id)
 	if card and is_instance_valid(card.panel):
 		_play_damage_animation(card)

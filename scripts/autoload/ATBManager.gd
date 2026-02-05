@@ -81,8 +81,25 @@ func set_paused(paused: bool) -> void:
 	is_paused = paused
 
 
+func _sync_party_heroes() -> void:
+	## 파티 영웅과 ATB 목록 동기화 (새 영웅 추가)
+	var heroes := PartyManager.get_alive_heroes()
+	for hero in heroes:
+		if not hero_atb.has(hero.id):
+			var hero_dex: int = hero.get_dex()
+			var initial_atb: float = randf_range(0, 30) + hero_dex * 0.5
+			hero_atb[hero.id] = {
+				"hero": hero,
+				"atb": minf(initial_atb, ATB_MAX - 1),
+				"speed": hero_dex
+			}
+
+
 func _update_hero_atb(delta: float) -> void:
 	## 영웅 ATB 업데이트
+	# 새 영웅이 파티에 추가되었으면 ATB에 등록
+	_sync_party_heroes()
+
 	var ready_hero: Hero = null
 	var highest_atb: float = 0.0
 
