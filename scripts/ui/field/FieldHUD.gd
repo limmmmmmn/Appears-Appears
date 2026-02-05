@@ -123,15 +123,14 @@ func _setup_kill_label() -> void:
 
 
 func _setup_bottom_party_cards() -> void:
-	## 하단 파티 카드 생성
-	bottom_party_cards = BottomPartyCards.new()
-	bottom_party_cards.name = "BottomPartyCards"
+	## 하단 파티 카드 씬 로드
+	var scene := preload("res://scenes/ui/BottomPartyCards.tscn")
+	bottom_party_cards = scene.instantiate() as BottomPartyCards
 
 	# 위치 설정 (하단 중앙)
 	var ctrl := get_node_or_null("Control")
 	if ctrl:
 		ctrl.add_child(bottom_party_cards)
-		# BottomPartyCards 내부에서 앵커 설정함
 
 
 func _connect_signals() -> void:

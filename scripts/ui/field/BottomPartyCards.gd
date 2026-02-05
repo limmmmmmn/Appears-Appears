@@ -21,6 +21,9 @@ const HP_COLOR_LOW := Color(0.9, 0.2, 0.2)
 # 시그널
 signal equipment_dropped(hero_index: int, item_id: String)
 
+# 씬에서 가져오는 노드
+@onready var cards_container: HBoxContainer = %CardsContainer
+
 # 카드 데이터
 class HeroCard:
 	var wrapper: Control  # 래퍼 (HBoxContainer 자식, 클리핑용)
@@ -39,33 +42,19 @@ class HeroCard:
 	var is_hovered: bool = false
 
 var hero_cards: Array[HeroCard] = []
-var cards_container: HBoxContainer
 
 
 func _ready() -> void:
-	_build_ui()
 	_connect_signals()
-	update_display()
+	# 씬이 완전히 로드된 후 카드 생성
+	call_deferred("_initial_setup")
 
 
-func _build_ui() -> void:
-	# 전체 컨테이너 (하단 전체 폭, 중앙 정렬)
-	anchor_left = 0.0
-	anchor_right = 1.0
-	anchor_top = 1.0
-	anchor_bottom = 1.0
-	offset_left = 0
-	offset_right = 0
-	# 카드 래퍼가 화면 하단에 위치하도록 (래퍼 전체 높이만큼)
-	offset_top = -CARD_HEIGHT
-	offset_bottom = 0
-
-	# HBoxContainer로 카드들을 가로로 배치 (중앙 정렬)
-	cards_container = HBoxContainer.new()
-	cards_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	cards_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cards_container.add_theme_constant_override("separation", CARD_SPACING)
-	add_child(cards_container)
+func _initial_setup() -> void:
+	if cards_container:
+		update_display()
+	else:
+		push_error("[BottomPartyCards] CardsContainer not found!")
 
 
 func _connect_signals() -> void:
@@ -90,21 +79,15 @@ func _on_party_changed() -> void:
 
 func _rebuild_cards() -> void:
 	## 파티원 수에 맞게 카드 재구성
-	print("[BottomPartyCards] _rebuild_cards 호출됨")  # 디버그
-
-	# 기존 카드 데이터 초기화
 	hero_cards.clear()
 
-	# cards_container의 모든 자식 즉시 제거 (free 사용으로 즉시 삭제)
+	# cards_container의 모든 자식 즉시 제거
 	if cards_container:
-		var child_count := cards_container.get_child_count()
-		print("[BottomPartyCards] 기존 카드 %d개 제거" % child_count)  # 디버그
 		for child in cards_container.get_children():
 			cards_container.remove_child(child)
-			child.free()  # queue_free 대신 free로 즉시 삭제
+			child.free()
 
 	var party: Array = PartyManager.get_party() if PartyManager else []
-	print("[BottomPartyCards] 파티원 %d명으로 카드 생성" % party.size())  # 디버그
 
 	# 새 카드 생성
 	for i in range(party.size()):
@@ -113,8 +96,6 @@ func _rebuild_cards() -> void:
 		var card := _create_hero_card(i)
 		hero_cards.append(card)
 		cards_container.add_child(card.wrapper)
-
-	print("[BottomPartyCards] 카드 생성 완료: %d개" % hero_cards.size())  # 디버그
 
 
 func _create_hero_card(index: int) -> HeroCard:
