@@ -254,10 +254,13 @@ func _flash_white() -> void:
 		return
 
 	var original_modulate := sprite.modulate
+	# 매우 밝은 색으로 설정 (modulate는 곱연산이라 1.0 이상 필요)
+	var flash_color := Color(8, 8, 8, 1)
+
 	var tween := create_tween()
-	# 즉시 흰색으로
-	tween.tween_property(sprite, "modulate", Color.WHITE, 0.02)
-	# 흰색 유지
+	# 즉시 밝게
+	tween.tween_property(sprite, "modulate", flash_color, 0.02)
+	# 밝은 상태 유지
 	tween.tween_interval(0.1)
 	# 원래 색으로 복귀
 	tween.tween_property(sprite, "modulate", original_modulate, 0.08)
