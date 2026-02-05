@@ -149,8 +149,11 @@ func _show_skill_selection_ui(hero: Hero) -> void:
 
 func _create_skill_selection_ui(hero: Hero) -> Control:
 	## 스킬 선택 UI 생성
+	# CenterContainer로 중앙 정렬
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+
 	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(300, 200)
 
 	var style := StyleBoxFlat.new()
@@ -160,15 +163,12 @@ func _create_skill_selection_ui(hero: Hero) -> Control:
 	style.set_corner_radius_all(8)
 	panel.add_theme_stylebox_override("panel", style)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	panel.add_child(vbox)
-
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 15)
 	margin.add_theme_constant_override("margin_right", 15)
 	margin.add_theme_constant_override("margin_top", 15)
 	margin.add_theme_constant_override("margin_bottom", 15)
+	panel.add_child(margin)
 
 	var inner_vbox := VBoxContainer.new()
 	inner_vbox.add_theme_constant_override("separation", 10)
@@ -206,15 +206,8 @@ func _create_skill_selection_ui(hero: Hero) -> Control:
 		btn.custom_minimum_size.y = 35
 		inner_vbox.add_child(btn)
 
-	vbox.add_child(margin)
-
-	# 패널 위치 조정
-	panel.position = Vector2(
-		(get_viewport().get_visible_rect().size.x - panel.custom_minimum_size.x) / 2,
-		(get_viewport().get_visible_rect().size.y - panel.custom_minimum_size.y) / 2
-	)
-
-	return panel
+	center.add_child(panel)
+	return center
 
 
 func _on_skill_selected(skill_id: String) -> void:
@@ -256,8 +249,11 @@ func _show_enemy_selection_ui() -> void:
 
 func _create_enemy_selection_ui() -> Control:
 	## 적 선택 UI 생성
+	# CenterContainer로 중앙 정렬
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+
 	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(350, 300)
 
 	var style := StyleBoxFlat.new()
@@ -316,13 +312,13 @@ func _create_enemy_selection_ui() -> Control:
 		window_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vbox.add_child(window_label)
 
-		# 적 버튼들
+		# 적 버튼들 - battle_id와 enemy의 battle_uid를 저장 (window 참조 대신)
 		for enemy in enemies:
 			var btn := Button.new()
 			var hp_percent: int = int((float(enemy.current_hp) / enemy.max_hp) * 100)
 			btn.text = "%s (HP: %d%%)" % [enemy.enemy_name, hp_percent]
 			btn.custom_minimum_size.y = 32
-			btn.pressed.connect(_on_enemy_selected.bind(window, enemy))
+			btn.pressed.connect(_on_enemy_selected.bind(battle_id, enemy.battle_uid))
 			vbox.add_child(btn)
 
 	if not enemies_found:
@@ -341,20 +337,38 @@ func _create_enemy_selection_ui() -> Control:
 	cancel_btn.pressed.connect(_on_target_selection_cancelled)
 	vbox.add_child(cancel_btn)
 
-	panel.position = Vector2(
-		(get_viewport().get_visible_rect().size.x - panel.custom_minimum_size.x) / 2,
-		(get_viewport().get_visible_rect().size.y - panel.custom_minimum_size.y) / 2
-	)
-
-	return panel
+	center.add_child(panel)
+	return center
 
 
-func _on_enemy_selected(window: BattleWindow, enemy: BattleEnemy) -> void:
+func _on_enemy_selected(battle_id: int, enemy_uid: int) -> void:
 	## 적 선택됨 - 공격 실행
 	_cleanup_ui()
 
+	# battle_id로 window 가져오기
+	if not BattleManager.active_battles.has(battle_id):
+		_finish_action()
+		return
+
+	var battle_data: Dictionary = BattleManager.active_battles[battle_id]
+	var window: BattleWindow = battle_data.get("window")
+	if window == null or not is_instance_valid(window):
+		_finish_action()
+		return
+
+	# enemy_uid로 적 찾기
+	var target_enemy: BattleEnemy = null
+	for enemy in window.get_alive_enemies():
+		if enemy.battle_uid == enemy_uid:
+			target_enemy = enemy
+			break
+
+	if target_enemy == null:
+		_finish_action()
+		return
+
 	# 해당 전투창에서 공격 실행
-	await window.execute_hero_attack(current_hero, current_skill_id, enemy)
+	await window.execute_hero_attack(current_hero, current_skill_id, target_enemy)
 
 	# 쿨타임 시작
 	CooldownManager.start_cooldown(current_hero.id, current_skill_id)
@@ -385,8 +399,11 @@ func _show_ally_selection_ui() -> void:
 
 func _create_ally_selection_ui() -> Control:
 	## 아군 선택 UI 생성
+	# CenterContainer로 중앙 정렬
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+
 	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(300, 250)
 
 	var style := StyleBoxFlat.new()
@@ -416,14 +433,14 @@ func _create_ally_selection_ui() -> Control:
 	var sep := HSeparator.new()
 	vbox.add_child(sep)
 
-	# 아군 버튼들
+	# 아군 버튼들 - hero.id 저장
 	var heroes := PartyManager.get_alive_heroes()
 	for hero in heroes:
 		var btn := Button.new()
 		var hp_percent: int = int((float(hero.current_hp) / hero.get_max_hp()) * 100)
 		btn.text = "%s (HP: %d%%)" % [hero.hero_name, hp_percent]
 		btn.custom_minimum_size.y = 32
-		btn.pressed.connect(_on_ally_selected.bind(hero))
+		btn.pressed.connect(_on_ally_selected.bind(hero.id))
 		vbox.add_child(btn)
 
 	# 취소 버튼
@@ -436,17 +453,19 @@ func _create_ally_selection_ui() -> Control:
 	cancel_btn.pressed.connect(_on_target_selection_cancelled)
 	vbox.add_child(cancel_btn)
 
-	panel.position = Vector2(
-		(get_viewport().get_visible_rect().size.x - panel.custom_minimum_size.x) / 2,
-		(get_viewport().get_visible_rect().size.y - panel.custom_minimum_size.y) / 2
-	)
-
-	return panel
+	center.add_child(panel)
+	return center
 
 
-func _on_ally_selected(target_hero: Hero) -> void:
+func _on_ally_selected(hero_id: String) -> void:
 	## 아군 선택됨 - 스킬 실행
 	_cleanup_ui()
+
+	# hero_id로 영웅 찾기
+	var target_hero: Hero = PartyManager.get_hero_by_id(hero_id)
+	if target_hero == null:
+		_finish_action()
+		return
 
 	var skill_data: Dictionary = DataManager.get_skill(current_skill_id)
 	_execute_ally_skill(current_hero, target_hero, skill_data)
