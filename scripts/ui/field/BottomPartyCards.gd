@@ -90,16 +90,21 @@ func _on_party_changed() -> void:
 
 func _rebuild_cards() -> void:
 	## 파티원 수에 맞게 카드 재구성
+	print("[BottomPartyCards] _rebuild_cards 호출됨")  # 디버그
+
 	# 기존 카드 데이터 초기화
 	hero_cards.clear()
 
 	# cards_container의 모든 자식 즉시 제거 (free 사용으로 즉시 삭제)
 	if cards_container:
+		var child_count := cards_container.get_child_count()
+		print("[BottomPartyCards] 기존 카드 %d개 제거" % child_count)  # 디버그
 		for child in cards_container.get_children():
 			cards_container.remove_child(child)
 			child.free()  # queue_free 대신 free로 즉시 삭제
 
 	var party: Array = PartyManager.get_party() if PartyManager else []
+	print("[BottomPartyCards] 파티원 %d명으로 카드 생성" % party.size())  # 디버그
 
 	# 새 카드 생성
 	for i in range(party.size()):
@@ -108,6 +113,8 @@ func _rebuild_cards() -> void:
 		var card := _create_hero_card(i)
 		hero_cards.append(card)
 		cards_container.add_child(card.wrapper)
+
+	print("[BottomPartyCards] 카드 생성 완료: %d개" % hero_cards.size())  # 디버그
 
 
 func _create_hero_card(index: int) -> HeroCard:
