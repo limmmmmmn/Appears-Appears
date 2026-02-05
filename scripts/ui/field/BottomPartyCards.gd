@@ -45,16 +45,20 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	# 전체 컨테이너 (하단 중앙 정렬)
-	set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	# 전체 컨테이너 (하단 전체 폭, 중앙 정렬)
+	anchor_left = 0.0
+	anchor_right = 1.0
 	anchor_top = 1.0
 	anchor_bottom = 1.0
+	offset_left = 0
+	offset_right = 0
 	offset_top = -CARD_HEIGHT - 10
 	offset_bottom = -10
 
 	# HBoxContainer로 카드들을 가로로 배치 (중앙 정렬)
 	cards_container = HBoxContainer.new()
 	cards_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cards_container.add_theme_constant_override("separation", CARD_SPACING)
 	add_child(cards_container)
 

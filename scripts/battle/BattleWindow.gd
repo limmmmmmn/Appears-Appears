@@ -1363,13 +1363,11 @@ func _play_reward_fly_animation() -> void:
 
 	# 모든 애니메이션 완료 후 정리 및 닫기
 	var cleanup_delay: float = delay + total_duration + 0.2
-	var cleanup_tween := get_tree().create_tween()
+	var cleanup_tween := create_tween()
 	cleanup_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)  # 일시정지 중에도 실행
 	cleanup_tween.tween_interval(cleanup_delay)
-	cleanup_tween.tween_callback(func():
-		fly_container.queue_free()
-		_play_close_effect()
-	)
+	cleanup_tween.tween_callback(fly_container.queue_free)
+	cleanup_tween.tween_callback(_play_close_effect)
 
 
 func _create_fly_reward_node(text: String, color: Color) -> Control:
