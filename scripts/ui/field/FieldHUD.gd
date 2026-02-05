@@ -31,7 +31,7 @@ var move_style_panel: PanelContainer = null
 # === 인벤토리 패널 (우측 하단) ===
 @onready var inventory_panel: PanelContainer = %InventoryPanel
 @onready var inventory_scroll: ScrollContainer = %InventoryScroll
-@onready var inventory_grid: GridContainer = %InventoryGrid
+@onready var inventory_list: VBoxContainer = %InventoryList
 
 # === 특성 패널 (우측) ===
 @onready var trait_panel: PanelContainer = %TraitPanel
@@ -49,9 +49,8 @@ signal town_enter_confirmed(claim_rewards: bool)  # 마을 진입 확정 시그�
 # === 컴포넌트 ===
 var battle_log: BattleLogUI = null
 
-# === 인벤토리 아이템 슬롯 ===
+# === 인벤토리 아이템 목록 ===
 var inventory_slots: Array = []
-const INVENTORY_SLOT_SIZE: int = 28
 
 
 func _ready() -> void:
@@ -258,7 +257,7 @@ func _connect_signals() -> void:
 #region 인벤토리 패널
 func _setup_inventory_panel() -> void:
 	## 인벤토리 패널 초기 설정
-	if not inventory_grid:
+	if not inventory_list:
 		return
 
 	# 인벤토리 변경 시그널 연결
@@ -267,99 +266,60 @@ func _setup_inventory_panel() -> void:
 
 
 func _update_inventory_display() -> void:
-	## 인벤토리 UI 업데이트
-	if not inventory_grid:
+	## 인벤토리 UI 업데이트 (목록 형태)
+	if not inventory_list:
 		return
 
-	# 기존 슬롯 제거
-	for child in inventory_grid.get_children():
+	# 기존 아이템 제거
+	for child in inventory_list.get_children():
 		child.queue_free()
 	inventory_slots.clear()
 
 	# 인벤토리 아이템 가져오기
 	var items: Array = InventoryManager.get_all_items() if InventoryManager else []
 
-	# 아이템 슬롯 생성
+	# 아이템 행 생성 (최대 10개)
+	var count: int = 0
 	for item in items:
-		var slot := _create_inventory_slot(item)
-		inventory_grid.add_child(slot)
-		inventory_slots.append(slot)
-
-	# 빈 슬롯 채우기 (최소 8개)
-	var empty_count: int = maxi(0, 8 - items.size())
-	for i in range(empty_count):
-		var empty_slot := _create_empty_slot()
-		inventory_grid.add_child(empty_slot)
+		if count >= 10:
+			break
+		var row := _create_inventory_row(item)
+		inventory_list.add_child(row)
+		inventory_slots.append(row)
+		count += 1
 
 
-func _create_inventory_slot(item: Dictionary) -> PanelContainer:
-	## 아이템 슬롯 UI 생성
-	var slot := PanelContainer.new()
-	slot.custom_minimum_size = Vector2(INVENTORY_SLOT_SIZE, INVENTORY_SLOT_SIZE)
+func _create_inventory_row(item: Dictionary) -> HBoxContainer:
+	## 아이템 행 UI 생성: [아이콘] 이름 x수량
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
 
-	var style := StyleBoxFlat.new()
 	var rarity: String = item.data.get("rarity", "common")
-	var rarity_color: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.3, 0.3, 0.3))
-	style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 2
-	style.border_color = rarity_color
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
-	slot.add_theme_stylebox_override("panel", style)
+	var rarity_color: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.7, 0.7, 0.7))
 
-	# 아이템 아이콘 (텍스트로 대체)
-	var label := Label.new()
+	# 아이콘
+	var icon_label := Label.new()
 	var item_type: String = item.data.get("type", "?")
-	var type_icon: String = _get_item_type_icon(item_type)
-	label.text = type_icon
-	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", rarity_color)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	slot.add_child(label)
+	icon_label.text = _get_item_type_icon(item_type)
+	icon_label.add_theme_font_size_override("font_size", 11)
+	icon_label.add_theme_color_override("font_color", rarity_color)
+	icon_label.custom_minimum_size.x = 16
+	row.add_child(icon_label)
 
-	# 수량 표시 (2개 이상일 때)
-	if item.quantity > 1:
-		var qty_label := Label.new()
-		qty_label.text = str(item.quantity)
-		qty_label.add_theme_font_size_override("font_size", 8)
-		qty_label.add_theme_color_override("font_color", Color.WHITE)
-		qty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		qty_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-		qty_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		slot.add_child(qty_label)
-
-	# 툴팁
+	# 이름
+	var name_label := Label.new()
 	var item_name: String = item.data.get("name", item.id)
-	slot.tooltip_text = item_name
+	if item.quantity > 1:
+		name_label.text = "%s x%d" % [item_name, item.quantity]
+	else:
+		name_label.text = item_name
+	name_label.add_theme_font_size_override("font_size", 9)
+	name_label.add_theme_color_override("font_color", rarity_color)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(name_label)
 
-	return slot
-
-
-func _create_empty_slot() -> PanelContainer:
-	## 빈 슬롯 UI 생성
-	var slot := PanelContainer.new()
-	slot.custom_minimum_size = Vector2(INVENTORY_SLOT_SIZE, INVENTORY_SLOT_SIZE)
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.12, 0.5)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(0.2, 0.2, 0.25)
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
-	slot.add_theme_stylebox_override("panel", style)
-
-	return slot
+	return row
 
 
 func _get_item_type_icon(item_type: String) -> String:
