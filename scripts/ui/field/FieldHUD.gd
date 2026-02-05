@@ -108,6 +108,11 @@ func _connect_signals() -> void:
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 
+	# 파티 패널 장비 드롭 시그널 연결
+	if bottom_party_panel:
+		if not bottom_party_panel.equipment_dropped.is_connected(_on_equipment_dropped):
+			bottom_party_panel.equipment_dropped.connect(_on_equipment_dropped)
+
 
 
 #region 인벤토리 패널
@@ -145,56 +150,86 @@ func _update_inventory_display() -> void:
 		count += 1
 
 
-func _create_inventory_row(item: Dictionary) -> Button:
-	## 아이템 행 UI 생성: 클릭 시 자동 장착
-	var btn := Button.new()
-	btn.flat = true
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+func _create_inventory_row(item: Dictionary) -> Control:
+	## 아이템 행 UI 생성: 드래그로 장착, 클릭 시 자동 장착
+	var row := _DraggableItemRow.new()
+	row.item_id = item.id
+	row.item_data = item.data
+	row.hud_ref = self
 
 	var rarity: String = item.data.get("rarity", "common")
 	var rarity_color: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.7, 0.7, 0.7))
 
-	# 버튼 텍스트
+	# 라벨 텍스트
 	var item_type: String = item.data.get("type", "?")
 	var icon: String = _get_item_type_icon(item_type)
 	var item_name: String = item.data.get("name", item.id)
+	var display_text: String
 	if item.quantity > 1:
-		btn.text = "%s %s x%d" % [icon, item_name, item.quantity]
+		display_text = "%s %s x%d" % [icon, item_name, item.quantity]
 	else:
-		btn.text = "%s %s" % [icon, item_name]
+		display_text = "%s %s" % [icon, item_name]
 
-	btn.add_theme_font_size_override("font_size", 9)
-	btn.add_theme_color_override("font_color", rarity_color)
-	btn.add_theme_color_override("font_hover_color", rarity_color * 1.2)
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	# 버튼 스타일
-	var normal_style := StyleBoxFlat.new()
-	normal_style.bg_color = Color(0, 0, 0, 0)
-	btn.add_theme_stylebox_override("normal", normal_style)
-
-	var hover_style := StyleBoxFlat.new()
-	hover_style.bg_color = Color(1, 1, 1, 0.1)
-	btn.add_theme_stylebox_override("hover", hover_style)
-
-	var pressed_style := StyleBoxFlat.new()
-	pressed_style.bg_color = Color(1, 1, 1, 0.2)
-	btn.add_theme_stylebox_override("pressed", pressed_style)
-
-	# 클릭 시 자동 장착
-	btn.pressed.connect(_on_inventory_item_clicked.bind(item.id))
+	row.setup(display_text, rarity_color, rarity)
 
 	# 툴팁
-	var slot: String = item.data.get("slot", "")
 	var stats: Dictionary = item.data.get("stats", {})
 	var tooltip: String = item_name + "\n"
 	tooltip += "희귀도: " + rarity + "\n"
 	for stat_key in stats:
 		tooltip += "%s: %+d\n" % [stat_key.to_upper(), stats[stat_key]]
-	tooltip += "\n[클릭: 자동 장착]"
-	btn.tooltip_text = tooltip
+	tooltip += "\n[드래그: 영웅에게 장착]\n[클릭: 자동 장착]"
+	row.tooltip_text = tooltip
 
-	return btn
+	return row
+
+
+## 드래그 가능한 인벤토리 아이템 행
+class _DraggableItemRow extends Control:
+	var item_id: String = ""
+	var item_data: Dictionary = {}
+	var hud_ref: FieldHUD = null
+	var label: Label
+	var rarity_color: Color = Color.WHITE
+	var rarity: String = "common"
+
+	func setup(text: String, color: Color, p_rarity: String) -> void:
+		rarity_color = color
+		rarity = p_rarity
+		custom_minimum_size = Vector2(0, 16)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+		label = Label.new()
+		label.text = text
+		label.add_theme_font_size_override("font_size", 9)
+		label.add_theme_color_override("font_color", color)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(label)
+
+	func _get_drag_data(_pos: Vector2) -> Variant:
+		# 장비 아이템만 드래그 가능
+		if item_data.get("slot", "").is_empty():
+			return null
+
+		# 드래그 프리뷰 생성
+		var preview := Label.new()
+		preview.text = label.text
+		preview.add_theme_font_size_override("font_size", 10)
+		preview.add_theme_color_override("font_color", rarity_color)
+		preview.add_theme_color_override("font_outline_color", Color.BLACK)
+		preview.add_theme_constant_override("outline_size", 2)
+		preview.modulate.a = 0.9
+		set_drag_preview(preview)
+
+		return {"type": "equipment", "item_id": item_id, "item_data": item_data}
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+				# 클릭 시 자동 장착
+				if hud_ref:
+					hud_ref._on_inventory_item_clicked(item_id)
 
 
 func _on_inventory_item_clicked(item_id: String) -> void:
@@ -278,6 +313,24 @@ func _get_loot_target_position() -> Vector2:
 func _on_loot_animation_completed(_item_id: String) -> void:
 	# 인벤토리 디스플레이 갱신
 	_update_inventory_display()
+
+
+func _on_equipment_dropped(hero_index: int, item_id: String) -> void:
+	## 장비가 영웅에게 드롭되어 장착되었을 때 호출
+	_update_inventory_display()
+
+	# 로그 출력
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	var item_name: String = item_data.get("name", item_id)
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	var hero_name: String = ""
+	if hero_index >= 0 and hero_index < party.size() and party[hero_index] != null:
+		hero_name = party[hero_index].hero_name
+
+	if not hero_name.is_empty():
+		add_log("%s에게 %s 장착!" % [hero_name, item_name], Color(0.5, 1.0, 0.5))
+	else:
+		add_log("%s 장착!" % item_name, Color(0.5, 1.0, 0.5))
 #endregion
 
 

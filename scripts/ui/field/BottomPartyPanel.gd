@@ -26,7 +26,8 @@ const CLASS_ATTACK_ICONS := {
 class SlotUI:
 	var container: HBoxContainer  # 가로: 페이스칩 + 장비목록
 	var face_vbox: VBoxContainer  # 페이스 + ATB
-	var face_container: Control
+	var face_container: Control   # 드롭 타겟 영역
+	var drop_target: _EquipDropTarget  # 드롭 타겟 컨트롤
 	var face: TextureRect
 	var damage_overlay: ColorRect
 	var hp_label: Label
@@ -77,11 +78,18 @@ func _create_slot(index: int) -> SlotUI:
 	slot.face_vbox.add_theme_constant_override("separation", 2)
 	slot.container.add_child(slot.face_vbox)
 
-	# 페이스 컨테이너 (40x40)
+	# 페이스 컨테이너 (40x40) - 기본 Control
 	slot.face_container = Control.new()
 	slot.face_container.custom_minimum_size = Vector2(FACE_SIZE, FACE_SIZE)
 	slot.face_container.clip_contents = false  # 아이콘이 위로 나올 수 있도록
 	slot.face_vbox.add_child(slot.face_container)
+
+	# 드롭 타겟 (페이스 영역 전체를 덮음)
+	slot.drop_target = _EquipDropTarget.new()
+	slot.drop_target.hero_index = index
+	slot.drop_target.panel_ref = self
+	slot.drop_target.set_anchors_preset(Control.PRESET_FULL_RECT)
+	slot.face_container.add_child(slot.drop_target)
 
 	# 페이스 이미지
 	slot.face = TextureRect.new()
@@ -89,7 +97,8 @@ func _create_slot(index: int) -> SlotUI:
 	slot.face.set_anchors_preset(Control.PRESET_FULL_RECT)
 	slot.face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	slot.face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	slot.face_container.add_child(slot.face)
+	slot.face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.drop_target.add_child(slot.face)
 
 	# 데미지 오버레이
 	slot.damage_overlay = ColorRect.new()
@@ -404,4 +413,134 @@ func _on_atb_updated() -> void:
 
 #endregion
 
+
+#region 장비 드래그 앤 드롭
+signal equipment_dropped(hero_index: int, item_id: String)
+
+func _on_equipment_dropped(hero_index: int, item_id: String) -> void:
+	## 장비가 드롭되었을 때 호출
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	if hero_index < 0 or hero_index >= party.size():
+		return
+
+	var hero: Hero = party[hero_index]
+	if hero == null:
+		return
+
+	# 장비 가능 여부 확인
+	if not hero.can_equip(item_id):
+		_show_equip_fail_feedback(hero_index)
+		return
+
+	# 장비 장착 시도
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	var item_slot: String = item_data.get("slot", "")
+
+	# 악세사리 슬롯 처리
+	var target_slot: String = item_slot
+	if item_slot in ["accessory", "acc", "acc1", "acc2"]:
+		# 빈 슬롯 먼저 확인
+		if hero.equipment.get("acc1", "").is_empty():
+			target_slot = "acc1"
+		elif hero.equipment.get("acc2", "").is_empty():
+			target_slot = "acc2"
+		else:
+			target_slot = "acc1"  # 둘 다 차있으면 acc1 교체
+
+	if InventoryManager.equip_item(hero, item_id, target_slot):
+		_show_equip_success_feedback(hero_index)
+		update_display()
+		equipment_dropped.emit(hero_index, item_id)
+	else:
+		_show_equip_fail_feedback(hero_index)
+
+
+func _show_equip_success_feedback(hero_index: int) -> void:
+	## 장착 성공 피드백 (초록색 반짝임)
+	if hero_index < 0 or hero_index >= slots.size():
+		return
+
+	var slot := slots[hero_index]
+	if not slot.face:
+		return
+
+	var tween := create_tween()
+	tween.tween_property(slot.face, "modulate", Color(0.5, 1.0, 0.5), 0.1)
+	tween.tween_property(slot.face, "modulate", Color.WHITE, 0.15)
+
+
+func _show_equip_fail_feedback(hero_index: int) -> void:
+	## 장착 실패 피드백 (빨간색 반짝임)
+	if hero_index < 0 or hero_index >= slots.size():
+		return
+
+	var slot := slots[hero_index]
+	if not slot.face:
+		return
+
+	var tween := create_tween()
+	tween.tween_property(slot.face, "modulate", Color(1.0, 0.3, 0.3), 0.1)
+	tween.tween_property(slot.face, "modulate", Color.WHITE, 0.15)
+
+
+## 드롭 타겟 컨트롤 (페이스 영역)
+class _EquipDropTarget extends Control:
+	var hero_index: int = -1
+	var panel_ref: BottomPartyPanel = null
+	var highlight: ColorRect = null
+
+	func _ready() -> void:
+		# 하이라이트 오버레이
+		highlight = ColorRect.new()
+		highlight.set_anchors_preset(Control.PRESET_FULL_RECT)
+		highlight.color = Color(0.3, 0.8, 0.3, 0.4)
+		highlight.visible = false
+		highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(highlight)
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		if not data is Dictionary:
+			return false
+		if data.get("type") != "equipment":
+			return false
+
+		# 영웅이 장착 가능한지 확인
+		var party: Array = PartyManager.get_party() if PartyManager else []
+		if hero_index < 0 or hero_index >= party.size():
+			return false
+
+		var hero: Hero = party[hero_index]
+		if hero == null:
+			return false
+
+		var item_id: String = data.get("item_id", "")
+		var can_equip: bool = hero.can_equip(item_id)
+
+		# 하이라이트 표시
+		if highlight:
+			highlight.visible = true
+			highlight.color = Color(0.3, 0.8, 0.3, 0.4) if can_equip else Color(0.8, 0.3, 0.3, 0.4)
+
+		return can_equip
+
+	func _drop_data(_pos: Vector2, data: Variant) -> void:
+		if highlight:
+			highlight.visible = false
+
+		if not data is Dictionary:
+			return
+
+		var item_id: String = data.get("item_id", "")
+		if item_id.is_empty():
+			return
+
+		if panel_ref:
+			panel_ref._on_equipment_dropped(hero_index, item_id)
+
+	func _notification(what: int) -> void:
+		# 드래그가 영역을 벗어나면 하이라이트 숨김
+		if what == NOTIFICATION_DRAG_END:
+			if highlight:
+				highlight.visible = false
+#endregion
 
