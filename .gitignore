@@ -1,0 +1,25 @@
+# Godot 4+ 에디터 캐시
+.godot/
+
+# Godot 3 캐시 (레거시)
+.import/
+
+# 내보내기 파일
+*.translation
+
+# 빌드/내보내기 결과물
+export/
+build/
+*.pck
+*.zip
+
+# OS 관련
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
