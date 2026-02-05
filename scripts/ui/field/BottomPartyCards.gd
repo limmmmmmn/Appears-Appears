@@ -8,7 +8,7 @@ const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 # 카드 크기
 const CARD_WIDTH := 105
 const CARD_HEIGHT := 140
-const CARD_HIDDEN_OFFSET := 90  # 숨겨질 때 아래로 이동하는 양
+const CARD_HIDDEN_OFFSET := 0  # 항상 보이게
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
@@ -247,9 +247,6 @@ func _on_card_mouse_entered(card: HeroCard) -> void:
 	if card.card_highlight:
 		card.card_highlight.visible = true
 
-	# 개별 카드 위로 올림
-	_animate_card(card, true)
-
 
 func _on_card_mouse_exited(card: HeroCard) -> void:
 	if not card.is_hovered:
@@ -279,9 +276,6 @@ func _on_card_mouse_exited(card: HeroCard) -> void:
 		if row_data.has("highlight"):
 			row_data["highlight"].visible = false
 
-	# 개별 카드 아래로 내림
-	_animate_card(card, false)
-
 	# 모든 카드가 닫혔는지 확인
 	var any_hovered := false
 	for c in hero_cards:
@@ -305,13 +299,6 @@ func _on_equip_slot_exited(card: HeroCard, highlight: ColorRect) -> void:
 	# 카드 하이라이트 다시 표시 (카드가 여전히 hover 중이면)
 	if card.is_hovered and card.card_highlight:
 		card.card_highlight.visible = true
-
-
-func _animate_card(card: HeroCard, show_full: bool) -> void:
-	var target_y: float = 0.0 if show_full else CARD_HIDDEN_OFFSET
-
-	var tween := create_tween()
-	tween.tween_property(card.panel, "position:y", target_y, 0.1).set_ease(Tween.EASE_OUT)
 
 
 func _style_card_panel(panel: PanelContainer) -> void:

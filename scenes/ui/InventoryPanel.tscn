@@ -24,10 +24,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -160.0
-offset_top = -180.0
-offset_right = 160.0
-offset_bottom = 180.0
+offset_left = -100.0
+offset_top = -140.0
+offset_right = 100.0
+offset_bottom = 140.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_bg")
@@ -55,7 +55,7 @@ text = "✕"
 layout_mode = 2
 
 [node name="ScrollContainer" type="ScrollContainer" parent="VBox" unique_id=1767798958]
-custom_minimum_size = Vector2(0, 160)
+custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
@@ -66,14 +66,14 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 2
 theme_override_constants/v_separation = 2
-columns = 8
+columns = 2
 
 [node name="HSeparator2" type="HSeparator" parent="VBox" unique_id=1982307246]
 layout_mode = 2
 
 [node name="InfoPanel" type="VBoxContainer" parent="VBox" unique_id=210143417]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 80)
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 theme_override_constants/separation = 2
 

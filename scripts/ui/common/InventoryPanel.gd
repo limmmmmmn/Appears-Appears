@@ -97,8 +97,8 @@ func refresh_inventory() -> void:
 		grid.add_child(btn)
 		item_buttons.append(btn)
 	
-	# 빈 슬롯 채우기 (최소 24개 표시)
-	var empty_count: int = max(0, 24 - items.size())
+	# 빈 슬롯 채우기 (최소 6개 표시, 2x3 그리드)
+	var empty_count: int = max(0, 6 - items.size())
 	for i in range(empty_count):
 		var empty_btn := _create_empty_slot()
 		grid.add_child(empty_btn)
