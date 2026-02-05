@@ -17,6 +17,7 @@ signal boss_battle_started(battle_id: int)  # 보스전 시작 시그널 (관전
 signal boss_battle_ended(battle_id: int)  # 보스전 종료 시그널
 signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
+signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal global_kill_count_changed(count: int, danger_level: int)
 signal accumulated_rewards_changed(gold: int, items: Array)

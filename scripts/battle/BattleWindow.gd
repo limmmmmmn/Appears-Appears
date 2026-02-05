@@ -1026,6 +1026,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	var damage := _calc_enemy_damage(enemy, target, is_crit)
 
 	PartyManager.on_hero_damaged(target, damage)
+	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
 	
 	var log_color: Color = Color.RED if is_crit else Color.YELLOW

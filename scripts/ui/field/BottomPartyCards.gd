@@ -59,6 +59,12 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("party_hp_changed"):
 			if not BattleManager.party_hp_changed.is_connected(update_display):
 				BattleManager.party_hp_changed.connect(update_display)
+		if BattleManager.has_signal("hero_attacked"):
+			if not BattleManager.hero_attacked.is_connected(_on_hero_attacked):
+				BattleManager.hero_attacked.connect(_on_hero_attacked)
+		if BattleManager.has_signal("hero_damaged"):
+			if not BattleManager.hero_damaged.is_connected(_on_hero_damaged):
+				BattleManager.hero_damaged.connect(_on_hero_damaged)
 
 	if ATBManager and ATBManager.has_signal("atb_updated"):
 		if not ATBManager.atb_updated.is_connected(_on_atb_updated):
@@ -465,3 +471,46 @@ func _get_rarity_color(rarity: String) -> Color:
 		"epic": return Color(1.0, 0.5, 0.2)
 		"legendary": return Color(1.0, 0.8, 0.2)
 	return Color.WHITE
+
+
+# === 카드 애니메이션 ===
+
+func _find_card_by_hero_id(hero_id: String) -> HeroCard:
+	for card in hero_cards:
+		if card.hero_id == hero_id:
+			return card
+	return null
+
+
+func _on_hero_attacked(hero_id: String) -> void:
+	var card := _find_card_by_hero_id(hero_id)
+	if card and is_instance_valid(card.panel):
+		_play_attack_animation(card)
+
+
+func _on_hero_damaged(hero_id: String) -> void:
+	var card := _find_card_by_hero_id(hero_id)
+	if card and is_instance_valid(card.panel):
+		_play_damage_animation(card)
+
+
+func _play_attack_animation(card: HeroCard) -> void:
+	var panel := card.panel
+	var original_y := panel.position.y
+
+	var tween := create_tween()
+	tween.tween_property(panel, "position:y", original_y - 15, 0.1).set_ease(Tween.EASE_OUT)
+	tween.tween_property(panel, "position:y", original_y, 0.15).set_ease(Tween.EASE_IN)
+
+
+func _play_damage_animation(card: HeroCard) -> void:
+	var panel := card.panel
+	var original_x := panel.position.x
+
+	var tween := create_tween()
+	tween.tween_property(panel, "position:x", original_x + 4, 0.03)
+	tween.tween_property(panel, "position:x", original_x - 4, 0.03)
+	tween.tween_property(panel, "position:x", original_x + 3, 0.03)
+	tween.tween_property(panel, "position:x", original_x - 3, 0.03)
+	tween.tween_property(panel, "position:x", original_x + 2, 0.03)
+	tween.tween_property(panel, "position:x", original_x, 0.03)
