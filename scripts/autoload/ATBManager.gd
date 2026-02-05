@@ -202,15 +202,20 @@ func _find_random_enemy() -> Dictionary:
 	## 모든 전투창에서 랜덤 적 찾기
 	var all_enemies: Array = []
 
-	for battle_id in BattleManager.active_battles:
+	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
+	for battle_id in battle_ids:
+		if not BattleManager.active_battles.has(battle_id):
+			continue
+
 		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
-		var window: BattleWindow = battle_data.get("window")
+		var window = battle_data.get("window")
 		if window == null or not is_instance_valid(window):
 			continue
 
 		var enemies: Array = window.get_alive_enemies()
 		for enemy in enemies:
-			all_enemies.append({"window": window, "enemy": enemy})
+			if enemy != null and is_instance_valid(enemy):
+				all_enemies.append({"window": window, "enemy": enemy})
 
 	if all_enemies.is_empty():
 		return {}
@@ -277,15 +282,24 @@ func _execute_aoe_attack(hero: Hero, skill_id: String) -> void:
 	var total_damage: int = 0
 	var enemies_hit: int = 0
 
+	# 배틀 ID 목록을 먼저 복사 (반복 중 수정 방지)
+	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
+
 	# 모든 전투창의 적 공격
-	for battle_id in BattleManager.active_battles:
+	for battle_id in battle_ids:
+		if not BattleManager.active_battles.has(battle_id):
+			continue
+
 		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
-		var window: BattleWindow = battle_data.get("window")
+		var window = battle_data.get("window")
 		if window == null or not is_instance_valid(window):
 			continue
 
 		var enemies: Array = window.get_alive_enemies()
 		for enemy in enemies:
+			if enemy == null or not is_instance_valid(enemy):
+				continue
+
 			var damage: int = _calculate_damage(hero, enemy, skill_data)
 			enemy.take_damage(damage)
 			total_damage += damage
@@ -347,9 +361,13 @@ func _finish_action() -> void:
 
 func _pause_all_battle_windows(paused: bool) -> void:
 	## 모든 전투창 일시정지/재개
-	for battle_id in BattleManager.active_battles:
+	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
+	for battle_id in battle_ids:
+		if not BattleManager.active_battles.has(battle_id):
+			continue
+
 		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
-		var window: BattleWindow = battle_data.get("window")
+		var window = battle_data.get("window")
 		if window and is_instance_valid(window):
 			window.set_atb_paused(paused)
 
