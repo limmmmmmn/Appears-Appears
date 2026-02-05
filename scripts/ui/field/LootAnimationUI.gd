@@ -112,40 +112,40 @@ func _create_ui() -> void:
 	container.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(container)
 	
-	# 글로우 배경 (Panel)
+	# 글로우 배경 (Panel) - 작은 크기
 	glow_panel = Panel.new()
-	glow_panel.custom_minimum_size = Vector2(50, 50)
+	glow_panel.custom_minimum_size = Vector2(24, 24)
 	var glow_style := StyleBoxFlat.new()
 	glow_style.bg_color = RARITY_GLOW.get(rarity, RARITY_GLOW["common"])
-	glow_style.corner_radius_top_left = 8
-	glow_style.corner_radius_top_right = 8
-	glow_style.corner_radius_bottom_left = 8
-	glow_style.corner_radius_bottom_right = 8
+	glow_style.corner_radius_top_left = 4
+	glow_style.corner_radius_top_right = 4
+	glow_style.corner_radius_bottom_left = 4
+	glow_style.corner_radius_bottom_right = 4
 	glow_panel.add_theme_stylebox_override("panel", glow_style)
 	container.add_child(glow_panel)
-	
-	# 아이콘 라벨 (글로우 위에)
+
+	# 아이콘 라벨 (글로우 위에) - 작은 크기
 	icon_label = Label.new()
 	icon_label.text = icon
 	icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	icon_label.add_theme_font_size_override("font_size", 28)
+	icon_label.add_theme_font_size_override("font_size", 12)
 	icon_label.modulate = RARITY_COLORS.get(rarity, Color.WHITE)
 	icon_label.anchors_preset = Control.PRESET_CENTER
-	icon_label.position = Vector2(-14, -18)
+	icon_label.position = Vector2(-6, -8)
 	glow_panel.add_child(icon_label)
-	
-	# 이름 라벨
+
+	# 이름 라벨 - 작은 크기
 	name_label = Label.new()
 	name_label.text = item_name
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 9)
+	name_label.add_theme_font_size_override("font_size", 6)
 	name_label.modulate = RARITY_COLORS.get(rarity, Color.WHITE)
-	name_label.custom_minimum_size = Vector2(60, 0)
+	name_label.custom_minimum_size = Vector2(30, 0)
 	container.add_child(name_label)
-	
+
 	# 컨테이너 중앙 정렬을 위한 오프셋
-	container.position = Vector2(-30, -35)
+	container.position = Vector2(-15, -18)
 
 
 func _process(delta: float) -> void:

@@ -217,10 +217,6 @@ func _connect_signals() -> void:
 		if not ATBManager.atb_updated.is_connected(_on_atb_updated):
 			ATBManager.atb_updated.connect(_on_atb_updated)
 
-	# 자동 장착 알림 연결
-	if InventoryManager and InventoryManager.has_signal("item_auto_equipped"):
-		if not InventoryManager.item_auto_equipped.is_connected(_on_item_auto_equipped):
-			InventoryManager.item_auto_equipped.connect(_on_item_auto_equipped)
 
 
 func update_display() -> void:
@@ -406,76 +402,6 @@ func _on_atb_updated() -> void:
 			slot.atb_bar.add_theme_stylebox_override("fill", normal_fill)
 
 
-func _on_item_auto_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String) -> void:
-	## 아이템 자동 장착 시 알림 표시
-	var item_data: Dictionary = DataManager.get_equipment(item_id)
-	var item_name: String = item_data.get("name", item_id)
-	var rarity: String = item_data.get("rarity", "common")
-
-	# 알림 패널 생성
-	var notify := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.15, 0.95)
-	style.border_width_bottom = 2
-	style.border_color = InventoryManager.RARITY_COLORS.get(rarity, Color.WHITE)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-	notify.add_theme_stylebox_override("panel", style)
-
-	# 내용
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	notify.add_child(vbox)
-
-	# 영웅 이름
-	var hero_label := Label.new()
-	hero_label.text = hero_name
-	hero_label.add_theme_font_size_override("font_size", 10)
-	hero_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	hero_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(hero_label)
-
-	# 아이템 이름
-	var item_label := Label.new()
-	item_label.text = item_name
-	item_label.add_theme_font_size_override("font_size", 11)
-	item_label.add_theme_color_override("font_color", InventoryManager.RARITY_COLORS.get(rarity, Color.WHITE))
-	item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(item_label)
-
-	# 교체 정보
-	if not replaced_id.is_empty():
-		var old_data: Dictionary = DataManager.get_equipment(replaced_id)
-		var old_name: String = old_data.get("name", replaced_id)
-		var replace_label := Label.new()
-		replace_label.text = "← " + old_name
-		replace_label.add_theme_font_size_override("font_size", 9)
-		replace_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-		replace_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(replace_label)
-
-	# 부모에 추가 (파티패널 위쪽)
-	add_child(notify)
-	notify.position = Vector2(0, -notify.size.y - 8)
-
-	# 애니메이션 후 제거
-	notify.modulate.a = 0.0
-	var tween := create_tween()
-	tween.tween_property(notify, "modulate:a", 1.0, 0.15)
-	tween.tween_property(notify, "position:y", notify.position.y - 10, 0.15)
-	tween.tween_interval(1.5)
-	tween.tween_property(notify, "modulate:a", 0.0, 0.3)
-	tween.tween_callback(notify.queue_free)
-
-	# 사운드
-	if SoundManager:
-		SoundManager.play_equip()
 #endregion
 
 
