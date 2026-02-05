@@ -1,19 +1,7 @@
 extends PanelContainer
 class_name BottomPartyPanel
 ## 하단 파티 패널 - 새 레이아웃
-## Face(40x40) + MP바 + 작전 패널 + 장비 그리드(3x2)
-
-signal tactic_changed(hero_index: int, tactic_id: String)
-
-## 작전 정의 (드래곤퀘스트 스타일)
-const TACTICS := {
-	"all_out": {"name": "전력으로 싸워라", "icon": "⚔️"},
-	"no_mp": {"name": "MP 사용 금지", "icon": "🚫"},
-	"heal_first": {"name": "회복 우선", "icon": "💚"},
-	"conserve_mp": {"name": "MP 아껴라", "icon": "💧"},
-	"defend": {"name": "방어 집중", "icon": "🛡️"}
-}
-const TACTIC_ORDER := ["all_out", "no_mp", "heal_first", "conserve_mp", "defend"]
+## Face(40x40) + ATB바 + 장비 그리드(3x2)
 
 const FACE_SIZE := 40
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
@@ -43,22 +31,17 @@ class SlotUI:
 	var hp_label: Label
 	var attack_icon: Label
 	var atb_bar: ProgressBar  # ATB 바
-	var tactic_btn: Button
 	var equip_grid: GridContainer
 	var equip_labels: Dictionary = {}  # slot_name -> Label
 	var hero_index: int = -1
-	var current_tactic: String = "all_out"
 	var hero_id: String = ""
 
 var slots: Array[SlotUI] = []
-var tactic_popup: PopupMenu
-var active_slot_index: int = -1
 var main_hbox: HBoxContainer
 
 
 func _ready() -> void:
 	_build_ui()
-	_setup_tactic_popup()
 	_connect_signals()
 	update_display()
 
@@ -160,20 +143,6 @@ func _create_slot(index: int) -> SlotUI:
 
 	slot.container.add_child(slot.atb_bar)
 
-	# 작전 버튼 (페이스 폭과 동일)
-	slot.tactic_btn = Button.new()
-	slot.tactic_btn.custom_minimum_size = Vector2(FACE_SIZE, 16)
-	slot.tactic_btn.add_theme_font_size_override("font_size", 7)
-	slot.tactic_btn.clip_text = true
-	slot.tactic_btn.text = "전력"
-	var tactic_style := StyleBoxFlat.new()
-	tactic_style.bg_color = Color(0.15, 0.15, 0.2)
-	tactic_style.border_width_bottom = 1
-	tactic_style.border_color = Color(0.3, 0.3, 0.4)
-	slot.tactic_btn.add_theme_stylebox_override("normal", tactic_style)
-	slot.tactic_btn.pressed.connect(_on_tactic_btn_pressed.bind(index))
-	slot.container.add_child(slot.tactic_btn)
-
 	# 장비 그리드 (3x2)
 	slot.equip_grid = GridContainer.new()
 	slot.equip_grid.columns = 3
@@ -205,18 +174,6 @@ func _get_slot_display_name(slot_name: String) -> String:
 		"acc1": return "악세1"
 		"acc2": return "악세2"
 	return slot_name
-
-
-func _setup_tactic_popup() -> void:
-	tactic_popup = PopupMenu.new()
-	add_child(tactic_popup)
-
-	for tactic_id in TACTIC_ORDER:
-		var tactic: Dictionary = TACTICS[tactic_id]
-		tactic_popup.add_item("%s %s" % [tactic.icon, tactic.name])
-		tactic_popup.set_item_metadata(tactic_popup.item_count - 1, tactic_id)
-
-	tactic_popup.id_pressed.connect(_on_tactic_selected)
 
 
 func _connect_signals() -> void:
@@ -267,9 +224,6 @@ func update_display() -> void:
 			_update_damage_overlay(slot, hp_percent)
 			_update_hp_label(slot, hero.current_hp, max_hp)
 
-			# 작전 버튼 업데이트
-			_update_tactic_button(slot)
-
 			# 장비 그리드 업데이트
 			_update_equip_grid(slot, hero)
 		else:
@@ -306,19 +260,6 @@ func _update_hp_label(slot: SlotUI, current_hp: int, max_hp: int) -> void:
 		slot.hp_label.add_theme_color_override("font_color", Color.WHITE)
 
 
-func _update_tactic_button(slot: SlotUI) -> void:
-	if not slot.tactic_btn:
-		return
-
-	var tactic_data: Dictionary = TACTICS.get(slot.current_tactic, TACTICS["all_out"])
-	# 짧은 이름으로 표시
-	var short_name: String = tactic_data.name
-	if short_name.length() > 4:
-		short_name = short_name.substr(0, 4)
-	slot.tactic_btn.text = short_name
-	slot.tactic_btn.tooltip_text = tactic_data.name
-
-
 func _update_equip_grid(slot: SlotUI, hero: Hero) -> void:
 	for slot_name in SLOT_ORDER:
 		var equip_lbl: Label = slot.equip_labels.get(slot_name)
@@ -347,58 +288,6 @@ func _get_rarity_color(rarity: String) -> Color:
 		"epic": return Color(1.0, 0.5, 0.2)
 		"legendary": return Color(1.0, 0.8, 0.2)
 	return Color.WHITE
-
-
-func _on_tactic_btn_pressed(hero_index: int) -> void:
-	if hero_index < 0 or hero_index >= slots.size():
-		return
-
-	active_slot_index = hero_index
-	var slot := slots[hero_index]
-
-	# 현재 선택된 작전 체크
-	for i in range(tactic_popup.item_count):
-		var item_tactic: String = tactic_popup.get_item_metadata(i)
-		tactic_popup.set_item_checked(i, item_tactic == slot.current_tactic)
-
-	# 팝업 위치
-	var btn_pos := slot.tactic_btn.global_position
-	tactic_popup.position = Vector2i(int(btn_pos.x), int(btn_pos.y - tactic_popup.size.y - 4))
-	tactic_popup.popup()
-
-
-func _on_tactic_selected(index: int) -> void:
-	if active_slot_index < 0 or active_slot_index >= slots.size():
-		return
-
-	var tactic_id: String = tactic_popup.get_item_metadata(index)
-	var slot := slots[active_slot_index]
-	slot.current_tactic = tactic_id
-
-	_update_tactic_button(slot)
-
-	if SoundManager != null:
-		SoundManager.play_select()
-
-	tactic_changed.emit(active_slot_index, tactic_id)
-	active_slot_index = -1
-
-
-func get_hero_tactic(hero_index: int) -> String:
-	if hero_index >= 0 and hero_index < slots.size():
-		return slots[hero_index].current_tactic
-	return "all_out"
-
-
-func set_hero_tactic(hero_index: int, tactic_id: String) -> void:
-	if hero_index >= 0 and hero_index < slots.size():
-		if TACTICS.has(tactic_id):
-			slots[hero_index].current_tactic = tactic_id
-			_update_tactic_button(slots[hero_index])
-
-
-func get_tactic_data(tactic_id: String) -> Dictionary:
-	return TACTICS.get(tactic_id, TACTICS["all_out"])
 
 
 #region 전투 이펙트

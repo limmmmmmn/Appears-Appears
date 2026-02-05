@@ -19,15 +19,6 @@ var has_click_target: bool = false
 var is_mouse_held: bool = false  # 마우스 버튼 누르고 있는지
 const CLICK_ARRIVE_DISTANCE: float = 5.0  # 도착 판정 거리
 
-# 자동 이동용
-var auto_move_direction: Vector2 = Vector2.DOWN  # 자동 이동 방향
-const AUTO_MOVE_DELAY: float = 1.5  # 입력 없으면 자동 이동까지 대기 시간
-var idle_timer: float = 0.0  # 가만히 있는 시간
-
-# 이동 스타일
-enum MoveStyle { RANDOM, HUNT_ENEMY, OFF, TO_TOWN, TO_BOSS }
-var current_move_style: MoveStyle = MoveStyle.RANDOM
-
 # 보스전 모드 (이동 정지)
 var is_in_boss_battle: bool = false
 
@@ -77,18 +68,16 @@ func _physics_process(delta: float) -> void:
 #=============================================================================
 # 리더 로직
 #=============================================================================
-func _process_leader(delta: float) -> void:
+func _process_leader(_delta: float) -> void:
 	# 키보드 입력 체크
 	var input_dir := Vector2(
 		Input.get_axis("ui_left", "ui_right"),
 		Input.get_axis("ui_up", "ui_down")
 	).normalized()
 
-	# 키보드 입력이 있으면 클릭 이동 취소 + 자동 이동 방향 갱신
+	# 키보드 입력이 있으면 클릭 이동 취소
 	if input_dir != Vector2.ZERO:
 		has_click_target = false
-		idle_timer = 0.0
-		auto_move_direction = input_dir
 		velocity = input_dir * move_speed
 		_update_direction(input_dir)
 		_play_walk_animation()
@@ -106,9 +95,6 @@ func _process_leader(delta: float) -> void:
 		var to_target: Vector2 = click_target - global_position
 		var distance: float = to_target.length()
 
-		idle_timer = 0.0
-		auto_move_direction = to_target.normalized()
-
 		# 마우스 누르고 있지 않고 목표 도착
 		if not is_mouse_held and distance <= CLICK_ARRIVE_DISTANCE:
 			has_click_target = false
@@ -124,123 +110,9 @@ func _process_leader(delta: float) -> void:
 			_record_path()
 		return
 
-	# 입력 없음 - 자동 이동 타이머 증가
-	idle_timer += delta
-	# RANDOM과 OFF 모드에서는 자동 이동 안 함
-	if idle_timer >= AUTO_MOVE_DELAY and current_move_style != MoveStyle.OFF and current_move_style != MoveStyle.RANDOM:
-		# 이동 스타일에 따른 자동 이동
-		_process_auto_move()
-	else:
-		velocity = Vector2.ZERO
-		_play_idle_animation()
-
-
-func _process_auto_move() -> void:
-	## 이동 스타일에 따른 자동 이동 처리
-	match current_move_style:
-		MoveStyle.RANDOM:
-			_auto_move_random()
-		MoveStyle.HUNT_ENEMY:
-			_auto_move_hunt_enemy()
-		MoveStyle.TO_TOWN:
-			_auto_move_to_town()
-		MoveStyle.TO_BOSS:
-			_auto_move_to_boss()
-		MoveStyle.OFF:
-			velocity = Vector2.ZERO
-			_play_idle_animation()
-
-
-func _auto_move_random() -> void:
-	## 랜덤 방향 자동 이동
-	velocity = auto_move_direction * move_speed
-	_update_direction(auto_move_direction)
-	_play_walk_animation()
-	move_and_slide()
-	_record_path()
-
-	# 랜덤하게 방향 변경 (약 2% 확률로 매 프레임)
-	if randf() < 0.02:
-		_change_random_direction()
-
-
-func _auto_move_hunt_enemy() -> void:
-	## 가장 가까운 적을 향해 이동
-	var nearest_enemy := _find_nearest_field_enemy()
-	if nearest_enemy:
-		auto_move_direction = (nearest_enemy.global_position - global_position).normalized()
-
-	velocity = auto_move_direction * move_speed
-	_update_direction(auto_move_direction)
-	_play_walk_animation()
-	move_and_slide()
-	_record_path()
-
-
-func _auto_move_to_town() -> void:
-	## 마을 방향으로 이동
-	var town_pos := _find_town_position()
-	if town_pos != Vector2.ZERO:
-		auto_move_direction = (town_pos - global_position).normalized()
-
-	velocity = auto_move_direction * move_speed
-	_update_direction(auto_move_direction)
-	_play_walk_animation()
-	move_and_slide()
-	_record_path()
-
-
-func _auto_move_to_boss() -> void:
-	## 필드 보스 방향으로 이동
-	var boss := _find_field_boss()
-	if boss:
-		auto_move_direction = (boss.global_position - global_position).normalized()
-
-	velocity = auto_move_direction * move_speed
-	_update_direction(auto_move_direction)
-	_play_walk_animation()
-	move_and_slide()
-	_record_path()
-
-
-func _find_nearest_field_enemy() -> Node2D:
-	## 가장 가까운 필드 적 찾기
-	var enemies := get_tree().get_nodes_in_group("field_enemy")
-	var nearest: Node2D = null
-	var nearest_dist: float = INF
-
-	for enemy in enemies:
-		if enemy is Node2D:
-			var dist: float = global_position.distance_to(enemy.global_position)
-			if dist < nearest_dist:
-				nearest_dist = dist
-				nearest = enemy
-
-	return nearest
-
-
-func _find_town_position() -> Vector2:
-	## 마을 위치 찾기
-	var town := get_tree().get_first_node_in_group("town")
-	if town and town is Node2D:
-		return town.global_position
-
-	# 마을이 없으면 맵 중앙으로 (기본값)
-	return Vector2.ZERO
-
-
-func _find_field_boss() -> Node2D:
-	## 필드 보스 찾기
-	var boss := get_tree().get_first_node_in_group("field_boss")
-	if boss and boss is Node2D:
-		return boss
-	return null
-
-
-func set_move_style(style: int) -> void:
-	## 이동 스타일 설정 (외부에서 호출)
-	current_move_style = style as MoveStyle
-	idle_timer = 0.0  # 타이머 리셋
+	# 입력 없음 - 대기
+	velocity = Vector2.ZERO
+	_play_idle_animation()
 
 
 func set_boss_battle_mode(enabled: bool) -> void:
@@ -257,21 +129,6 @@ func brief_pause(duration: float = 0.15) -> void:
 	is_stunned = true
 	stun_timer = duration
 	velocity = Vector2.ZERO
-
-
-func _change_random_direction() -> void:
-	## 랜덤한 방향으로 변경
-	var directions: Array[Vector2] = [
-		Vector2.UP,
-		Vector2.DOWN,
-		Vector2.LEFT,
-		Vector2.RIGHT,
-		Vector2(1, 1).normalized(),   # 우하
-		Vector2(1, -1).normalized(),  # 우상
-		Vector2(-1, 1).normalized(),  # 좌하
-		Vector2(-1, -1).normalized()  # 좌상
-	]
-	auto_move_direction = directions[randi() % directions.size()]
 
 
 func _input(event: InputEvent) -> void:
