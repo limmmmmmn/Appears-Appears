@@ -1449,8 +1449,10 @@ func _start_loot_animations() -> void:
 func _delayed_loot_drop(item_id: String, start_pos: Vector2, delay: float) -> void:
 	if delay > 0.0:
 		await get_tree().create_timer(delay).timeout
-	
-	InventoryManager.add_item(item_id)
+
+	# 자동 장착 시도, 실패 시 인벤토리에 추가
+	if not InventoryManager.try_auto_equip(item_id):
+		InventoryManager.add_item(item_id)
 	loot_drop_requested.emit(item_id, start_pos)
 
 
