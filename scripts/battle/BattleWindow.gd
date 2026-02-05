@@ -1050,8 +1050,11 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
-	# 원념 증가 (로컬 - 전투창 종료 시 글로벌로 전송)
+	# 원념 증가 (로컬)
 	kill_count += 1
+
+	# 글로벌 킬 카운트 즉시 증가 (적 처치할 때마다)
+	BattleManager.increment_global_kill_count()
 
 	# 특성: 적 3마리 이상일 때 보너스 원념
 	if _check_trait_condition("enemies_gte_3"):
@@ -1278,10 +1281,6 @@ func _end_battle_victory() -> void:
 		SoundManager.play_victory()
 
 	_send_log("승리! Gold +%d" % total_gold, Color.CYAN)
-
-	# 글로벌 킬 카운트 증가
-	for i in range(kill_count):
-		BattleManager.increment_global_kill_count()
 
 	GameManager.add_gold(total_gold)
 

@@ -70,9 +70,10 @@ func _ready() -> void:
 	_update_trait_display()
 	_update_inventory_display()
 
-	# 하단 파티 패널 숨김 (기존 씬)
+	# 하단 파티 패널 제거 (기존 씬 - BottomPartyCards로 대체됨)
 	if bottom_party_panel:
-		bottom_party_panel.visible = false
+		bottom_party_panel.queue_free()
+		bottom_party_panel = null
 
 
 func _setup_components() -> void:
