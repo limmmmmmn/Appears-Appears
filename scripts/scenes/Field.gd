@@ -278,9 +278,9 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	if spawner:
 		spawner.on_enemy_killed(tile_type, enemy_pos)
 
-	# 적 멈추고 0.5초 후 사라짐
+	# 적 멈추고 0.25초 후 사라짐
 	field_enemies.erase(field_enemy)
-	field_enemy.freeze_and_despawn(0.5)
+	field_enemy.freeze_and_despawn(0.25)
 
 	# 새 시스템: 적 1마리씩 전투에 추가 (기존 창에 추가되거나 새 창 생성)
 	if BattleManager:
