@@ -11,6 +11,10 @@ var enemy_id: String = ""
 var enemy_name: String = ""
 var enemy_type: String = "normal"  # normal, elite, boss
 
+# 고유 식별자 (전투창 간 구분용)
+static var _uid_counter: int = 0
+var battle_uid: int = -1
+
 # 스탯
 var max_hp: int = 1
 var current_hp: int = 1
@@ -40,6 +44,10 @@ var is_elite_version: bool = false  # 엘리트 버전 여부
 func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0) -> void:
 	enemy_id = p_enemy_id
 	is_elite_version = p_is_elite
+
+	# 고유 ID 할당
+	_uid_counter += 1
+	battle_uid = _uid_counter
 
 	var data: Dictionary = DataManager.get_enemy(enemy_id)
 	if data.is_empty():

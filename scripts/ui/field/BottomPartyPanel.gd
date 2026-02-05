@@ -42,6 +42,7 @@ class SlotUI:
 	var damage_overlay: ColorRect
 	var hp_label: Label
 	var attack_icon: Label
+	var atb_bar: ProgressBar  # ATB 바
 	var tactic_btn: Button
 	var equip_grid: GridContainer
 	var equip_labels: Dictionary = {}  # slot_name -> Label
@@ -132,6 +133,33 @@ func _create_slot(index: int) -> SlotUI:
 	slot.attack_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.face_container.add_child(slot.attack_icon)
 
+	# ATB 바 (페이스 아래)
+	slot.atb_bar = ProgressBar.new()
+	slot.atb_bar.custom_minimum_size = Vector2(FACE_SIZE, 6)
+	slot.atb_bar.max_value = 100.0
+	slot.atb_bar.value = 0.0
+	slot.atb_bar.show_percentage = false
+	slot.atb_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# ATB 바 스타일
+	var atb_bg := StyleBoxFlat.new()
+	atb_bg.bg_color = Color(0.15, 0.15, 0.2)
+	atb_bg.corner_radius_top_left = 2
+	atb_bg.corner_radius_top_right = 2
+	atb_bg.corner_radius_bottom_left = 2
+	atb_bg.corner_radius_bottom_right = 2
+	slot.atb_bar.add_theme_stylebox_override("background", atb_bg)
+
+	var atb_fill := StyleBoxFlat.new()
+	atb_fill.bg_color = Color(0.3, 0.7, 1.0)
+	atb_fill.corner_radius_top_left = 2
+	atb_fill.corner_radius_top_right = 2
+	atb_fill.corner_radius_bottom_left = 2
+	atb_fill.corner_radius_bottom_right = 2
+	slot.atb_bar.add_theme_stylebox_override("fill", atb_fill)
+
+	slot.container.add_child(slot.atb_bar)
+
 	# 작전 버튼 (페이스 폭과 동일)
 	slot.tactic_btn = Button.new()
 	slot.tactic_btn.custom_minimum_size = Vector2(FACE_SIZE, 16)
@@ -203,6 +231,11 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("hero_attacked"):
 			if not BattleManager.hero_attacked.is_connected(_on_hero_attacked):
 				BattleManager.hero_attacked.connect(_on_hero_attacked)
+
+	# ATB 업데이트 연결
+	if ATBManager and ATBManager.has_signal("atb_updated"):
+		if not ATBManager.atb_updated.is_connected(_on_atb_updated):
+			ATBManager.atb_updated.connect(_on_atb_updated)
 
 
 func update_display() -> void:
@@ -419,6 +452,34 @@ func _play_hit_flash(slot: SlotUI) -> void:
 	tween.tween_property(slot.face, "modulate", Color.WHITE, 0.1)
 	tween.tween_property(slot.face, "modulate", Color(1.0, 0.5, 0.5), 0.05)
 	tween.tween_property(slot.face, "modulate", Color.WHITE, 0.1)
+
+
+func _on_atb_updated() -> void:
+	## ATB 업데이트 시 바 갱신
+	for slot in slots:
+		if slot.hero_id.is_empty() or slot.atb_bar == null:
+			continue
+
+		var atb_percent: float = ATBManager.get_hero_atb_percent(slot.hero_id)
+		slot.atb_bar.value = atb_percent * 100.0
+
+		# ATB 100% 도달 시 색상 변경 (준비 완료)
+		if atb_percent >= 1.0:
+			var ready_fill := StyleBoxFlat.new()
+			ready_fill.bg_color = Color(1.0, 0.8, 0.2)  # 금색
+			ready_fill.corner_radius_top_left = 2
+			ready_fill.corner_radius_top_right = 2
+			ready_fill.corner_radius_bottom_left = 2
+			ready_fill.corner_radius_bottom_right = 2
+			slot.atb_bar.add_theme_stylebox_override("fill", ready_fill)
+		else:
+			var normal_fill := StyleBoxFlat.new()
+			normal_fill.bg_color = Color(0.3, 0.7, 1.0)  # 파란색
+			normal_fill.corner_radius_top_left = 2
+			normal_fill.corner_radius_top_right = 2
+			normal_fill.corner_radius_bottom_left = 2
+			normal_fill.corner_radius_bottom_right = 2
+			slot.atb_bar.add_theme_stylebox_override("fill", normal_fill)
 #endregion
 
 
