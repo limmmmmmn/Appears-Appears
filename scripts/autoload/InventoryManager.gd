@@ -4,6 +4,7 @@ extends Node
 signal inventory_changed
 signal item_added(item_id: String, quantity: int)
 signal item_removed(item_id: String, quantity: int)
+signal item_auto_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String)
 
 # 인벤토리: { item_id: quantity }
 var items: Dictionary = {}
@@ -252,6 +253,124 @@ func get_rarity_color(item_id: String) -> Color:
 
 	var rarity: String = data.get("rarity", "common")
 	return RARITY_COLORS.get(rarity, Color.WHITE)
+#endregion
+
+
+#region 자동 장착
+func try_auto_equip(item_id: String) -> bool:
+	## 아이템 자동 장착 시도
+	## 반환: 장착 성공 여부
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	if item_data.is_empty():
+		return false  # 장비가 아님
+
+	var item_slot: String = item_data.get("slot", "")
+	var item_type: String = item_data.get("type", "")
+	if item_slot.is_empty():
+		return false
+
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	if party.is_empty():
+		return false
+
+	# 1단계: 빈 슬롯에 장착 시도 (파티 순서대로)
+	for hero in party:
+		if hero == null:
+			continue
+		if not hero.can_equip(item_id):
+			continue
+
+		# 해당 슬롯이 비어있는지 확인
+		var slots_to_check: Array = _get_slots_for_item(item_slot, hero)
+		for slot in slots_to_check:
+			var current: String = hero.equipment.get(slot, "")
+			if current.is_empty():
+				# 빈 슬롯 발견! 장착
+				_do_auto_equip(hero, item_id, slot, "")
+				return true
+
+	# 2단계: 더 강한 아이템이면 교체 (파티 순서대로)
+	var new_power: int = _calculate_item_power(item_id)
+
+	for hero in party:
+		if hero == null:
+			continue
+		if not hero.can_equip(item_id):
+			continue
+
+		var slots_to_check: Array = _get_slots_for_item(item_slot, hero)
+		for slot in slots_to_check:
+			var current: String = hero.equipment.get(slot, "")
+			if current.is_empty():
+				continue
+
+			var current_power: int = _calculate_item_power(current)
+			if new_power > current_power:
+				# 더 강한 아이템! 교체
+				_do_auto_equip(hero, item_id, slot, current)
+				return true
+
+	return false
+
+
+func _get_slots_for_item(item_slot: String, hero: Hero) -> Array:
+	## 아이템이 장착될 수 있는 슬롯 목록 반환
+	if item_slot == "acc":
+		return ["acc1", "acc2"]
+	elif item_slot == "off_hand":
+		# 양손무기 체크
+		if hero.is_off_hand_disabled():
+			return []
+		return ["off_hand"]
+	else:
+		return [item_slot]
+
+
+func _calculate_item_power(item_id: String) -> int:
+	## 아이템의 총 스탯 파워 계산
+	if item_id.is_empty():
+		return 0
+
+	var data: Dictionary = DataManager.get_equipment(item_id)
+	if data.is_empty():
+		return 0
+
+	var stats: Dictionary = data.get("stats", {})
+	var power: int = 0
+
+	# 모든 스탯 합산 (가중치 적용)
+	power += int(stats.get("hp", 0)) / 5  # HP는 5로 나눔
+	power += int(stats.get("str", 0)) * 2
+	power += int(stats.get("def", 0)) * 2
+	power += int(stats.get("int", 0)) * 2
+	power += int(stats.get("dex", 0)) * 2
+	power += int(stats.get("luk", 0))
+	power += int(stats.get("atk", 0)) * 2
+
+	# 희귀도 보너스
+	var rarity: String = data.get("rarity", "common")
+	match rarity:
+		"magic": power += 5
+		"rare": power += 15
+		"unique": power += 30
+		"legendary": power += 50
+
+	return power
+
+
+func _do_auto_equip(hero: Hero, item_id: String, slot: String, replaced_id: String) -> void:
+	## 실제 자동 장착 수행
+	# 기존 장비를 인벤으로 (교체인 경우)
+	if not replaced_id.is_empty():
+		add_item(replaced_id, 1)
+
+	# 새 장비 장착
+	hero.equipment[slot] = item_id
+
+	# 시그널 발송 (알림 UI용)
+	item_auto_equipped.emit(hero.hero_name, item_id, slot, replaced_id)
+
+	PartyManager.party_changed.emit()
 #endregion
 
 

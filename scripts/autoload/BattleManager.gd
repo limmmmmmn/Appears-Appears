@@ -399,9 +399,10 @@ func claim_accumulated_rewards() -> void:
 	if accumulated_gold > 0:
 		GameManager.add_gold(accumulated_gold)
 
-	# 아이템은 인벤토리에 추가
+	# 아이템 자동 장착 시도, 실패 시 인벤토리에 추가
 	for item in accumulated_items:
-		InventoryManager.add_item(item.id, 1)
+		if not InventoryManager.try_auto_equip(item.id):
+			InventoryManager.add_item(item.id, 1)
 
 	# 로그
 	battle_log_received.emit("보상 획득! Gold +%d" % accumulated_gold, Color.CYAN)
