@@ -255,8 +255,12 @@ func _flash_white() -> void:
 
 	var original_modulate := sprite.modulate
 	var tween := create_tween()
-	tween.tween_property(sprite, "modulate", Color.WHITE, 0.05)
-	tween.tween_property(sprite, "modulate", original_modulate, 0.1)
+	# 즉시 흰색으로
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.02)
+	# 흰색 유지
+	tween.tween_interval(0.1)
+	# 원래 색으로 복귀
+	tween.tween_property(sprite, "modulate", original_modulate, 0.08)
 
 
 #region 관전 시스템
