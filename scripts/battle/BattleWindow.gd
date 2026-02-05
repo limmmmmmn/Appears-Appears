@@ -57,9 +57,13 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
 
 # === 동적 생성 UI ===
-var auto_claim_toggle: Button = null
-var auto_claim_enabled: bool = false  # 자동 보상 받기 토글
 var is_waiting_for_claim: bool = false  # 보상 대기 상태 (적 전멸 후)
+
+# === 보상 UI (전투창 중앙) ===
+var claim_reward_panel: CenterContainer = null
+var claim_button: Button = null
+var claim_gold_label: Label = null
+var claim_items_label: Label = null
 
 # === 고/스톱 시스템 ===
 var go_stop_panel: PanelContainer = null
@@ -152,8 +156,8 @@ func _ready() -> void:
 	# 고/스톱 UI 생성
 	_setup_go_stop_ui()
 
-	# 자동 보상 토글 버튼 생성
-	_setup_auto_claim_toggle()
+	# 보상 받기 UI 생성
+	_setup_claim_reward_ui()
 
 
 func _process(delta: float) -> void:
@@ -224,6 +228,10 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	if current_state == BattleState.DEFEAT:
 		return
 
+	# 원념 레벨업 선택 중에는 적 추가 불가
+	if is_go_stop_active:
+		return
+
 	enemy_data_list.append(enemy_id)
 	_spawn_single_enemy(enemy_id, is_elite)
 
@@ -258,7 +266,7 @@ func _cancel_claim_waiting() -> void:
 	## 보상 대기 상태 취소 (적이 추가되었을 때)
 	is_waiting_for_claim = false
 	is_processing_action = false  # 액션 처리 상태 초기화
-	_update_auto_claim_button_style()
+	_hide_claim_ui()
 	# ATB UI 다시 표시
 	if atb_panel:
 		atb_panel.visible = true
@@ -1225,18 +1233,14 @@ func _update_buttons_for_no_enemies() -> void:
 
 func _show_claim_reward_button() -> void:
 	## 적이 모두 처치됨 - 보상 대기 상태로 전환
-	## 자동 보상이 활성화되어 있으면 즉시 보상 획득
-	## 아니면 자동 버튼 클릭 대기
 	is_waiting_for_claim = true
-	_update_auto_claim_button_style()
 
 	# ATB UI 숨기기
 	if atb_panel:
 		atb_panel.visible = false
 
-	if auto_claim_enabled:
-		# 자동 보상 모드 - 바로 보상 획득
-		call_deferred("_claim_rewards_now")
+	# 보상 UI 표시
+	_show_claim_ui()
 
 
 func _claim_rewards_now() -> void:
@@ -1244,7 +1248,7 @@ func _claim_rewards_now() -> void:
 	if not is_waiting_for_claim:
 		return
 	is_waiting_for_claim = false
-	_update_auto_claim_button_style()
+	_hide_claim_ui()
 	_end_battle_victory()
 
 
@@ -1746,97 +1750,100 @@ func play_aoe_flash() -> void:
 #endregion
 
 
-#region 자동 보상 토글
-func _setup_auto_claim_toggle() -> void:
-	## 좌하단에 자동 보상 토글 버튼 생성
-	var bottom_bar := get_node_or_null("MainVBox/BottomBar")
-	if not bottom_bar:
-		return
+#region 보상 받기 UI
+func _setup_claim_reward_ui() -> void:
+	## 전투창 중앙에 보상 받기 UI 생성 (숨겨진 상태로)
+	claim_reward_panel = CenterContainer.new()
+	claim_reward_panel.visible = false
+	claim_reward_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	claim_reward_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	auto_claim_toggle = Button.new()
-	auto_claim_toggle.name = "AutoClaimToggle"
-	auto_claim_toggle.text = "자동"
-	auto_claim_toggle.toggle_mode = true
-	auto_claim_toggle.button_pressed = false
-	auto_claim_toggle.custom_minimum_size = Vector2(50, 26)
-	auto_claim_toggle.tooltip_text = "ON: 적 처치 후 자동 보상\nOFF: 수동 보상"
+	var panel := PanelContainer.new()
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.95)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = Color(0.3, 0.8, 0.4)
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	panel_style.content_margin_left = 15
+	panel_style.content_margin_right = 15
+	panel_style.content_margin_top = 12
+	panel_style.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", panel_style)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	claim_reward_panel.add_child(panel)
 
-	# 스타일 - OFF 상태
-	var off_style := StyleBoxFlat.new()
-	off_style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
-	off_style.corner_radius_top_left = 4
-	off_style.corner_radius_top_right = 4
-	off_style.corner_radius_bottom_left = 4
-	off_style.corner_radius_bottom_right = 4
-	off_style.border_width_bottom = 2
-	off_style.border_color = Color(0.4, 0.4, 0.5)
-	auto_claim_toggle.add_theme_stylebox_override("normal", off_style)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(vbox)
 
-	# 스타일 - ON 상태 (pressed)
-	var on_style := StyleBoxFlat.new()
-	on_style.bg_color = Color(0.2, 0.4, 0.3, 0.95)
-	on_style.corner_radius_top_left = 4
-	on_style.corner_radius_top_right = 4
-	on_style.corner_radius_bottom_left = 4
-	on_style.corner_radius_bottom_right = 4
-	on_style.border_width_bottom = 2
-	on_style.border_color = Color(0.3, 0.8, 0.4)
-	auto_claim_toggle.add_theme_stylebox_override("pressed", on_style)
+	# 보상 받기 버튼
+	claim_button = Button.new()
+	claim_button.text = "보상 받기"
+	claim_button.custom_minimum_size = Vector2(100, 32)
+	claim_button.add_theme_font_size_override("font_size", 14)
+	claim_button.pressed.connect(_on_claim_button_pressed)
+	vbox.add_child(claim_button)
 
-	# hover 스타일
-	var hover_style := off_style.duplicate()
-	hover_style.bg_color = Color(0.25, 0.25, 0.3, 0.95)
-	auto_claim_toggle.add_theme_stylebox_override("hover", hover_style)
+	# 골드 라벨
+	claim_gold_label = Label.new()
+	claim_gold_label.text = "💰 0 Gold"
+	claim_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	claim_gold_label.add_theme_font_size_override("font_size", 11)
+	claim_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	vbox.add_child(claim_gold_label)
 
-	auto_claim_toggle.add_theme_font_size_override("font_size", 10)
-	auto_claim_toggle.toggled.connect(_on_auto_claim_toggled)
+	# 아이템 라벨
+	claim_items_label = Label.new()
+	claim_items_label.text = ""
+	claim_items_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	claim_items_label.add_theme_font_size_override("font_size", 10)
+	claim_items_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
+	vbox.add_child(claim_items_label)
 
-	# 좌측에 배치하기 위해 맨 앞에 추가
-	bottom_bar.add_child(auto_claim_toggle)
-	bottom_bar.move_child(auto_claim_toggle, 0)
-
-	# Spacer 추가 (좌측 버튼과 우측 도주 버튼 분리)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bottom_bar.add_child(spacer)
-	bottom_bar.move_child(spacer, 1)
+	battle_area.add_child(claim_reward_panel)
 
 
-func _on_auto_claim_toggled(toggled_on: bool) -> void:
-	## 자동 보상 토글 상태 변경
-	auto_claim_enabled = toggled_on
-
-	# 보상 대기 중이면 즉시 보상 획득
+func _on_claim_button_pressed() -> void:
+	## 보상 받기 버튼 클릭
 	if is_waiting_for_claim:
-		call_deferred("_claim_rewards_now")
+		_claim_rewards_now()
+
+
+func _show_claim_ui() -> void:
+	## 보상 UI 표시 및 업데이트
+	if not claim_reward_panel:
 		return
 
-	_update_auto_claim_button_style()
+	# 골드 표시
+	claim_gold_label.text = "💰 %d Gold" % total_gold
 
-
-func _update_auto_claim_button_style() -> void:
-	## 자동 버튼 스타일 업데이트
-	if not auto_claim_toggle:
-		return
-
-	if is_waiting_for_claim:
-		# 보상 대기 중 - 강조 스타일 (초록색 깜빡임)
-		auto_claim_toggle.text = "보상!"
-		auto_claim_toggle.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
-
-		# 깜빡임 애니메이션
-		var tween := create_tween()
-		tween.set_loops()
-		tween.tween_property(auto_claim_toggle, "modulate", Color(1.2, 1.2, 1.2), 0.4)
-		tween.tween_property(auto_claim_toggle, "modulate", Color(1.0, 1.0, 1.0), 0.4)
+	# 아이템 표시
+	if drop_items.is_empty():
+		claim_items_label.text = ""
 	else:
-		# 일반 상태
-		auto_claim_toggle.text = "자동"
-		auto_claim_toggle.modulate = Color(1.0, 1.0, 1.0)
-		if auto_claim_enabled:
-			auto_claim_toggle.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
-		else:
-			auto_claim_toggle.remove_theme_color_override("font_color")
+		var item_names: Array[String] = []
+		for item_id in drop_items:
+			var item_data: Dictionary = DataManager.get_item(item_id)
+			if item_data.is_empty():
+				item_data = DataManager.get_equipment(item_id)
+			var item_name: String = str(item_data.get("name", item_id))
+			item_names.append(item_name)
+		claim_items_label.text = "🎁 " + ", ".join(item_names)
+
+	claim_reward_panel.visible = true
+
+
+func _hide_claim_ui() -> void:
+	## 보상 UI 숨기기
+	if claim_reward_panel:
+		claim_reward_panel.visible = false
 #endregion
 
 
@@ -1871,15 +1878,15 @@ func _setup_go_stop_ui() -> void:
 
 	# 제목
 	var title_label := Label.new()
-	title_label.text = "⚠ 적이 더 강해집니다!"
+	title_label.text = "⚠ 원념 레벨이 오릅니다!"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 14)
+	title_label.add_theme_font_size_override("font_size", 13)
 	title_label.add_theme_color_override("font_color", Color.ORANGE)
 	vbox.add_child(title_label)
 
 	# 설명
 	var desc_label := Label.new()
-	desc_label.text = "계속 하시겠습니까?"
+	desc_label.text = "적이 더 강해집니다."
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_label.add_theme_font_size_override("font_size", 11)
 	desc_label.add_theme_color_override("font_color", Color.WHITE)
@@ -1891,17 +1898,17 @@ func _setup_go_stop_ui() -> void:
 	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(btn_hbox)
 
-	# 고 버튼
+	# 계속하기 버튼 (고)
 	go_button = Button.new()
-	go_button.text = "▶ 고 (계속)"
+	go_button.text = "계속하기"
 	go_button.custom_minimum_size = Vector2(90, 35)
 	go_button.add_theme_font_size_override("font_size", 12)
 	go_button.focus_mode = Control.FOCUS_NONE  # 마우스 포커스 비활성화
 	btn_hbox.add_child(go_button)
 
-	# 스톱 버튼
+	# 보상받기 버튼 (스톱)
 	stop_button = Button.new()
-	stop_button.text = "스톱 (보상)"
+	stop_button.text = "보상받기"
 	stop_button.custom_minimum_size = Vector2(90, 35)
 	stop_button.add_theme_font_size_override("font_size", 12)
 	stop_button.focus_mode = Control.FOCUS_NONE  # 마우스 포커스 비활성화
@@ -1936,12 +1943,12 @@ func _show_go_stop_choice(new_level: int, _message: String) -> void:
 	# 제목 업데이트
 	var title := go_stop_panel.get_child(0).get_child(0) as Label
 	if title:
-		title.text = "⚠ 원념 %d단계! 적이 더 강해집니다!" % new_level
+		title.text = "⚠ 원념 레벨이 오릅니다! (%d단계)" % new_level
 
 	# 설명 업데이트
 	var desc := go_stop_panel.get_child(0).get_child(1) as Label
 	if desc:
-		desc.text = "계속 하시겠습니까?"
+		desc.text = "적이 더 강해집니다."
 
 	_update_go_stop_selection_visual()
 
