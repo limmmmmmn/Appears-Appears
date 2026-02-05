@@ -79,12 +79,6 @@ sources/10 = SubResource("TileSetAtlasSource_73esb")
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
 size = Vector2(32, 24)
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_town"]
-size = Vector2(48, 48)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
-size = Vector2(480, 16)
-
 [node name="Field_1_2" type="Node2D" unique_id=1490563956]
 script = ExtResource("1_script")
 
@@ -122,44 +116,6 @@ offset_right = 24.0
 offset_bottom = -24.0
 text = "EXIT"
 horizontal_alignment = 1
-
-[node name="TownArea" type="Area2D" parent="." unique_id=51905686]
-position = Vector2(240, 230)
-collision_layer = 0
-collision_mask = 2
-monitorable = false
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="TownArea" unique_id=1550316006]
-shape = SubResource("RectangleShape2D_town")
-debug_color = Color(0.4, 0.4, 0.9, 0.4)
-
-[node name="TownLabel" type="Label" parent="TownArea" unique_id=1662036234]
-visible = false
-offset_left = -24.0
-offset_top = -36.0
-offset_right = 24.0
-offset_bottom = -20.0
-text = "🏠 마을"
-horizontal_alignment = 1
-
-[node name="TownIcon" type="ColorRect" parent="TownArea" unique_id=137185120]
-offset_left = -20.0
-offset_top = -20.0
-offset_right = 20.0
-offset_bottom = 20.0
-color = Color(0.6, 0.4, 0.2, 0.8)
-
-[node name="Walls" type="StaticBody2D" parent="." unique_id=1324819009]
-collision_layer = 8
-collision_mask = 0
-
-[node name="Top" type="CollisionShape2D" parent="Walls" unique_id=1722475087]
-position = Vector2(240, -8)
-shape = SubResource("RectangleShape2D_wall")
-
-[node name="Bottom" type="CollisionShape2D" parent="Walls" unique_id=228026605]
-position = Vector2(240, 278)
-shape = SubResource("RectangleShape2D_wall")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1660883038]
 
