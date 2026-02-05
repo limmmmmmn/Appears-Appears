@@ -790,16 +790,6 @@ func _create_footer(parent: VBoxContainer) -> void:
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	footer.add_child(hbox)
 
-	# 감정 버튼 (미감정 아이템 있을 때만 활성화)
-	var identify_count: int = InventoryManager.get_unidentified_count() if InventoryManager else 0
-	var identify_btn := _create_btn("감정 (%d)" % identify_count, Color(0.4, 0.3, 0.5))
-	if identify_count > 0:
-		identify_btn.pressed.connect(_on_identify)
-	else:
-		identify_btn.disabled = true
-		identify_btn.modulate.a = 0.5
-	hbox.add_child(identify_btn)
-
 	var resume := _create_btn("게임 계속", Color(0.2, 0.5, 0.3))
 	resume.pressed.connect(_on_resume)
 	hbox.add_child(resume)
@@ -832,14 +822,6 @@ func _create_btn(text: String, color: Color) -> Button:
 	btn.add_theme_stylebox_override("hover", hover)
 
 	return btn
-
-
-func _on_identify() -> void:
-	## 미감정 아이템 모두 감정
-	var count: int = InventoryManager.identify_all_items()
-	if count > 0:
-		# UI 갱신
-		_create_ui()  # 전체 재생성
 
 
 func _on_resume() -> void:

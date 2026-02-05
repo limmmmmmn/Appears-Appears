@@ -361,7 +361,7 @@ func add_accumulated_reward(_exp: int, gold: int, items: Array = []) -> void:
 	## 전투창에서 보상 누적
 	accumulated_gold += gold
 
-	# 아이템은 미감정 상태로 추가
+	# 아이템 추가
 	for item_id in items:
 		# 장비 데이터 먼저 확인, 없으면 일반 아이템 확인
 		var item_data: Dictionary = DataManager.get_equipment(item_id)
@@ -370,14 +370,13 @@ func add_accumulated_reward(_exp: int, gold: int, items: Array = []) -> void:
 		if item_data.is_empty():
 			continue
 
-		var unidentified_item := {
+		var reward_item := {
 			"id": item_id,
 			"type": item_data.get("type", "unknown"),
 			"slot": item_data.get("slot", ""),
-			"rarity": item_data.get("rarity", "common"),
-			"identified": false
+			"rarity": item_data.get("rarity", "common")
 		}
-		accumulated_items.append(unidentified_item)
+		accumulated_items.append(reward_item)
 
 	accumulated_rewards_changed.emit(accumulated_gold, accumulated_items)
 
@@ -400,9 +399,9 @@ func claim_accumulated_rewards() -> void:
 	if accumulated_gold > 0:
 		GameManager.add_gold(accumulated_gold)
 
-	# 아이템은 인벤토리에 추가 (미감정 상태)
+	# 아이템은 인벤토리에 추가
 	for item in accumulated_items:
-		InventoryManager.add_unidentified_item(item.id, 1)
+		InventoryManager.add_item(item.id, 1)
 
 	# 로그
 	battle_log_received.emit("보상 획득! Gold +%d" % accumulated_gold, Color.CYAN)
