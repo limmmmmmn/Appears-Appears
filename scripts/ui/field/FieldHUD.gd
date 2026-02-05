@@ -4,7 +4,7 @@ class_name FieldHUD
 ## - TopBar: 스테이지, 골드, 배속, 메뉴
 ## - LogPanel: 전투 로그 (좌측 하단)
 ## - BottomPartyPanel: 파티 정보 (하단 중앙) - 외부 씬
-## - MinimapPanel: 미니맵 (우측 하단)
+## - InventoryPanel: 인벤토리 (우측 하단)
 
 signal menu_pressed
 signal move_style_changed(style: int)  # 이동 스타일 변경 시그널
@@ -28,10 +28,10 @@ var move_style_panel: PanelContainer = null
 # === 하단 파티 패널 (중앙) - 외부 씬 ===
 @onready var bottom_party_panel: BottomPartyPanel = %BottomPartyPanel
 
-# === 미니맵 패널 (우측 하단) ===
-@onready var minimap_panel: PanelContainer = %MinimapPanel
-@onready var minimap_viewport: SubViewportContainer = %MinimapViewport
-@onready var minimap_camera: Camera2D = %MinimapCamera
+# === 인벤토리 패널 (우측 하단) ===
+@onready var inventory_panel: PanelContainer = %InventoryPanel
+@onready var inventory_scroll: ScrollContainer = %InventoryScroll
+@onready var inventory_grid: GridContainer = %InventoryGrid
 
 # === 특성 패널 (우측) ===
 @onready var trait_panel: PanelContainer = %TraitPanel
@@ -49,9 +49,9 @@ signal town_enter_confirmed(claim_rewards: bool)  # 마을 진입 확정 시그�
 # === 컴포넌트 ===
 var battle_log: BattleLogUI = null
 
-# === 미니맵 설정 ===
-var minimap_zoom: float = 0.1  # 미니맵 줌 레벨 (작을수록 더 넓은 영역 표시)
-var minimap_target: Node2D = null  # 추적할 대상 (파티 리더)
+# === 인벤토리 아이템 슬롯 ===
+var inventory_slots: Array = []
+const INVENTORY_SLOT_SIZE: int = 28
 
 
 func _ready() -> void:
@@ -60,12 +60,10 @@ func _ready() -> void:
 	_setup_grudge_popup()
 	_setup_town_popup()
 	_connect_signals()
+	_setup_inventory_panel()
 	update_all()
 	_update_trait_display()
-
-
-func _process(_delta: float) -> void:
-	_update_minimap()
+	_update_inventory_display()
 
 
 func _setup_components() -> void:
@@ -77,10 +75,6 @@ func _setup_components() -> void:
 	battle_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if log_container:
 		log_container.add_child(battle_log)
-
-	# 미니맵 카메라 초기 설정
-	if minimap_camera:
-		minimap_camera.zoom = Vector2(minimap_zoom, minimap_zoom)
 
 
 func _setup_speed_button() -> void:
@@ -261,52 +255,130 @@ func _connect_signals() -> void:
 
 
 
-#region 미니맵
-func _update_minimap() -> void:
-	if not minimap_camera:
+#region 인벤토리 패널
+func _setup_inventory_panel() -> void:
+	## 인벤토리 패널 초기 설정
+	if not inventory_grid:
 		return
-	
-	# 추적 대상이 없으면 파티 리더 찾기
-	if not is_instance_valid(minimap_target):
-		_find_minimap_target()
-	
-	# 대상이 있으면 카메라 위치 업데이트
-	if is_instance_valid(minimap_target):
-		minimap_camera.global_position = minimap_target.global_position
+
+	# 인벤토리 변경 시그널 연결
+	if InventoryManager and not InventoryManager.inventory_changed.is_connected(_update_inventory_display):
+		InventoryManager.inventory_changed.connect(_update_inventory_display)
 
 
-func _find_minimap_target() -> void:
-	# 필드 씬에서 PartyMember (리더) 찾기
-	var field = get_tree().get_first_node_in_group("field")
-	if field:
-		var leader = field.get_node_or_null("PartyLeader")
-		if leader:
-			minimap_target = leader
-			return
-	
-	# 그룹으로 찾기
-	var party_members = get_tree().get_nodes_in_group("party_member")
-	if party_members.size() > 0:
-		minimap_target = party_members[0]
+func _update_inventory_display() -> void:
+	## 인벤토리 UI 업데이트
+	if not inventory_grid:
+		return
+
+	# 기존 슬롯 제거
+	for child in inventory_grid.get_children():
+		child.queue_free()
+	inventory_slots.clear()
+
+	# 인벤토리 아이템 가져오기
+	var items: Array = InventoryManager.get_all_items() if InventoryManager else []
+
+	# 아이템 슬롯 생성
+	for item in items:
+		var slot := _create_inventory_slot(item)
+		inventory_grid.add_child(slot)
+		inventory_slots.append(slot)
+
+	# 빈 슬롯 채우기 (최소 8개)
+	var empty_count: int = maxi(0, 8 - items.size())
+	for i in range(empty_count):
+		var empty_slot := _create_empty_slot()
+		inventory_grid.add_child(empty_slot)
 
 
-func set_minimap_target(target: Node2D) -> void:
-	## 미니맵이 추적할 대상 설정
-	minimap_target = target
+func _create_inventory_slot(item: Dictionary) -> PanelContainer:
+	## 아이템 슬롯 UI 생성
+	var slot := PanelContainer.new()
+	slot.custom_minimum_size = Vector2(INVENTORY_SLOT_SIZE, INVENTORY_SLOT_SIZE)
+
+	var style := StyleBoxFlat.new()
+	var rarity: String = item.data.get("rarity", "common")
+	var rarity_color: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.3, 0.3, 0.3))
+	style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 2
+	style.border_color = rarity_color
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	slot.add_theme_stylebox_override("panel", style)
+
+	# 아이템 아이콘 (텍스트로 대체)
+	var label := Label.new()
+	var item_type: String = item.data.get("type", "?")
+	var type_icon: String = _get_item_type_icon(item_type)
+	label.text = type_icon
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", rarity_color)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	slot.add_child(label)
+
+	# 수량 표시 (2개 이상일 때)
+	if item.quantity > 1:
+		var qty_label := Label.new()
+		qty_label.text = str(item.quantity)
+		qty_label.add_theme_font_size_override("font_size", 8)
+		qty_label.add_theme_color_override("font_color", Color.WHITE)
+		qty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		qty_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		qty_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		slot.add_child(qty_label)
+
+	# 툴팁
+	var item_name: String = item.data.get("name", item.id)
+	slot.tooltip_text = item_name
+
+	return slot
 
 
-func set_minimap_zoom(zoom_level: float) -> void:
-	## 미니맵 줌 레벨 설정 (0.05 ~ 0.5 권장)
-	minimap_zoom = clamp(zoom_level, 0.02, 1.0)
-	if minimap_camera:
-		minimap_camera.zoom = Vector2(minimap_zoom, minimap_zoom)
+func _create_empty_slot() -> PanelContainer:
+	## 빈 슬롯 UI 생성
+	var slot := PanelContainer.new()
+	slot.custom_minimum_size = Vector2(INVENTORY_SLOT_SIZE, INVENTORY_SLOT_SIZE)
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.1, 0.12, 0.5)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.2, 0.2, 0.25)
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	slot.add_theme_stylebox_override("panel", style)
+
+	return slot
 
 
-func get_minimap_viewport() -> SubViewport:
-	## 미니맵 SubViewport 반환 (외부에서 레이어 추가 등에 사용)
-	if minimap_viewport:
-		return minimap_viewport.get_node_or_null("SubViewport")
-	return null
+func _get_item_type_icon(item_type: String) -> String:
+	## 아이템 타입별 아이콘 반환
+	match item_type:
+		"sword": return "⚔"
+		"dagger": return "🗡"
+		"staff": return "🪄"
+		"bow": return "🏹"
+		"axe": return "🪓"
+		"shield": return "🛡"
+		"helmet": return "⛑"
+		"heavy_armor", "medium_armor", "light_armor": return "🥋"
+		"robe": return "👘"
+		"ring": return "💍"
+		"amulet": return "📿"
+		"boots": return "👢"
+		"potion": return "🧪"
+		_: return "?"
 #endregion
 
 
@@ -643,8 +715,11 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 
 		for item in rewards.items:
 			var item_lbl := Label.new()
-			var type_name: String = InventoryManager.get_item_type_name(item.id)
-			item_lbl.text = "?" + type_name
+			var item_data: Dictionary = DataManager.get_equipment(item.id)
+			if item_data.is_empty():
+				item_data = DataManager.get_item(item.id)
+			var item_name: String = item_data.get("name", item.id)
+			item_lbl.text = item_name
 			item_lbl.add_theme_font_size_override("font_size", 10)
 			var rarity_color: Color = InventoryManager.get_rarity_color(item.id)
 			item_lbl.add_theme_color_override("font_color", rarity_color)
@@ -882,8 +957,11 @@ func show_town_enter_popup() -> void:
 
 		for item in rewards.items:
 			var item_lbl := Label.new()
-			var type_name: String = InventoryManager.get_item_type_name(item.id)
-			item_lbl.text = "?" + type_name
+			var item_data: Dictionary = DataManager.get_equipment(item.id)
+			if item_data.is_empty():
+				item_data = DataManager.get_item(item.id)
+			var item_name: String = item_data.get("name", item.id)
+			item_lbl.text = item_name
 			item_lbl.add_theme_font_size_override("font_size", 10)
 			var rarity_color: Color = InventoryManager.get_rarity_color(item.id)
 			item_lbl.add_theme_color_override("font_color", rarity_color)
