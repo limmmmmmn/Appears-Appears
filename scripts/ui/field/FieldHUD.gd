@@ -145,37 +145,76 @@ func _update_inventory_display() -> void:
 		count += 1
 
 
-func _create_inventory_row(item: Dictionary) -> HBoxContainer:
-	## 아이템 행 UI 생성: [아이콘] 이름 x수량
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
+func _create_inventory_row(item: Dictionary) -> Button:
+	## 아이템 행 UI 생성: 클릭 시 자동 장착
+	var btn := Button.new()
+	btn.flat = true
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 
 	var rarity: String = item.data.get("rarity", "common")
 	var rarity_color: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.7, 0.7, 0.7))
 
-	# 아이콘
-	var icon_label := Label.new()
+	# 버튼 텍스트
 	var item_type: String = item.data.get("type", "?")
-	icon_label.text = _get_item_type_icon(item_type)
-	icon_label.add_theme_font_size_override("font_size", 11)
-	icon_label.add_theme_color_override("font_color", rarity_color)
-	icon_label.custom_minimum_size.x = 16
-	row.add_child(icon_label)
-
-	# 이름
-	var name_label := Label.new()
+	var icon: String = _get_item_type_icon(item_type)
 	var item_name: String = item.data.get("name", item.id)
 	if item.quantity > 1:
-		name_label.text = "%s x%d" % [item_name, item.quantity]
+		btn.text = "%s %s x%d" % [icon, item_name, item.quantity]
 	else:
-		name_label.text = item_name
-	name_label.add_theme_font_size_override("font_size", 9)
-	name_label.add_theme_color_override("font_color", rarity_color)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	row.add_child(name_label)
+		btn.text = "%s %s" % [icon, item_name]
 
-	return row
+	btn.add_theme_font_size_override("font_size", 9)
+	btn.add_theme_color_override("font_color", rarity_color)
+	btn.add_theme_color_override("font_hover_color", rarity_color * 1.2)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# 버튼 스타일
+	var normal_style := StyleBoxFlat.new()
+	normal_style.bg_color = Color(0, 0, 0, 0)
+	btn.add_theme_stylebox_override("normal", normal_style)
+
+	var hover_style := StyleBoxFlat.new()
+	hover_style.bg_color = Color(1, 1, 1, 0.1)
+	btn.add_theme_stylebox_override("hover", hover_style)
+
+	var pressed_style := StyleBoxFlat.new()
+	pressed_style.bg_color = Color(1, 1, 1, 0.2)
+	btn.add_theme_stylebox_override("pressed", pressed_style)
+
+	# 클릭 시 자동 장착
+	btn.pressed.connect(_on_inventory_item_clicked.bind(item.id))
+
+	# 툴팁
+	var slot: String = item.data.get("slot", "")
+	var stats: Dictionary = item.data.get("stats", {})
+	var tooltip: String = item_name + "\n"
+	tooltip += "희귀도: " + rarity + "\n"
+	for stat_key in stats:
+		tooltip += "%s: %+d\n" % [stat_key.to_upper(), stats[stat_key]]
+	tooltip += "\n[클릭: 자동 장착]"
+	btn.tooltip_text = tooltip
+
+	return btn
+
+
+func _on_inventory_item_clicked(item_id: String) -> void:
+	## 인벤토리 아이템 클릭 - 자동 장착 시도
+	if not InventoryManager:
+		return
+
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	if item_data.is_empty():
+		# 장비가 아님 (소비 아이템 등)
+		return
+
+	# 자동 장착 시도
+	if InventoryManager.try_auto_equip(item_id):
+		# 장착 성공 - 로그 출력
+		var item_name: String = item_data.get("name", item_id)
+		add_log("%s 장착!" % item_name, Color(0.5, 1.0, 0.5))
+	else:
+		# 장착 실패 - 모든 슬롯이 더 좋은 장비로 채워져 있음
+		add_log("장착할 수 없습니다.", Color(1.0, 0.5, 0.5))
 
 
 func _get_item_type_icon(item_type: String) -> String:
