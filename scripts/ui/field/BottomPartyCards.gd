@@ -89,11 +89,14 @@ func _on_party_changed() -> void:
 
 func _rebuild_cards() -> void:
 	## 파티원 수에 맞게 카드 재구성
-	# 기존 카드 제거
-	for card in hero_cards:
-		if card.panel and is_instance_valid(card.panel):
-			card.panel.queue_free()
+	# 기존 카드 데이터 초기화
 	hero_cards.clear()
+
+	# cards_container의 모든 자식 즉시 제거
+	if cards_container:
+		for child in cards_container.get_children():
+			cards_container.remove_child(child)
+			child.queue_free()
 
 	var party: Array = PartyManager.get_party() if PartyManager else []
 

@@ -20,9 +20,6 @@ var kill_label: Label = null  # 킬 카운트 표시 (동적 생성)
 @onready var log_scroll: ScrollContainer = %LogScroll
 @onready var log_container: VBoxContainer = %LogContainer
 
-# === 하단 파티 패널 (중앙) - 외부 씬 (숨김) ===
-@onready var bottom_party_panel: BottomPartyPanel = %BottomPartyPanel
-
 # === 하단 파티 카드 (동적 생성) ===
 var bottom_party_cards: BottomPartyCards = null
 
@@ -69,11 +66,6 @@ func _ready() -> void:
 	update_all()
 	_update_trait_display()
 	_update_inventory_display()
-
-	# 하단 파티 패널 제거 (기존 씬 - BottomPartyCards로 대체됨)
-	if bottom_party_panel:
-		bottom_party_panel.queue_free()
-		bottom_party_panel = null
 
 
 func _setup_components() -> void:
@@ -161,8 +153,6 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("global_kill_count_changed"):
 			if not BattleManager.global_kill_count_changed.is_connected(_on_global_kill_count_changed):
 				BattleManager.global_kill_count_changed.connect(_on_global_kill_count_changed)
-		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
-			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 
 	# 하단 파티 카드 장비 드롭 시그널 연결
 	if bottom_party_cards:
