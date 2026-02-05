@@ -1425,11 +1425,17 @@ func _play_close_effect() -> void:
 func _start_loot_animations() -> void:
 	var delay: float = 0.0
 	var delay_interval: float = 0.15
-	
+
+	# 먼저 모든 아이템을 즉시 처리 (자동 장착 또는 인벤토리 추가)
+	for item_id in drop_items:
+		if not InventoryManager.try_auto_equip(item_id):
+			InventoryManager.add_item(item_id)
+
+	# 그 후 애니메이션과 로그만 표시
 	for item_id in drop_items:
 		var start_pos: Vector2 = global_position + size / 2
-		_delayed_loot_drop(item_id, start_pos, delay)
-		
+		_delayed_loot_visual(item_id, start_pos, delay)
+
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
 		if not equip_data.is_empty():
 			var rarity: String = str(equip_data.get("rarity", "common"))
@@ -1442,17 +1448,16 @@ func _start_loot_animations() -> void:
 		else:
 			var item_data: Dictionary = DataManager.get_item(item_id)
 			_send_log("%s 획득!" % str(item_data.get("name", item_id)), Color.YELLOW)
-		
+
 		delay += delay_interval
 
 
-func _delayed_loot_drop(item_id: String, start_pos: Vector2, delay: float) -> void:
+func _delayed_loot_visual(item_id: String, start_pos: Vector2, delay: float) -> void:
+	## 아이템 드롭 시각 효과만 (아이템은 이미 처리됨)
 	if delay > 0.0:
-		await get_tree().create_timer(delay).timeout
-
-	# 자동 장착 시도, 실패 시 인벤토리에 추가
-	if not InventoryManager.try_auto_equip(item_id):
-		InventoryManager.add_item(item_id)
+		var timer := get_tree().create_timer(delay)
+		if timer:
+			await timer.timeout
 	loot_drop_requested.emit(item_id, start_pos)
 
 
