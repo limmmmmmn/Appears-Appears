@@ -19,8 +19,11 @@ signal menu_pressed
 @onready var log_scroll: ScrollContainer = %LogScroll
 @onready var log_container: VBoxContainer = %LogContainer
 
-# === 하단 파티 패널 (중앙) - 외부 씬 ===
+# === 하단 파티 패널 (중앙) - 외부 씬 (숨김) ===
 @onready var bottom_party_panel: BottomPartyPanel = %BottomPartyPanel
+
+# === 우측 파티 패널 (동적 생성) ===
+var right_party_panel: RightPartyPanel = null
 
 # === 인벤토리 패널 (우측 하단) ===
 @onready var inventory_panel: PanelContainer = %InventoryPanel
@@ -53,11 +56,16 @@ func _ready() -> void:
 	_setup_components()
 	_setup_grudge_popup()
 	_setup_town_popup()
+	_setup_right_party_panel()
 	_connect_signals()
 	_setup_inventory_panel()
 	update_all()
 	_update_trait_display()
 	_update_inventory_display()
+
+	# 하단 파티 패널 숨김
+	if bottom_party_panel:
+		bottom_party_panel.visible = false
 
 
 func _setup_components() -> void:
@@ -73,7 +81,7 @@ func _setup_components() -> void:
 func _setup_speed_button() -> void:
 	if not speed_button:
 		return
-	
+
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
 	style.corner_radius_top_left = 3
@@ -83,10 +91,27 @@ func _setup_speed_button() -> void:
 	style.border_width_bottom = 2
 	style.border_color = Color(0.4, 0.6, 0.9)
 	speed_button.add_theme_stylebox_override("normal", style)
-	
+
 	var hover := style.duplicate()
 	hover.bg_color = Color(0.25, 0.25, 0.3, 0.95)
 	speed_button.add_theme_stylebox_override("hover", hover)
+
+
+func _setup_right_party_panel() -> void:
+	## 우측 파티 패널 생성
+	right_party_panel = RightPartyPanel.new()
+	right_party_panel.name = "RightPartyPanel"
+
+	# 위치 설정 (우측 중앙)
+	var ctrl := get_node_or_null("Control")
+	if ctrl:
+		ctrl.add_child(right_party_panel)
+		right_party_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+		right_party_panel.offset_left = -140
+		right_party_panel.offset_right = -4
+		right_party_panel.offset_top = -160
+		right_party_panel.offset_bottom = 160
+		right_party_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
 
 func _connect_signals() -> void:
@@ -108,10 +133,10 @@ func _connect_signals() -> void:
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 
-	# 파티 패널 장비 드롭 시그널 연결
-	if bottom_party_panel:
-		if not bottom_party_panel.equipment_dropped.is_connected(_on_equipment_dropped):
-			bottom_party_panel.equipment_dropped.connect(_on_equipment_dropped)
+	# 우측 파티 패널 장비 드롭 시그널 연결
+	if right_party_panel:
+		if not right_party_panel.equipment_dropped.is_connected(_on_equipment_dropped):
+			right_party_panel.equipment_dropped.connect(_on_equipment_dropped)
 
 
 
@@ -351,8 +376,8 @@ func update_top_bar() -> void:
 
 
 func update_party_display() -> void:
-	if bottom_party_panel:
-		bottom_party_panel.update_display()
+	if right_party_panel:
+		right_party_panel.update_display()
 #endregion
 
 
