@@ -1,6 +1,6 @@
 extends Control
 class_name BottomPartyCards
-## 하단 파티 카드 UI - 마우스 hover시 위로 슬라이드
+## 하단 파티 카드 UI - 개별 카드 hover시 위로 슬라이드 + 장비 선택
 
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
 const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
@@ -14,6 +14,7 @@ const CARD_HIDDEN_OFFSET := 90  # 숨겨질 때 아래로 이동하는 양
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
 const HP_COLOR_MID := Color(0.9, 0.7, 0.2)
 const HP_COLOR_LOW := Color(0.9, 0.2, 0.2)
+const HIGHLIGHT_COLOR := Color(0.4, 0.7, 1.0, 0.8)
 
 # 시그널
 signal equipment_dropped(hero_index: int, item_id: String)
@@ -23,6 +24,7 @@ signal equipment_dropped(hero_index: int, item_id: String)
 
 # 카드 데이터
 class HeroCard:
+	var wrapper: Control  # 클리핑용 래퍼
 	var panel: PanelContainer
 	var name_label: Label
 	var hp_bar: ProgressBar
@@ -31,17 +33,17 @@ class HeroCard:
 	var basic_atb_bar: ProgressBar
 	var skill_rows: Dictionary = {}
 	var equip_section: VBoxContainer
-	var equip_rows: Dictionary = {}
+	var equip_rows: Dictionary = {}  # slot_name -> {row, icon, name, highlight}
 	var hero_index: int = -1
 	var hero_id: String = ""
+	var is_hovered: bool = false
+	var card_highlight: ColorRect = null  # 카드 전체 하이라이트
 
 var hero_cards: Array[HeroCard] = []
+var _any_card_hovered: bool = false
 
 
 func _ready() -> void:
-	# 컨테이너를 아래로 이동시켜 카드 일부만 보이게
-	if cards_container:
-		cards_container.position.y = CARD_HIDDEN_OFFSET
 	_connect_signals()
 	call_deferred("_initial_setup")
 
@@ -88,18 +90,33 @@ func _rebuild_cards() -> void:
 			continue
 		var card := _create_hero_card(i)
 		hero_cards.append(card)
-		cards_container.add_child(card.panel)
+		cards_container.add_child(card.wrapper)
 
 
 func _create_hero_card(index: int) -> HeroCard:
 	var card := HeroCard.new()
 	card.hero_index = index
 
-	# 메인 패널
+	# 클리핑 래퍼 (개별 카드용)
+	card.wrapper = Control.new()
+	card.wrapper.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
+	card.wrapper.clip_contents = true
+
+	# 메인 패널 (래퍼 안에서 이동)
 	card.panel = PanelContainer.new()
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
+	card.panel.position = Vector2(0, CARD_HIDDEN_OFFSET)  # 기본: 아래로 내려감
 	card.panel.set_meta("card_index", index)
 	_style_card_panel(card.panel)
+	card.wrapper.add_child(card.panel)
+
+	# 카드 전체 하이라이트 (숨김 상태로 시작)
+	card.card_highlight = ColorRect.new()
+	card.card_highlight.set_anchors_preset(Control.PRESET_FULL_RECT)
+	card.card_highlight.color = HIGHLIGHT_COLOR
+	card.card_highlight.visible = false
+	card.card_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.panel.add_child(card.card_highlight)
 
 	# 마우스 이벤트 연결
 	card.panel.mouse_entered.connect(_on_card_mouse_entered.bind(card))
@@ -113,6 +130,7 @@ func _create_hero_card(index: int) -> HeroCard:
 	vbox.offset_right = -5
 	vbox.offset_top = 4
 	vbox.offset_bottom = -4
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.panel.add_child(vbox)
 
 	# === 이름 ===
@@ -121,11 +139,13 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.name_label.add_theme_font_size_override("font_size", 10)
 	card.name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95))
+	card.name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(card.name_label)
 
 	# === HP바 ===
 	var hp_container := Control.new()
 	hp_container.custom_minimum_size = Vector2(0, 12)
+	hp_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hp_container)
 
 	card.hp_bar = ProgressBar.new()
@@ -133,6 +153,7 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.hp_bar.max_value = 100.0
 	card.hp_bar.value = 100.0
 	card.hp_bar.show_percentage = false
+	card.hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_hp_bar(card.hp_bar)
 	hp_container.add_child(card.hp_bar)
 
@@ -144,11 +165,13 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.hp_label.add_theme_color_override("font_color", Color.WHITE)
 	card.hp_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	card.hp_label.add_theme_constant_override("outline_size", 2)
+	card.hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hp_container.add_child(card.hp_label)
 
 	# === ATB 섹션 ===
 	card.atb_section = VBoxContainer.new()
 	card.atb_section.add_theme_constant_override("separation", 1)
+	card.atb_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(card.atb_section)
 
 	var basic_row := _create_atb_row("공격")
@@ -158,49 +181,137 @@ func _create_hero_card(index: int) -> HeroCard:
 	# === 구분선 ===
 	var sep := HSeparator.new()
 	sep.add_theme_constant_override("separation", 1)
+	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(sep)
 
 	# === 장비 섹션 ===
 	card.equip_section = VBoxContainer.new()
 	card.equip_section.add_theme_constant_override("separation", 0)
+	card.equip_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(card.equip_section)
 
 	for slot_name in SLOT_ORDER:
-		var row := _create_equip_row(slot_name)
-		card.equip_section.add_child(row)
-		card.equip_rows[slot_name] = row
+		var row_data := _create_equip_row_with_highlight(slot_name, card)
+		card.equip_section.add_child(row_data["row"])
+		card.equip_rows[slot_name] = row_data
 
 	return card
 
 
-var _hover_count: int = 0  # 현재 hover 중인 카드 수
-var _exit_pending: bool = false  # exit 대기 중인지
+func _create_equip_row_with_highlight(slot_name: String, card: HeroCard) -> Dictionary:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	row.mouse_filter = Control.MOUSE_FILTER_STOP  # 마우스 이벤트 받음
 
-func _on_card_mouse_entered(_card: HeroCard) -> void:
-	_hover_count += 1
-	_exit_pending = false
-	_animate_container(true)
+	# 하이라이트 배경
+	var highlight := ColorRect.new()
+	highlight.set_anchors_preset(Control.PRESET_FULL_RECT)
+	highlight.color = HIGHLIGHT_COLOR
+	highlight.visible = false
+	highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(highlight)
+
+	var icon_lbl := Label.new()
+	icon_lbl.name = "Icon"
+	icon_lbl.text = SLOT_ICONS.get(slot_name, "?")
+	icon_lbl.add_theme_font_size_override("font_size", 8)
+	icon_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	icon_lbl.custom_minimum_size.x = 12
+	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(icon_lbl)
+
+	var name_lbl := Label.new()
+	name_lbl.name = "Name"
+	name_lbl.text = "-"
+	name_lbl.add_theme_font_size_override("font_size", 8)
+	name_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(name_lbl)
+
+	# 장비 슬롯 hover 이벤트
+	row.mouse_entered.connect(_on_equip_slot_entered.bind(card, slot_name, highlight))
+	row.mouse_exited.connect(_on_equip_slot_exited.bind(card, highlight))
+
+	return {"row": row, "icon": icon_lbl, "name": name_lbl, "highlight": highlight}
 
 
-func _on_card_mouse_exited(_card: HeroCard) -> void:
-	_hover_count = maxi(0, _hover_count - 1)
-	if _hover_count == 0:
-		_exit_pending = true
-		# 짧은 딜레이 후 실제로 나갔는지 확인
-		await get_tree().create_timer(0.03).timeout
-		if _exit_pending and _hover_count == 0:
-			_animate_container(false)
+func _on_card_mouse_entered(card: HeroCard) -> void:
+	if card.is_hovered:
+		return
+	card.is_hovered = true
+	_any_card_hovered = true
+
+	# 카드 하이라이트 표시
+	if card.card_highlight:
+		card.card_highlight.visible = true
+
+	# 개별 카드 위로 올림
+	_animate_card(card, true)
 
 
-func _animate_container(show_full: bool) -> void:
-	var target_y: float = 0.0 if show_full else CARD_HIDDEN_OFFSET
-
-	# 이미 목표 위치면 스킵
-	if abs(cards_container.position.y - target_y) < 1.0:
+func _on_card_mouse_exited(card: HeroCard) -> void:
+	if not card.is_hovered:
 		return
 
+	# 짧은 딜레이 후 확인
+	await get_tree().create_timer(0.03).timeout
+
+	if not is_instance_valid(card.panel):
+		return
+
+	# 마우스가 다시 카드 위에 있으면 무시
+	var mouse_pos := card.panel.get_local_mouse_position()
+	var panel_rect := Rect2(Vector2.ZERO, card.panel.size)
+	if panel_rect.has_point(mouse_pos):
+		return
+
+	card.is_hovered = false
+
+	# 카드 하이라이트 숨김
+	if card.card_highlight:
+		card.card_highlight.visible = false
+
+	# 모든 장비 하이라이트 숨김
+	for slot_name in card.equip_rows:
+		var row_data: Dictionary = card.equip_rows[slot_name]
+		if row_data.has("highlight"):
+			row_data["highlight"].visible = false
+
+	# 개별 카드 아래로 내림
+	_animate_card(card, false)
+
+	# 모든 카드가 닫혔는지 확인
+	var any_hovered := false
+	for c in hero_cards:
+		if c.is_hovered:
+			any_hovered = true
+			break
+
+	if not any_hovered:
+		_any_card_hovered = false
+
+
+func _on_equip_slot_entered(card: HeroCard, slot_name: String, highlight: ColorRect) -> void:
+	# 카드 전체 하이라이트 숨기고 장비 슬롯 하이라이트 표시
+	if card.card_highlight:
+		card.card_highlight.visible = false
+	highlight.visible = true
+
+
+func _on_equip_slot_exited(card: HeroCard, highlight: ColorRect) -> void:
+	highlight.visible = false
+	# 카드 하이라이트 다시 표시 (카드가 여전히 hover 중이면)
+	if card.is_hovered and card.card_highlight:
+		card.card_highlight.visible = true
+
+
+func _animate_card(card: HeroCard, show_full: bool) -> void:
+	var target_y: float = 0.0 if show_full else CARD_HIDDEN_OFFSET
+
 	var tween := create_tween()
-	tween.tween_property(cards_container, "position:y", target_y, 0.1).set_ease(Tween.EASE_OUT)
+	tween.tween_property(card.panel, "position:y", target_y, 0.1).set_ease(Tween.EASE_OUT)
 
 
 func _style_card_panel(panel: PanelContainer) -> void:
@@ -221,6 +332,7 @@ func _style_card_panel(panel: PanelContainer) -> void:
 func _create_atb_row(label_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var label := Label.new()
 	label.name = "Label"
@@ -228,6 +340,7 @@ func _create_atb_row(label_text: String) -> HBoxContainer:
 	label.add_theme_font_size_override("font_size", 8)
 	label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	label.custom_minimum_size.x = 24
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label)
 
 	var bar := ProgressBar.new()
@@ -237,32 +350,9 @@ func _create_atb_row(label_text: String) -> HBoxContainer:
 	bar.max_value = 100.0
 	bar.value = 0.0
 	bar.show_percentage = false
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_atb_bar(bar, false)
 	row.add_child(bar)
-
-	return row
-
-
-func _create_equip_row(slot_name: String) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 2)
-
-	var icon_lbl := Label.new()
-	icon_lbl.name = "Icon"
-	icon_lbl.text = SLOT_ICONS.get(slot_name, "?")
-	icon_lbl.add_theme_font_size_override("font_size", 8)
-	icon_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-	icon_lbl.custom_minimum_size.x = 12
-	row.add_child(icon_lbl)
-
-	var name_lbl := Label.new()
-	name_lbl.name = "Name"
-	name_lbl.text = "-"
-	name_lbl.add_theme_font_size_override("font_size", 8)
-	name_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	row.add_child(name_lbl)
 
 	return row
 
@@ -367,12 +457,12 @@ func _update_hp_bar_color(card: HeroCard, hp_percent: float) -> void:
 
 func _update_equip_list(card: HeroCard, hero: Hero) -> void:
 	for slot_name in SLOT_ORDER:
-		var row: HBoxContainer = card.equip_rows.get(slot_name)
-		if not row:
+		var row_data: Dictionary = card.equip_rows.get(slot_name, {})
+		if row_data.is_empty():
 			continue
 
-		var icon_lbl: Label = row.get_node_or_null("Icon")
-		var name_lbl: Label = row.get_node_or_null("Name")
+		var icon_lbl: Label = row_data.get("icon")
+		var name_lbl: Label = row_data.get("name")
 		if not icon_lbl or not name_lbl:
 			continue
 
@@ -424,6 +514,7 @@ func _update_skill_atb_bars(card: HeroCard, hero: Hero) -> void:
 func _create_cooldown_row(label_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var label := Label.new()
 	label.name = "Label"
@@ -431,6 +522,7 @@ func _create_cooldown_row(label_text: String) -> HBoxContainer:
 	label.add_theme_font_size_override("font_size", 8)
 	label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
 	label.custom_minimum_size.x = 24
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label)
 
 	var bar := ProgressBar.new()
@@ -440,6 +532,7 @@ func _create_cooldown_row(label_text: String) -> HBoxContainer:
 	bar.max_value = 100.0
 	bar.value = 0.0
 	bar.show_percentage = false
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_style_cooldown_bar(bar, true)
 	row.add_child(bar)
 
