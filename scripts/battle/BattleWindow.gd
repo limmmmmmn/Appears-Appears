@@ -1059,11 +1059,14 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		if bonus_kill > 0:
 			kill_count += bonus_kill
 
-	# 위험도 테두리 업데이트 (시각 효과만)
+	# 위험도 테두리 업데이트 + 레벨업 알림 표시
 	var new_danger: int = get_local_danger_level()
 	if new_danger > danger_level:
+		var old_level: int = danger_level
 		update_danger_level()
 		_shake_window()
+		# 원념 레벨업 알림 표시
+		_show_go_stop_choice(new_danger, "")
 
 	# 보상 계산 (위험도 + 특성 적용)
 	var global_danger: int = BattleManager.get_danger_level()
