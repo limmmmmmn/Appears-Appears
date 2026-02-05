@@ -314,7 +314,6 @@ func update_display() -> void:
 
 	if hero_cards.size() != party.size():
 		_rebuild_cards()
-		return
 
 	for i in range(hero_cards.size()):
 		if i >= party.size() or party[i] == null:
