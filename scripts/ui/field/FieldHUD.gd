@@ -13,6 +13,7 @@ signal menu_pressed
 @onready var gold_label: Label = %GoldLabel
 @onready var speed_button: Button = %SpeedButton
 @onready var menu_button: Button = %MenuButton
+var kill_label: Label = null  # 킬 카운트 표시 (동적 생성)
 
 # === 로그 패널 (좌측 하단) ===
 @onready var log_panel: PanelContainer = %LogPanel
@@ -50,10 +51,16 @@ var battle_log: BattleLogUI = null
 # === 인벤토리 아이템 목록 ===
 var inventory_slots: Array = []
 
+# === 킬 카운트 영웅 추가 시스템 ===
+const KILLS_PER_HERO := 5
+const AVAILABLE_HEROES := ["roland", "luna", "elena", "shadow", "aria", "gareth"]
+var last_hero_kill_threshold: int = 0  # 마지막으로 영웅을 추가한 킬 수 (5, 10, 15, ...)
+
 
 func _ready() -> void:
 	add_to_group("field_hud")
 	_setup_components()
+	_setup_kill_label()
 	_setup_grudge_popup()
 	_setup_town_popup()
 	_setup_bottom_party_cards()
@@ -97,6 +104,31 @@ func _setup_speed_button() -> void:
 	speed_button.add_theme_stylebox_override("hover", hover)
 
 
+func _setup_kill_label() -> void:
+	## 킬 카운트 라벨 생성 (골드 옆)
+	if not gold_label:
+		return
+
+	var parent := gold_label.get_parent()
+	if not parent:
+		return
+
+	kill_label = Label.new()
+	kill_label.name = "KillLabel"
+	kill_label.text = "💀 0"
+	kill_label.add_theme_font_size_override("font_size", 14)
+	kill_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
+
+	# 골드 라벨 뒤에 삽입
+	var gold_idx := gold_label.get_index()
+	parent.add_child(kill_label)
+	parent.move_child(kill_label, gold_idx + 1)
+
+	# 초기 킬 카운트 표시
+	var current_kills := BattleManager.get_global_kill_count() if BattleManager else 0
+	kill_label.text = "💀 %d" % current_kills
+
+
 func _setup_bottom_party_cards() -> void:
 	## 하단 파티 카드 생성
 	bottom_party_cards = BottomPartyCards.new()
@@ -125,6 +157,9 @@ func _connect_signals() -> void:
 			BattleManager.party_hp_changed.connect(update_party_display)
 		if not BattleManager.loot_animation_requested.is_connected(_on_loot_animation_requested):
 			BattleManager.loot_animation_requested.connect(_on_loot_animation_requested)
+		if BattleManager.has_signal("global_kill_count_changed"):
+			if not BattleManager.global_kill_count_changed.is_connected(_on_global_kill_count_changed):
+				BattleManager.global_kill_count_changed.connect(_on_global_kill_count_changed)
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 
@@ -306,6 +341,57 @@ func _update_speed_button() -> void:
 
 func _on_battle_log_received(message: String, color: Color) -> void:
 	add_log(message, color)
+
+
+func _on_global_kill_count_changed(count: int, _danger_level: int) -> void:
+	## 킬 카운트 변경 시 호출
+	# UI 업데이트
+	if kill_label:
+		kill_label.text = "💀 %d" % count
+
+	# 5킬마다 영웅 추가 체크
+	var current_threshold := (count / KILLS_PER_HERO) * KILLS_PER_HERO
+	if current_threshold > last_hero_kill_threshold and current_threshold > 0:
+		last_hero_kill_threshold = current_threshold
+		_add_random_hero()
+
+
+func _add_random_hero() -> void:
+	## 랜덤 영웅 추가
+	if not PartyManager:
+		return
+
+	# 파티가 꽉 찼으면 추가하지 않음
+	var party: Array = PartyManager.get_party()
+	if party.size() >= 4:
+		add_log("파티가 가득 찼습니다!", Color(1.0, 0.8, 0.3))
+		return
+
+	# 이미 파티에 있는 영웅 제외
+	var party_hero_ids: Array = []
+	for hero in party:
+		if hero:
+			party_hero_ids.append(hero.id)
+
+	var available: Array = []
+	for hero_id in AVAILABLE_HEROES:
+		if hero_id not in party_hero_ids:
+			available.append(hero_id)
+
+	if available.is_empty():
+		add_log("추가할 수 있는 영웅이 없습니다.", Color(0.8, 0.8, 0.8))
+		return
+
+	# 랜덤 선택
+	var random_hero_id: String = available[randi() % available.size()]
+	if PartyManager.add_hero_by_id(random_hero_id):
+		var hero_data: Dictionary = DataManager.get_hero(random_hero_id) if DataManager else {}
+		var hero_name: String = hero_data.get("name", random_hero_id)
+		add_log("🎉 %s 합류!" % hero_name, Color(0.5, 1.0, 0.8))
+
+		# 파티 카드 갱신
+		if bottom_party_cards:
+			bottom_party_cards.update_display()
 
 
 func _on_loot_animation_requested(item_id: String, start_pos: Vector2) -> void:
