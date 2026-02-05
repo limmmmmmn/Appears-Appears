@@ -1,6 +1,6 @@
 extends Control
 class_name BottomPartyCards
-## 하단 파티 카드 UI - 개별 카드 hover시 위로 슬라이드 + 장비 선택
+## 하단 파티 카드 UI
 
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
 const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
@@ -8,13 +8,11 @@ const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 # 카드 크기
 const CARD_WIDTH := 105
 const CARD_HEIGHT := 140
-const CARD_HIDDEN_OFFSET := 0  # 항상 보이게
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
 const HP_COLOR_MID := Color(0.9, 0.7, 0.2)
 const HP_COLOR_LOW := Color(0.9, 0.2, 0.2)
-const HIGHLIGHT_COLOR := Color(0.4, 0.7, 1.0, 0.8)
 
 # 시그널
 signal equipment_dropped(hero_index: int, item_id: String)
@@ -33,14 +31,11 @@ class HeroCard:
 	var basic_atb_bar: ProgressBar
 	var skill_rows: Dictionary = {}
 	var equip_section: VBoxContainer
-	var equip_rows: Dictionary = {}  # slot_name -> {row, icon, name, highlight}
+	var equip_rows: Dictionary = {}  # slot_name -> {row, icon, name}
 	var hero_index: int = -1
 	var hero_id: String = ""
-	var is_hovered: bool = false
-	var card_highlight: ColorRect = null  # 카드 전체 하이라이트
 
 var hero_cards: Array[HeroCard] = []
-var _any_card_hovered: bool = false
 
 
 func _ready() -> void:
@@ -97,30 +92,16 @@ func _create_hero_card(index: int) -> HeroCard:
 	var card := HeroCard.new()
 	card.hero_index = index
 
-	# 클리핑 래퍼 (개별 카드용)
+	# 래퍼
 	card.wrapper = Control.new()
 	card.wrapper.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
-	card.wrapper.clip_contents = true
 
-	# 메인 패널 (래퍼 안에서 이동)
+	# 메인 패널
 	card.panel = PanelContainer.new()
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
-	card.panel.position = Vector2(0, CARD_HIDDEN_OFFSET)  # 기본: 아래로 내려감
 	card.panel.set_meta("card_index", index)
 	_style_card_panel(card.panel)
 	card.wrapper.add_child(card.panel)
-
-	# 카드 전체 하이라이트 (숨김 상태로 시작)
-	card.card_highlight = ColorRect.new()
-	card.card_highlight.set_anchors_preset(Control.PRESET_FULL_RECT)
-	card.card_highlight.color = HIGHLIGHT_COLOR
-	card.card_highlight.visible = false
-	card.card_highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.panel.add_child(card.card_highlight)
-
-	# 마우스 이벤트 연결
-	card.panel.mouse_entered.connect(_on_card_mouse_entered.bind(card))
-	card.panel.mouse_exited.connect(_on_card_mouse_exited.bind(card))
 
 	# 내부 VBox
 	var vbox := VBoxContainer.new()
@@ -191,25 +172,17 @@ func _create_hero_card(index: int) -> HeroCard:
 	vbox.add_child(card.equip_section)
 
 	for slot_name in SLOT_ORDER:
-		var row_data := _create_equip_row_with_highlight(slot_name, card)
+		var row_data := _create_equip_row(slot_name)
 		card.equip_section.add_child(row_data["row"])
 		card.equip_rows[slot_name] = row_data
 
 	return card
 
 
-func _create_equip_row_with_highlight(slot_name: String, card: HeroCard) -> Dictionary:
+func _create_equip_row(slot_name: String) -> Dictionary:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 2)
-	row.mouse_filter = Control.MOUSE_FILTER_STOP  # 마우스 이벤트 받음
-
-	# 하이라이트 배경
-	var highlight := ColorRect.new()
-	highlight.set_anchors_preset(Control.PRESET_FULL_RECT)
-	highlight.color = HIGHLIGHT_COLOR
-	highlight.visible = false
-	highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(highlight)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var icon_lbl := Label.new()
 	icon_lbl.name = "Icon"
@@ -230,75 +203,7 @@ func _create_equip_row_with_highlight(slot_name: String, card: HeroCard) -> Dict
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(name_lbl)
 
-	# 장비 슬롯 hover 이벤트
-	row.mouse_entered.connect(_on_equip_slot_entered.bind(card, slot_name, highlight))
-	row.mouse_exited.connect(_on_equip_slot_exited.bind(card, highlight))
-
-	return {"row": row, "icon": icon_lbl, "name": name_lbl, "highlight": highlight}
-
-
-func _on_card_mouse_entered(card: HeroCard) -> void:
-	if card.is_hovered:
-		return
-	card.is_hovered = true
-	_any_card_hovered = true
-
-	# 카드 하이라이트 표시
-	if card.card_highlight:
-		card.card_highlight.visible = true
-
-
-func _on_card_mouse_exited(card: HeroCard) -> void:
-	if not card.is_hovered:
-		return
-
-	# 짧은 딜레이 후 확인
-	await get_tree().create_timer(0.03).timeout
-
-	if not is_instance_valid(card.panel):
-		return
-
-	# 마우스가 다시 카드 위에 있으면 무시
-	var mouse_pos := card.panel.get_local_mouse_position()
-	var panel_rect := Rect2(Vector2.ZERO, card.panel.size)
-	if panel_rect.has_point(mouse_pos):
-		return
-
-	card.is_hovered = false
-
-	# 카드 하이라이트 숨김
-	if card.card_highlight:
-		card.card_highlight.visible = false
-
-	# 모든 장비 하이라이트 숨김
-	for slot_name in card.equip_rows:
-		var row_data: Dictionary = card.equip_rows[slot_name]
-		if row_data.has("highlight"):
-			row_data["highlight"].visible = false
-
-	# 모든 카드가 닫혔는지 확인
-	var any_hovered := false
-	for c in hero_cards:
-		if c.is_hovered:
-			any_hovered = true
-			break
-
-	if not any_hovered:
-		_any_card_hovered = false
-
-
-func _on_equip_slot_entered(card: HeroCard, slot_name: String, highlight: ColorRect) -> void:
-	# 카드 전체 하이라이트 숨기고 장비 슬롯 하이라이트 표시
-	if card.card_highlight:
-		card.card_highlight.visible = false
-	highlight.visible = true
-
-
-func _on_equip_slot_exited(card: HeroCard, highlight: ColorRect) -> void:
-	highlight.visible = false
-	# 카드 하이라이트 다시 표시 (카드가 여전히 hover 중이면)
-	if card.is_hovered and card.card_highlight:
-		card.card_highlight.visible = true
+	return {"row": row, "icon": icon_lbl, "name": name_lbl}
 
 
 func _style_card_panel(panel: PanelContainer) -> void:
