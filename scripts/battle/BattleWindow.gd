@@ -1279,6 +1279,10 @@ func _end_battle_victory() -> void:
 
 	_send_log("승리! Gold +%d" % total_gold, Color.CYAN)
 
+	# 글로벌 킬 카운트 증가
+	for i in range(kill_count):
+		BattleManager.increment_global_kill_count()
+
 	GameManager.add_gold(total_gold)
 
 	if not drop_items.is_empty():

@@ -129,6 +129,7 @@ theme_override_constants/separation = 0
 
 [node name="BottomPartyPanel" parent="Control" instance=ExtResource("2_party_panel")]
 unique_name_in_owner = true
+visible = false
 layout_mode = 1
 
 [node name="TraitPanel" type="PanelContainer" parent="Control"]
