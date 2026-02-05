@@ -1,7 +1,7 @@
 extends PanelContainer
 class_name BottomPartyPanel
 ## 하단 파티 패널 - 새 레이아웃
-## Face(40x40) + ATB바 + 장비 그리드(3x2)
+## Face(40x40) + ATB바 + 장비 목록(6줄)
 
 const FACE_SIZE := 40
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
@@ -24,15 +24,16 @@ const CLASS_ATTACK_ICONS := {
 
 # 슬롯 데이터
 class SlotUI:
-	var container: VBoxContainer
+	var container: HBoxContainer  # 가로: 페이스칩 + 장비목록
+	var face_vbox: VBoxContainer  # 페이스 + ATB
 	var face_container: Control
 	var face: TextureRect
 	var damage_overlay: ColorRect
 	var hp_label: Label
 	var attack_icon: Label
 	var atb_bar: ProgressBar  # ATB 바
-	var equip_grid: GridContainer
-	var equip_labels: Dictionary = {}  # slot_name -> Label
+	var equip_vbox: VBoxContainer  # 장비 목록 (6줄)
+	var equip_rows: Dictionary = {}  # slot_name -> HBoxContainer
 	var hero_index: int = -1
 	var hero_id: String = ""
 
@@ -66,16 +67,21 @@ func _create_slot(index: int) -> SlotUI:
 	var slot := SlotUI.new()
 	slot.hero_index = index
 
-	# 메인 컨테이너
-	slot.container = VBoxContainer.new()
-	slot.container.add_theme_constant_override("separation", 2)
+	# 메인 컨테이너 (가로: 페이스칩 + 장비목록)
+	slot.container = HBoxContainer.new()
+	slot.container.add_theme_constant_override("separation", 6)
 	slot.container.visible = false
+
+	# === 페이스칩 영역 ===
+	slot.face_vbox = VBoxContainer.new()
+	slot.face_vbox.add_theme_constant_override("separation", 2)
+	slot.container.add_child(slot.face_vbox)
 
 	# 페이스 컨테이너 (40x40)
 	slot.face_container = Control.new()
 	slot.face_container.custom_minimum_size = Vector2(FACE_SIZE, FACE_SIZE)
 	slot.face_container.clip_contents = false  # 아이콘이 위로 나올 수 있도록
-	slot.container.add_child(slot.face_container)
+	slot.face_vbox.add_child(slot.face_container)
 
 	# 페이스 이미지
 	slot.face = TextureRect.new()
@@ -118,7 +124,7 @@ func _create_slot(index: int) -> SlotUI:
 
 	# ATB 바 (페이스 아래)
 	slot.atb_bar = ProgressBar.new()
-	slot.atb_bar.custom_minimum_size = Vector2(FACE_SIZE, 6)
+	slot.atb_bar.custom_minimum_size = Vector2(FACE_SIZE, 5)
 	slot.atb_bar.max_value = 100.0
 	slot.atb_bar.value = 0.0
 	slot.atb_bar.show_percentage = false
@@ -140,29 +146,46 @@ func _create_slot(index: int) -> SlotUI:
 	atb_fill.corner_radius_bottom_left = 2
 	atb_fill.corner_radius_bottom_right = 2
 	slot.atb_bar.add_theme_stylebox_override("fill", atb_fill)
+	slot.face_vbox.add_child(slot.atb_bar)
 
-	slot.container.add_child(slot.atb_bar)
+	# === 장비 목록 영역 (6줄) ===
+	slot.equip_vbox = VBoxContainer.new()
+	slot.equip_vbox.add_theme_constant_override("separation", 1)
+	slot.container.add_child(slot.equip_vbox)
 
-	# 장비 그리드 (3x2)
-	slot.equip_grid = GridContainer.new()
-	slot.equip_grid.columns = 3
-	slot.equip_grid.add_theme_constant_override("h_separation", 1)
-	slot.equip_grid.add_theme_constant_override("v_separation", 1)
-	slot.container.add_child(slot.equip_grid)
-
-	# 6개의 장비 슬롯 생성
+	# 6개 장비 슬롯 행 생성
 	for slot_name in SLOT_ORDER:
-		var equip_lbl := Label.new()
-		equip_lbl.custom_minimum_size = Vector2(13, 12)
-		equip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		equip_lbl.add_theme_font_size_override("font_size", 9)
-		equip_lbl.text = SLOT_ICONS.get(slot_name, "?")
-		equip_lbl.tooltip_text = _get_slot_display_name(slot_name)
-		equip_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
-		slot.equip_grid.add_child(equip_lbl)
-		slot.equip_labels[slot_name] = equip_lbl
+		var row := _create_equip_row(slot_name)
+		slot.equip_vbox.add_child(row)
+		slot.equip_rows[slot_name] = row
 
 	return slot
+
+
+func _create_equip_row(slot_name: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	# 아이콘
+	var icon_lbl := Label.new()
+	icon_lbl.name = "Icon"
+	icon_lbl.text = SLOT_ICONS.get(slot_name, "?")
+	icon_lbl.add_theme_font_size_override("font_size", 9)
+	icon_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+	icon_lbl.custom_minimum_size.x = 14
+	row.add_child(icon_lbl)
+
+	# 이름
+	var name_lbl := Label.new()
+	name_lbl.name = "Name"
+	name_lbl.text = "-"
+	name_lbl.add_theme_font_size_override("font_size", 8)
+	name_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+	name_lbl.custom_minimum_size.x = 60
+	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(name_lbl)
+
+	return row
 
 
 func _get_slot_display_name(slot_name: String) -> String:
@@ -224,8 +247,8 @@ func update_display() -> void:
 			_update_damage_overlay(slot, hp_percent)
 			_update_hp_label(slot, hero.current_hp, max_hp)
 
-			# 장비 그리드 업데이트
-			_update_equip_grid(slot, hero)
+			# 장비 목록 업데이트
+			_update_equip_list(slot, hero)
 		else:
 			slot.container.visible = false
 
@@ -260,23 +283,30 @@ func _update_hp_label(slot: SlotUI, current_hp: int, max_hp: int) -> void:
 		slot.hp_label.add_theme_color_override("font_color", Color.WHITE)
 
 
-func _update_equip_grid(slot: SlotUI, hero: Hero) -> void:
+func _update_equip_list(slot: SlotUI, hero: Hero) -> void:
 	for slot_name in SLOT_ORDER:
-		var equip_lbl: Label = slot.equip_labels.get(slot_name)
-		if not equip_lbl:
+		var row: HBoxContainer = slot.equip_rows.get(slot_name)
+		if not row:
+			continue
+
+		var icon_lbl: Label = row.get_node_or_null("Icon")
+		var name_lbl: Label = row.get_node_or_null("Name")
+		if not icon_lbl or not name_lbl:
 			continue
 
 		var equip_id: String = hero.equipment.get(slot_name, "")
 		if equip_id.is_empty():
-			equip_lbl.text = SLOT_ICONS.get(slot_name, "?")
-			equip_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
-			equip_lbl.tooltip_text = _get_slot_display_name(slot_name) + " (비어있음)"
+			icon_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+			name_lbl.text = "-"
+			name_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
 		else:
 			var equip_data: Dictionary = DataManager.get_equipment(equip_id)
-			equip_lbl.text = SLOT_ICONS.get(slot_name, "?")
 			var rarity: String = equip_data.get("rarity", "common")
-			equip_lbl.add_theme_color_override("font_color", _get_rarity_color(rarity))
-			equip_lbl.tooltip_text = equip_data.get("name", equip_id)
+			var rarity_color: Color = _get_rarity_color(rarity)
+
+			icon_lbl.add_theme_color_override("font_color", rarity_color)
+			name_lbl.text = equip_data.get("name", equip_id)
+			name_lbl.add_theme_color_override("font_color", rarity_color)
 
 
 func _get_rarity_color(rarity: String) -> Color:
