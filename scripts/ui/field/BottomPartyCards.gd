@@ -108,14 +108,13 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.clip_container = Control.new()
 	card.clip_container.clip_contents = true
 	card.clip_container.custom_minimum_size = Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT)
-	card.clip_container.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	card.clip_container.offset_top = CARD_HEIGHT - CARD_VISIBLE_HEIGHT
+	card.clip_container.position = Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT)
 	card.wrapper.add_child(card.clip_container)
 
 	# 메인 패널 (클리핑 컨테이너 안)
 	card.panel = PanelContainer.new()
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
-	card.panel.position = Vector2(0, -(CARD_HEIGHT - CARD_VISIBLE_HEIGHT))  # 상단 부분이 잘리도록
+	card.panel.position = Vector2(0, -(CARD_HEIGHT - CARD_VISIBLE_HEIGHT))
 	_style_card_panel(card.panel)
 	card.clip_container.add_child(card.panel)
 
@@ -214,12 +213,12 @@ func _animate_card(card: HeroCard, expand: bool) -> void:
 
 	if expand:
 		# 클리핑 영역 확장 + 패널 위치 조정
-		tween.tween_property(card.clip_container, "offset_top", 0.0, 0.1)
+		tween.tween_property(card.clip_container, "position", Vector2(0, 0), 0.1)
 		tween.tween_property(card.clip_container, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_HEIGHT), 0.1)
 		tween.tween_property(card.panel, "position", Vector2(0, 0), 0.1)
 	else:
 		# 클리핑 영역 축소 + 패널 위치 조정
-		tween.tween_property(card.clip_container, "offset_top", float(CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.12)
+		tween.tween_property(card.clip_container, "position", Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.12)
 		tween.tween_property(card.clip_container, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT), 0.12)
 		tween.tween_property(card.panel, "position", Vector2(0, -(CARD_HEIGHT - CARD_VISIBLE_HEIGHT)), 0.12)
 
