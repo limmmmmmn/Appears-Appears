@@ -185,52 +185,32 @@ func _create_hero_card(index: int) -> HeroCard:
 
 
 func _on_card_mouse_entered(card: HeroCard) -> void:
-	if card.is_hovered:
-		return
 	card.is_hovered = true
-
-	# 기존 tween 취소
-	if card.panel.has_meta("tween"):
-		var old_tween = card.panel.get_meta("tween")
-		if old_tween and old_tween.is_valid():
-			old_tween.kill()
-
-	# 래퍼 크기 확장 + 카드 위로 올림
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_HEIGHT), 0.12).set_ease(Tween.EASE_OUT)
-	tween.tween_property(card.panel, "position", Vector2(0, 0), 0.12).set_ease(Tween.EASE_OUT)
-	card.panel.set_meta("tween", tween)
+	_animate_card(card, true)
 
 
 func _on_card_mouse_exited(card: HeroCard) -> void:
-	if not card.is_hovered:
-		return
-
-	# 마우스가 실제로 카드 영역을 벗어났는지 확인 (딜레이 후)
-	await get_tree().create_timer(0.05).timeout
-
-	# 딜레이 후에도 여전히 벗어났는지 확인
-	if not is_instance_valid(card.wrapper):
-		return
-	var mouse_pos := card.wrapper.get_local_mouse_position()
-	var wrapper_rect := Rect2(Vector2.ZERO, card.wrapper.size)
-	if wrapper_rect.has_point(mouse_pos):
-		return  # 마우스가 다시 들어옴
-
 	card.is_hovered = false
+	_animate_card(card, false)
 
+
+func _animate_card(card: HeroCard, expand: bool) -> void:
 	# 기존 tween 취소
 	if card.panel.has_meta("tween"):
 		var old_tween = card.panel.get_meta("tween")
 		if old_tween and old_tween.is_valid():
 			old_tween.kill()
 
-	# 래퍼 크기 축소 + 카드 아래로 내림
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT), 0.15).set_ease(Tween.EASE_IN)
-	tween.tween_property(card.panel, "position", Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.15).set_ease(Tween.EASE_IN)
+
+	if expand:
+		tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_HEIGHT), 0.1)
+		tween.tween_property(card.panel, "position", Vector2(0, 0), 0.1)
+	else:
+		tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT), 0.12)
+		tween.tween_property(card.panel, "position", Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.12)
+
 	card.panel.set_meta("tween", tween)
 
 
