@@ -1,14 +1,17 @@
 extends Control
 class_name BottomPartyCards
-## 하단 파티 카드 UI - 파티원당 개별 카드 (간소화 버전)
+## 하단 파티 카드 UI - 파티원당 개별 카드
+## 평소에는 상단만 보이고, 마우스 hover시 위로 올라옴
 
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
 const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 
 # 카드 크기
 const CARD_WIDTH := 105
-const CARD_HEIGHT := 170
+const CARD_HEIGHT := 140  # 줄인 높이
+const CARD_VISIBLE_HEIGHT := 55  # 평소 보이는 높이 (이름 + HP + 공격바)
 const CARD_SPACING := 6
+const HOVER_OFFSET := 85  # 마우스 hover시 올라가는 높이
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
@@ -21,9 +24,10 @@ signal equipment_dropped(hero_index: int, item_id: String)
 # 씬에서 가져오는 노드
 @onready var cards_container: HBoxContainer = %CardsContainer
 
-# 카드 데이터 (간소화)
+# 카드 데이터
 class HeroCard:
-	var panel: PanelContainer
+	var wrapper: Control  # 래퍼 (클리핑용)
+	var panel: PanelContainer  # 실제 카드 패널
 	var name_label: Label
 	var hp_bar: ProgressBar
 	var hp_label: Label
@@ -34,6 +38,7 @@ class HeroCard:
 	var equip_rows: Dictionary = {}
 	var hero_index: int = -1
 	var hero_id: String = ""
+	var is_hovered: bool = false
 
 var hero_cards: Array[HeroCard] = []
 
@@ -86,26 +91,38 @@ func _rebuild_cards() -> void:
 			continue
 		var card := _create_hero_card(i)
 		hero_cards.append(card)
-		cards_container.add_child(card.panel)
+		cards_container.add_child(card.wrapper)
 
 
 func _create_hero_card(index: int) -> HeroCard:
 	var card := HeroCard.new()
 	card.hero_index = index
 
-	# 메인 패널 (직접 컨테이너에 추가)
+	# 래퍼 (클리핑 컨테이너)
+	card.wrapper = Control.new()
+	card.wrapper.custom_minimum_size = Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT)
+	card.wrapper.clip_contents = true
+	card.wrapper.set_meta("card_index", index)
+
+	# 메인 패널 (래퍼 안에서 움직임)
 	card.panel = PanelContainer.new()
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
+	card.panel.position = Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT)  # 기본: 아래로 내려감
 	_style_card_panel(card.panel)
+	card.wrapper.add_child(card.panel)
+
+	# 마우스 이벤트 연결
+	card.wrapper.mouse_entered.connect(_on_card_mouse_entered.bind(card))
+	card.wrapper.mouse_exited.connect(_on_card_mouse_exited.bind(card))
 
 	# 내부 VBox
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
+	vbox.add_theme_constant_override("separation", 1)
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vbox.offset_left = 5
 	vbox.offset_right = -5
-	vbox.offset_top = 5
-	vbox.offset_bottom = -5
+	vbox.offset_top = 4
+	vbox.offset_bottom = -4
 	card.panel.add_child(vbox)
 
 	# === 이름 ===
@@ -151,7 +168,7 @@ func _create_hero_card(index: int) -> HeroCard:
 
 	# === 구분선 ===
 	var sep := HSeparator.new()
-	sep.add_theme_constant_override("separation", 2)
+	sep.add_theme_constant_override("separation", 1)
 	vbox.add_child(sep)
 
 	# === 장비 섹션 ===
@@ -165,6 +182,30 @@ func _create_hero_card(index: int) -> HeroCard:
 		card.equip_rows[slot_name] = row
 
 	return card
+
+
+func _on_card_mouse_entered(card: HeroCard) -> void:
+	if card.is_hovered:
+		return
+	card.is_hovered = true
+
+	# 래퍼 크기 확장 + 카드 위로 올림
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_HEIGHT), 0.15)
+	tween.tween_property(card.panel, "position", Vector2(0, 0), 0.15)
+
+
+func _on_card_mouse_exited(card: HeroCard) -> void:
+	if not card.is_hovered:
+		return
+	card.is_hovered = false
+
+	# 래퍼 크기 축소 + 카드 아래로 내림
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT), 0.15)
+	tween.tween_property(card.panel, "position", Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.15)
 
 
 func _style_card_panel(panel: PanelContainer) -> void:
