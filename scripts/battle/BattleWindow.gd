@@ -752,6 +752,7 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		return
 
 	_bring_to_front()
+	print("[BattleWindow] hero_attacked emit: ", hero.id)
 	BattleManager.hero_attacked.emit(hero.id)
 
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
@@ -1026,6 +1027,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	var damage := _calc_enemy_damage(enemy, target, is_crit)
 
 	PartyManager.on_hero_damaged(target, damage)
+	print("[BattleWindow] hero_damaged emit: ", target.id)
 	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
 	
