@@ -238,10 +238,25 @@ func freeze_and_despawn(duration: float = 0.5) -> void:
 	if alert_icon:
 		alert_icon.visible = false
 
+	# 흰색 반짝임 효과
+	if sprite:
+		_flash_white()
+
 	await get_tree().create_timer(duration).timeout
 
 	if is_instance_valid(self):
 		queue_free()
+
+
+func _flash_white() -> void:
+	## 흰색 반짝임 효과
+	if not sprite or not is_instance_valid(sprite):
+		return
+
+	var original_modulate := sprite.modulate
+	var tween := create_tween()
+	tween.tween_property(sprite, "modulate", Color.WHITE, 0.05)
+	tween.tween_property(sprite, "modulate", original_modulate, 0.1)
 
 
 #region 관전 시스템
