@@ -13,12 +13,6 @@ var hero_data: Dictionary = {}
 var facing_right: bool = false
 var current_direction: String = "down"
 
-# 클릭 이동용
-var click_target: Vector2 = Vector2.ZERO
-var has_click_target: bool = false
-var is_mouse_held: bool = false  # 마우스 버튼 누르고 있는지
-const CLICK_ARRIVE_DISTANCE: float = 5.0  # 도착 판정 거리
-
 # 보스전 모드 (이동 정지)
 var is_in_boss_battle: bool = false
 
@@ -69,45 +63,32 @@ func _physics_process(delta: float) -> void:
 # 리더 로직
 #=============================================================================
 func _process_leader(_delta: float) -> void:
-	# 키보드 입력 체크
-	var input_dir := Vector2(
-		Input.get_axis("ui_left", "ui_right"),
-		Input.get_axis("ui_up", "ui_down")
-	).normalized()
+	# WASD + 방향키 입력 체크
+	var input_dir := Vector2.ZERO
 
-	# 키보드 입력이 있으면 클릭 이동 취소
+	# WASD 입력
+	if Input.is_key_pressed(KEY_A):
+		input_dir.x -= 1
+	if Input.is_key_pressed(KEY_D):
+		input_dir.x += 1
+	if Input.is_key_pressed(KEY_W):
+		input_dir.y -= 1
+	if Input.is_key_pressed(KEY_S):
+		input_dir.y += 1
+
+	# 방향키도 지원
+	input_dir.x += Input.get_axis("ui_left", "ui_right")
+	input_dir.y += Input.get_axis("ui_up", "ui_down")
+
+	input_dir = input_dir.normalized()
+
+	# 키보드 입력이 있으면 이동
 	if input_dir != Vector2.ZERO:
-		has_click_target = false
 		velocity = input_dir * move_speed
 		_update_direction(input_dir)
 		_play_walk_animation()
 		move_and_slide()
 		_record_path()
-		return
-
-	# 마우스 누르고 있으면 계속 해당 위치로 이동
-	if is_mouse_held and not _is_mouse_over_ui():
-		click_target = get_global_mouse_position()
-		has_click_target = true
-
-	# 클릭 이동 처리
-	if has_click_target:
-		var to_target: Vector2 = click_target - global_position
-		var distance: float = to_target.length()
-
-		# 마우스 누르고 있지 않고 목표 도착
-		if not is_mouse_held and distance <= CLICK_ARRIVE_DISTANCE:
-			has_click_target = false
-			velocity = Vector2.ZERO
-			_play_idle_animation()
-		else:
-			# 목표를 향해 이동
-			var move_dir: Vector2 = to_target.normalized()
-			velocity = move_dir * move_speed
-			_update_direction(move_dir)
-			_play_walk_animation()
-			move_and_slide()
-			_record_path()
 		return
 
 	# 입력 없음 - 대기
@@ -120,8 +101,6 @@ func set_boss_battle_mode(enabled: bool) -> void:
 	is_in_boss_battle = enabled
 	if enabled:
 		velocity = Vector2.ZERO
-		has_click_target = false
-		is_mouse_held = false
 
 
 func brief_pause(duration: float = 0.15) -> void:
@@ -129,42 +108,6 @@ func brief_pause(duration: float = 0.15) -> void:
 	is_stunned = true
 	stun_timer = duration
 	velocity = Vector2.ZERO
-
-
-func _input(event: InputEvent) -> void:
-	## 클릭 이동 입력 처리
-	if not is_leader:
-		return
-
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				# UI 클릭은 무시
-				if _is_mouse_over_ui():
-					return
-				# 클릭 시작
-				is_mouse_held = true
-				click_target = get_global_mouse_position()
-				has_click_target = true
-			else:
-				# 클릭 해제
-				is_mouse_held = false
-
-
-func _is_mouse_over_ui() -> bool:
-	## 마우스가 UI 위에 있는지 확인
-	var mouse_pos := get_viewport().get_mouse_position()
-	# Control 노드들 중 마우스 아래에 있는 것 확인
-	var gui := get_tree().root.get_node_or_null("FieldScene/FieldHUD")
-	if gui:
-		# FieldHUD의 Control 자식들 확인
-		var ctrl := gui.get_node_or_null("Control")
-		if ctrl and ctrl is Control:
-			for child in ctrl.get_children():
-				if child is Control and child.visible:
-					if child.get_global_rect().has_point(mouse_pos):
-						return true
-	return false
 
 
 func _record_path() -> void:
