@@ -228,6 +228,22 @@ func brief_pause(duration: float = 0.3) -> void:
 		current_state = prev_state
 
 
+func freeze_and_despawn(duration: float = 0.5) -> void:
+	## 제자리에 멈추고 일정 시간 후 사라짐
+	is_despawning = true
+	velocity = Vector2.ZERO
+	current_state = State.IDLE
+
+	# 느낌표 아이콘 숨김
+	if alert_icon:
+		alert_icon.visible = false
+
+	await get_tree().create_timer(duration).timeout
+
+	if is_instance_valid(self):
+		queue_free()
+
+
 #region 관전 시스템
 func _process_spectate(_delta: float) -> void:
 	## 관전 위치로 이동

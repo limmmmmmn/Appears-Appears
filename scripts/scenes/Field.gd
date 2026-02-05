@@ -246,9 +246,6 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	## 필드 적과 충돌 시 - 전투창 증식 시스템 (1:1 대응)
 	## 필드 적 1마리 = 전투창 적 1마리
 
-	# 적만 잠시 멈춤 효과 (조우 시 멈칫)
-	field_enemy.brief_pause(0.25)
-
 	var enemy_data: Dictionary = DataManager.get_enemy(field_enemy.enemy_id)
 	var enemy_name: String = str(enemy_data.get("name", field_enemy.enemy_id))
 
@@ -281,8 +278,9 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	if spawner:
 		spawner.on_enemy_killed(tile_type, enemy_pos)
 
+	# 적 멈추고 0.5초 후 사라짐
 	field_enemies.erase(field_enemy)
-	field_enemy.despawn()
+	field_enemy.freeze_and_despawn(0.5)
 
 	# 새 시스템: 적 1마리씩 전투에 추가 (기존 창에 추가되거나 새 창 생성)
 	if BattleManager:
