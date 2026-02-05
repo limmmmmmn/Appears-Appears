@@ -89,14 +89,19 @@ func _find_node_recursive(node: Node, type) -> Node:
 
 
 func _setup_systems() -> void:
-	# HUD
-	var old_hud = get_node_or_null("CanvasLayer")
-	if old_hud:
-		old_hud.queue_free()
-	
-	hud = hud_scene.instantiate() as FieldHUD
-	add_child(hud)
-	hud.menu_pressed.connect(_on_menu_pressed)
+	# HUD - 씬에 이미 존재하는 HUD 노드를 재사용하거나 새로 생성
+	var existing_hud = get_node_or_null("HUD")
+	if existing_hud and existing_hud is FieldHUD:
+		hud = existing_hud as FieldHUD
+	else:
+		# 혹시 다른 이름으로 존재할 경우 제거
+		var old_hud = get_node_or_null("CanvasLayer")
+		if old_hud:
+			old_hud.queue_free()
+		hud = hud_scene.instantiate() as FieldHUD
+		add_child(hud)
+	if not hud.menu_pressed.is_connected(_on_menu_pressed):
+		hud.menu_pressed.connect(_on_menu_pressed)
 	
 	# 게임오버 UI
 	game_over_ui = GameOverUI.new()
