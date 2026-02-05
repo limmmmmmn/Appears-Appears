@@ -1,15 +1,17 @@
 extends Control
 class_name BottomPartyCards
 ## 하단 파티 카드 UI - 파티원당 개별 카드
-## 1명일 때 가운데, 인원이 늘어나도 가운데 유지
+## 평소에는 상단만 보이고, 마우스 hover시 위로 튀어나옴
 
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
 const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 
 # 카드 크기
-const CARD_WIDTH := 130
-const CARD_HEIGHT := 180
-const CARD_SPACING := 8
+const CARD_WIDTH := 105
+const CARD_HEIGHT := 170
+const CARD_VISIBLE_HEIGHT := 58  # 평소 보이는 높이 (이름 + HP + 공격바)
+const CARD_SPACING := 6
+const HOVER_OFFSET := 115  # 마우스 hover시 올라가는 높이
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
@@ -33,6 +35,7 @@ class HeroCard:
 	var equip_rows: Dictionary = {}
 	var hero_index: int = -1
 	var hero_id: String = ""
+	var is_hovered: bool = false
 
 var hero_cards: Array[HeroCard] = []
 var cards_container: HBoxContainer
@@ -52,8 +55,9 @@ func _build_ui() -> void:
 	anchor_bottom = 1.0
 	offset_left = 0
 	offset_right = 0
-	offset_top = -CARD_HEIGHT - 10
-	offset_bottom = -10
+	# 카드가 화면 아래로 숨겨지도록 위치 조정
+	offset_top = -CARD_VISIBLE_HEIGHT
+	offset_bottom = CARD_HEIGHT - CARD_VISIBLE_HEIGHT
 
 	# HBoxContainer로 카드들을 가로로 배치 (중앙 정렬)
 	cards_container = HBoxContainer.new()
@@ -111,21 +115,22 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
 	_style_card_panel(card.panel)
 
-	# 드롭 타겟 (전체 카드 영역)
+	# 드롭 타겟 (전체 카드 영역) + hover 처리
 	card.drop_target = _EquipDropTarget.new()
 	card.drop_target.hero_index = index
 	card.drop_target.cards_ref = self
+	card.drop_target.card_ref = card
 	card.drop_target.set_anchors_preset(Control.PRESET_FULL_RECT)
 	card.panel.add_child(card.drop_target)
 
 	# 내부 VBox
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 3)
+	vbox.add_theme_constant_override("separation", 2)
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 6
-	vbox.offset_right = -6
-	vbox.offset_top = 6
-	vbox.offset_bottom = -6
+	vbox.offset_left = 5
+	vbox.offset_right = -5
+	vbox.offset_top = 5
+	vbox.offset_bottom = -5
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.drop_target.add_child(vbox)
 
@@ -133,14 +138,14 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.name_label = Label.new()
 	card.name_label.text = "영웅"
 	card.name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	card.name_label.add_theme_font_size_override("font_size", 11)
+	card.name_label.add_theme_font_size_override("font_size", 10)
 	card.name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95))
 	card.name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(card.name_label)
 
 	# === HP바 ===
 	var hp_container := Control.new()
-	hp_container.custom_minimum_size = Vector2(0, 14)
+	hp_container.custom_minimum_size = Vector2(0, 12)
 	hp_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hp_container)
 
@@ -157,7 +162,7 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.hp_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	card.hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card.hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	card.hp_label.add_theme_font_size_override("font_size", 9)
+	card.hp_label.add_theme_font_size_override("font_size", 8)
 	card.hp_label.add_theme_color_override("font_color", Color.WHITE)
 	card.hp_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	card.hp_label.add_theme_constant_override("outline_size", 2)
@@ -166,7 +171,7 @@ func _create_hero_card(index: int) -> HeroCard:
 
 	# === ATB 섹션 ===
 	card.atb_section = VBoxContainer.new()
-	card.atb_section.add_theme_constant_override("separation", 2)
+	card.atb_section.add_theme_constant_override("separation", 1)
 	card.atb_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(card.atb_section)
 
@@ -183,7 +188,7 @@ func _create_hero_card(index: int) -> HeroCard:
 
 	# === 장비 섹션 ===
 	card.equip_section = VBoxContainer.new()
-	card.equip_section.add_theme_constant_override("separation", 1)
+	card.equip_section.add_theme_constant_override("separation", 0)
 	card.equip_section.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(card.equip_section)
 
@@ -197,7 +202,7 @@ func _create_hero_card(index: int) -> HeroCard:
 
 func _style_card_panel(panel: PanelContainer) -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.05, 0.08, 0.92)
+	style.bg_color = Color(0.05, 0.05, 0.08, 0.95)
 	style.border_width_left = 2
 	style.border_width_top = 2
 	style.border_width_right = 2
@@ -212,7 +217,7 @@ func _style_card_panel(panel: PanelContainer) -> void:
 
 func _create_atb_row(label_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
+	row.add_theme_constant_override("separation", 3)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var label := Label.new()
@@ -220,13 +225,13 @@ func _create_atb_row(label_text: String) -> HBoxContainer:
 	label.text = label_text
 	label.add_theme_font_size_override("font_size", 8)
 	label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	label.custom_minimum_size.x = 28
+	label.custom_minimum_size.x = 24
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label)
 
 	var bar := ProgressBar.new()
 	bar.name = "Bar"
-	bar.custom_minimum_size = Vector2(70, 6)
+	bar.custom_minimum_size = Vector2(60, 5)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.max_value = 100.0
 	bar.value = 0.0
@@ -240,7 +245,7 @@ func _create_atb_row(label_text: String) -> HBoxContainer:
 
 func _create_equip_row(slot_name: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 3)
+	row.add_theme_constant_override("separation", 2)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var icon_lbl := Label.new()
@@ -317,6 +322,30 @@ func _style_cooldown_bar(bar: ProgressBar, is_ready: bool) -> void:
 	fill.corner_radius_bottom_left = 2
 	fill.corner_radius_bottom_right = 2
 	bar.add_theme_stylebox_override("fill", fill)
+
+
+#region Hover 애니메이션
+func _on_card_mouse_entered(card: HeroCard) -> void:
+	if card.is_hovered:
+		return
+	card.is_hovered = true
+
+	var tween := create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_BACK)
+	tween.tween_property(card.panel, "position:y", -HOVER_OFFSET, 0.2)
+
+
+func _on_card_mouse_exited(card: HeroCard) -> void:
+	if not card.is_hovered:
+		return
+	card.is_hovered = false
+
+	var tween := create_tween()
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(card.panel, "position:y", 0.0, 0.15)
+#endregion
 
 
 func update_display() -> void:
@@ -430,7 +459,7 @@ func _update_skill_atb_bars(card: HeroCard, hero: Hero) -> void:
 
 func _create_cooldown_row(label_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
+	row.add_theme_constant_override("separation", 3)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var label := Label.new()
@@ -438,13 +467,13 @@ func _create_cooldown_row(label_text: String) -> HBoxContainer:
 	label.text = label_text
 	label.add_theme_font_size_override("font_size", 8)
 	label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
-	label.custom_minimum_size.x = 28
+	label.custom_minimum_size.x = 24
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label)
 
 	var bar := ProgressBar.new()
 	bar.name = "Bar"
-	bar.custom_minimum_size = Vector2(70, 6)
+	bar.custom_minimum_size = Vector2(60, 5)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.max_value = 100.0
 	bar.value = 0.0
@@ -556,14 +585,17 @@ func _show_equip_fail_feedback(hero_index: int) -> void:
 	tween.tween_property(card.name_label, "modulate", Color.WHITE, 0.15)
 
 
-## 드롭 타겟 컨트롤
+## 드롭 타겟 컨트롤 + hover 처리
 class _EquipDropTarget extends Control:
 	var hero_index: int = -1
 	var cards_ref: BottomPartyCards = null
+	var card_ref: HeroCard = null
 	var highlight: ColorRect = null
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_PASS
+		mouse_entered.connect(_on_mouse_entered)
+		mouse_exited.connect(_on_mouse_exited)
 
 		highlight = ColorRect.new()
 		highlight.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -571,6 +603,14 @@ class _EquipDropTarget extends Control:
 		highlight.visible = false
 		highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(highlight)
+
+	func _on_mouse_entered() -> void:
+		if cards_ref and card_ref:
+			cards_ref._on_card_mouse_entered(card_ref)
+
+	func _on_mouse_exited() -> void:
+		if cards_ref and card_ref:
+			cards_ref._on_card_mouse_exited(card_ref)
 
 	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 		if not data is Dictionary:
