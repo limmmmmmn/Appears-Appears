@@ -26,10 +26,11 @@ var enemies: Array = []
 var enemy_data_list: Array = []
 
 # === ATB 시스템 ===
-# ATB (Active Time Battle) - 물리: DEX, 마법: INT 기반 게이지 충전
-var atb_units: Array = []  # [{type: "hero"/"enemy", ref: Hero/BattleEnemy, atb: float, speed: int}]
+# ATB (Active Time Battle) - 적만 로컬 관리 (영웅은 ATBManager에서 중앙 관리)
+var enemy_atb_units: Array = []  # [{ref: BattleEnemy, atb: float, speed: int}]
 var is_processing_action: bool = false
 var action_delay_timer: float = 0.0
+var atb_paused: bool = false  # ATBManager에서 일시정지 제어
 const ATB_FILL_RATE: float = 30.0  # 기본 ATB 충전 속도
 const ATB_MAX: float = 100.0  # ATB 최대값
 const ACTION_DELAY: float = 0.3  # 액션 후 딜레이
@@ -327,35 +328,24 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 
 
 func _init_atb_system() -> void:
-	## ATB 시스템 초기화
-	atb_units.clear()
+	## ATB 시스템 초기화 (적만 로컬 관리)
+	enemy_atb_units.clear()
 	is_processing_action = false
 	action_delay_timer = 0.0
+	atb_paused = false
 
-	# 영웅들을 ATB에 추가 (DEX 기반)
-	for hero in PartyManager.get_alive_heroes():
-		var hero_dex: int = hero.get_dex()
-		var initial_atb: float = randf_range(0, 30) + hero_dex * 0.5
-		atb_units.append({
-			"type": "hero",
-			"ref": hero,
-			"atb": minf(initial_atb, ATB_MAX - 1),
-			"speed": hero_dex
-		})
-
-	# 적들을 ATB에 추가 (물리형: DEX, 마법형: INT)
+	# 적들만 ATB에 추가 (영웅은 ATBManager에서 중앙 관리)
 	for enemy in enemies:
 		if enemy != null and enemy.is_alive():
 			var enemy_spd: int = enemy.get_atb_speed()
 			var initial_atb: float = randf_range(0, 20) + enemy_spd * 0.3
-			atb_units.append({
-				"type": "enemy",
+			enemy_atb_units.append({
 				"ref": enemy,
 				"atb": minf(initial_atb, ATB_MAX - 1),
 				"speed": enemy_spd
 			})
 
-	_send_log("ATB 전투 시작!", Color.LIGHT_GRAY)
+	_send_log("전투 시작!", Color.LIGHT_GRAY)
 	_update_atb_ui()
 
 
@@ -388,27 +378,18 @@ func _setup_atb_ui() -> void:
 
 
 func _update_atb_ui() -> void:
-	## ATB UI 업데이트
+	## ATB UI 업데이트 (적만 표시)
 	if atb_bars_container == null:
 		return
 
 	# 기존 바들 업데이트 또는 생성
-	for unit in atb_units:
-		var unit_ref = unit["ref"]
-		var is_valid: bool = false
+	for unit in enemy_atb_units:
+		var unit_ref: BattleEnemy = unit["ref"]
+		var is_valid: bool = unit_ref != null and unit_ref.is_alive()
 		var unit_name: String = ""
-		var is_hero: bool = unit["type"] == "hero"
 
-		if is_hero:
-			var hero: Hero = unit_ref
-			is_valid = hero != null and not hero.is_dead
-			if is_valid:
-				unit_name = hero.hero_name
-		else:
-			var enemy: BattleEnemy = unit_ref
-			is_valid = enemy != null and enemy.is_alive()
-			if is_valid:
-				unit_name = enemy.enemy_name
+		if is_valid:
+			unit_name = unit_ref.enemy_name
 
 		if not is_valid:
 			# 죽은 유닛의 바 제거
@@ -421,7 +402,7 @@ func _update_atb_ui() -> void:
 
 		# 바가 없으면 생성
 		if not atb_bars.has(unit_ref):
-			_create_atb_bar(unit_ref, unit_name, is_hero)
+			_create_atb_bar(unit_ref, unit_name, false)
 
 		# 바 값 업데이트
 		if atb_bars.has(unit_ref):
@@ -489,8 +470,8 @@ func _start_battle() -> void:
 
 #region ATB 시스템
 func _update_atb_system(delta: float) -> void:
-	## ATB 게이지 충전 및 액션 처리
-	if is_processing_action:
+	## ATB 게이지 충전 및 액션 처리 (적만 처리, 영웅은 ATBManager에서 중앙 관리)
+	if is_processing_action or atb_paused:
 		return
 
 	# 액션 딜레이 처리
@@ -498,72 +479,46 @@ func _update_atb_system(delta: float) -> void:
 		action_delay_timer -= delta
 		return
 
-	# 모든 유닛의 ATB 게이지 충전
-	var ready_units: Array = []
-	for unit in atb_units:
-		var unit_ref = unit["ref"]
-		var is_valid: bool = _is_unit_valid(unit)
-
-		if not is_valid:
+	# 적 ATB 게이지 충전
+	var ready_enemies: Array = []
+	for unit in enemy_atb_units:
+		var enemy: BattleEnemy = unit["ref"]
+		if enemy == null or not enemy.is_alive():
 			continue
 
-		# 아직 행동 준비 안 된 유닛은 게이지 충전
+		# 아직 행동 준비 안 된 적은 게이지 충전
 		if unit["atb"] < ATB_MAX:
 			var unit_speed: float = float(unit["speed"])
 			var fill_amount: float = ATB_FILL_RATE * (unit_speed / 10.0) * delta
 			unit["atb"] = minf(unit["atb"] + fill_amount, ATB_MAX)
 
-		# 게이지가 가득 찬 유닛은 준비 목록에 추가
+		# 게이지가 가득 찬 적은 준비 목록에 추가
 		if unit["atb"] >= ATB_MAX:
-			ready_units.append(unit)
+			ready_enemies.append(unit)
 
 	# UI 업데이트
 	_update_atb_ui()
 
-	# 준비된 유닛 중 가장 먼저 찬 유닛이 행동
-	if not ready_units.is_empty():
-		# 속도가 높은 유닛 우선 (동일 시 영웅 우선)
-		ready_units.sort_custom(_compare_atb_priority)
-		_execute_atb_action(ready_units[0])
+	# 준비된 적 중 가장 빠른 적이 행동
+	if not ready_enemies.is_empty():
+		ready_enemies.sort_custom(_compare_enemy_atb_priority)
+		_execute_enemy_atb_action(ready_enemies[0])
 
 
-func _compare_atb_priority(a: Dictionary, b: Dictionary) -> bool:
-	## ATB 우선순위 비교 (속도 높은 순, 동일 시 영웅 우선)
-	if a["speed"] != b["speed"]:
-		return a["speed"] > b["speed"]
-	if a["type"] == "hero" and b["type"] == "enemy":
-		return true
-	return false
+func _compare_enemy_atb_priority(a: Dictionary, b: Dictionary) -> bool:
+	## 적 ATB 우선순위 비교 (속도 높은 순)
+	return a["speed"] > b["speed"]
 
 
-func _is_unit_valid(unit: Dictionary) -> bool:
-	## 유닛이 유효한지 확인
-	if unit["type"] == "hero":
-		var hero: Hero = unit["ref"]
-		return hero != null and not hero.is_dead
-	else:
-		var enemy: BattleEnemy = unit["ref"]
-		return enemy != null and enemy.is_alive()
-
-
-func _execute_atb_action(unit: Dictionary) -> void:
-	## ATB 액션 실행
+func _execute_enemy_atb_action(unit: Dictionary) -> void:
+	## 적 ATB 액션 실행
 	is_processing_action = true
-	var unit_type: String = unit["type"]
-	var unit_ref = unit["ref"]
+	var enemy: BattleEnemy = unit["ref"]
+	var unit_name: String = enemy.enemy_name
 
-	# 액션 시작
-	var unit_name: String = ""
-	if unit_type == "hero":
-		unit_name = unit_ref.hero_name
-		turn_started.emit(unit_name, true)
-		_play_turn_effect()
-		await _process_hero_turn(unit_ref)
-	else:
-		unit_name = unit_ref.enemy_name
-		turn_started.emit(unit_name, false)
-		_play_turn_effect()
-		await _process_enemy_turn(unit_ref)
+	turn_started.emit(unit_name, false)
+	_play_turn_effect()
+	await _process_enemy_turn(enemy)
 
 	# ATB 게이지 리셋
 	unit["atb"] = 0.0
@@ -586,19 +541,104 @@ func _add_enemy_to_atb(enemy: BattleEnemy) -> void:
 		return
 
 	# 이미 추가되어 있는지 확인
-	for unit in atb_units:
+	for unit in enemy_atb_units:
 		if unit["ref"] == enemy:
 			return
 
 	var enemy_spd: int = enemy.get_atb_speed()
 	var initial_atb: float = randf_range(0, 15) + enemy_spd * 0.2
-	atb_units.append({
-		"type": "enemy",
+	enemy_atb_units.append({
 		"ref": enemy,
 		"atb": minf(initial_atb, ATB_MAX - 1),
 		"speed": enemy_spd
 	})
 	_update_atb_ui()
+
+
+func set_atb_paused(paused: bool) -> void:
+	## ATBManager에서 호출하여 ATB 일시정지/재개
+	atb_paused = paused
+
+
+func get_alive_enemies() -> Array:
+	## 살아있는 적 목록 반환
+	var alive: Array = []
+	for enemy in enemies:
+		if enemy != null and enemy.is_alive():
+			alive.append(enemy)
+	return alive
+
+
+func execute_hero_attack(hero: Hero, skill_id: String, target: BattleEnemy) -> void:
+	## ATBManager에서 호출하여 특정 적에게 영웅 공격 실행
+	if hero == null or hero.is_dead:
+		return
+
+	if target == null or not target.is_alive():
+		return
+
+	_bring_to_front()
+
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	if skill_data.is_empty():
+		skill_id = "basic_attack"
+		skill_data = DataManager.get_skill("basic_attack")
+
+	var skill_name: String = skill_data.get("name", "공격")
+	var skill_type: String = skill_data.get("type", "physical")
+
+	# 로그에 누구의 턴인지 표시
+	_send_log("▶ %s의 턴" % hero.hero_name, Color.CYAN)
+
+	# 짧은 대기 (연출)
+	await get_tree().create_timer(0.15).timeout
+
+	# 회피 판정
+	var eva_ignore: float = _get_skill_effect_value(skill_data, "ignore_eva", 0.0)
+	var effective_eva: float = target.get_eva() * (1.0 - eva_ignore)
+	var is_evaded: bool = randf() * 100 < effective_eva
+
+	if is_evaded:
+		target.show_miss_text()
+		target.play_evade_effect()
+		_send_log("%s의 %s을(를) %s이(가) 회피!" % [hero.hero_name, skill_name, target.enemy_name], Color.GRAY)
+		return
+
+	# 크리티컬 판정
+	var crit_bonus: float = _get_skill_effect_value(skill_data, "crit_bonus", 0.0)
+	var crit_chance: float = hero.get_crit() + crit_bonus
+	var is_crit: bool = randf() * 100 < crit_chance
+
+	# 데미지 계산
+	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
+
+	# 클래스별 공격 사운드
+	if SoundManager:
+		SoundManager.play_attack(hero.class_id, is_crit)
+
+	target.take_damage(damage)
+	target.play_hit_effect(is_crit)
+	target.show_damage_number(damage, is_crit)
+
+	# 크리티컬 시 진동 효과
+	if is_crit:
+		play_critical_shake()
+
+	var log_color: Color = Color.ORANGE if is_crit else (Color.CYAN if skill_type == "magic" else Color.WHITE)
+	var crit_text: String = " ⭐" if is_crit else ""
+
+	if skill_id == "basic_attack":
+		_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
+	else:
+		_send_log("%s [%s] → %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
+
+	if not target.is_alive():
+		on_enemy_defeated(target)
+
+
+func on_enemy_defeated(enemy: BattleEnemy) -> void:
+	## 적 처치 처리 (ATBManager에서도 호출 가능)
+	_on_enemy_defeated(enemy)
 
 
 func _process_hero_turn(hero: Hero) -> void:

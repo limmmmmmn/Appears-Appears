@@ -154,6 +154,10 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 	# 첫 전투 시작 체크
 	var is_first_battle := active_battles.is_empty()
 
+	# 첫 전투 시작 시 ATBManager 초기화
+	if is_first_battle:
+		ATBManager.initialize_battle()
+
 	# BattleWindow 씬 인스턴스 생성
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
 
@@ -312,6 +316,7 @@ func end_battle(battle_id: int, victory: bool) -> void:
 	battle_ended.emit(battle_id, victory)
 	
 	if active_battles.is_empty():
+		ATBManager.reset()
 		all_battles_ended.emit()
 
 
@@ -444,6 +449,7 @@ func clear_battle_container() -> void:
 		battle_container.queue_free()
 		battle_container = null
 	active_battles.clear()
+	ATBManager.reset()
 #endregion
 
 
