@@ -126,7 +126,8 @@ func _process_leader(delta: float) -> void:
 
 	# 입력 없음 - 자동 이동 타이머 증가
 	idle_timer += delta
-	if idle_timer >= AUTO_MOVE_DELAY and current_move_style != MoveStyle.OFF:
+	# RANDOM과 OFF 모드에서는 자동 이동 안 함
+	if idle_timer >= AUTO_MOVE_DELAY and current_move_style != MoveStyle.OFF and current_move_style != MoveStyle.RANDOM:
 		# 이동 스타일에 따른 자동 이동
 		_process_auto_move()
 	else:

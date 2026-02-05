@@ -65,13 +65,10 @@ var claim_button: Button = null
 var claim_gold_label: Label = null
 var claim_items_label: Label = null
 
-# === 고/스톱 시스템 ===
+# === 원념 레벨업 알림 ===
 var go_stop_panel: PanelContainer = null
 var go_button: Button = null
-var stop_button: Button = null
-var is_go_stop_active: bool = false  # 고/스톱 선택 대기 중
-var go_stop_selection: int = 0  # 0 = 고, 1 = 스톱
-var go_stop_from_clear: bool = false  # 적 전멸로 인한 고/스톱인지
+var is_go_stop_active: bool = false  # 원념 레벨업 알림 표시 중 (적 진입 차단)
 var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
 # === 활성 특성 ===
@@ -1864,13 +1861,13 @@ func _hide_claim_ui() -> void:
 #endregion
 
 
-#region 고/스톱 시스템
+#region 원념 레벨업 알림 시스템
 func _setup_go_stop_ui() -> void:
-	## 고/스톱 UI 생성 (숨겨진 상태로)
+	## 원념 레벨업 알림 UI 생성 (숨겨진 상태로)
 	go_stop_panel = PanelContainer.new()
 	go_stop_panel.visible = false
 	go_stop_panel.z_index = 50
-	go_stop_panel.process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 동작
+	go_stop_panel.process_mode = Node.PROCESS_MODE_ALWAYS
 
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.1, 0.05, 0.15, 0.95)
@@ -1890,11 +1887,12 @@ func _setup_go_stop_ui() -> void:
 	go_stop_panel.add_theme_stylebox_override("panel", panel_style)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 12)
 	go_stop_panel.add_child(vbox)
 
 	# 제목
 	var title_label := Label.new()
+	title_label.name = "TitleLabel"
 	title_label.text = "⚠ 원념 레벨이 오릅니다!"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.add_theme_font_size_override("font_size", 13)
@@ -1903,53 +1901,44 @@ func _setup_go_stop_ui() -> void:
 
 	# 설명
 	var desc_label := Label.new()
-	desc_label.text = "적이 더 강해집니다."
+	desc_label.name = "DescLabel"
+	desc_label.text = "적들이 더 강해집니다."
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_label.add_theme_font_size_override("font_size", 11)
 	desc_label.add_theme_color_override("font_color", Color.WHITE)
 	vbox.add_child(desc_label)
 
-	# 버튼 컨테이너
-	var btn_hbox := HBoxContainer.new()
-	btn_hbox.add_theme_constant_override("separation", 20)
-	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_child(btn_hbox)
-
-	# 계속하기 버튼 (고)
+	# 확인 버튼
 	go_button = Button.new()
-	go_button.text = "계속하기"
-	go_button.custom_minimum_size = Vector2(90, 35)
+	go_button.text = "확인"
+	go_button.custom_minimum_size = Vector2(80, 32)
 	go_button.add_theme_font_size_override("font_size", 12)
-	go_button.focus_mode = Control.FOCUS_NONE  # 마우스 포커스 비활성화
-	btn_hbox.add_child(go_button)
-
-	# 보상받기 버튼 (스톱)
-	stop_button = Button.new()
-	stop_button.text = "보상받기"
-	stop_button.custom_minimum_size = Vector2(90, 35)
-	stop_button.add_theme_font_size_override("font_size", 12)
-	stop_button.focus_mode = Control.FOCUS_NONE  # 마우스 포커스 비활성화
-	btn_hbox.add_child(stop_button)
-
-	# 키 힌트
-	var hint_label := Label.new()
-	hint_label.text = "[← →] 선택  [Enter] 결정"
-	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_label.add_theme_font_size_override("font_size", 9)
-	hint_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-	vbox.add_child(hint_label)
+	go_button.focus_mode = Control.FOCUS_NONE
+	go_button.pressed.connect(_on_level_up_confirm_pressed)
+	vbox.add_child(go_button)
 
 	add_child(go_stop_panel)
 
 
+func _on_level_up_confirm_pressed() -> void:
+	## 원념 레벨업 확인 버튼 클릭
+	_hide_level_up_panel()
+
+
+func _hide_level_up_panel() -> void:
+	## 원념 레벨업 알림 패널 숨기기
+	if go_stop_panel:
+		go_stop_panel.visible = false
+	is_go_stop_active = false
+	get_tree().paused = false
+
+
 func _show_go_stop_choice(new_level: int, _message: String) -> void:
-	## 원념 레벨업 시 고/스톱 선택 UI 표시
+	## 원념 레벨업 시 알림 UI 표시
 	if not go_stop_panel:
 		return
 
 	is_go_stop_active = true
-	go_stop_selection = 0  # 기본 선택: 고
-	go_stop_from_clear = false  # 원념 레벨업으로 인한 고/스톱
 	get_tree().paused = true  # 게임 일시정지
 
 	# 패널 위치 (전투창 중앙)
@@ -1965,124 +1954,7 @@ func _show_go_stop_choice(new_level: int, _message: String) -> void:
 	# 설명 업데이트
 	var desc := go_stop_panel.get_child(0).get_child(1) as Label
 	if desc:
-		desc.text = "적이 더 강해집니다."
-
-	_update_go_stop_selection_visual()
-
-
-func _show_go_stop_for_clear() -> void:
-	## 적이 모두 사라졌을 때 고/스톱 선택 UI 표시
-	if not go_stop_panel:
-		return
-
-	is_go_stop_active = true
-	go_stop_selection = 0  # 기본 선택: 고
-	go_stop_from_clear = true  # 적 전멸로 인한 고/스톱
-	get_tree().paused = true  # 게임 일시정지
-
-	# 패널 위치 (전투창 중앙)
-	go_stop_panel.visible = true
-	await get_tree().create_timer(0.01).timeout
-	go_stop_panel.position = (size - go_stop_panel.size) / 2
-
-	# 제목 업데이트
-	var title := go_stop_panel.get_child(0).get_child(0) as Label
-	if title:
-		title.text = "✓ 적을 모두 처치했습니다!"
-
-	# 설명 업데이트
-	var desc := go_stop_panel.get_child(0).get_child(1) as Label
-	if desc:
-		desc.text = "더 싸우시겠습니까?"
-
-	_update_go_stop_selection_visual()
-
-
-func _update_go_stop_selection_visual() -> void:
-	## 선택된 버튼 시각적 강조 업데이트
-	if not go_button or not stop_button:
-		return
-
-	# 선택됨 스타일 (밝고 테두리)
-	var selected_go := StyleBoxFlat.new()
-	selected_go.bg_color = Color(0.3, 0.7, 0.3)
-	selected_go.border_width_left = 3
-	selected_go.border_width_top = 3
-	selected_go.border_width_right = 3
-	selected_go.border_width_bottom = 3
-	selected_go.border_color = Color.WHITE
-	selected_go.corner_radius_top_left = 4
-	selected_go.corner_radius_top_right = 4
-	selected_go.corner_radius_bottom_left = 4
-	selected_go.corner_radius_bottom_right = 4
-
-	var selected_stop := StyleBoxFlat.new()
-	selected_stop.bg_color = Color(0.7, 0.3, 0.3)
-	selected_stop.border_width_left = 3
-	selected_stop.border_width_top = 3
-	selected_stop.border_width_right = 3
-	selected_stop.border_width_bottom = 3
-	selected_stop.border_color = Color.WHITE
-	selected_stop.corner_radius_top_left = 4
-	selected_stop.corner_radius_top_right = 4
-	selected_stop.corner_radius_bottom_left = 4
-	selected_stop.corner_radius_bottom_right = 4
-
-	# 비선택 스타일 (어둡게)
-	var unselected_go := StyleBoxFlat.new()
-	unselected_go.bg_color = Color(0.15, 0.3, 0.15)
-	unselected_go.corner_radius_top_left = 4
-	unselected_go.corner_radius_top_right = 4
-	unselected_go.corner_radius_bottom_left = 4
-	unselected_go.corner_radius_bottom_right = 4
-
-	var unselected_stop := StyleBoxFlat.new()
-	unselected_stop.bg_color = Color(0.3, 0.15, 0.15)
-	unselected_stop.corner_radius_top_left = 4
-	unselected_stop.corner_radius_top_right = 4
-	unselected_stop.corner_radius_bottom_left = 4
-	unselected_stop.corner_radius_bottom_right = 4
-
-	if go_stop_selection == 0:
-		# 고 선택됨
-		go_button.text = "▶ 고 (계속) ◀"
-		go_button.add_theme_stylebox_override("normal", selected_go)
-		go_button.add_theme_stylebox_override("hover", selected_go)
-		go_button.add_theme_color_override("font_color", Color.WHITE)
-
-		stop_button.text = "스톱 (보상)"
-		stop_button.add_theme_stylebox_override("normal", unselected_stop)
-		stop_button.add_theme_stylebox_override("hover", unselected_stop)
-		stop_button.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	else:
-		# 스톱 선택됨
-		go_button.text = "고 (계속)"
-		go_button.add_theme_stylebox_override("normal", unselected_go)
-		go_button.add_theme_stylebox_override("hover", unselected_go)
-		go_button.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-
-		stop_button.text = "▶ 스톱 (보상) ◀"
-		stop_button.add_theme_stylebox_override("normal", selected_stop)
-		stop_button.add_theme_stylebox_override("hover", selected_stop)
-		stop_button.add_theme_color_override("font_color", Color.WHITE)
-
-
-func _on_go_pressed() -> void:
-	## '고' 선택 - 전투 계속 (적 대기)
-	is_go_stop_active = false
-	go_stop_panel.visible = false
-	get_tree().paused = false  # 게임 재개
-
-	if go_stop_from_clear:
-		# 적 전멸 후 '고' 선택 시 대기 모드로 전환
-		is_waiting_for_enemies = true
-		_enter_waiting_mode()
-		_send_log("적을 기다린다...", Color.GRAY)
-	else:
-		# 일반적인 '고' 선택 (원념 레벨업 등)
-		current_state = BattleState.RUNNING
-		set_process(true)
-		_send_log("계속 싸운다!", Color.GREEN)
+		desc.text = "적들이 더 강해집니다."
 
 
 func _enter_waiting_mode() -> void:
@@ -2101,60 +1973,15 @@ func _exit_waiting_mode() -> void:
 	_send_log("전투 재개!", Color.GREEN)
 
 
-func _on_stop_pressed() -> void:
-	## '스톱' 선택 - 보상 받고 종료
-	is_go_stop_active = false
-	go_stop_panel.visible = false
-	get_tree().paused = false  # 게임 재개
-	_send_log("여기서 멈춘다!", Color.YELLOW)
-	_stop_and_claim_rewards()
-
-
-func _stop_and_claim_rewards() -> void:
-	## 스톱 선택 시 보상 지급 및 종료
-	current_state = BattleState.VICTORY
-	set_process(false)
-
-	_send_log("보상 획득! Gold +%d" % total_gold, Color.CYAN)
-
-	GameManager.add_gold(total_gold)
-
-	if not drop_items.is_empty():
-		_start_loot_animations()
-
-	call_deferred("_emit_party_updated")
-	battle_ended.emit(battle_id, true)
-
-	# 보상 날아가는 연출 후 닫기
-	_play_reward_fly_animation()
-
-
 func _input(event: InputEvent) -> void:
-	## 키보드 입력으로 고/스톱 선택 (좌우 이동 + 엔터 확정)
+	## 키보드 입력으로 원념 레벨업 확인
 	if not is_go_stop_active:
 		return
 
 	if event is InputEventKey and event.pressed:
-		match event.keycode:
-			KEY_LEFT:
-				# 왼쪽: 고 선택
-				if go_stop_selection != 0:
-					go_stop_selection = 0
-					_update_go_stop_selection_visual()
-				get_viewport().set_input_as_handled()
-			KEY_RIGHT:
-				# 오른쪽: 스톱 선택
-				if go_stop_selection != 1:
-					go_stop_selection = 1
-					_update_go_stop_selection_visual()
-				get_viewport().set_input_as_handled()
-			KEY_ENTER, KEY_KP_ENTER:
-				# 엔터: 현재 선택 확정
-				if go_stop_selection == 0:
-					_on_go_pressed()
-				else:
-					_on_stop_pressed()
-				get_viewport().set_input_as_handled()
+		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER or event.keycode == KEY_SPACE:
+			_hide_level_up_panel()
+			get_viewport().set_input_as_handled()
 #endregion
 
 
