@@ -1082,6 +1082,9 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	enemy.play_death_effect()
 
+	# 모든 적이 처치되었는지 확인 후 보상 UI 표시
+	call_deferred("_check_all_enemies_dead")
+
 
 func _show_danger_level_up_message(new_level: int) -> void:
 	## 위험도 상승 시 로그 메시지만 표시 (선택 UI는 FieldHUD에서 글로벌하게 처리)
@@ -1185,6 +1188,20 @@ func _animate_popup(canvas_layer: CanvasLayer, bg: PanelContainer) -> void:
 	tween.tween_interval(2.0)
 	tween.tween_property(bg, "modulate:a", 0.0, 0.4)
 	tween.tween_callback(canvas_layer.queue_free)
+
+
+func _check_all_enemies_dead() -> void:
+	## 모든 적이 처치되었는지 확인하고 보상 UI 표시
+	if is_waiting_for_claim:
+		return  # 이미 보상 대기 중
+
+	var alive_enemies: Array = []
+	for e in enemies:
+		if e != null and e.is_alive():
+			alive_enemies.append(e)
+
+	if alive_enemies.is_empty():
+		_show_claim_reward_button()
 
 
 func _check_battle_end() -> bool:

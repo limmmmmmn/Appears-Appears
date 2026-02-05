@@ -184,12 +184,10 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 		window_size = WINDOW_SIZE
 		target_pos = _calculate_window_position()
 
-	var start_pos: Vector2 = viewport_size / 2 - window_size / 2
-
-	# 시작 위치에 배치 (중앙, 투명, 작은 크기)
-	window.position = start_pos
+	# 시작 위치에 배치 (목표 위치에서 투명하게 시작)
+	window.position = target_pos
 	window.modulate.a = 0.0
-	window.scale = Vector2(0.5, 0.5)
+	window.scale = Vector2(0.8, 0.8)
 
 	# 전투 초기화 (새 시스템용)
 	window.setup_new(battle_id, enemy_ids, is_elite, is_boss)
@@ -289,15 +287,15 @@ func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = f
 
 
 #region 전투창 등장 애니메이션
-func _animate_window_appear(window: BattleWindow, target_pos: Vector2) -> void:
+func _animate_window_appear(window: BattleWindow, _target_pos: Vector2) -> void:
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.set_ease(Tween.EASE_OUT)
 	tween.set_trans(Tween.TRANS_BACK)
-	
-	tween.tween_property(window, "position", target_pos, 0.35)
+
+	# 위치 이동 없이 제자리에서 나타남
 	tween.tween_property(window, "modulate:a", 1.0, 0.2)
-	tween.tween_property(window, "scale", Vector2.ONE, 0.3)
+	tween.tween_property(window, "scale", Vector2.ONE, 0.25)
 #endregion
 
 
