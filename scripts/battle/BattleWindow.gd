@@ -1769,7 +1769,7 @@ func play_aoe_flash() -> void:
 
 #region 보상 받기 UI
 func _setup_claim_reward_ui() -> void:
-	## 전투창 중앙에 보상 받기 UI 생성 (숨겨진 상태로)
+	## 전투창 중앙에 이탈 UI 생성 (숨겨진 상태로)
 	claim_reward_panel = CenterContainer.new()
 	claim_reward_panel.visible = false
 	claim_reward_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1796,17 +1796,25 @@ func _setup_claim_reward_ui() -> void:
 	claim_reward_panel.add_child(panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 6)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
-	# 보상 받기 버튼
+	# 이탈 버튼
 	claim_button = Button.new()
-	claim_button.text = "보상 받기"
-	claim_button.custom_minimum_size = Vector2(100, 32)
+	claim_button.text = "이탈"
+	claim_button.custom_minimum_size = Vector2(80, 32)
 	claim_button.add_theme_font_size_override("font_size", 14)
 	claim_button.pressed.connect(_on_claim_button_pressed)
 	vbox.add_child(claim_button)
+
+	# 현재까지 보상 라벨
+	var rewards_title_label := Label.new()
+	rewards_title_label.text = "현재까지 보상"
+	rewards_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rewards_title_label.add_theme_font_size_override("font_size", 10)
+	rewards_title_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(rewards_title_label)
 
 	# 골드 라벨
 	claim_gold_label = Label.new()
@@ -1841,18 +1849,18 @@ func _show_claim_ui() -> void:
 	# 골드 표시
 	claim_gold_label.text = "💰 %d Gold" % total_gold
 
-	# 아이템 표시
+	# 아이템 표시 (각 아이템 줄바꿈으로 나열)
 	if drop_items.is_empty():
 		claim_items_label.text = ""
 	else:
-		var item_names: Array[String] = []
+		var item_lines: Array[String] = []
 		for item_id in drop_items:
 			var item_data: Dictionary = DataManager.get_item(item_id)
 			if item_data.is_empty():
 				item_data = DataManager.get_equipment(item_id)
 			var item_name: String = str(item_data.get("name", item_id))
-			item_names.append(item_name)
-		claim_items_label.text = "🎁 " + ", ".join(item_names)
+			item_lines.append("• " + item_name)
+		claim_items_label.text = "\n".join(item_lines)
 
 	claim_reward_panel.visible = true
 
