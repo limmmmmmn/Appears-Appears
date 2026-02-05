@@ -22,11 +22,11 @@ class HeroSlotUI:
 	var name_label: Label
 	var hp_bar: ProgressBar
 	var hp_label: Label  # HP 텍스트 (바 위에)
-	var atb_rows: VBoxContainer  # ATB 바들
+	var atb_rows: VBoxContainer  # ATB/스킬 바들
 	var basic_atb_row: HBoxContainer  # 공격 ATB
 	var basic_atb_label: Label
 	var basic_atb_bar: ProgressBar
-	var skill_atb_rows: Array[HBoxContainer] = []  # 스킬 ATB들
+	var skill_rows: Dictionary = {}  # skill_id -> {row: HBoxContainer, bar: ProgressBar, label: Label}
 	var equip_section: VBoxContainer  # 장비 섹션
 	var equip_rows: Dictionary = {}  # slot_name -> HBoxContainer
 	var drop_target: _EquipDropTarget  # 드롭 타겟
@@ -152,12 +152,12 @@ func _create_hero_slot(index: int) -> HeroSlotUI:
 	slot.info_section.add_child(slot.atb_rows)
 
 	# 기본 공격 ATB 행
-	slot.basic_atb_row = _create_atb_row("ATB")
+	slot.basic_atb_row = _create_atb_row("공격")
 	slot.basic_atb_label = slot.basic_atb_row.get_node("Label")
 	slot.basic_atb_bar = slot.basic_atb_row.get_node("Bar")
 	slot.atb_rows.add_child(slot.basic_atb_row)
 
-	# 스킬 ATB 행은 스킬 시스템 확장 시 추가 예정
+	# 스킬 쿨다운 행들은 update_display에서 동적으로 추가
 
 	# === 장비 섹션 ===
 	slot.equip_section = VBoxContainer.new()
@@ -363,9 +363,86 @@ func _update_equip_list(slot: HeroSlotUI, hero: Hero) -> void:
 			name_lbl.add_theme_color_override("font_color", rarity_color)
 
 
-func _update_skill_atb_bars(_slot: HeroSlotUI, _hero: Hero) -> void:
-	# 스킬별 ATB는 현재 미구현 - 추후 확장 예정
-	pass
+func _update_skill_atb_bars(slot: HeroSlotUI, hero: Hero) -> void:
+	## 스킬 쿨다운 바 생성/업데이트
+	var skills: Array = hero.get_available_skills()
+
+	# 기존에 없는 스킬 행 추가
+	for skill_id in skills:
+		if skill_id == "basic_attack":
+			continue
+
+		if not slot.skill_rows.has(skill_id):
+			var skill_data: Dictionary = DataManager.get_skill(skill_id)
+			var skill_name: String = skill_data.get("name", skill_id)
+
+			var row := _create_cooldown_row(skill_name)
+			slot.atb_rows.add_child(row)
+			slot.skill_rows[skill_id] = {
+				"row": row,
+				"bar": row.get_node("Bar"),
+				"label": row.get_node("Label")
+			}
+
+	# 더 이상 없는 스킬 행 제거
+	var to_remove: Array = []
+	for skill_id in slot.skill_rows.keys():
+		if skill_id not in skills:
+			to_remove.append(skill_id)
+
+	for skill_id in to_remove:
+		var row_data: Dictionary = slot.skill_rows[skill_id]
+		row_data["row"].queue_free()
+		slot.skill_rows.erase(skill_id)
+
+
+func _create_cooldown_row(label_text: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# 라벨 (스킬 이름)
+	var label := Label.new()
+	label.name = "Label"
+	label.text = label_text
+	label.add_theme_font_size_override("font_size", 8)
+	label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+	label.custom_minimum_size.x = 30
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(label)
+
+	# 쿨다운 바 (역방향: 100% = 쿨다운 중, 0% = 준비완료)
+	var bar := ProgressBar.new()
+	bar.name = "Bar"
+	bar.custom_minimum_size = Vector2(80, 6)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.max_value = 100.0
+	bar.value = 0.0
+	bar.show_percentage = false
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_style_cooldown_bar(bar, true)
+	row.add_child(bar)
+
+	return row
+
+
+func _style_cooldown_bar(bar: ProgressBar, is_ready: bool) -> void:
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.15, 0.15, 0.2)
+	bg.corner_radius_top_left = 2
+	bg.corner_radius_top_right = 2
+	bg.corner_radius_bottom_left = 2
+	bg.corner_radius_bottom_right = 2
+	bar.add_theme_stylebox_override("background", bg)
+
+	var fill := StyleBoxFlat.new()
+	# 준비 완료면 초록색, 쿨다운 중이면 회색
+	fill.bg_color = Color(0.3, 0.8, 0.3) if is_ready else Color(0.4, 0.4, 0.5)
+	fill.corner_radius_top_left = 2
+	fill.corner_radius_top_right = 2
+	fill.corner_radius_bottom_left = 2
+	fill.corner_radius_bottom_right = 2
+	bar.add_theme_stylebox_override("fill", fill)
 
 
 func _on_atb_updated() -> void:
@@ -378,10 +455,23 @@ func _on_atb_updated() -> void:
 		var slot := hero_slots[i]
 		var hero: Hero = party[i]
 
-		# ATB 업데이트
+		# 기본 공격 ATB 업데이트
 		var atb_percent: float = ATBManager.get_hero_atb_percent(hero.id) if ATBManager else 0.0
 		slot.basic_atb_bar.value = atb_percent * 100.0
 		_style_atb_bar(slot.basic_atb_bar, atb_percent >= 1.0)
+
+		# 스킬 쿨다운 업데이트
+		for skill_id in slot.skill_rows.keys():
+			var row_data: Dictionary = slot.skill_rows[skill_id]
+			var bar: ProgressBar = row_data["bar"]
+
+			# 쿨다운 퍼센트 가져오기 (0 = 준비완료, 1 = 막 사용)
+			var cooldown_percent: float = CooldownManager.get_cooldown_percent(hero.id, skill_id) if CooldownManager else 0.0
+			var is_ready: bool = cooldown_percent <= 0.0
+
+			# 바 업데이트 (준비 완료면 100%, 쿨다운 중이면 남은 비율)
+			bar.value = 100.0 if is_ready else (1.0 - cooldown_percent) * 100.0
+			_style_cooldown_bar(bar, is_ready)
 
 
 func _get_rarity_color(rarity: String) -> Color:

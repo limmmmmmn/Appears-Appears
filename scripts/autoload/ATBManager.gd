@@ -148,6 +148,7 @@ func _execute_auto_attack(hero: Hero) -> void:
 
 func _select_best_skill(hero: Hero) -> String:
 	## 사용 가능한 최적 스킬 선택 (쿨타임 체크)
+	## 우선순위: 특수 스킬 > 기본 공격
 	var skills := hero.get_available_skills()
 
 	# 힐러 클래스면 아군 체력 체크
@@ -164,13 +165,23 @@ func _select_best_skill(hero: Hero) -> String:
 				if skill_data.get("type", "") == "heal":
 					return skill_id
 
-	# 일반 스킬 선택 (쿨타임이 없는 것 중 우선순위)
+	# 1차: 특수 스킬 우선 (기본 공격 제외, 쿨타임 없는 것)
 	for skill_id in skills:
+		if skill_id == "basic_attack":
+			continue
+		# 토글 OFF면 스킵
+		if not hero.is_skill_enabled(skill_id):
+			continue
 		var cooldown: float = CooldownManager.get_remaining_cooldown(hero.id, skill_id)
 		if cooldown <= 0:
 			return skill_id
 
-	# 모두 쿨타임이면 기본 공격
+	# 2차: 기본 공격 (쿨타임 체크)
+	var basic_cooldown: float = CooldownManager.get_remaining_cooldown(hero.id, "basic_attack")
+	if basic_cooldown <= 0:
+		return "basic_attack"
+
+	# 모두 쿨타임이면 기본 공격 강제 사용 (대기 방지)
 	return "basic_attack"
 
 

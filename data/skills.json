@@ -32,14 +32,14 @@
   "fireball": {
 	"id": "fireball",
 	"name": "파이어볼",
-	"description": "불덩이를 발사한다",
+	"description": "전투창 내 모든 적에게 화염 피해",
 	"type": "magic",
-	"target": "single_enemy",
-	"cooldown": 6.0,
-	"damage_base": 15,
+	"target": "all_enemies",
+	"cooldown": 8.0,
+	"damage_base": 10,
 	"damage_scaling": {
 	  "stat": "int",
-	  "multiplier": 1.2
+	  "multiplier": 0.8
 	},
 	"effects": [],
 	"default_on": true
@@ -48,14 +48,11 @@
 	"id": "heal",
 	"name": "힐",
 	"description": "아군 한 명의 HP를 회복한다",
-	"type": "magic",
+	"type": "heal",
 	"target": "single_ally",
-	"cooldown": 8.0,
-	"heal_base": 20,
-	"heal_scaling": {
-	  "stat": "int",
-	  "multiplier": 0.8
-	},
+	"cooldown": 10.0,
+	"base_damage": 25,
+	"scaling": 1.2,
 	"effects": [],
 	"default_on": true
   },
