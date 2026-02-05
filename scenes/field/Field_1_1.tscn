@@ -7,7 +7,6 @@
 
 [ext_resource type="PackedScene" uid="uid://c2cjb4efakggb" path="res://scenes/ui/FieldHUD.tscn" id="hud_scene"]
 [ext_resource type="PackedScene" uid="uid://ly3qxa1t3hy3" path="res://scenes/field/PartyMember.tscn" id="player_scene"]
-[ext_resource type="PackedScene" uid="uid://hbfw4ha3j1w6" path="res://scenes/field/FieldEnemy.tscn" id="enemy_scene"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_c8nu2"]
 texture = ExtResource("2_4afwf")
@@ -67,10 +66,3 @@ position = Vector2(380, 170)
 [node name="Player" parent="." instance=ExtResource("player_scene")]
 position = Vector2(240, 135)
 
-[node name="Enemies" type="Node2D" parent="."]
-
-[node name="Enemy1" parent="Enemies" instance=ExtResource("enemy_scene")]
-position = Vector2(350, 120)
-
-[node name="Enemy2" parent="Enemies" instance=ExtResource("enemy_scene")]
-position = Vector2(130, 150)
