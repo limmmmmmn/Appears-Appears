@@ -7,10 +7,6 @@ var hero_name: String = ""
 var class_id: String = ""
 var hero_class_name: String = ""  # class_name은 Godot 예약어
 
-var level: int = 1
-var exp: int = 0
-var exp_to_next: int = 40  # 레벨업 속도 상향
-
 # 기본 스탯
 var base_hp: int = 0
 var base_str: int = 0
@@ -129,32 +125,6 @@ func _get_equipment_stat(stat: String) -> int:
 		var data: Dictionary = DataManager.get_equipment(equip_id)
 		total += int(data.get("stats", {}).get(stat, 0))
 	return total
-#endregion
-
-
-#region 레벨업
-func add_exp(amount: int) -> bool:
-	exp += amount
-	if exp >= exp_to_next:
-		_level_up()
-		return true
-	return false
-
-
-func _level_up() -> void:
-	level += 1
-	exp -= exp_to_next
-	exp_to_next = int(40 * pow(level, 1.2))  # 레벨업 속도 상향
-
-	var growth: Dictionary = DataManager.get_class_growth(class_id)
-	base_hp += int(growth.get("hp", 1))
-	base_str += int(growth.get("str", 1))
-	base_def += int(growth.get("def", 1))
-	base_int += int(growth.get("int", 1))
-	base_dex += int(growth.get("dex", 1))
-	base_luk += int(growth.get("luk", 1))
-
-	current_hp = get_max_hp()
 #endregion
 
 
@@ -331,8 +301,8 @@ func unequip_rune() -> String:
 
 
 func get_stat_summary() -> String:
-	return "[%s] Lv.%d %s | HP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
-		hero_name, level, hero_class_name,
+	return "[%s] %s | HP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
+		hero_name, hero_class_name,
 		current_hp, get_max_hp(),
 		get_str(), get_def(), get_int(), get_dex(), get_luk()
 	]

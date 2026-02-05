@@ -184,7 +184,7 @@ func _open_tavern() -> void:
 	else:
 		for hero in party:
 			var hero_label := Label.new()
-			hero_label.text = "• %s (Lv.%d %s)" % [hero.hero_name, hero.level, hero.hero_class_name]
+			hero_label.text = "• %s (%s)" % [hero.hero_name, hero.hero_class_name]
 			sub_content.add_child(hero_label)
 	
 	var sep2 := HSeparator.new()
@@ -342,15 +342,14 @@ func _open_church() -> void:
 		sub_content.add_child(no_dead)
 	else:
 		var base_cost: int = int(church_data.get("revive_cost_base", 50))
-		var per_level: int = int(church_data.get("revive_cost_per_level", 10))
-		
+
 		for hero in dead_heroes:
-			var cost: int = base_cost + (hero.level * per_level)
-			
+			var cost: int = base_cost
+
 			var hbox := HBoxContainer.new()
-			
+
 			var name_label := Label.new()
-			name_label.text = "%s (Lv.%d)" % [hero.hero_name, hero.level]
+			name_label.text = "%s (%s)" % [hero.hero_name, hero.hero_class_name]
 			name_label.custom_minimum_size.x = 150
 			hbox.add_child(name_label)
 			

@@ -16,7 +16,6 @@ var int_stat: int = 0
 var current_hp: int = 0
 var is_dead: bool = false
 
-var exp_reward: int = 0
 var gold_min: int = 0
 var gold_max: int = 0
 var drop_table: Array = []
@@ -62,7 +61,6 @@ func _initialize(enemy_id: String) -> void:
 	current_hp = max_hp
 	
 	var rewards: Dictionary = data.get("rewards", {})
-	exp_reward = int(rewards.get("exp", 0))
 	gold_min = int(rewards.get("gold_min", 0))
 	gold_max = int(rewards.get("gold_max", 0))
 	drop_table = data.get("drop_table", [])

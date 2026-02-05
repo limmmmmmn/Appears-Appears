@@ -19,7 +19,7 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal global_kill_count_changed(count: int, danger_level: int)
-signal accumulated_rewards_changed(exp: int, gold: int, items: Array)
+signal accumulated_rewards_changed(gold: int, items: Array)
 signal danger_level_up(new_level: int)  # 원념 레벨업 시 (선택창 표시용)
 
 # === 전투창 증식 시스템 설정 ===
@@ -32,7 +32,6 @@ const DANGER_LEVEL_INTERVAL: int = 5  # 위험도 1레벨당 킬 수 (5킬마다
 const STAT_SCALE_PER_LEVEL: float = 0.05  # 위험도 1레벨당 스탯 증가율 (5%)
 
 # === 누적 보상 시스템 ===
-var accumulated_exp: int = 0
 var accumulated_gold: int = 0
 var accumulated_items: Array = []  # [{id, type, rarity, identified}]
 
@@ -353,9 +352,8 @@ func _on_loot_drop_requested(item_id: String, start_pos: Vector2) -> void:
 
 
 #region 누적 보상 시스템
-func add_accumulated_reward(exp: int, gold: int, items: Array = []) -> void:
+func add_accumulated_reward(_exp: int, gold: int, items: Array = []) -> void:
 	## 전투창에서 보상 누적
-	accumulated_exp += exp
 	accumulated_gold += gold
 
 	# 아이템은 미감정 상태로 추가
@@ -376,7 +374,7 @@ func add_accumulated_reward(exp: int, gold: int, items: Array = []) -> void:
 		}
 		accumulated_items.append(unidentified_item)
 
-	accumulated_rewards_changed.emit(accumulated_exp, accumulated_gold, accumulated_items)
+	accumulated_rewards_changed.emit(accumulated_gold, accumulated_items)
 
 
 func increment_global_kill_count() -> void:
@@ -394,8 +392,6 @@ func increment_global_kill_count() -> void:
 
 func claim_accumulated_rewards() -> void:
 	## 누적 보상 수령 (스톱 선택 시)
-	if accumulated_exp > 0:
-		PartyManager.distribute_exp(accumulated_exp)
 	if accumulated_gold > 0:
 		GameManager.add_gold(accumulated_gold)
 
@@ -404,7 +400,7 @@ func claim_accumulated_rewards() -> void:
 		InventoryManager.add_unidentified_item(item.id, 1)
 
 	# 로그
-	battle_log_received.emit("보상 획득! EXP +%d, Gold +%d" % [accumulated_exp, accumulated_gold], Color.CYAN)
+	battle_log_received.emit("보상 획득! Gold +%d" % accumulated_gold, Color.CYAN)
 
 	# 초기화
 	reset_accumulated_rewards()
@@ -412,17 +408,16 @@ func claim_accumulated_rewards() -> void:
 
 func reset_accumulated_rewards() -> void:
 	## 보상 및 원념 초기화
-	accumulated_exp = 0
 	accumulated_gold = 0
 	accumulated_items.clear()
 	global_kill_count = 0
-	accumulated_rewards_changed.emit(0, 0, [])
+	accumulated_rewards_changed.emit(0, [])
 	global_kill_count_changed.emit(0, 0)
 
 
 func get_accumulated_rewards() -> Dictionary:
 	return {
-		"exp": accumulated_exp,
+		"exp": 0,  # 레벨 시스템 제거됨
 		"gold": accumulated_gold,
 		"items": accumulated_items,
 		"danger_level": get_danger_level()

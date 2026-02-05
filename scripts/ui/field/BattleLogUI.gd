@@ -90,10 +90,6 @@ func add_defeat(target: String) -> void:
 	add_log("💀%s 쓰러짐!" % target, Color.ORANGE_RED)
 
 
-func add_exp(exp: int) -> void:
-	add_log("✨+%d EXP" % exp, Color.CYAN)
-
-
 func add_gold(gold: int) -> void:
 	add_log("💰+%d G" % gold, Color.GOLD)
 
@@ -104,10 +100,6 @@ func add_item(item_name: String) -> void:
 
 func add_system(message: String) -> void:
 	add_log(message, Color.GRAY)
-
-
-func add_level_up(hero_name: String, new_level: int) -> void:
-	add_log("🎉%s 레벨업! Lv.%d" % [hero_name, new_level], Color.GOLD)
 
 
 func add_stat_info(stat_name: String, value: String) -> void:

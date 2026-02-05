@@ -32,13 +32,11 @@ func _collect_stats() -> void:
 	}
 	
 	# 파티 정보
-	var total_level: int = 0
 	var hero_names: Array[String] = []
 	for hero in PartyManager.get_party():
-		total_level += hero.level
 		hero_names.append(hero.hero_name)
-	
-	stats["total_level"] = total_level
+
+	stats["party_size"] = hero_names.size()
 	stats["hero_names"] = hero_names
 
 
@@ -118,11 +116,6 @@ func _build_ui() -> void:
 	party_label.add_theme_color_override("font_color", Color.LIGHT_CYAN)
 	stats_vbox.add_child(party_label)
 	
-	# 총 레벨
-	var level_label := Label.new()
-	level_label.text = "⭐ 총 레벨: %d" % stats.get("total_level", 0)
-	level_label.add_theme_color_override("font_color", Color.LIGHT_GREEN)
-	stats_vbox.add_child(level_label)
 	
 	# 획득 골드
 	var gold_label := Label.new()

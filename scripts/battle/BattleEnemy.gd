@@ -22,7 +22,6 @@ var base_luk: int = 0
 var damage_type: String = "physical"  # physical or magic
 
 # 보상
-var exp_reward: int = 0
 var gold_min: int = 0
 var gold_max: int = 0
 var drop_table: Array = []
@@ -80,7 +79,6 @@ func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0
 	# 보상 (엘리트는 2배)
 	var rewards: Dictionary = data.get("rewards", {})
 	var reward_mult: float = 2.0 if is_elite_version else 1.0
-	exp_reward = int(int(rewards.get("exp", 5)) * reward_mult)
 	gold_min = int(int(rewards.get("gold_min", 1)) * reward_mult)
 	gold_max = int(int(rewards.get("gold_max", 5)) * reward_mult)
 	

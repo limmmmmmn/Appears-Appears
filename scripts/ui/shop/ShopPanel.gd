@@ -475,22 +475,7 @@ func _show_equipment_comparison(item_id: String) -> void:
 					compare_text += "HP: %d → %d ([color=red]%d[/color])  " % [current_hp, new_hp, hp_diff]
 				else:
 					compare_text += "HP: %d → %d  " % [current_hp, new_hp]
-			
-			# MP 비교
-			if new_stats.has("mp") or current_stats.has("mp"):
-				var current_mp := hero.get_max_mp()
-				var old_mp_bonus: int = int(current_stats.get("mp", 0))
-				var new_mp_bonus: int = int(new_stats.get("mp", 0))
-				var new_mp := current_mp - old_mp_bonus + new_mp_bonus
-				var mp_diff := new_mp - current_mp
-				
-				if mp_diff > 0:
-					compare_text += "MP: %d → %d ([color=lime]+%d[/color])  " % [current_mp, new_mp, mp_diff]
-				elif mp_diff < 0:
-					compare_text += "MP: %d → %d ([color=red]%d[/color])  " % [current_mp, new_mp, mp_diff]
-				else:
-					compare_text += "MP: %d → %d  " % [current_mp, new_mp]
-			
+
 			if compare_text.is_empty():
 				compare_text = "(스탯 변화 없음)"
 			

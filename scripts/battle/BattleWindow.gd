@@ -40,7 +40,6 @@ var atb_bars_container: VBoxContainer = null
 var atb_bars: Dictionary = {}  # ref -> ProgressBar
 
 # === 보상 ===
-var total_exp: int = 0
 var total_gold: int = 0
 var drop_items: Array = []
 var loot_multiplier: float = 1.0  # 루팅 배율 (아이템 등장 확률 배수)
@@ -178,7 +177,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	is_boss_battle = p_is_boss
 
 	# 보상 초기화
-	total_exp = 0
 	total_gold = 0
 	drop_items.clear()
 	kill_count = 0
@@ -1026,13 +1024,10 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	var global_danger: int = BattleManager.get_danger_level()
 	var danger_reward_mult: float = 1.0 + (global_danger * 0.1)  # 위험도당 10% 보상 증가
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
-	var exp_trait_mult: float = 1.0 + _get_trait_effect_float("exp_mult")
 
-	var exp_reward: int = int(enemy.exp_reward * danger_reward_mult * exp_trait_mult)
 	var gold_reward: int = int(enemy.get_gold_reward() * danger_reward_mult * gold_trait_mult)
 	var items: Array = enemy.roll_drops()
 
-	total_exp += exp_reward
 	total_gold += gold_reward
 	drop_items.append_array(items)
 	_update_rewards_ui()
@@ -1166,18 +1161,13 @@ func _check_battle_end() -> bool:
 
 func _report_rewards_and_close() -> void:
 	## 보상을 BattleManager에 누적하고 전투창 닫기
-	# EXP는 즉시 자동 획득
-	if total_exp > 0:
-		PartyManager.distribute_exp(total_exp)
-
-	# Gold와 아이템만 누적 (EXP는 0으로)
 	BattleManager.add_accumulated_reward(0, total_gold, drop_items)
 
 	# 킬카운트 증가 (원념 레벨 체크는 BattleManager에서)
 	for i in range(kill_count):
 		BattleManager.increment_global_kill_count()
 
-	_send_log("전투 종료! (EXP +%d 획득, Gold +%d)" % [total_exp, total_gold], Color.LIME)
+	_send_log("전투 종료! (Gold +%d)" % total_gold, Color.LIME)
 
 	# 전투창 종료 (승리)
 	current_state = BattleState.VICTORY
@@ -1226,9 +1216,8 @@ func _end_battle_victory() -> void:
 	if SoundManager != null:
 		SoundManager.play_victory()
 
-	_send_log("승리! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
+	_send_log("승리! Gold +%d" % total_gold, Color.CYAN)
 
-	PartyManager.distribute_exp(total_exp)
 	GameManager.add_gold(total_gold)
 
 	if not drop_items.is_empty():
@@ -1245,7 +1234,7 @@ func _end_battle_victory() -> void:
 func _play_reward_fly_animation() -> void:
 	## 보상이 원념 패널로 날아가는 연출
 	# 보상이 없으면 바로 닫기
-	if total_exp <= 0 and total_gold <= 0 and drop_items.is_empty():
+	if total_gold <= 0 and drop_items.is_empty():
 		_play_close_effect()
 		return
 
@@ -1266,14 +1255,6 @@ func _play_reward_fly_animation() -> void:
 	var fly_nodes: Array = []
 	var delay: float = 0.0
 	var delay_interval: float = 0.12
-
-	# EXP 아이콘 생성
-	if total_exp > 0:
-		var exp_node := _create_fly_reward_node("⭐ +%d EXP" % total_exp, Color(0.4, 1.0, 0.4))
-		exp_node.position = start_pos
-		fly_container.add_child(exp_node)
-		fly_nodes.append({"node": exp_node, "delay": delay, "start": start_pos})
-		delay += delay_interval
 
 	# Gold 아이콘 생성
 	if total_gold > 0:
@@ -1457,7 +1438,7 @@ func _update_rewards_ui() -> void:
 	if gold_label:
 		gold_label.text = str(total_gold)
 	if exp_label:
-		exp_label.text = str(total_exp)
+		exp_label.get_parent().visible = false  # EXP 시스템 제거됨
 	if loot_label:
 		# 루팅 배율 + 위험도 보너스 표시
 		var total_mult: float = loot_multiplier * (1.0 + danger_level * 0.1)
@@ -1484,9 +1465,8 @@ func get_kill_count() -> int:
 	return kill_count
 
 
-func _add_rewards(exp: int, gold: int, items: Array) -> void:
+func _add_rewards(_exp: int, gold: int, items: Array) -> void:
 	## 보상 추가 (전투창에 쌓임)
-	total_exp += exp
 	total_gold += gold
 	drop_items.append_array(items)
 	_update_rewards_ui()
@@ -1557,10 +1537,9 @@ func _check_trait_condition(condition: String) -> bool:
 #region 전투창 모드 시스템
 func _close_with_rewards() -> void:
 	## 현재까지 쌓인 보상을 받고 창 닫기
-	if total_exp > 0 or total_gold > 0:
-		PartyManager.distribute_exp(total_exp)
+	if total_gold > 0:
 		GameManager.add_gold(total_gold)
-		_send_log("보상 획득! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
+		_send_log("보상 획득! Gold +%d" % total_gold, Color.CYAN)
 
 	if not drop_items.is_empty():
 		_start_loot_animations()
@@ -1576,13 +1555,11 @@ func _close_with_rewards() -> void:
 
 func _run_with_partial_rewards() -> void:
 	## Run: 50% 보상만 받고 즉시 닫기
-	var partial_exp: int = int(total_exp * 0.5)
 	var partial_gold: int = int(total_gold * 0.5)
 
-	if partial_exp > 0 or partial_gold > 0:
-		PartyManager.distribute_exp(partial_exp)
+	if partial_gold > 0:
 		GameManager.add_gold(partial_gold)
-		_send_log("도주! 보상 50%%만 획득: EXP +%d, Gold +%d" % [partial_exp, partial_gold], Color.ORANGE)
+		_send_log("도주! 보상 50%%만 획득: Gold +%d" % partial_gold, Color.ORANGE)
 	else:
 		_send_log("도주!", Color.ORANGE)
 
@@ -2074,9 +2051,8 @@ func _stop_and_claim_rewards() -> void:
 	current_state = BattleState.VICTORY
 	set_process(false)
 
-	_send_log("보상 획득! EXP +%d, Gold +%d" % [total_exp, total_gold], Color.CYAN)
+	_send_log("보상 획득! Gold +%d" % total_gold, Color.CYAN)
 
-	PartyManager.distribute_exp(total_exp)
 	GameManager.add_gold(total_gold)
 
 	if not drop_items.is_empty():

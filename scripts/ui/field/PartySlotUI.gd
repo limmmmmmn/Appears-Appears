@@ -172,7 +172,7 @@ func update_display(new_hero: Hero) -> void:
 		return
 	
 	visible = true
-	name_label.text = "Lv.%d %s" % [hero.level, hero.hero_name]
+	name_label.text = "%s (%s)" % [hero.hero_name, hero.hero_class_name]
 	
 	if SpriteManager:
 		face_texture.texture = SpriteManager.get_hero_face_sprite(hero.id)

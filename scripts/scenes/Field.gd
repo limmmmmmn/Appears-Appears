@@ -390,12 +390,6 @@ func _show_boss_reward_popup() -> void:
 	reward_hbox.add_theme_constant_override("separation", 20)
 	vbox.add_child(reward_hbox)
 
-	var exp_lbl := Label.new()
-	exp_lbl.text = "EXP: %d" % rewards.exp
-	exp_lbl.add_theme_font_size_override("font_size", 11)
-	exp_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
-	reward_hbox.add_child(exp_lbl)
-
 	var gold_lbl := Label.new()
 	gold_lbl.text = "Gold: %d" % rewards.gold
 	gold_lbl.add_theme_font_size_override("font_size", 11)

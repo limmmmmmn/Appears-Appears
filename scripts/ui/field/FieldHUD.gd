@@ -259,9 +259,6 @@ func _connect_signals() -> void:
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 
-	if PartyManager:
-		if not PartyManager.hero_leveled_up.is_connected(_on_hero_leveled_up):
-			PartyManager.hero_leveled_up.connect(_on_hero_leveled_up)
 
 
 #region 미니맵
@@ -400,10 +397,6 @@ func add_defeat_log(t: String) -> void:
 	if battle_log:
 		battle_log.add_defeat(t)
 
-func add_exp_log(e: int) -> void:
-	if battle_log:
-		battle_log.add_exp(e)
-
 func add_gold_log(g: int) -> void:
 	if battle_log:
 		battle_log.add_gold(g)
@@ -416,19 +409,9 @@ func add_system_log(msg: String) -> void:
 	if battle_log:
 		battle_log.add_system(msg)
 
-func add_level_up_log(hero_name: String, new_level: int) -> void:
-	if battle_log:
-		battle_log.add_level_up(hero_name, new_level)
-
 func clear_logs() -> void:
 	if battle_log:
 		battle_log.clear()
-
-
-func _on_hero_leveled_up(hero: Hero, new_level: int) -> void:
-	## 영웅 레벨업 알림
-	add_level_up_log(hero.hero_name, new_level)
-	update_party_display()
 #endregion
 
 
@@ -644,12 +627,6 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 	reward_info.alignment = BoxContainer.ALIGNMENT_CENTER
 	reward_info.add_theme_constant_override("separation", 20)
 	vbox.add_child(reward_info)
-
-	var exp_lbl := Label.new()
-	exp_lbl.text = "EXP: %d" % rewards.exp
-	exp_lbl.add_theme_font_size_override("font_size", 11)
-	exp_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
-	reward_info.add_child(exp_lbl)
 
 	var gold_lbl := Label.new()
 	gold_lbl.text = "Gold: %d" % rewards.gold
@@ -884,17 +861,11 @@ func show_town_enter_popup() -> void:
 
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
 
-	# EXP/Gold
+	# Gold
 	var reward_info := HBoxContainer.new()
 	reward_info.alignment = BoxContainer.ALIGNMENT_CENTER
 	reward_info.add_theme_constant_override("separation", 20)
 	vbox.add_child(reward_info)
-
-	var exp_lbl := Label.new()
-	exp_lbl.text = "EXP: %d" % rewards.exp
-	exp_lbl.add_theme_font_size_override("font_size", 12)
-	exp_lbl.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))
-	reward_info.add_child(exp_lbl)
 
 	var gold_lbl := Label.new()
 	gold_lbl.text = "Gold: %d" % rewards.gold
@@ -1031,5 +1002,5 @@ func _on_town_cancel() -> void:
 func has_unclaimed_rewards() -> bool:
 	## 받지 않은 보상이 있는지 확인
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
-	return rewards.exp > 0 or rewards.gold > 0 or rewards.items.size() > 0
+	return rewards.gold > 0 or rewards.items.size() > 0
 #endregion

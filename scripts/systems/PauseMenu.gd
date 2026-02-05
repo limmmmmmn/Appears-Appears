@@ -217,11 +217,11 @@ func _create_hero_full_card(hero: Hero) -> PanelContainer:
 	name_label.add_theme_font_size_override("font_size", 11)
 	name_vbox.add_child(name_label)
 
-	var level_label := Label.new()
-	level_label.text = "Lv.%d %s" % [hero.level, hero.hero_class_name]
-	level_label.add_theme_font_size_override("font_size", 8)
-	level_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	name_vbox.add_child(level_label)
+	var class_label := Label.new()
+	class_label.text = hero.hero_class_name
+	class_label.add_theme_font_size_override("font_size", 8)
+	class_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	name_vbox.add_child(class_label)
 
 	vbox.add_child(_create_separator())
 

@@ -98,8 +98,6 @@ func _serialize_party() -> Array:
 	for hero in PartyManager.get_party():
 		party_data.append({
 			"id": hero.id,
-			"level": hero.level,
-			"exp": hero.exp,
 			"current_hp": hero.current_hp,
 			"is_dead": hero.is_dead,
 			"seed_bonus": hero.seed_bonus.duplicate(),
@@ -192,8 +190,6 @@ func _deserialize_party(data: Array) -> void:
 		if hero.id.is_empty():
 			continue
 		
-		hero.level = int(hero_data.get("level", 1))
-		hero.exp = int(hero_data.get("exp", 0))
 		hero.current_hp = int(hero_data.get("current_hp", hero.get_max_hp()))
 		hero.is_dead = bool(hero_data.get("is_dead", false))
 		
