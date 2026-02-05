@@ -269,7 +269,7 @@ func _update_equip_grid(slot: SlotUI, hero: Hero) -> void:
 		var equip_id: String = hero.equipment.get(slot_name, "")
 		if equip_id.is_empty():
 			equip_lbl.text = SLOT_ICONS.get(slot_name, "?")
-			equip_lbl.add_theme_color_override("font_color", Color(0.35, 0.35, 0.35))
+			equip_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
 			equip_lbl.tooltip_text = _get_slot_display_name(slot_name) + " (비어있음)"
 		else:
 			var equip_data: Dictionary = DataManager.get_equipment(equip_id)
