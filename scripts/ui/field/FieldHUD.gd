@@ -3,7 +3,7 @@ class_name FieldHUD
 ## 필드 HUD 메인 컨트롤러
 ## - TopBar: 스테이지, 골드, 배속, 메뉴
 ## - LogPanel: 전투 로그 (좌측 하단)
-## - BottomPartyPanel: 파티 정보 (하단 중앙) - 외부 씬
+## - BottomPartyCards: 파티 카드 (하단 중앙) - 동적 생성
 ## - InventoryPanel: 인벤토리 (우측 하단)
 
 signal menu_pressed
@@ -22,8 +22,8 @@ signal menu_pressed
 # === 하단 파티 패널 (중앙) - 외부 씬 (숨김) ===
 @onready var bottom_party_panel: BottomPartyPanel = %BottomPartyPanel
 
-# === 우측 파티 패널 (동적 생성) ===
-var right_party_panel: RightPartyPanel = null
+# === 하단 파티 카드 (동적 생성) ===
+var bottom_party_cards: BottomPartyCards = null
 
 # === 인벤토리 패널 (우측 하단) ===
 @onready var inventory_panel: PanelContainer = %InventoryPanel
@@ -56,14 +56,14 @@ func _ready() -> void:
 	_setup_components()
 	_setup_grudge_popup()
 	_setup_town_popup()
-	_setup_right_party_panel()
+	_setup_bottom_party_cards()
 	_connect_signals()
 	_setup_inventory_panel()
 	update_all()
 	_update_trait_display()
 	_update_inventory_display()
 
-	# 하단 파티 패널 숨김
+	# 하단 파티 패널 숨김 (기존 씬)
 	if bottom_party_panel:
 		bottom_party_panel.visible = false
 
@@ -97,21 +97,16 @@ func _setup_speed_button() -> void:
 	speed_button.add_theme_stylebox_override("hover", hover)
 
 
-func _setup_right_party_panel() -> void:
-	## 우측 파티 패널 생성
-	right_party_panel = RightPartyPanel.new()
-	right_party_panel.name = "RightPartyPanel"
+func _setup_bottom_party_cards() -> void:
+	## 하단 파티 카드 생성
+	bottom_party_cards = BottomPartyCards.new()
+	bottom_party_cards.name = "BottomPartyCards"
 
-	# 위치 설정 (우측 중앙)
+	# 위치 설정 (하단 중앙)
 	var ctrl := get_node_or_null("Control")
 	if ctrl:
-		ctrl.add_child(right_party_panel)
-		right_party_panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-		right_party_panel.offset_left = -140
-		right_party_panel.offset_right = -4
-		right_party_panel.offset_top = -160
-		right_party_panel.offset_bottom = 160
-		right_party_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		ctrl.add_child(bottom_party_cards)
+		# BottomPartyCards 내부에서 앵커 설정함
 
 
 func _connect_signals() -> void:
@@ -133,10 +128,10 @@ func _connect_signals() -> void:
 		if not BattleManager.danger_level_up.is_connected(show_grudge_choice_popup):
 			BattleManager.danger_level_up.connect(show_grudge_choice_popup)
 
-	# 우측 파티 패널 장비 드롭 시그널 연결
-	if right_party_panel:
-		if not right_party_panel.equipment_dropped.is_connected(_on_equipment_dropped):
-			right_party_panel.equipment_dropped.connect(_on_equipment_dropped)
+	# 하단 파티 카드 장비 드롭 시그널 연결
+	if bottom_party_cards:
+		if not bottom_party_cards.equipment_dropped.is_connected(_on_equipment_dropped):
+			bottom_party_cards.equipment_dropped.connect(_on_equipment_dropped)
 
 
 
@@ -376,8 +371,8 @@ func update_top_bar() -> void:
 
 
 func update_party_display() -> void:
-	if right_party_panel:
-		right_party_panel.update_display()
+	if bottom_party_cards:
+		bottom_party_cards.update_display()
 #endregion
 
 
