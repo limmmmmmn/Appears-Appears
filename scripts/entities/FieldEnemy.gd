@@ -216,6 +216,18 @@ func despawn() -> void:
 	queue_free()
 
 
+func brief_pause(duration: float = 0.3) -> void:
+	## 잠깐 멈칫하는 효과 (전투 시작 시)
+	var prev_state := current_state
+	velocity = Vector2.ZERO
+	current_state = State.IDLE
+
+	await get_tree().create_timer(duration).timeout
+
+	if is_instance_valid(self) and not is_despawning:
+		current_state = prev_state
+
+
 #region 관전 시스템
 func _process_spectate(_delta: float) -> void:
 	## 관전 위치로 이동

@@ -246,9 +246,8 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	## 필드 적과 충돌 시 - 전투창 증식 시스템 (1:1 대응)
 	## 필드 적 1마리 = 전투창 적 1마리
 
-	# 잠시 멈춤 효과 (적 조우 시 멈칫)
-	if party_leader:
-		party_leader.brief_pause(0.12)
+	# 적만 잠시 멈춤 효과 (조우 시 멈칫)
+	field_enemy.brief_pause(0.25)
 
 	var enemy_data: Dictionary = DataManager.get_enemy(field_enemy.enemy_id)
 	var enemy_name: String = str(enemy_data.get("name", field_enemy.enemy_id))
