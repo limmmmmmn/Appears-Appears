@@ -32,15 +32,21 @@ var glow_panel: Panel
 
 # === 등급 색상 ===
 const RARITY_COLORS: Dictionary = {
-	"common": Color.WHITE,
-	"magic": Color(0.4, 0.6, 1.0),
-	"legendary": Color(1.0, 0.7, 0.2)
+	"common": Color(0.7, 0.7, 0.7),      # 회색
+	"uncommon": Color(0.4, 0.8, 0.4),    # 초록
+	"magic": Color(0.4, 0.6, 1.0),       # 파랑
+	"rare": Color(0.8, 0.5, 1.0),        # 보라
+	"epic": Color(1.0, 0.5, 0.2),        # 주황
+	"legendary": Color(1.0, 0.8, 0.2),   # 금색
 }
 
 const RARITY_GLOW: Dictionary = {
 	"common": Color(0.5, 0.5, 0.5, 0.3),
+	"uncommon": Color(0.3, 0.6, 0.3, 0.4),
 	"magic": Color(0.3, 0.5, 1.0, 0.5),
-	"legendary": Color(1.0, 0.6, 0.1, 0.7)
+	"rare": Color(0.6, 0.4, 0.8, 0.5),
+	"epic": Color(1.0, 0.4, 0.1, 0.6),
+	"legendary": Color(1.0, 0.7, 0.1, 0.7)
 }
 
 const TYPE_ICONS: Dictionary = {

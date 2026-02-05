@@ -36,10 +36,11 @@ const ITEM_TYPE_NAMES: Dictionary = {
 # 희귀도 -> 색상 매핑
 const RARITY_COLORS: Dictionary = {
 	"common": Color(0.7, 0.7, 0.7),      # 회색
-	"magic": Color(0.3, 0.5, 1.0),       # 파랑
-	"rare": Color(1.0, 0.85, 0.0),       # 노랑
-	"unique": Color(0.6, 0.2, 0.8),      # 보라
-	"legendary": Color(1.0, 0.5, 0.0),   # 주황
+	"uncommon": Color(0.4, 0.8, 0.4),    # 초록
+	"magic": Color(0.4, 0.6, 1.0),       # 파랑
+	"rare": Color(0.8, 0.5, 1.0),        # 보라
+	"epic": Color(1.0, 0.5, 0.2),        # 주황
+	"legendary": Color(1.0, 0.8, 0.2),   # 금색
 }
 
 
