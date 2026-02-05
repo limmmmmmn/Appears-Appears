@@ -583,6 +583,8 @@ func execute_hero_attack(hero: Hero, skill_id: String, target: BattleEnemy) -> v
 		return
 
 	_bring_to_front()
+	print("[BattleWindow] execute_hero_attack emit: ", hero.id)
+	BattleManager.hero_attacked.emit(hero.id)
 
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	if skill_data.is_empty():
