@@ -63,9 +63,11 @@ func _ready() -> void:
 	_update_trait_display()
 	_update_inventory_display()
 
-	# 하단 파티 패널 숨김
+	# 하단 파티 패널 표시, 우측 파티 패널 숨김
 	if bottom_party_panel:
-		bottom_party_panel.visible = false
+		bottom_party_panel.visible = true
+	if right_party_panel:
+		right_party_panel.visible = false
 
 
 func _setup_components() -> void:
