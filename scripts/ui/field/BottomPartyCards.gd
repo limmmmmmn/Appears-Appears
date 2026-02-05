@@ -26,7 +26,8 @@ signal equipment_dropped(hero_index: int, item_id: String)
 
 # 카드 데이터
 class HeroCard:
-	var wrapper: Control  # 래퍼 (클리핑용)
+	var wrapper: Control  # 마우스 감지용 (항상 큰 크기)
+	var clip_container: Control  # 클리핑용 (크기 변경)
 	var panel: PanelContainer  # 실제 카드 패널
 	var name_label: Label
 	var hp_bar: ProgressBar
@@ -98,18 +99,25 @@ func _create_hero_card(index: int) -> HeroCard:
 	var card := HeroCard.new()
 	card.hero_index = index
 
-	# 래퍼 (클리핑 컨테이너)
+	# 외부 래퍼 (마우스 감지용 - 항상 큰 크기, 투명)
 	card.wrapper = Control.new()
-	card.wrapper.custom_minimum_size = Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT)
-	card.wrapper.clip_contents = true
+	card.wrapper.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
 	card.wrapper.set_meta("card_index", index)
 
-	# 메인 패널 (래퍼 안에서 움직임)
+	# 클리핑 컨테이너 (하단에 위치, 크기 변경됨)
+	card.clip_container = Control.new()
+	card.clip_container.clip_contents = true
+	card.clip_container.custom_minimum_size = Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT)
+	card.clip_container.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	card.clip_container.offset_top = CARD_HEIGHT - CARD_VISIBLE_HEIGHT
+	card.wrapper.add_child(card.clip_container)
+
+	# 메인 패널 (클리핑 컨테이너 안)
 	card.panel = PanelContainer.new()
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
-	card.panel.position = Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT)  # 기본: 아래로 내려감
+	card.panel.position = Vector2(0, -(CARD_HEIGHT - CARD_VISIBLE_HEIGHT))  # 상단 부분이 잘리도록
 	_style_card_panel(card.panel)
-	card.wrapper.add_child(card.panel)
+	card.clip_container.add_child(card.panel)
 
 	# 마우스 이벤트 연결
 	card.wrapper.mouse_entered.connect(_on_card_mouse_entered.bind(card))
@@ -205,11 +213,15 @@ func _animate_card(card: HeroCard, expand: bool) -> void:
 	tween.set_parallel(true)
 
 	if expand:
-		tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_HEIGHT), 0.1)
+		# 클리핑 영역 확장 + 패널 위치 조정
+		tween.tween_property(card.clip_container, "offset_top", 0.0, 0.1)
+		tween.tween_property(card.clip_container, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_HEIGHT), 0.1)
 		tween.tween_property(card.panel, "position", Vector2(0, 0), 0.1)
 	else:
-		tween.tween_property(card.wrapper, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT), 0.12)
-		tween.tween_property(card.panel, "position", Vector2(0, CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.12)
+		# 클리핑 영역 축소 + 패널 위치 조정
+		tween.tween_property(card.clip_container, "offset_top", float(CARD_HEIGHT - CARD_VISIBLE_HEIGHT), 0.12)
+		tween.tween_property(card.clip_container, "custom_minimum_size", Vector2(CARD_WIDTH, CARD_VISIBLE_HEIGHT), 0.12)
+		tween.tween_property(card.panel, "position", Vector2(0, -(CARD_HEIGHT - CARD_VISIBLE_HEIGHT)), 0.12)
 
 	card.panel.set_meta("tween", tween)
 
