@@ -168,7 +168,7 @@ class _UnequipDropZone extends PanelContainer:
 	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 		if not data is Dictionary:
 			return false
-		var valid := data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
+		var valid: bool = data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
 		if valid:
 			add_theme_stylebox_override("panel", _hover_style)
 		return valid
