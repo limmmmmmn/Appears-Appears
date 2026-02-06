@@ -47,6 +47,7 @@ var battle_log: BattleLogUI = null
 
 # === 인벤토리 아이템 목록 ===
 var inventory_slots: Array = []
+var inventory_drop_target: _InventoryDropTarget = null
 
 # === 킬 카운트 영웅 추가 시스템 ===
 const KILLS_PER_HERO := 5
@@ -169,6 +170,22 @@ func _setup_inventory_panel() -> void:
 	# 인벤토리 변경 시그널 연결
 	if InventoryManager and not InventoryManager.inventory_changed.is_connected(_update_inventory_display):
 		InventoryManager.inventory_changed.connect(_update_inventory_display)
+
+	_setup_inventory_drop_target()
+
+
+func _setup_inventory_drop_target() -> void:
+	if not inventory_panel:
+		return
+
+	if inventory_drop_target and is_instance_valid(inventory_drop_target):
+		return
+
+	inventory_drop_target = _InventoryDropTarget.new()
+	inventory_drop_target.hud_ref = self
+	inventory_drop_target.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inventory_drop_target.mouse_filter = Control.MOUSE_FILTER_PASS
+	inventory_panel.add_child(inventory_drop_target)
 
 
 func _update_inventory_display() -> void:
@@ -305,6 +322,39 @@ class _DraggableItemRow extends Button:
 		set_drag_preview(preview)
 
 		return {"type": "equipment", "item_id": item_id, "item_data": item_data}
+
+
+## 인벤토리 패널 드롭 타겟 (장비 해제)
+class _InventoryDropTarget extends Control:
+	var hud_ref: FieldHUD = null
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		if not data is Dictionary:
+			return false
+		if data.get("type", "") != "equipment":
+			return false
+		if data.get("source", "") != "equipment":
+			return false
+		return true
+
+	func _drop_data(_pos: Vector2, data: Variant) -> void:
+		if not data is Dictionary:
+			return
+
+		var hero_index: int = data.get("hero_index", -1)
+		var source_slot: String = data.get("source_slot", "")
+		if hero_index < 0 or source_slot.is_empty():
+			return
+
+		var party: Array = PartyManager.get_party() if PartyManager else []
+		if hero_index >= party.size() or party[hero_index] == null:
+			return
+
+		var hero: Hero = party[hero_index]
+		if InventoryManager and InventoryManager.unequip_item(hero, source_slot):
+			if hud_ref:
+				hud_ref.update_party_display()
+				hud_ref._update_inventory_display()
 
 
 func _on_inventory_item_clicked(item_id: String) -> void:

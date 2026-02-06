@@ -31,11 +31,120 @@ class HeroCard:
 	var basic_atb_bar: ProgressBar
 	var skill_rows: Dictionary = {}
 	var equip_section: VBoxContainer
-	var equip_rows: Dictionary = {}  # slot_name -> {row, icon, name}
+	var equip_rows: Dictionary = {}  # slot_name -> _EquipSlotRow
 	var hero_index: int = -1
 	var hero_id: String = ""
 
 var hero_cards: Array[HeroCard] = []
+
+
+class _EquipSlotRow extends PanelContainer:
+	var card_ref: BottomPartyCards
+	var hero_index: int = -1
+	var slot_name: String = ""
+	var item_id: String = ""
+	var icon_label: Label
+	var name_label: Label
+	var _normal_style: StyleBoxFlat
+	var _hover_style: StyleBoxFlat
+
+	func setup(p_card_ref: BottomPartyCards, p_hero_index: int, p_slot_name: String) -> void:
+		card_ref = p_card_ref
+		hero_index = p_hero_index
+		slot_name = p_slot_name
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		custom_minimum_size = Vector2(0, 14)
+
+		_normal_style = StyleBoxFlat.new()
+		_normal_style.bg_color = Color(0.08, 0.08, 0.1, 0.0)
+		_normal_style.border_width_left = 1
+		_normal_style.border_width_top = 1
+		_normal_style.border_width_right = 1
+		_normal_style.border_width_bottom = 1
+		_normal_style.border_color = Color(0.25, 0.25, 0.3, 0.6)
+		_normal_style.corner_radius_top_left = 2
+		_normal_style.corner_radius_top_right = 2
+		_normal_style.corner_radius_bottom_left = 2
+		_normal_style.corner_radius_bottom_right = 2
+		_normal_style.content_margin_left = 2
+		_normal_style.content_margin_right = 2
+		add_theme_stylebox_override("panel", _normal_style)
+
+		_hover_style = _normal_style.duplicate()
+		_hover_style.bg_color = Color(0.25, 0.25, 0.15, 0.8)
+		_hover_style.border_width_left = 2
+		_hover_style.border_width_top = 2
+		_hover_style.border_width_right = 2
+		_hover_style.border_width_bottom = 2
+		_hover_style.border_color = Color(1.0, 0.95, 0.3, 1.0)
+
+		mouse_entered.connect(_on_mouse_entered)
+		mouse_exited.connect(_on_mouse_exited)
+
+	func _on_mouse_entered() -> void:
+		add_theme_stylebox_override("panel", _hover_style)
+
+	func _on_mouse_exited() -> void:
+		add_theme_stylebox_override("panel", _normal_style)
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		if not data is Dictionary:
+			return false
+		if data.get("type", "") != "equipment":
+			return false
+
+		var item_id_local: String = data.get("item_id", "")
+		if item_id_local.is_empty():
+			return false
+
+		var party: Array = PartyManager.get_party() if PartyManager else []
+		if hero_index < 0 or hero_index >= party.size() or party[hero_index] == null:
+			return false
+
+		var hero: Hero = party[hero_index]
+		if not hero.can_equip(item_id_local):
+			return false
+
+		var equip_data: Dictionary = DataManager.get_equipment(item_id_local)
+		var equip_slot: String = equip_data.get("slot", "")
+		if equip_slot.is_empty():
+			return false
+
+		if equip_slot in ["accessory", "acc", "acc1", "acc2"]:
+			return slot_name in ["acc1", "acc2"]
+
+		return equip_slot == slot_name
+
+	func _drop_data(_pos: Vector2, data: Variant) -> void:
+		if not data is Dictionary:
+			return
+
+		var item_id_local: String = data.get("item_id", "")
+		if item_id_local.is_empty():
+			return
+
+		if card_ref:
+			card_ref._handle_equipment_drop(hero_index, slot_name, item_id_local, data)
+
+	func _get_drag_data(_pos: Vector2) -> Variant:
+		if item_id.is_empty():
+			return null
+
+		var preview := Label.new()
+		preview.text = "%s %s" % [SLOT_ICONS.get(slot_name, "?"), name_label.text]
+		preview.add_theme_font_size_override("font_size", 9)
+		preview.add_theme_color_override("font_color", Color(1.0, 0.95, 0.3))
+		preview.add_theme_color_override("font_outline_color", Color.BLACK)
+		preview.add_theme_constant_override("outline_size", 2)
+		set_drag_preview(preview)
+
+		return {
+			"type": "equipment",
+			"item_id": item_id,
+			"source": "equipment",
+			"hero_index": hero_index,
+			"source_slot": slot_name
+		}
 
 
 func _ready() -> void:
@@ -179,17 +288,21 @@ func _create_hero_card(index: int) -> HeroCard:
 	vbox.add_child(card.equip_section)
 
 	for slot_name in SLOT_ORDER:
-		var row_data := _create_equip_row(slot_name)
+		var row_data := _create_equip_row(slot_name, index)
 		card.equip_section.add_child(row_data["row"])
 		card.equip_rows[slot_name] = row_data
 
 	return card
 
 
-func _create_equip_row(slot_name: String) -> Dictionary:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 2)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+func _create_equip_row(slot_name: String, hero_index: int) -> Dictionary:
+	var row := _EquipSlotRow.new()
+	row.setup(self, hero_index, slot_name)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 2)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(hbox)
 
 	var icon_lbl := Label.new()
 	icon_lbl.name = "Icon"
@@ -198,7 +311,7 @@ func _create_equip_row(slot_name: String) -> Dictionary:
 	icon_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 	icon_lbl.custom_minimum_size.x = 12
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(icon_lbl)
+	hbox.add_child(icon_lbl)
 
 	var name_lbl := Label.new()
 	name_lbl.name = "Name"
@@ -208,7 +321,10 @@ func _create_equip_row(slot_name: String) -> Dictionary:
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(name_lbl)
+	hbox.add_child(name_lbl)
+
+	row.icon_label = icon_lbl
+	row.name_label = name_lbl
 
 	return {"row": row, "icon": icon_lbl, "name": name_lbl}
 
@@ -359,12 +475,15 @@ func _update_equip_list(card: HeroCard, hero: Hero) -> void:
 		if row_data.is_empty():
 			continue
 
+		var row: _EquipSlotRow = row_data.get("row")
 		var icon_lbl: Label = row_data.get("icon")
 		var name_lbl: Label = row_data.get("name")
 		if not icon_lbl or not name_lbl:
 			continue
 
 		var equip_id: String = hero.equipment.get(slot_name, "")
+		if row:
+			row.item_id = equip_id
 		if equip_id.is_empty():
 			icon_lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
 			name_lbl.text = "-"
@@ -471,6 +590,35 @@ func _get_rarity_color(rarity: String) -> Color:
 		"epic": return Color(1.0, 0.5, 0.2)
 		"legendary": return Color(1.0, 0.8, 0.2)
 	return Color.WHITE
+
+
+func _handle_equipment_drop(hero_index: int, target_slot: String, item_id: String, data: Dictionary) -> void:
+	var source: String = data.get("source", "inventory")
+	if source == "equipment":
+		return
+
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	if hero_index < 0 or hero_index >= party.size() or party[hero_index] == null:
+		return
+
+	var hero: Hero = party[hero_index]
+	if not hero.can_equip(item_id):
+		return
+
+	var equip_data: Dictionary = DataManager.get_equipment(item_id)
+	var equip_slot: String = equip_data.get("slot", "")
+	if equip_slot.is_empty():
+		return
+
+	if equip_slot in ["accessory", "acc", "acc1", "acc2"]:
+		if target_slot not in ["acc1", "acc2"]:
+			return
+	elif equip_slot != target_slot:
+		return
+
+	if InventoryManager and InventoryManager.equip_item(hero, item_id, target_slot):
+		update_display()
+		equipment_dropped.emit(hero_index, item_id)
 
 
 # === 카드 애니메이션 ===
