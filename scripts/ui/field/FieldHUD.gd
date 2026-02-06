@@ -56,12 +56,6 @@ var last_hero_kill_threshold: int = 0  # 마지막으로 영웅을 추가한 킬
 
 func _ready() -> void:
 	add_to_group("field_hud")
-
-	# Control 노드의 mouse_filter 설정 (마우스 이벤트 전달 허용)
-	var ctrl = get_node_or_null("Control")
-	if ctrl:
-		ctrl.mouse_filter = Control.MOUSE_FILTER_PASS
-
 	_setup_components()
 	_setup_kill_label()
 	_setup_grudge_popup()
@@ -172,18 +166,6 @@ func _setup_inventory_panel() -> void:
 	if not inventory_list:
 		return
 
-	# 모든 부모 컨테이너의 mouse_filter를 PASS로 설정
-	if inventory_panel:
-		inventory_panel.mouse_filter = Control.MOUSE_FILTER_PASS
-		# VBox 찾기
-		var vbox = inventory_panel.get_node_or_null("VBox")
-		if vbox:
-			vbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	if inventory_scroll:
-		inventory_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
-	if inventory_list:
-		inventory_list.mouse_filter = Control.MOUSE_FILTER_PASS
-
 	# 인벤토리 변경 시그널 연결
 	if InventoryManager and not InventoryManager.inventory_changed.is_connected(_update_inventory_display):
 		InventoryManager.inventory_changed.connect(_update_inventory_display)
@@ -247,71 +229,65 @@ func _create_inventory_row(item: Dictionary) -> Control:
 	return row
 
 
-## 드래그 가능한 인벤토리 아이템 행
-class _DraggableItemRow extends PanelContainer:
+## 드래그 가능한 인벤토리 아이템 행 (Button 기반)
+class _DraggableItemRow extends Button:
 	var item_id: String = ""
 	var item_data: Dictionary = {}
 	var hud_ref: FieldHUD = null
-	var label: Label
 	var rarity_color: Color = Color.WHITE
 	var rarity: String = "common"
-	var is_hovered: bool = false
 
 	func setup(text: String, color: Color, p_rarity: String) -> void:
 		rarity_color = color
 		rarity = p_rarity
-		custom_minimum_size = Vector2(100, 20)
+		self.text = text
+		custom_minimum_size = Vector2(100, 18)
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		mouse_filter = Control.MOUSE_FILTER_STOP
+		alignment = HORIZONTAL_ALIGNMENT_LEFT
 
-		# 스타일 적용
-		_apply_style(false)
+		add_theme_font_size_override("font_size", 9)
+		add_theme_color_override("font_color", color)
 
-		label = Label.new()
-		label.text = text
-		label.add_theme_font_size_override("font_size", 9)
-		label.add_theme_color_override("font_color", color)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(label)
+		# 기본 스타일 (normal)
+		var normal_style := StyleBoxFlat.new()
+		normal_style.bg_color = Color(0.1, 0.1, 0.12, 0.8)
+		normal_style.border_width_left = 1
+		normal_style.border_width_top = 1
+		normal_style.border_width_right = 1
+		normal_style.border_width_bottom = 1
+		normal_style.border_color = Color(0.35, 0.35, 0.4, 0.8)
+		normal_style.corner_radius_top_left = 3
+		normal_style.corner_radius_top_right = 3
+		normal_style.corner_radius_bottom_left = 3
+		normal_style.corner_radius_bottom_right = 3
+		normal_style.content_margin_left = 4
+		normal_style.content_margin_right = 4
+		add_theme_stylebox_override("normal", normal_style)
 
-	func _notification(what: int) -> void:
-		if what == NOTIFICATION_MOUSE_ENTER:
-			is_hovered = true
-			_apply_style(true)
-			# 커서를 손 모양으로 변경
-			Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
-		elif what == NOTIFICATION_MOUSE_EXIT:
-			is_hovered = false
-			_apply_style(false)
-			# 커서를 기본으로 복원
-			Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+		# 호버 스타일
+		var hover_style := StyleBoxFlat.new()
+		hover_style.bg_color = Color(0.3, 0.3, 0.15, 1.0)
+		hover_style.border_width_left = 2
+		hover_style.border_width_top = 2
+		hover_style.border_width_right = 2
+		hover_style.border_width_bottom = 2
+		hover_style.border_color = Color(1.0, 0.95, 0.3, 1.0)
+		hover_style.corner_radius_top_left = 3
+		hover_style.corner_radius_top_right = 3
+		hover_style.corner_radius_bottom_left = 3
+		hover_style.corner_radius_bottom_right = 3
+		hover_style.content_margin_left = 4
+		hover_style.content_margin_right = 4
+		add_theme_stylebox_override("hover", hover_style)
+		add_theme_stylebox_override("pressed", hover_style)
 
-	func _apply_style(hovered: bool) -> void:
-		var style := StyleBoxFlat.new()
-		style.content_margin_left = 4
-		style.content_margin_top = 2
-		style.content_margin_right = 4
-		style.content_margin_bottom = 2
-		if hovered:
-			style.bg_color = Color(0.3, 0.3, 0.15, 1.0)
-			style.border_width_left = 2
-			style.border_width_top = 2
-			style.border_width_right = 2
-			style.border_width_bottom = 2
-			style.border_color = Color(1.0, 0.95, 0.3, 1.0)
-		else:
-			style.bg_color = Color(0.1, 0.1, 0.12, 0.8)
-			style.border_width_left = 1
-			style.border_width_top = 1
-			style.border_width_right = 1
-			style.border_width_bottom = 1
-			style.border_color = Color(0.35, 0.35, 0.4, 0.8)
-		style.corner_radius_top_left = 3
-		style.corner_radius_top_right = 3
-		style.corner_radius_bottom_left = 3
-		style.corner_radius_bottom_right = 3
-		add_theme_stylebox_override("panel", style)
+		# 클릭 연결
+		pressed.connect(_on_pressed)
+
+	func _on_pressed() -> void:
+		# 클릭 시 자동 장착
+		if hud_ref:
+			hud_ref._on_inventory_item_clicked(item_id)
 
 	func _get_drag_data(_pos: Vector2) -> Variant:
 		# 장비 아이템만 드래그 가능
@@ -320,7 +296,7 @@ class _DraggableItemRow extends PanelContainer:
 
 		# 드래그 프리뷰 생성
 		var preview := Label.new()
-		preview.text = label.text
+		preview.text = self.text
 		preview.add_theme_font_size_override("font_size", 10)
 		preview.add_theme_color_override("font_color", rarity_color)
 		preview.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -329,13 +305,6 @@ class _DraggableItemRow extends PanelContainer:
 		set_drag_preview(preview)
 
 		return {"type": "equipment", "item_id": item_id, "item_data": item_data}
-
-	func _gui_input(event: InputEvent) -> void:
-		if event is InputEventMouseButton:
-			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-				# 클릭 시 자동 장착
-				if hud_ref:
-					hud_ref._on_inventory_item_clicked(item_id)
 
 
 func _on_inventory_item_clicked(item_id: String) -> void:
