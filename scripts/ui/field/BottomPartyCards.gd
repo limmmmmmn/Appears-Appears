@@ -42,10 +42,6 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("hero_damaged"):
 			if not BattleManager.hero_damaged.is_connected(_on_hero_damaged):
 				BattleManager.hero_damaged.connect(_on_hero_damaged)
-
-	if ATBManager and ATBManager.has_signal("atb_updated"):
-		if not ATBManager.atb_updated.is_connected(_on_atb_updated):
-			ATBManager.atb_updated.connect(_on_atb_updated)
 #endregion
 
 
@@ -99,16 +95,6 @@ func update_display() -> void:
 		if i >= party.size() or party[i] == null:
 			continue
 		cards[i].update_from_hero(party[i])
-#endregion
-
-
-#region ATB
-func _on_atb_updated() -> void:
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	for i in range(cards.size()):
-		if i >= party.size() or party[i] == null:
-			continue
-		cards[i].update_atb(party[i])
 #endregion
 
 
