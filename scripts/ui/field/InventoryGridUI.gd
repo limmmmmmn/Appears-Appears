@@ -164,9 +164,22 @@ func _on_button_gui_input(event: InputEvent, btn: Button, item_id: String) -> vo
 			item_right_clicked.emit(item_id, event.global_position)
 			return
 
-		# 드래그 비활성화 - 클릭만 처리
-		if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-			item_clicked.emit(item_id)
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				drag_start_pos = event.global_position
+				pending_drag_item = item_id
+			else:
+				# 드래그 안 했으면 클릭
+				if pending_drag_item == item_id:
+					item_clicked.emit(item_id)
+				pending_drag_item = ""
+
+	elif event is InputEventMouseMotion:
+		if pending_drag_item == item_id:
+			var distance = event.global_position.distance_to(drag_start_pos)
+			if distance > DRAG_THRESHOLD:
+				item_drag_started.emit(item_id)
+				pending_drag_item = ""
 
 
 func _on_item_hover(btn: Button, item_id: String) -> void:

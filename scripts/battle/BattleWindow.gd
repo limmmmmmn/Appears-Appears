@@ -626,17 +626,31 @@ func execute_hero_attack(hero: Hero, skill_id: String, target: BattleEnemy) -> v
 	target.play_hit_effect(is_crit)
 	target.show_damage_number(damage, is_crit)
 
-	# 크리티컬 시 진동 효과
-	if is_crit:
+	# 강타 등 강력한 스킬 사용 시 진동 효과
+	if skill_id == "power_strike" or skill_id == "shield_bash":
+		play_skill_shake()
+	elif is_crit:
 		play_critical_shake()
 
-	var log_color: Color = Color.ORANGE if is_crit else (Color.CYAN if skill_type == "magic" else Color.WHITE)
+	# 로그 색상: 스킬별 구분
+	var log_color: Color
+	if is_crit:
+		log_color = Color.ORANGE
+	elif skill_id == "power_strike":
+		log_color = Color.TOMATO  # 강타는 붉은색
+	elif skill_id == "shield_bash":
+		log_color = Color.STEEL_BLUE  # 방패 강타는 파란색
+	elif skill_type == "magic":
+		log_color = Color.CYAN
+	else:
+		log_color = Color.WHITE
+
 	var crit_text: String = " ⭐" if is_crit else ""
 
 	if skill_id == "basic_attack":
 		_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
 	else:
-		_send_log("%s [%s] → %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
+		_send_log("%s ★%s★ → %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
 
 	if not target.is_alive():
 		on_enemy_defeated(target)
@@ -1785,6 +1799,15 @@ func play_critical_shake() -> void:
 	is_shaking = true
 	shake_time = 0.3
 	shake_intensity = 8.0
+
+
+func play_skill_shake() -> void:
+	## 강타 등 스킬 사용 시 진동 효과
+	if not is_shaking:
+		shake_original_pos = position
+	is_shaking = true
+	shake_time = 0.2
+	shake_intensity = 5.0
 
 
 func play_aoe_flash() -> void:
