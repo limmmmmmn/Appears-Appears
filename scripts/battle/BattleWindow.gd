@@ -124,6 +124,14 @@ const DANGER_BORDER_COLORS: Array = [
 	Color(0.6, 0.0, 0.6),      # 5+: 보라색 (최고 위험)
 ]
 
+# === 마우스 드래그 이동 ===
+var _is_dragging: bool = false
+var _drag_offset: Vector2 = Vector2.ZERO
+
+# === 적 호버 툴팁 ===
+var _enemy_tooltip: PanelContainer = null
+var _hovered_enemy: BattleEnemy = null
+
 
 func _ready() -> void:
 	visible = false
@@ -137,6 +145,9 @@ func _ready() -> void:
 
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
+
+	# 마우스 GUI 입력 연결
+	gui_input.connect(_on_gui_input)
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
@@ -155,6 +166,9 @@ func _ready() -> void:
 
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
+
+	# 적 호버 툴팁 생성
+	_setup_enemy_tooltip()
 
 
 func _process(delta: float) -> void:
@@ -281,6 +295,8 @@ func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
 	# 전투창별 위험도를 적에게 전달
 	battle_enemy.setup(enemy_id, make_elite, get_local_danger_level())
 	enemies.append(battle_enemy)
+	# 마우스 호버 이벤트 연결
+	_connect_enemy_hover(battle_enemy)
 
 
 func get_local_danger_level() -> int:
@@ -2059,6 +2075,143 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER or event.keycode == KEY_SPACE:
 			_hide_level_up_panel()
 			get_viewport().set_input_as_handled()
+#endregion
+
+
+#region 마우스 인터랙션
+func _on_gui_input(event: InputEvent) -> void:
+	## 마우스 드래그로 전투창 이동
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_is_dragging = true
+				_drag_offset = event.global_position - global_position
+				_bring_to_front()
+			else:
+				_is_dragging = false
+	elif event is InputEventMouseMotion and _is_dragging:
+		global_position = event.global_position - _drag_offset
+		# 화면 밖으로 나가지 않도록 제한
+		var vp_size := Vector2(480, 270)
+		global_position.x = clampf(global_position.x, -size.x + 40, vp_size.x - 40)
+		global_position.y = clampf(global_position.y, 0, vp_size.y - 30)
+
+
+func _setup_enemy_tooltip() -> void:
+	## 적 호버 시 표시할 툴팁 패널 생성
+	_enemy_tooltip = PanelContainer.new()
+	_enemy_tooltip.name = "EnemyTooltip"
+	_enemy_tooltip.visible = false
+	_enemy_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_enemy_tooltip.z_index = 200
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.1, 0.95)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.5, 0.5, 0.6, 0.8)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	_enemy_tooltip.add_theme_stylebox_override("panel", style)
+
+	add_child(_enemy_tooltip)
+
+
+func _connect_enemy_hover(enemy: BattleEnemy) -> void:
+	## 적 스프라이트에 마우스 호버 이벤트 연결
+	if enemy == null:
+		return
+
+	# 적 Control에 마우스 이벤트 수신 설정
+	enemy.mouse_filter = Control.MOUSE_FILTER_STOP
+	enemy.mouse_entered.connect(_on_enemy_mouse_entered.bind(enemy))
+	enemy.mouse_exited.connect(_on_enemy_mouse_exited.bind(enemy))
+
+
+func _on_enemy_mouse_entered(enemy: BattleEnemy) -> void:
+	if enemy == null or not enemy.is_alive():
+		return
+	_hovered_enemy = enemy
+	_show_enemy_tooltip(enemy)
+
+
+func _on_enemy_mouse_exited(enemy: BattleEnemy) -> void:
+	if _hovered_enemy == enemy:
+		_hovered_enemy = null
+		_hide_enemy_tooltip()
+
+
+func _show_enemy_tooltip(enemy: BattleEnemy) -> void:
+	## 적 정보 툴팁 표시
+	if _enemy_tooltip == null:
+		return
+
+	# 기존 내용 제거
+	for child in _enemy_tooltip.get_children():
+		child.queue_free()
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 2)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_enemy_tooltip.add_child(vbox)
+
+	# 이름
+	var name_label := Label.new()
+	name_label.text = enemy.enemy_name
+	name_label.add_theme_font_size_override("font_size", 10)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if enemy.is_elite_version:
+		name_label.add_theme_color_override("font_color", Color.PURPLE)
+	elif enemy.enemy_type == "boss":
+		name_label.add_theme_color_override("font_color", Color.ORANGE)
+	else:
+		name_label.add_theme_color_override("font_color", Color.WHITE)
+	vbox.add_child(name_label)
+
+	# HP
+	var hp_label := Label.new()
+	hp_label.text = "HP: %d/%d" % [enemy.current_hp, enemy.max_hp]
+	hp_label.add_theme_font_size_override("font_size", 9)
+	hp_label.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3))
+	hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(hp_label)
+
+	# 스탯
+	var stats_label := Label.new()
+	stats_label.text = "ATK:%d DEF:%d SPD:%d" % [enemy.get_atk(), enemy.get_p_def(), enemy.get_dex()]
+	stats_label.add_theme_font_size_override("font_size", 8)
+	stats_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(stats_label)
+
+	# 타입
+	var type_label := Label.new()
+	type_label.text = "타입: %s" % enemy.damage_type
+	type_label.add_theme_font_size_override("font_size", 8)
+	type_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
+	type_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(type_label)
+
+	# 위치: 적 위 또는 아래
+	_enemy_tooltip.visible = true
+	await get_tree().process_frame
+	var tooltip_pos := enemy.global_position + Vector2(0, -_enemy_tooltip.size.y - 4)
+	if tooltip_pos.y < global_position.y:
+		tooltip_pos = enemy.global_position + Vector2(0, enemy.size.y + 2)
+	_enemy_tooltip.global_position = tooltip_pos
+
+
+func _hide_enemy_tooltip() -> void:
+	if _enemy_tooltip:
+		_enemy_tooltip.visible = false
 #endregion
 
 
