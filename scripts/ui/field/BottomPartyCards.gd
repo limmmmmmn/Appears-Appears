@@ -48,6 +48,7 @@ class HeroCard:
 	var equip_rows: Dictionary = {}  # slot_name -> { row: _EquipSlotRow, icon, name }
 	var hero_index: int = -1
 	var hero_id: String = ""
+	var is_hovered: bool = false
 #endregion
 
 
@@ -203,6 +204,8 @@ func _create_hero_card(index: int) -> HeroCard:
 	var panel_style := FieldHUD._make_flat_style(CARD_BG, CARD_BORDER, 6, 2)
 	card.panel.add_theme_stylebox_override("panel", panel_style)
 	card.panel.gui_input.connect(_on_card_gui_input.bind(card))
+	card.panel.mouse_entered.connect(func(): card.is_hovered = true)
+	card.panel.mouse_exited.connect(func(): card.is_hovered = false)
 	card.wrapper.add_child(card.panel)
 
 	# 내부 레이아웃
@@ -545,7 +548,7 @@ func _find_card_by_hero_id(hero_id: String) -> HeroCard:
 
 func _on_hero_attacked(hero_id: String) -> void:
 	var card := _find_card_by_hero_id(hero_id)
-	if card and is_instance_valid(card.panel):
+	if card and is_instance_valid(card.panel) and not card.is_hovered:
 		var panel := card.panel
 		var original_y := panel.position.y
 		var tween := create_tween()
@@ -555,7 +558,7 @@ func _on_hero_attacked(hero_id: String) -> void:
 
 func _on_hero_damaged(hero_id: String) -> void:
 	var card := _find_card_by_hero_id(hero_id)
-	if card and is_instance_valid(card.panel):
+	if card and is_instance_valid(card.panel) and not card.is_hovered:
 		var panel := card.panel
 		var ox := panel.position.x
 		var tween := create_tween()
