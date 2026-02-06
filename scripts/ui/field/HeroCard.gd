@@ -204,6 +204,33 @@ func _on_gui_input(event: InputEvent) -> void:
 
 
 #region 능력치 비교 팝업
+
+## 장착 아이템 정보 표시 (자기 카드 위 — 이름+능력치)
+func show_item_info(item_id: String) -> void:
+	hide_stat_compare()
+	if item_id.is_empty():
+		return
+	var edata: Dictionary = DataManager.get_equipment(item_id)
+	if edata.is_empty():
+		return
+
+	_stat_popup = _create_popup_panel()
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 0)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stat_popup.add_child(vbox)
+
+	var rarity: String = edata.get("rarity", "common")
+	_add_popup_label(vbox, edata.get("name", item_id), 8, _get_rarity_color(rarity))
+
+	var stats: Dictionary = edata.get("stats", {})
+	for sk in stats:
+		_add_popup_label(vbox, "%s +%d" % [sk.to_upper(), int(stats[sk])], 8, Color(0.7, 0.85, 1.0))
+
+	_finalize_popup()
+
+
+## 능력치 비교 표시 (다른 히어로 카드 위 — 현재장비 vs 새장비 나란히)
 func show_stat_compare(item_id: String) -> void:
 	hide_stat_compare()
 	var party: Array = PartyManager.get_party() if PartyManager else []
@@ -213,20 +240,82 @@ func show_stat_compare(item_id: String) -> void:
 	if not hero.can_equip(item_id):
 		return
 
-	var changes: Dictionary = StatCompareUtil.calculate_stat_changes(hero, item_id)
-	if changes.is_empty():
+	var new_edata: Dictionary = DataManager.get_equipment(item_id)
+	if new_edata.is_empty():
 		return
 
-	# 변화가 있는 스탯만 필터
-	var has_diff := false
-	for stat_name in changes:
-		if changes[stat_name]["diff"] != 0:
-			has_diff = true
-			break
-	if not has_diff:
-		return
+	var slot: String = new_edata.get("slot", "")
+	var target_slot := StatCompareUtil._get_target_slot(hero, slot)
+	var cur_equip_id: String = hero.equipment.get(target_slot, "")
+	var cur_edata: Dictionary = {}
+	if not cur_equip_id.is_empty():
+		cur_edata = DataManager.get_equipment(cur_equip_id)
 
-	_stat_popup = PanelContainer.new()
+	_stat_popup = _create_popup_panel()
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 6)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stat_popup.add_child(hbox)
+
+	# 좌: 현재 장비
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 0)
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(left)
+
+	if cur_edata.is_empty():
+		_add_popup_label(left, "(없음)", 8, FieldHUD.STYLE.text_dim)
+	else:
+		var cur_rarity: String = cur_edata.get("rarity", "common")
+		_add_popup_label(left, cur_edata.get("name", cur_equip_id), 8, _get_rarity_color(cur_rarity))
+		var cur_stats: Dictionary = cur_edata.get("stats", {})
+		for sk in cur_stats:
+			_add_popup_label(left, "%s +%d" % [sk.to_upper(), int(cur_stats[sk])], 8, Color(0.6, 0.6, 0.7))
+
+	# 화살표
+	var arrow := Label.new()
+	arrow.text = "→"
+	arrow.add_theme_font_size_override("font_size", 9)
+	arrow.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hbox.add_child(arrow)
+
+	# 우: 새 장비 (스탯 색상은 현재 대비 비교)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 0)
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(right)
+
+	var new_rarity: String = new_edata.get("rarity", "common")
+	_add_popup_label(right, new_edata.get("name", item_id), 8, _get_rarity_color(new_rarity))
+
+	var new_stats: Dictionary = new_edata.get("stats", {})
+	var cur_stats_ref: Dictionary = cur_edata.get("stats", {}) if not cur_edata.is_empty() else {}
+	for sk in new_stats:
+		var nv: int = int(new_stats[sk])
+		var cv: int = int(cur_stats_ref.get(sk, 0))
+		var diff: int = nv - cv
+		var color: Color
+		if diff > 0:
+			color = Color(0.4, 1.0, 0.4)
+		elif diff < 0:
+			color = Color(1.0, 0.4, 0.4)
+		else:
+			color = Color(0.7, 0.85, 1.0)
+		_add_popup_label(right, "%s +%d" % [sk.to_upper(), nv], 8, color)
+
+	_finalize_popup()
+
+
+func hide_stat_compare() -> void:
+	if _stat_popup and is_instance_valid(_stat_popup):
+		_stat_popup.queue_free()
+		_stat_popup = null
+
+
+func _create_popup_panel() -> PanelContainer:
+	var p := PanelContainer.new()
 	var style := FieldHUD._make_flat_style(
 		Color(0.05, 0.05, 0.08, 0.95), Color(0.4, 0.6, 0.9, 0.8), 4, 1
 	)
@@ -234,40 +323,26 @@ func show_stat_compare(item_id: String) -> void:
 	style.content_margin_right = 4
 	style.content_margin_top = 2
 	style.content_margin_bottom = 2
-	_stat_popup.add_theme_stylebox_override("panel", style)
-	_stat_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_theme_stylebox_override("panel", style)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return p
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 0)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stat_popup.add_child(vbox)
 
-	for stat_name in changes:
-		var data: Dictionary = changes[stat_name]
-		var diff: int = data["diff"]
-		if diff == 0:
-			continue
-		var lbl := Label.new()
-		lbl.add_theme_font_size_override("font_size", 8)
-		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if diff > 0:
-			lbl.text = "%s +%d" % [stat_name, diff]
-			lbl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.4))
-		else:
-			lbl.text = "%s %d" % [stat_name, diff]
-			lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
-		vbox.add_child(lbl)
+func _add_popup_label(parent: Node, text: String, font_size: int, color: Color) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", color)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(lbl)
+	return lbl
 
+
+func _finalize_popup() -> void:
 	add_child(_stat_popup)
 	_stat_popup.reset_size()
 	var popup_h: float = _stat_popup.get_combined_minimum_size().y
 	_stat_popup.position = Vector2(0, -popup_h - 2)
-
-
-func hide_stat_compare() -> void:
-	if _stat_popup and is_instance_valid(_stat_popup):
-		_stat_popup.queue_free()
-		_stat_popup = null
 #endregion
 
 
@@ -402,12 +477,14 @@ class _EquipSlotRow extends PanelContainer:
 		_self_hovered = true
 		_update_style()
 		if not item_id.is_empty():
+			card_ref.show_item_info(item_id)
 			_highlight_siblings(true)
 
 	func _on_row_mouse_exited() -> void:
 		_self_hovered = false
 		_update_style()
 		if not item_id.is_empty():
+			card_ref.hide_stat_compare()
 			_highlight_siblings(false)
 
 	func _update_style() -> void:
