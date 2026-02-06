@@ -178,10 +178,31 @@ class _DraggableItemButton extends Button:
 	func _on_mouse_entered() -> void:
 		if _hover_style:
 			add_theme_stylebox_override("normal", _hover_style)
+		_highlight_compatible_slots(true)
 
 	func _on_mouse_exited() -> void:
 		if _normal_style:
 			add_theme_stylebox_override("normal", _normal_style)
+		_highlight_compatible_slots(false)
+
+	func _highlight_compatible_slots(on: bool) -> void:
+		if not inv_card:
+			return
+		var equip_data: Dictionary = DataManager.get_equipment(item_id) if DataManager else {}
+		var eslot: String = equip_data.get("slot", item_data.get("slot", ""))
+		if eslot.is_empty():
+			return
+		var target_slots: Array = HeroCard.get_target_slots(eslot)
+		var container = inv_card.get_parent()
+		if not container:
+			return
+		for child in container.get_children():
+			if child is HeroCard:
+				if on:
+					for ts in target_slots:
+						child.highlight_slot(ts)
+				else:
+					child.clear_slot_highlights()
 
 	func _on_pressed() -> void:
 		if inv_card:

@@ -349,6 +349,31 @@ static func _get_rarity_color(rarity: String) -> Color:
 #endregion
 
 
+#region 슬롯 하이라이트
+func highlight_slot(p_slot_name: String) -> void:
+	var rd: Dictionary = equip_rows.get(p_slot_name, {})
+	if rd.is_empty():
+		return
+	var row: _EquipSlotRow = rd.get("row")
+	if row:
+		row.set_ext_highlight(true)
+
+
+func clear_slot_highlights() -> void:
+	for sn in equip_rows:
+		var rd: Dictionary = equip_rows[sn]
+		var row: _EquipSlotRow = rd.get("row")
+		if row:
+			row.set_ext_highlight(false)
+
+
+static func get_target_slots(item_slot: String) -> Array:
+	if item_slot in ["accessory", "acc", "acc1", "acc2"]:
+		return ["acc1", "acc2"]
+	return [item_slot]
+#endregion
+
+
 #region 장비 슬롯 드래그앤드롭
 class _EquipSlotRow extends PanelContainer:
 	var card_ref: HeroCard
@@ -359,6 +384,8 @@ class _EquipSlotRow extends PanelContainer:
 	var name_label: Label
 	var _normal_style: StyleBoxFlat
 	var _hover_style: StyleBoxFlat
+	var _self_hovered: bool = false
+	var _ext_highlighted: bool = false
 
 	func setup(p_card: HeroCard, p_idx: int, p_slot: String) -> void:
 		card_ref = p_card
@@ -380,8 +407,43 @@ class _EquipSlotRow extends PanelContainer:
 		_hover_style.content_margin_left = 2
 		_hover_style.content_margin_right = 2
 
-		mouse_entered.connect(func(): add_theme_stylebox_override("panel", _hover_style))
-		mouse_exited.connect(func(): add_theme_stylebox_override("panel", _normal_style))
+		mouse_entered.connect(_on_row_mouse_entered)
+		mouse_exited.connect(_on_row_mouse_exited)
+
+	func set_ext_highlight(on: bool) -> void:
+		_ext_highlighted = on
+		_update_style()
+
+	func _on_row_mouse_entered() -> void:
+		_self_hovered = true
+		_update_style()
+		if not item_id.is_empty():
+			_highlight_siblings(true)
+
+	func _on_row_mouse_exited() -> void:
+		_self_hovered = false
+		_update_style()
+		if not item_id.is_empty():
+			_highlight_siblings(false)
+
+	func _update_style() -> void:
+		if _self_hovered or _ext_highlighted:
+			add_theme_stylebox_override("panel", _hover_style)
+		else:
+			add_theme_stylebox_override("panel", _normal_style)
+
+	func _highlight_siblings(on: bool) -> void:
+		if not card_ref:
+			return
+		var container = card_ref.get_parent()
+		if not container:
+			return
+		for child in container.get_children():
+			if child is HeroCard and child != card_ref:
+				if on:
+					child.highlight_slot(slot_name)
+				else:
+					child.clear_slot_highlights()
 
 	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 		if not data is Dictionary or data.get("type", "") != "equipment":
