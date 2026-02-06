@@ -30,7 +30,7 @@ var hud_scene: PackedScene
 # 분리된 시스템들
 var spawner: EnemySpawner
 var town_barrier: TownBarrier
-var pause_menu: PauseMenu
+
 
 
 func _ready() -> void:
@@ -113,12 +113,7 @@ func _setup_systems() -> void:
 	spawner = EnemySpawner.new()
 	spawner.setup(self, tilemap)
 	
-	# 일시정지 메뉴
-	pause_menu = PauseMenu.new()
-	add_child(pause_menu)
-	pause_menu.resume_pressed.connect(_on_resume_pressed)
-	pause_menu.title_pressed.connect(_on_title_pressed)
-	pause_menu.quit_pressed.connect(_on_quit_game)
+
 
 
 func _connect_signals() -> void:
@@ -564,11 +559,6 @@ func _enter_town() -> void:
 # 메뉴 & 게임오버
 #=============================================================================
 func _on_menu_pressed() -> void:
-	pause_menu.show_menu()
-
-
-func _on_resume_pressed() -> void:
-	# 메뉴에서 돌아올 때 특별한 처리가 필요하면 여기에
 	pass
 
 
@@ -603,12 +593,8 @@ func _on_quit_game() -> void:
 	get_tree().quit()
 
 
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		if pause_menu.is_visible_menu():
-			pause_menu.hide_menu()
-		else:
-			pause_menu.show_menu()
+func _input(_event: InputEvent) -> void:
+	pass
 
 
 func _on_elite_victory(_battle_id: int) -> void:
