@@ -3,7 +3,7 @@ class_name HeroCard
 ## 개별 영웅 카드 (씬 인스턴스 방식)
 ## HeroCard.tscn과 1:1 대응
 ## 루트=Control(레이아웃용), Panel=PanelContainer(애니메이션 대상)
-## 이름, HP바, ATB/쿨타임 바, 장비 슬롯 6개
+## 이름, HP바, ATB/쿨타임 바, 장비 슬롯 8개 (2열 그리드)
 
 const SLOT_ICONS := {
 	"main_hand": "⚔", "off_hand": "🛡", "head": "👒",
@@ -54,37 +54,48 @@ func init(p_hero_index: int) -> void:
 
 
 func _build_equip_slots() -> void:
-	for slot_name in SLOT_ORDER:
-		var row := _EquipSlotRow.new()
-		row.setup(self, hero_index, slot_name)
+	# 2열 그리드: 2개씩 묶어서 HBoxContainer에 배치
+	for i in range(0, SLOT_ORDER.size(), 2):
+		var grid_row := HBoxContainer.new()
+		grid_row.add_theme_constant_override("separation", 2)
+		grid_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		equip_section.add_child(grid_row)
 
-		var hbox := HBoxContainer.new()
-		hbox.add_theme_constant_override("separation", 2)
-		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(hbox)
+		for j in range(2):
+			if i + j >= SLOT_ORDER.size():
+				break
+			var slot_name: String = SLOT_ORDER[i + j]
+			var row := _EquipSlotRow.new()
+			row.setup(self, hero_index, slot_name)
+			row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-		var icon_lbl := Label.new()
-		icon_lbl.text = SLOT_ICONS.get(slot_name, "?")
-		icon_lbl.add_theme_font_size_override("font_size", 8)
-		icon_lbl.add_theme_color_override("font_color", FieldHUD.STYLE.text_dim)
-		icon_lbl.custom_minimum_size.x = 12
-		icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		hbox.add_child(icon_lbl)
+			var hbox := HBoxContainer.new()
+			hbox.add_theme_constant_override("separation", 1)
+			hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(hbox)
 
-		var name_lbl := Label.new()
-		name_lbl.text = "-"
-		name_lbl.add_theme_font_size_override("font_size", 8)
-		name_lbl.add_theme_color_override("font_color", FieldHUD.STYLE.text_dim)
-		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		hbox.add_child(name_lbl)
+			var icon_lbl := Label.new()
+			icon_lbl.text = SLOT_ICONS.get(slot_name, "?")
+			icon_lbl.add_theme_font_size_override("font_size", 8)
+			icon_lbl.add_theme_color_override("font_color", FieldHUD.STYLE.text_dim)
+			icon_lbl.custom_minimum_size.x = 12
+			icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			hbox.add_child(icon_lbl)
 
-		row.icon_label = icon_lbl
-		row.name_label = name_lbl
+			var name_lbl := Label.new()
+			name_lbl.text = "-"
+			name_lbl.add_theme_font_size_override("font_size", 8)
+			name_lbl.add_theme_color_override("font_color", FieldHUD.STYLE.text_dim)
+			name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			hbox.add_child(name_lbl)
 
-		equip_section.add_child(row)
-		equip_rows[slot_name] = {"row": row, "icon": icon_lbl, "name": name_lbl}
+			row.icon_label = icon_lbl
+			row.name_label = name_lbl
+
+			grid_row.add_child(row)
+			equip_rows[slot_name] = {"row": row, "icon": icon_lbl, "name": name_lbl}
 #endregion
 
 
