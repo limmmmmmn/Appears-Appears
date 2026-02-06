@@ -6,7 +6,7 @@ signal gold_changed(new_gold: int)
 signal game_over
 signal game_clear
 
-enum GameState { TITLE, FIELD, TOWN, BATTLE, PAUSED, GAME_OVER }
+enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER }
 var current_state: GameState = GameState.TITLE
 
 var current_stage: int = 1
@@ -46,9 +46,6 @@ func add_gold(amount: int) -> void:
 	gold += amount
 	gold_changed.emit(gold)
 	
-	# 마을에서만 자동 저장
-	if SaveManager and current_state == GameState.TOWN:
-		SaveManager.auto_save("골드 획득")
 
 
 func spend_gold(amount: int) -> bool:
@@ -56,11 +53,7 @@ func spend_gold(amount: int) -> bool:
 		return false
 	gold -= amount
 	gold_changed.emit(gold)
-	
-	# 마을에서만 자동 저장
-	if SaveManager and current_state == GameState.TOWN:
-		SaveManager.auto_save("골드 사용")
-	
+
 	return true
 
 
@@ -113,7 +106,7 @@ func go_to_field(stage_id: String = "", field_id: String = "") -> void:
 	if stage_id.is_empty():
 		stage_id = "stage_" + str(current_stage)
 	if field_id.is_empty():
-		# 현재 필드 ID 사용 (마을에서 출발 시)
+		# 현재 필드 ID 사용
 		field_id = "field_%d_%d" % [current_stage, current_field]
 	
 	# 필드 존재 확인
@@ -136,24 +129,11 @@ func go_to_field(stage_id: String = "", field_id: String = "") -> void:
 	get_tree().change_scene_to_file(scene_path)
 
 
-func go_to_town() -> void:
-	## 마을로 이동
-	change_state(GameState.TOWN)
-	
-	# 자동 저장
-	if SaveManager:
-		SaveManager.auto_save("마을 진입")
-	
-	get_tree().change_scene_to_file("res://scenes/town/Town.tscn")
-
-
 func go_to_next_from_field() -> void:
 	## 필드 출구 도달 시 호출
 	var next: String = FieldManager.get_next_destination()
-	
-	if next == "town":
-		go_to_town()
-	elif next.begins_with("stage_"):
+
+	if next.begins_with("stage_"):
 		# 다음 스테이지
 		current_stage += 1
 		current_field = 1
@@ -161,8 +141,13 @@ func go_to_next_from_field() -> void:
 	elif next == "ending":
 		game_clear.emit()
 		go_to_ending()
-	else:
+	elif next.begins_with("field_"):
 		# 같은 스테이지 다음 필드
+		current_field += 1
+		var new_stage_id: String = "stage_" + str(current_stage)
+		go_to_field(new_stage_id, next)
+	else:
+		# 기본: 다음 필드로 진행
 		current_field += 1
 		var new_stage_id: String = "stage_" + str(current_stage)
 		var new_field_id: String = "field_%d_%d" % [current_stage, current_field]

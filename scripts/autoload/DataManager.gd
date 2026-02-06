@@ -7,8 +7,6 @@ var enemies: Dictionary = {}
 var skills: Dictionary = {}
 var equipment: Dictionary = {}
 var items: Dictionary = {}
-var shops: Dictionary = {}
-var town_events: Dictionary = {}
 var traits: Dictionary = {}
 var runes: Dictionary = {}
 
@@ -26,8 +24,6 @@ func _load_all_data() -> void:
 	skills = _load_json("skills.json")
 	equipment = _load_json("equipment.json")
 	items = _load_json("items.json")
-	shops = _load_json("shops.json")
-	town_events = _load_json("town_events.json")
 	traits = _load_json("traits.json")
 	runes = _load_json("runes.json")
 	
@@ -139,21 +135,6 @@ func get_item(item_id: String) -> Dictionary:
 	if equipment.has(item_id):
 		return equipment[item_id]
 	return {}
-
-
-# 상점
-func get_shop(shop_id: String) -> Dictionary:
-	return shops.get(shop_id, {})
-
-
-func get_shop_items(shop_id: String) -> Array:
-	var shop: Dictionary = get_shop(shop_id)
-	return shop.get("items", [])
-
-
-# 마을 이벤트
-func get_town_events() -> Array:
-	return town_events.get("events", [])
 
 
 # 특성

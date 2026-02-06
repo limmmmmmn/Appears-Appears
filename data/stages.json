@@ -7,8 +7,7 @@
 	"stone": { "can_spawn": true, "walkable": true },
 	"water": { "can_spawn": false, "walkable": false },
 	"road": { "can_spawn": false, "walkable": true },
-	"wall": { "can_spawn": false, "walkable": false },
-	"town": { "can_spawn": false, "walkable": true, "is_exit": true, "exit_type": "town" }
+	"wall": { "can_spawn": false, "walkable": false }
   },
   
   "battle_config": {
@@ -37,7 +36,7 @@
 		  "elite_chance": 0.1,
 		  "chest_count": { "min": 0, "max": 1 },
 		  "is_boss_field": false,
-		  "next": "town"
+		  "next": "field_1_2"
 		},
 		{
 		  "id": "field_1_2",
@@ -47,7 +46,7 @@
 		  "elite_chance": 0.25,
 		  "chest_count": { "min": 1, "max": 2 },
 		  "is_boss_field": false,
-		  "next": "town"
+		  "next": "field_1_3"
 		},
 		{
 		  "id": "field_1_3",
@@ -80,7 +79,7 @@
 		  "elite_chance": 0.2,
 		  "chest_count": { "min": 1, "max": 2 },
 		  "is_boss_field": false,
-		  "next": "town"
+		  "next": "field_2_2"
 		},
 		{
 		  "id": "field_2_2",
@@ -90,7 +89,7 @@
 		  "elite_chance": 0.3,
 		  "chest_count": { "min": 1, "max": 2 },
 		  "is_boss_field": false,
-		  "next": "town"
+		  "next": "field_2_3"
 		},
 		{
 		  "id": "field_2_3",
@@ -123,7 +122,7 @@
 		  "elite_chance": 0.3,
 		  "chest_count": { "min": 1, "max": 2 },
 		  "is_boss_field": false,
-		  "next": "town"
+		  "next": "field_3_2"
 		},
 		{
 		  "id": "field_3_2",
@@ -133,7 +132,7 @@
 		  "elite_chance": 0.4,
 		  "chest_count": { "min": 1, "max": 3 },
 		  "is_boss_field": false,
-		  "next": "town"
+		  "next": "field_3_3"
 		},
 		{
 		  "id": "field_3_3",

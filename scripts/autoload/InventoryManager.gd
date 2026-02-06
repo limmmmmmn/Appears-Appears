@@ -65,10 +65,6 @@ func add_item(item_id: String, quantity: int = 1) -> bool:
 	item_added.emit(item_id, quantity)
 	inventory_changed.emit()
 	
-	# 마을에서만 자동 저장 (필드에서는 전투 중 드랍이 많으니 제외)
-	if SaveManager and GameManager and GameManager.current_state == GameManager.GameState.TOWN:
-		SaveManager.auto_save("아이템 획득")
-	
 	return true
 
 
@@ -87,10 +83,6 @@ func remove_item(item_id: String, quantity: int = 1) -> bool:
 	
 	item_removed.emit(item_id, quantity)
 	inventory_changed.emit()
-	
-	# 마을에서만 자동 저장
-	if SaveManager and GameManager and GameManager.current_state == GameManager.GameState.TOWN:
-		SaveManager.auto_save("아이템 사용/판매")
 	
 	return true
 

@@ -129,7 +129,7 @@ func is_tile_walkable(tile_type: String) -> bool:
 
 
 func is_exit_tile(tile_type: String) -> bool:
-	## 출구 타일인지 확인 (마을 타일 등)
+	## 출구 타일인지 확인
 	if not tile_types.has(tile_type):
 		return false
 	var tile_data: Dictionary = tile_types[tile_type] as Dictionary
@@ -137,7 +137,7 @@ func is_exit_tile(tile_type: String) -> bool:
 
 
 func get_exit_type(tile_type: String) -> String:
-	## 출구 타일의 목적지 타입 반환 (town, stage, etc)
+	## 출구 타일의 목적지 타입 반환 (stage, field, etc)
 	if not tile_types.has(tile_type):
 		return ""
 	var tile_data: Dictionary = tile_types[tile_type] as Dictionary

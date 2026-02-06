@@ -3,12 +3,10 @@ extends Node2D
 
 signal battle_triggered(battle_enemies: Array)
 signal exit_reached(next_destination: String)
-signal town_entered
 signal field_cleared
 
 @export var spawn_point: Marker2D
 @export var exit_area: Area2D
-@export var town_area: Area2D
 @export var tilemap: TileMapLayer
 
 var party_leader: PartyMember
@@ -29,7 +27,6 @@ var hud_scene: PackedScene
 
 # 분리된 시스템들
 var spawner: EnemySpawner
-var town_barrier: TownBarrier
 
 
 
@@ -205,15 +202,6 @@ func _setup_exit() -> void:
 		exit_area = get_node_or_null("ExitArea")
 	if exit_area and not exit_area.body_entered.is_connected(_on_exit_body_entered):
 		exit_area.body_entered.connect(_on_exit_body_entered)
-	
-	if not town_area:
-		town_area = get_node_or_null("TownArea")
-	if town_area:
-		if not town_area.body_entered.is_connected(_on_town_body_entered):
-			town_area.body_entered.connect(_on_town_body_entered)
-		# 결계 시스템
-		town_barrier = TownBarrier.new()
-		town_barrier.setup(self, town_area)
 	
 	# 위치 자동 저장 타이머
 	var save_timer := Timer.new()
@@ -519,40 +507,6 @@ func _on_exit_body_entered(body: Node2D) -> void:
 	exit_reached.emit(next)
 	if GameManager:
 		GameManager.go_to_next_from_field()
-
-
-func _on_town_body_entered(body: Node2D) -> void:
-	if not body.is_in_group("party_leader"):
-		return
-
-	if BattleManager and BattleManager.get_active_battle_count() > 0:
-		return
-
-	# 누적 보상이 있으면 확인 팝업 표시
-	if hud and hud.has_unclaimed_rewards():
-		if not hud.town_enter_confirmed.is_connected(_on_town_enter_confirmed):
-			hud.town_enter_confirmed.connect(_on_town_enter_confirmed, CONNECT_ONE_SHOT)
-		hud.show_town_enter_popup()
-		return
-
-	# 보상이 없으면 바로 마을로
-	_enter_town()
-
-
-func _on_town_enter_confirmed(_claimed_rewards: bool) -> void:
-	## 마을 진입 확인 팝업에서 선택 완료
-	_enter_town()
-
-
-func _enter_town() -> void:
-	## 실제 마을 진입 처리
-	if hud:
-		hud.add_system_log("마을로 향한다...")
-
-	town_entered.emit()
-	GameManager.advance_to_next_field()
-	if GameManager:
-		GameManager.go_to_town()
 
 
 #=============================================================================

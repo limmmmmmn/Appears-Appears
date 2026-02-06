@@ -2,7 +2,6 @@ extends Control
 ## Main: 게임 엔트리 포인트
 
 const TITLE_SCENE := preload("res://scenes/main/Title.tscn")
-const TOWN_SCENE := preload("res://scenes/town/Town.tscn")
 
 var current_scene: Node = null
 
@@ -28,11 +27,7 @@ func _continue_game() -> void:
 	## 저장된 게임 불러오기
 	if SaveManager.load_game():
 		# 저장된 상태에 따라 분기
-		match GameManager.current_state:
-			GameManager.GameState.FIELD:
-				_go_to_field_from_save()
-			GameManager.GameState.TOWN, _:
-				_go_to_town()
+		_go_to_field_from_save()
 	else:
 		push_error("[Main] 로드 실패!")
 		_show_title()
@@ -73,7 +68,6 @@ func _go_to_field_from_save() -> void:
 		GameManager.change_state(GameManager.GameState.FIELD)
 	else:
 		push_error("[Main] 필드 씬 로드 실패: ", scene_path)
-		_go_to_town()
 
 
 func _start_new_game() -> void:
@@ -86,9 +80,6 @@ func _start_new_game() -> void:
 
 	# 시작 아이템 없음 (장비는 파밍)
 
-	# 선술집 초기화 (영웅 5명 배치) - 이미 파티에 있는 영웅은 제외됨
-	TownManager.init_new_game()
-
 	# 필드에서 시작! (Stage 1-1)
 	GameManager.go_to_field()
 
@@ -96,28 +87,8 @@ func _start_new_game() -> void:
 	SaveManager.auto_save("새 게임 시작")
 
 
-func _go_to_town() -> void:
-	_clear_current_scene()
-	
-	var town := TOWN_SCENE.instantiate()
-	town.go_to_field.connect(_go_to_field)
-	
-	# Control 노드가 전체 화면을 채우도록 설정
-	town.set_anchors_preset(Control.PRESET_FULL_RECT)
-	
-	add_child(town)
-	current_scene = town
-	
-	GameManager.change_state(GameManager.GameState.TOWN)
-
-
 func _go_to_field() -> void:
 	_clear_current_scene()
-	
-	# TODO: 필드 씬 구현 후 연결
-	
-	# 임시: 다시 마을로
-	# _go_to_town()
 	
 	GameManager.change_state(GameManager.GameState.FIELD)
 
