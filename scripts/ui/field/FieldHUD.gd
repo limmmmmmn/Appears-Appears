@@ -166,6 +166,12 @@ func _setup_inventory_panel() -> void:
 	if not inventory_list:
 		return
 
+	# ScrollContainer와 VBoxContainer의 mouse_filter 설정
+	if inventory_scroll:
+		inventory_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	if inventory_list:
+		inventory_list.mouse_filter = Control.MOUSE_FILTER_PASS
+
 	# 인벤토리 변경 시그널 연결
 	if InventoryManager and not InventoryManager.inventory_changed.is_connected(_update_inventory_display):
 		InventoryManager.inventory_changed.connect(_update_inventory_display)
@@ -237,11 +243,12 @@ class _DraggableItemRow extends PanelContainer:
 	var label: Label
 	var rarity_color: Color = Color.WHITE
 	var rarity: String = "common"
+	var is_hovered: bool = false
 
 	func setup(text: String, color: Color, p_rarity: String) -> void:
 		rarity_color = color
 		rarity = p_rarity
-		custom_minimum_size = Vector2(0, 18)
+		custom_minimum_size = Vector2(100, 20)
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -256,40 +263,39 @@ class _DraggableItemRow extends PanelContainer:
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(label)
 
-		mouse_entered.connect(_on_mouse_entered)
-		mouse_exited.connect(_on_mouse_exited)
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_MOUSE_ENTER:
+			is_hovered = true
+			_apply_style(true)
+		elif what == NOTIFICATION_MOUSE_EXIT:
+			is_hovered = false
+			_apply_style(false)
 
 	func _apply_style(hovered: bool) -> void:
 		var style := StyleBoxFlat.new()
 		style.content_margin_left = 4
-		style.content_margin_top = 1
+		style.content_margin_top = 2
 		style.content_margin_right = 4
-		style.content_margin_bottom = 1
+		style.content_margin_bottom = 2
 		if hovered:
-			style.bg_color = Color(0.25, 0.25, 0.15, 0.9)
+			style.bg_color = Color(0.3, 0.3, 0.15, 1.0)
 			style.border_width_left = 2
 			style.border_width_top = 2
 			style.border_width_right = 2
 			style.border_width_bottom = 2
-			style.border_color = Color(0.95, 0.9, 0.3, 1.0)
+			style.border_color = Color(1.0, 0.95, 0.3, 1.0)
 		else:
-			style.bg_color = Color(0.1, 0.1, 0.12, 0.6)
+			style.bg_color = Color(0.1, 0.1, 0.12, 0.8)
 			style.border_width_left = 1
 			style.border_width_top = 1
 			style.border_width_right = 1
 			style.border_width_bottom = 1
-			style.border_color = Color(0.3, 0.3, 0.35, 0.6)
+			style.border_color = Color(0.35, 0.35, 0.4, 0.8)
 		style.corner_radius_top_left = 3
 		style.corner_radius_top_right = 3
 		style.corner_radius_bottom_left = 3
 		style.corner_radius_bottom_right = 3
 		add_theme_stylebox_override("panel", style)
-
-	func _on_mouse_entered() -> void:
-		_apply_style(true)
-
-	func _on_mouse_exited() -> void:
-		_apply_style(false)
 
 	func _get_drag_data(_pos: Vector2) -> Variant:
 		# 장비 아이템만 드래그 가능
