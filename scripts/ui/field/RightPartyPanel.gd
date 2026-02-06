@@ -3,8 +3,8 @@ class_name RightPartyPanel
 ## 우측 파티 패널 - 정보 + 장비 목록
 ## 레이아웃: 이름+HP바, ATB바들, 장비목록(6줄)
 
-const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
-const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
+const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "shoes": "👟", "necklace": "📿", "ring1": "💍", "ring2": "💍"}
+const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "shoes", "necklace", "ring1", "ring2"]
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
@@ -507,13 +507,13 @@ func _on_equipment_dropped(hero_index: int, item_id: String) -> void:
 
 	# 악세사리 슬롯 처리
 	var target_slot: String = item_slot
-	if item_slot in ["accessory", "acc", "acc1", "acc2"]:
-		if hero.equipment.get("acc1", "").is_empty():
-			target_slot = "acc1"
-		elif hero.equipment.get("acc2", "").is_empty():
-			target_slot = "acc2"
+	if item_slot in ["ring", "ring1", "ring2"]:
+		if hero.equipment.get("ring1", "").is_empty():
+			target_slot = "ring1"
+		elif hero.equipment.get("ring2", "").is_empty():
+			target_slot = "ring2"
 		else:
-			target_slot = "acc1"
+			target_slot = "ring1"
 
 	if InventoryManager.equip_item(hero, item_id, target_slot):
 		_show_equip_success_feedback(hero_index)

@@ -20,7 +20,7 @@
 	  "luk": 1
 	},
 	"equip_restrictions": {
-	  "can_equip": ["sword", "axe", "shield", "heavy_armor", "medium_armor", "helmet"],
+	  "can_equip": ["sword", "axe", "shield", "heavy_armor", "medium_armor", "helmet", "shoes", "necklace", "ring"],
 	  "dual_wield": false
 	},
 	"tags": ["melee", "physical", "tank"],
@@ -47,7 +47,7 @@
 	  "luk": 1
 	},
 	"equip_restrictions": {
-	  "can_equip": ["staff", "wand", "robe", "cloth_armor"],
+	  "can_equip": ["staff", "wand", "robe", "cloth_armor", "shoes", "necklace", "ring"],
 	  "dual_wield": false
 	},
 	"tags": ["magic", "ranged", "aoe"],
@@ -74,7 +74,7 @@
 	  "luk": 1
 	},
 	"equip_restrictions": {
-	  "can_equip": ["staff", "mace", "robe", "medium_armor"],
+	  "can_equip": ["staff", "mace", "robe", "medium_armor", "shoes", "necklace", "ring"],
 	  "dual_wield": false
 	},
 	"tags": ["magic", "support", "healer"],
@@ -101,7 +101,7 @@
 	  "luk": 3
 	},
 	"equip_restrictions": {
-	  "can_equip": ["dagger", "sword", "light_armor", "cloth_armor"],
+	  "can_equip": ["dagger", "sword", "light_armor", "cloth_armor", "shoes", "necklace", "ring"],
 	  "dual_wield": true
 	},
 	"tags": ["melee", "physical", "speed", "dual_wield"],
@@ -128,7 +128,7 @@
 	  "luk": 2
 	},
 	"equip_restrictions": {
-	  "can_equip": ["bow", "crossbow", "light_armor", "cloth_armor"],
+	  "can_equip": ["bow", "crossbow", "light_armor", "cloth_armor", "shoes", "necklace", "ring"],
 	  "dual_wield": false
 	},
 	"tags": ["ranged", "physical", "speed"],
@@ -155,7 +155,7 @@
 	  "luk": 1
 	},
 	"equip_restrictions": {
-	  "can_equip": ["sword", "lance", "shield", "heavy_armor", "helmet"],
+	  "can_equip": ["sword", "lance", "shield", "heavy_armor", "helmet", "shoes", "necklace", "ring"],
 	  "dual_wield": false
 	},
 	"tags": ["melee", "physical", "tank", "heavy"],

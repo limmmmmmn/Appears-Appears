@@ -23,9 +23,10 @@ const SLOT_NAMES_KR: Dictionary = {
 	"off_hand": "보조",
 	"head": "머리",
 	"body": "몸통",
-	"accessory": "장신구",
-	"acc1": "장신구1",
-	"acc2": "장신구2"
+	"shoes": "신발",
+	"necklace": "목걸이",
+	"ring1": "반지1",
+	"ring2": "반지2"
 }
 
 

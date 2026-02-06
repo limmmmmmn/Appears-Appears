@@ -9,9 +9,10 @@ const SLOT_DISPLAY_NAMES := {
 	"off_hand": "보조",
 	"head": "머리",
 	"body": "몸통",
-	"accessory": "장신구",
-	"acc1": "장신구1",
-	"acc2": "장신구2"
+	"shoes": "신발",
+	"necklace": "목걸이",
+	"ring1": "반지1",
+	"ring2": "반지2"
 }
 
 
@@ -161,20 +162,20 @@ static func get_slot_display_name(slot: String) -> String:
 
 ## 악세서리 슬롯 결정
 static func _get_target_slot(hero: Hero, slot: String) -> String:
-	if slot == "accessory":
-		if hero.equipment.get("acc1", "").is_empty():
-			return "acc1"
-		return "acc1"  # 기본값
+	if slot in ["ring", "ring1", "ring2"]:
+		if hero.equipment.get("ring1", "").is_empty():
+			return "ring1"
+		return "ring1"
 	return slot
 
 
 ## 장착할 최적 슬롯 결정
 static func determine_equip_slot(hero: Hero, item_slot: String) -> String:
-	if item_slot == "accessory":
-		if hero.equipment.get("acc1", "").is_empty():
-			return "acc1"
-		elif hero.equipment.get("acc2", "").is_empty():
-			return "acc2"
+	if item_slot in ["ring", "ring1", "ring2"]:
+		if hero.equipment.get("ring1", "").is_empty():
+			return "ring1"
+		elif hero.equipment.get("ring2", "").is_empty():
+			return "ring2"
 		else:
-			return "acc1"
+			return "ring1"
 	return item_slot

@@ -376,8 +376,8 @@ func _show_equipment_comparison(item_id: String) -> void:
 		if can_equip:
 			# 현재 장비 vs 새 장비 비교
 			var target_slot := slot
-			if slot == "accessory":
-				target_slot = "acc1"
+			if slot in ["ring", "ring1", "ring2"]:
+				target_slot = "ring1"
 			
 			var current_equip_id: String = hero.equipment.get(target_slot, "")
 			var current_equip: Dictionary = DataManager.get_equipment(current_equip_id) if current_equip_id else {}
@@ -516,7 +516,9 @@ func _get_slot_display_name(slot: String) -> String:
 		"off_hand": return "보조"
 		"head": return "머리"
 		"body": return "몸통"
-		"accessory": return "장신구"
+		"shoes": return "신발"
+		"necklace": return "목걸이"
+		"ring1", "ring2": return "반지"
 		_: return slot
 
 

@@ -19,8 +19,10 @@ const SLOT_NAMES := {
 	"off_hand": "보조",
 	"head": "머리",
 	"body": "몸통",
-	"acc1": "장신구1",
-	"acc2": "장신구2"
+	"shoes": "신발",
+	"necklace": "목걸이",
+	"ring1": "반지1",
+	"ring2": "반지2"
 }
 
 
@@ -370,9 +372,9 @@ func _update_preview(item_id: String) -> void:
 	var new_stats: Dictionary = equip_data.get("stats", {})
 	var slot: String = equip_data.get("slot", "")
 	var target_slot := slot
-	if slot == "accessory":
-		target_slot = "acc1"
-	
+	if slot in ["ring", "ring1", "ring2"]:
+		target_slot = "ring1"
+
 	var current_equip_id: String = hero.equipment.get(target_slot, "")
 	var current_equip: Dictionary = DataManager.get_equipment(current_equip_id) if current_equip_id else {}
 	var current_stats: Dictionary = current_equip.get("stats", {})
@@ -464,13 +466,13 @@ func _on_inventory_item_pressed(item_id: String) -> void:
 		return
 	
 	var slot: String = equip_data.get("slot", "")
-	if slot == "accessory":
-		if hero.equipment["acc1"].is_empty():
-			slot = "acc1"
-		elif hero.equipment["acc2"].is_empty():
-			slot = "acc2"
+	if slot in ["ring", "ring1", "ring2"]:
+		if hero.equipment["ring1"].is_empty():
+			slot = "ring1"
+		elif hero.equipment["ring2"].is_empty():
+			slot = "ring2"
 		else:
-			slot = "acc1"
+			slot = "ring1"
 	
 	PartyManager.equip_to_hero(hero, item_id, slot)
 	_refresh_all()
