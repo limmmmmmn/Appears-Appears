@@ -71,6 +71,7 @@ func _ready() -> void:
 
 func _setup_components() -> void:
 	_setup_speed_button()
+	_setup_field_buttons()
 
 	# 배틀 로그
 	battle_log = BattleLogUI.new()
@@ -83,19 +84,12 @@ func _setup_speed_button() -> void:
 	if not speed_button:
 		return
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.border_width_bottom = 2
-	style.border_color = Color(0.4, 0.6, 0.9)
-	speed_button.add_theme_stylebox_override("normal", style)
+	_apply_field_button_style(speed_button)
 
-	var hover := style.duplicate()
-	hover.bg_color = Color(0.25, 0.25, 0.3, 0.95)
-	speed_button.add_theme_stylebox_override("hover", hover)
+
+func _setup_field_buttons() -> void:
+	if menu_button:
+		_apply_field_button_style(menu_button)
 
 
 func _setup_kill_label() -> void:
@@ -233,6 +227,7 @@ func _create_inventory_row(item: Dictionary) -> Control:
 		display_text = "%s %s" % [icon, item_name]
 
 	row.setup(display_text, rarity_color, rarity)
+	_apply_field_button_style(row)
 
 	# 툴팁
 	var stats: Dictionary = item.data.get("stats", {})
@@ -244,6 +239,38 @@ func _create_inventory_row(item: Dictionary) -> Control:
 	row.tooltip_text = tooltip
 
 	return row
+
+
+func _apply_field_button_style(btn: Button) -> void:
+	if not btn:
+		return
+
+	var normal_style := StyleBoxFlat.new()
+	normal_style.bg_color = Color(0.12, 0.12, 0.15, 0.9)
+	normal_style.border_width_left = 1
+	normal_style.border_width_top = 1
+	normal_style.border_width_right = 1
+	normal_style.border_width_bottom = 1
+	normal_style.border_color = Color(0.3, 0.3, 0.35, 0.7)
+	normal_style.corner_radius_top_left = 3
+	normal_style.corner_radius_top_right = 3
+	normal_style.corner_radius_bottom_left = 3
+	normal_style.corner_radius_bottom_right = 3
+	normal_style.content_margin_left = 4
+	normal_style.content_margin_right = 4
+
+	var hover_style := normal_style.duplicate()
+	hover_style.bg_color = Color(0.3, 0.3, 0.15, 0.95)
+	hover_style.border_width_left = 2
+	hover_style.border_width_top = 2
+	hover_style.border_width_right = 2
+	hover_style.border_width_bottom = 2
+	hover_style.border_color = Color(1.0, 0.95, 0.3, 1.0)
+
+	btn.add_theme_stylebox_override("normal", normal_style)
+	btn.add_theme_stylebox_override("hover", hover_style)
+	btn.add_theme_stylebox_override("pressed", hover_style)
+	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 
 ## 드래그 가능한 인벤토리 아이템 행 (Button 기반)
@@ -264,39 +291,6 @@ class _DraggableItemRow extends Button:
 
 		add_theme_font_size_override("font_size", 9)
 		add_theme_color_override("font_color", color)
-
-		# 기본 스타일 (normal)
-		var normal_style := StyleBoxFlat.new()
-		normal_style.bg_color = Color(0.1, 0.1, 0.12, 0.8)
-		normal_style.border_width_left = 1
-		normal_style.border_width_top = 1
-		normal_style.border_width_right = 1
-		normal_style.border_width_bottom = 1
-		normal_style.border_color = Color(0.35, 0.35, 0.4, 0.8)
-		normal_style.corner_radius_top_left = 3
-		normal_style.corner_radius_top_right = 3
-		normal_style.corner_radius_bottom_left = 3
-		normal_style.corner_radius_bottom_right = 3
-		normal_style.content_margin_left = 4
-		normal_style.content_margin_right = 4
-		add_theme_stylebox_override("normal", normal_style)
-
-		# 호버 스타일
-		var hover_style := StyleBoxFlat.new()
-		hover_style.bg_color = Color(0.3, 0.3, 0.15, 1.0)
-		hover_style.border_width_left = 2
-		hover_style.border_width_top = 2
-		hover_style.border_width_right = 2
-		hover_style.border_width_bottom = 2
-		hover_style.border_color = Color(1.0, 0.95, 0.3, 1.0)
-		hover_style.corner_radius_top_left = 3
-		hover_style.corner_radius_top_right = 3
-		hover_style.corner_radius_bottom_left = 3
-		hover_style.corner_radius_bottom_right = 3
-		hover_style.content_margin_left = 4
-		hover_style.content_margin_right = 4
-		add_theme_stylebox_override("hover", hover_style)
-		add_theme_stylebox_override("pressed", hover_style)
 
 		# 클릭 연결
 		pressed.connect(_on_pressed)
