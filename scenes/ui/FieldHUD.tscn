@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c2cjb4efakggb"]
 
 [ext_resource type="Script" uid="uid://b22n74rgrssul" path="res://scripts/ui/field/FieldHUD.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://d1i8t3gqv5d1f" path="res://scripts/ui/field/InventoryDropPanel.gd" id="2_script"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
 content_margin_left = 10.0
@@ -180,6 +181,7 @@ offset_bottom = -4.0
 grow_horizontal = 0
 grow_vertical = 0
 mouse_filter = 1
+script = ExtResource("2_script")
 theme_override_styles/panel = SubResource("StyleBoxFlat_inventory")
 
 [node name="VBox" type="VBoxContainer" parent="Control/InventoryPanel"]
