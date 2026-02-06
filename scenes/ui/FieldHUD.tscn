@@ -11,32 +11,6 @@ bg_color = Color(0.06, 0.06, 0.09, 0.95)
 border_width_bottom = 1
 border_color = Color(0.3, 0.35, 0.5, 0.8)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_log"]
-content_margin_left = 6.0
-content_margin_top = 4.0
-content_margin_right = 6.0
-content_margin_bottom = 4.0
-bg_color = Color(0.04, 0.04, 0.07, 0.92)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.25, 0.28, 0.4, 0.7)
-corner_radius_top_right = 6
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_inventory"]
-content_margin_left = 5.0
-content_margin_top = 5.0
-content_margin_right = 5.0
-content_margin_bottom = 5.0
-bg_color = Color(0.04, 0.04, 0.07, 0.92)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.5, 0.42, 0.25, 0.7)
-corner_radius_top_left = 6
-
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_trait"]
 content_margin_left = 8.0
 content_margin_top = 6.0
@@ -105,43 +79,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "☰"
 
-[node name="LogPanel" type="PanelContainer" parent="Control"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 4.0
-offset_top = -105.0
-offset_right = 185.0
-offset_bottom = -4.0
-grow_vertical = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_log")
-
-[node name="VBox" type="VBoxContainer" parent="Control/LogPanel"]
-layout_mode = 2
-theme_override_constants/separation = 2
-
-[node name="LogTitle" type="Label" parent="Control/LogPanel/VBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 9
-theme_override_colors/font_color = Color(0.6, 0.65, 0.8, 1)
-text = "[ 전투 로그 ]"
-
-[node name="LogScroll" type="ScrollContainer" parent="Control/LogPanel/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 0
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="LogContainer" type="VBoxContainer" parent="Control/LogPanel/VBox/LogScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/separation = 1
-
 [node name="TraitPanel" type="PanelContainer" parent="Control"]
 unique_name_in_owner = true
 layout_mode = 1
@@ -164,47 +101,3 @@ unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 2
-
-[node name="InventoryPanel" type="PanelContainer" parent="Control"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 3
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -125.0
-offset_top = -145.0
-offset_right = -4.0
-offset_bottom = -4.0
-grow_horizontal = 0
-grow_vertical = 0
-mouse_filter = 1
-theme_override_styles/panel = SubResource("StyleBoxFlat_inventory")
-
-[node name="VBox" type="VBoxContainer" parent="Control/InventoryPanel"]
-layout_mode = 2
-mouse_filter = 1
-theme_override_constants/separation = 2
-
-[node name="InventoryTitle" type="Label" parent="Control/InventoryPanel/VBox"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_font_sizes/font_size = 9
-theme_override_colors/font_color = Color(0.7, 0.6, 0.4, 1)
-text = "[ 인벤토리 ]"
-horizontal_alignment = 1
-
-[node name="InventoryScroll" type="ScrollContainer" parent="Control/InventoryPanel/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 1
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-
-[node name="InventoryList" type="VBoxContainer" parent="Control/InventoryPanel/VBox/InventoryScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 1
-size_flags_horizontal = 3
-theme_override_constants/separation = 1
