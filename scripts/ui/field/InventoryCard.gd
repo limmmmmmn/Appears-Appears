@@ -205,8 +205,10 @@ class _DraggableItemButton extends Button:
 				if on:
 					for ts in target_slots:
 						child.highlight_slot(ts, item_id)
+					child.show_stat_compare(item_id)
 				else:
 					child.clear_slot_highlights()
+					child.hide_stat_compare()
 
 	func _on_pressed() -> void:
 		if inv_card:

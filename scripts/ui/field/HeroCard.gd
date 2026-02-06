@@ -29,6 +29,7 @@ var is_hovered: bool = false
 var equip_rows: Dictionary = {}  # slot_name -> { row: _EquipSlotRow, icon: Label, name: Label }
 
 var _anim_tween: Tween = null
+var _stat_popup: PanelContainer = null
 
 
 func _ready() -> void:
@@ -202,6 +203,74 @@ func _on_gui_input(event: InputEvent) -> void:
 #endregion
 
 
+#region 능력치 비교 팝업
+func show_stat_compare(item_id: String) -> void:
+	hide_stat_compare()
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	if hero_index < 0 or hero_index >= party.size() or party[hero_index] == null:
+		return
+	var hero: Hero = party[hero_index]
+	if not hero.can_equip(item_id):
+		return
+
+	var changes: Dictionary = StatCompareUtil.calculate_stat_changes(hero, item_id)
+	if changes.is_empty():
+		return
+
+	# 변화가 있는 스탯만 필터
+	var has_diff := false
+	for stat_name in changes:
+		if changes[stat_name]["diff"] != 0:
+			has_diff = true
+			break
+	if not has_diff:
+		return
+
+	_stat_popup = PanelContainer.new()
+	var style := FieldHUD._make_flat_style(
+		Color(0.05, 0.05, 0.08, 0.95), Color(0.4, 0.6, 0.9, 0.8), 4, 1
+	)
+	style.content_margin_left = 4
+	style.content_margin_right = 4
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	_stat_popup.add_theme_stylebox_override("panel", style)
+	_stat_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 0)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stat_popup.add_child(vbox)
+
+	for stat_name in changes:
+		var data: Dictionary = changes[stat_name]
+		var diff: int = data["diff"]
+		if diff == 0:
+			continue
+		var lbl := Label.new()
+		lbl.add_theme_font_size_override("font_size", 8)
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if diff > 0:
+			lbl.text = "%s +%d" % [stat_name, diff]
+			lbl.add_theme_color_override("font_color", Color(0.4, 1.0, 0.4))
+		else:
+			lbl.text = "%s %d" % [stat_name, diff]
+			lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		vbox.add_child(lbl)
+
+	add_child(_stat_popup)
+	_stat_popup.reset_size()
+	var popup_h: float = _stat_popup.get_combined_minimum_size().y
+	_stat_popup.position = Vector2(0, -popup_h - 2)
+
+
+func hide_stat_compare() -> void:
+	if _stat_popup and is_instance_valid(_stat_popup):
+		_stat_popup.queue_free()
+		_stat_popup = null
+#endregion
+
+
 #region 장비 드롭 처리
 func handle_equipment_drop(target_slot: String, item_id: String, data: Dictionary) -> void:
 	var party: Array = PartyManager.get_party() if PartyManager else []
@@ -357,8 +426,10 @@ class _EquipSlotRow extends PanelContainer:
 			if child is HeroCard and child != card_ref:
 				if on:
 					child.highlight_slot(slot_name, item_id)
+					child.show_stat_compare(item_id)
 				else:
 					child.clear_slot_highlights()
+					child.hide_stat_compare()
 
 	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 		if not data is Dictionary or data.get("type", "") != "equipment":
