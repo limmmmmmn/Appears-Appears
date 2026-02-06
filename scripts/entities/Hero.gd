@@ -27,7 +27,7 @@ var taunt_count: int = 0
 
 # 장비
 var equipment: Dictionary = {
-	"main_hand": "", "off_hand": "", "head": "", "body": "", "shoes": "", "necklace": "", "ring1": "", "ring2": ""
+	"main_hand": "", "off_hand": "", "head": "", "body": "", "acc1": "", "acc2": "", "acc3": "", "acc4": ""
 }
 
 # 스킬 토글

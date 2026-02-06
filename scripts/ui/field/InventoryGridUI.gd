@@ -25,10 +25,10 @@ const SLOT_ICONS: Dictionary = {
 	"off_hand": "🛡️",
 	"head": "👑",
 	"body": "👕",
-	"shoes": "👟",
-	"necklace": "📿",
-	"ring1": "💍",
-	"ring2": "💍"
+	"acc1": "💍",
+	"acc2": "💍",
+	"acc3": "💍",
+	"acc4": "💍"
 }
 
 const TYPE_ICONS: Dictionary = {
@@ -48,7 +48,8 @@ const TYPE_ICONS: Dictionary = {
 	# 악세서리
 	"ring": "💍",
 	"necklace": "📿",
-	"shoes": "👟"
+	"shoes": "👟",
+	"acc": "💍"
 }
 
 const RARITY_COLORS: Dictionary = {

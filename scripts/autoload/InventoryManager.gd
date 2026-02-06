@@ -294,8 +294,8 @@ func try_auto_equip(item_id: String) -> bool:
 
 func _get_slots_for_item(item_slot: String, hero: Hero) -> Array:
 	## 아이템이 장착될 수 있는 슬롯 목록 반환
-	if item_slot in ["ring", "ring1", "ring2"]:
-		return ["ring1", "ring2"]
+	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
+		return ["acc1", "acc2", "acc3", "acc4"]
 	elif item_slot == "off_hand":
 		# 양손무기 체크
 		if hero.is_off_hand_disabled():

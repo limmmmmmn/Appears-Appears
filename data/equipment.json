@@ -691,7 +691,7 @@
   "ring_hp": {
 	"id": "ring_hp",
 	"name": "생명의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "common",
 	"two_handed": false,
@@ -701,7 +701,7 @@
   "ring_hp_uncommon": {
 	"id": "ring_hp_uncommon",
 	"name": "활력의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "uncommon",
 	"two_handed": false,
@@ -711,7 +711,7 @@
   "ring_str": {
 	"id": "ring_str",
 	"name": "힘의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "common",
 	"two_handed": false,
@@ -721,7 +721,7 @@
   "ring_str_uncommon": {
 	"id": "ring_str_uncommon",
 	"name": "전사의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "uncommon",
 	"two_handed": false,
@@ -731,7 +731,7 @@
   "ring_luck": {
 	"id": "ring_luck",
 	"name": "행운의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "magic",
 	"two_handed": false,
@@ -741,7 +741,7 @@
   "ring_luck_rare": {
 	"id": "ring_luck_rare",
 	"name": "도박꾼의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "rare",
 	"two_handed": false,
@@ -751,7 +751,7 @@
   "ring_int": {
 	"id": "ring_int",
 	"name": "지혜의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "magic",
 	"two_handed": false,
@@ -761,7 +761,7 @@
   "ring_int_rare": {
 	"id": "ring_int_rare",
 	"name": "현자의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "rare",
 	"two_handed": false,
@@ -771,7 +771,7 @@
   "ring_epic": {
 	"id": "ring_epic",
 	"name": "용의 눈 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "epic",
 	"two_handed": false,
@@ -782,7 +782,7 @@
   "amulet_common": {
 	"id": "amulet_common",
 	"name": "수호의 부적",
-	"slot": "necklace",
+	"slot": "acc",
 	"type": "necklace",
 	"rarity": "common",
 	"two_handed": false,
@@ -792,7 +792,7 @@
   "amulet_uncommon": {
 	"id": "amulet_uncommon",
 	"name": "정화의 부적",
-	"slot": "necklace",
+	"slot": "acc",
 	"type": "necklace",
 	"rarity": "uncommon",
 	"two_handed": false,
@@ -802,7 +802,7 @@
   "amulet_crit": {
 	"id": "amulet_crit",
 	"name": "급소의 부적",
-	"slot": "necklace",
+	"slot": "acc",
 	"type": "necklace",
 	"rarity": "magic",
 	"two_handed": false,
@@ -812,7 +812,7 @@
   "amulet_rare": {
 	"id": "amulet_rare",
 	"name": "용맹의 목걸이",
-	"slot": "necklace",
+	"slot": "acc",
 	"type": "necklace",
 	"rarity": "rare",
 	"two_handed": false,
@@ -822,7 +822,7 @@
   "amulet_epic": {
 	"id": "amulet_epic",
 	"name": "불사조의 깃털",
-	"slot": "necklace",
+	"slot": "acc",
 	"type": "necklace",
 	"rarity": "epic",
 	"two_handed": false,
@@ -833,7 +833,7 @@
   "boots_common": {
 	"id": "boots_common",
 	"name": "가죽 장화",
-	"slot": "shoes",
+	"slot": "acc",
 	"type": "shoes",
 	"rarity": "common",
 	"two_handed": false,
@@ -843,7 +843,7 @@
   "boots_speed": {
 	"id": "boots_speed",
 	"name": "신속의 장화",
-	"slot": "shoes",
+	"slot": "acc",
 	"type": "shoes",
 	"rarity": "uncommon",
 	"two_handed": false,
@@ -853,7 +853,7 @@
   "boots_magic": {
 	"id": "boots_magic",
 	"name": "바람걸음 장화",
-	"slot": "shoes",
+	"slot": "acc",
 	"type": "shoes",
 	"rarity": "magic",
 	"two_handed": false,
@@ -863,7 +863,7 @@
   "boots_rare": {
 	"id": "boots_rare",
 	"name": "질풍의 장화",
-	"slot": "shoes",
+	"slot": "acc",
 	"type": "shoes",
 	"rarity": "rare",
 	"two_handed": false,
@@ -873,7 +873,7 @@
   "boots_epic": {
 	"id": "boots_epic",
 	"name": "헤르메스의 날개",
-	"slot": "shoes",
+	"slot": "acc",
 	"type": "shoes",
 	"rarity": "epic",
 	"two_handed": false,
@@ -951,7 +951,7 @@
   "ring_legendary": {
 	"id": "ring_legendary",
 	"name": "전능의 반지",
-	"slot": "ring1",
+	"slot": "acc",
 	"type": "ring",
 	"rarity": "legendary",
 	"two_handed": false,
@@ -962,7 +962,7 @@
   "amulet_legendary": {
 	"id": "amulet_legendary",
 	"name": "불멸의 심장",
-	"slot": "necklace",
+	"slot": "acc",
 	"type": "necklace",
 	"rarity": "legendary",
 	"two_handed": false,

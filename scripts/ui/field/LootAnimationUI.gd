@@ -52,11 +52,11 @@ const RARITY_GLOW: Dictionary = {
 const TYPE_ICONS: Dictionary = {
 	"sword": "🗡️", "dagger": "🔪", "axe": "🪓", "staff": "🪄", "bow": "🏹",
 	"shield": "🛡️", "helmet": "⛑️", "light_armor": "👘", "medium_armor": "🦺",
-	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "📿", "shoes": "👟"
+	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "📿", "shoes": "👟", "acc": "💍"
 }
 
 const SLOT_ICONS: Dictionary = {
-	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑", "body": "👕", "shoes": "👟", "necklace": "📿", "ring1": "💍", "ring2": "💍"
+	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑", "body": "👕", "acc1": "💍", "acc2": "💍", "acc3": "💍", "acc4": "💍"
 }
 
 

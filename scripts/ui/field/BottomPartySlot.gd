@@ -38,18 +38,18 @@ const SLOT_FONT_SIZE: int = 10
 
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑",
-	"body": "👕", "shoes": "👟", "necklace": "📿", "ring1": "💍", "ring2": "💍"
+	"body": "👕", "acc1": "💍", "acc2": "💍", "acc3": "💍", "acc4": "💍"
 }
 
 const SLOT_NAMES_KR: Dictionary = {
 	"main_hand": "주무기", "off_hand": "보조", "head": "머리",
-	"body": "몸통", "shoes": "신발", "necklace": "목걸이", "ring1": "반지1", "ring2": "반지2"
+	"body": "몸통", "acc1": "악세1", "acc2": "악세2", "acc3": "악세3", "acc4": "악세4"
 }
 
 const ITEM_ICONS: Dictionary = {
 	"sword": "🗡️", "dagger": "🔪", "axe": "🪓", "staff": "🪄", "bow": "🏹",
 	"shield": "🛡️", "helmet": "⛑️", "light_armor": "👘", "medium_armor": "🦺",
-	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "📿", "shoes": "👟",
+	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "📿", "shoes": "👟", "acc": "💍",
 	"weapon": "⚔️", "head": "👑", "body": "👕"
 }
 
@@ -118,7 +118,7 @@ func _create_layout() -> void:
 	equip_row2.add_theme_constant_override("separation", 1)
 	add_child(equip_row2)
 	
-	for slot_name in ["body", "shoes", "necklace", "ring1", "ring2"]:
+	for slot_name in ["body", "acc1", "acc2", "acc3", "acc4"]:
 		_create_equip_button(equip_row2, slot_name)
 	
 	# 5행: 스킬 토글

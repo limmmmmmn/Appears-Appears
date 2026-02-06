@@ -145,7 +145,7 @@ func _create_item_info_panel() -> VBoxContainer:
 	var slot_name: String = str(item_data.get("slot", ""))
 	var slot_display: Dictionary = {
 		"main_hand": "주무기", "off_hand": "보조", "head": "머리",
-		"body": "몸통", "shoes": "신발", "necklace": "목걸이", "ring1": "반지", "ring2": "반지"
+		"body": "몸통", "acc": "악세서리", "acc1": "악세1", "acc2": "악세2", "acc3": "악세3", "acc4": "악세4"
 	}
 	slot_label.text = slot_display.get(slot_name, slot_name)
 	slot_label.add_theme_font_size_override("font_size", 8)
@@ -189,8 +189,8 @@ func _create_hero_compare_panel(hero: Hero, item_slot: String) -> HBoxContainer:
 	
 	# 비교할 슬롯 결정
 	var check_slot := item_slot
-	if item_slot in ["ring", "ring1", "ring2"]:
-		check_slot = "ring1"
+	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
+		check_slot = "acc1"
 	
 	# 현재 장착 아이템
 	var equipped_id: String = hero.equipment.get(check_slot, "")

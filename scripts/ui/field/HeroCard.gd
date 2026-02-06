@@ -7,9 +7,9 @@ class_name HeroCard
 
 const SLOT_ICONS := {
 	"main_hand": "⚔", "off_hand": "🛡", "head": "👒",
-	"body": "👕", "shoes": "👟", "necklace": "📿", "ring1": "💍", "ring2": "💍",
+	"body": "👕", "acc1": "💍", "acc2": "💍", "acc3": "💍", "acc4": "💍",
 }
-const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "shoes", "necklace", "ring1", "ring2"]
+const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2", "acc3", "acc4"]
 
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
@@ -391,8 +391,8 @@ func clear_slot_highlights() -> void:
 
 
 static func get_target_slots(item_slot: String) -> Array:
-	if item_slot in ["ring", "ring1", "ring2"]:
-		return ["ring1", "ring2"]
+	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
+		return ["acc1", "acc2", "acc3", "acc4"]
 	return [item_slot]
 #endregion
 
@@ -488,8 +488,8 @@ class _EquipSlotRow extends PanelContainer:
 		var eslot: String = edata.get("slot", "")
 		if eslot.is_empty():
 			return false
-		if eslot in ["ring", "ring1", "ring2"]:
-			return slot_name in ["ring1", "ring2"]
+		if eslot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
+			return slot_name in ["acc1", "acc2", "acc3", "acc4"]
 		return eslot == slot_name
 
 	func _drop_data(_pos: Vector2, data: Variant) -> void:
