@@ -1,186 +1,238 @@
 extends CanvasLayer
 class_name FieldHUD
-## 필드 HUD 메인 컨트롤러
-## - TopBar: 스테이지, 골드, 배속, 메뉴
-## - LogPanel: 전투 로그 (좌측 하단)
-## - BottomPartyCards: 파티 카드 (하단 중앙) - 동적 생성
-## - InventoryPanel: 인벤토리 (우측 하단)
+## 필드 HUD 메인 컨트롤러 (재구축)
+## 모든 패널을 일관된 스타일로 통합 관리
+##
+## 구성:
+##   TopBar       - 스테이지, 골드, 킬, 배속, 메뉴 (상단)
+##   LogPanel     - 전투 로그 (좌측 하단)
+##   PartyCards   - 파티 카드 (하단 중앙)
+##   InventoryPanel - 인벤토리 (우측 하단)
+##   TraitPanel   - 룬/특성 (우측 중앙)
+##   GrudgePopup  - 원념 선택 (팝업)
+##   TownPopup    - 마을 진입 확인 (팝업)
 
 signal menu_pressed
+signal town_enter_confirmed(claim_rewards: bool)
 
-# === 상단 바 ===
+
+#region 공통 스타일 상수
+const STYLE := {
+	"bg_dark":    Color(0.04, 0.04, 0.07, 0.92),
+	"bg_panel":   Color(0.06, 0.06, 0.09, 0.95),
+	"bg_popup":   Color(0.08, 0.05, 0.12, 0.95),
+	"bg_btn":     Color(0.12, 0.12, 0.16, 0.9),
+	"bg_btn_hover": Color(0.25, 0.25, 0.15, 0.95),
+	"border_default": Color(0.3, 0.33, 0.45, 0.7),
+	"border_gold":    Color(0.5, 0.42, 0.25, 0.7),
+	"border_accent":  Color(0.4, 0.6, 0.9, 0.8),
+	"border_popup":   Color(0.8, 0.4, 1.0),
+	"text_normal":    Color(0.85, 0.85, 0.9),
+	"text_dim":       Color(0.55, 0.55, 0.6),
+	"text_gold":      Color(1.0, 0.85, 0.3),
+	"text_green":     Color(0.5, 1.0, 0.5),
+	"text_red":       Color(1.0, 0.5, 0.5),
+	"text_purple":    Color(1.0, 0.5, 0.8),
+	"corner_radius":  6,
+	"font_tiny":      8,
+	"font_small":     9,
+	"font_normal":    11,
+	"font_medium":    12,
+	"font_large":     14,
+	"font_title":     16,
+}
+
+const ITEM_TYPE_ICONS := {
+	"sword": "⚔", "dagger": "🗡", "staff": "🪄", "bow": "🏹", "axe": "🪓",
+	"shield": "🛡", "helmet": "⛑", "heavy_armor": "🥋", "medium_armor": "🥋",
+	"light_armor": "🥋", "robe": "👘", "ring": "💍", "amulet": "📿",
+	"boots": "👢", "potion": "🧪",
+}
+#endregion
+
+
+#region 노드 참조
+# TopBar
 @onready var stage_label: Label = %StageLabel
 @onready var gold_label: Label = %GoldLabel
 @onready var speed_button: Button = %SpeedButton
 @onready var menu_button: Button = %MenuButton
-var kill_label: Label = null  # 킬 카운트 표시 (동적 생성)
+var kill_label: Label = null
 
-# === 로그 패널 (좌측 하단) ===
+# LogPanel
 @onready var log_panel: PanelContainer = %LogPanel
 @onready var log_scroll: ScrollContainer = %LogScroll
 @onready var log_container: VBoxContainer = %LogContainer
 
-# === 하단 파티 카드 (동적 생성) ===
+# BottomPartyCards
 var bottom_party_cards: BottomPartyCards = null
 
-# === 인벤토리 패널 (우측 하단) ===
+# InventoryPanel
 @onready var inventory_panel: PanelContainer = %InventoryPanel
 @onready var inventory_scroll: ScrollContainer = %InventoryScroll
 @onready var inventory_list: VBoxContainer = %InventoryList
 
-# === 특성 패널 (우측) ===
+# TraitPanel
 @onready var trait_panel: PanelContainer = %TraitPanel
 @onready var trait_vbox: VBoxContainer = %TraitVBox
+#endregion
 
 
-# === 원념 선택 팝업 (전체 화면) ===
-var grudge_popup: CanvasLayer = null
-var is_grudge_popup_active: bool = false
-
-# === 마을 진입 확인 팝업 ===
-var town_popup: CanvasLayer = null
-var is_town_popup_active: bool = false
-signal town_enter_confirmed(claim_rewards: bool)  # 마을 진입 확정 시그널
-
-# === 컴포넌트 ===
+#region 내부 상태
 var battle_log: BattleLogUI = null
-
-# === 인벤토리 아이템 목록 ===
 var inventory_slots: Array = []
 var inventory_drop_target: _InventoryDropTarget = null
 
-# === 킬 카운트 영웅 추가 시스템 ===
+# 팝업
+var grudge_popup: CanvasLayer = null
+var is_grudge_popup_active: bool = false
+var town_popup: CanvasLayer = null
+var is_town_popup_active: bool = false
+
+# 킬 카운트 영웅 추가
 const KILLS_PER_HERO := 5
 const AVAILABLE_HEROES := ["roland", "luna", "elena", "shadow", "aria", "gareth"]
-var last_hero_kill_threshold: int = 0  # 마지막으로 영웅을 추가한 킬 수 (5, 10, 15, ...)
+var last_hero_kill_threshold: int = 0
+#endregion
 
 
 func _ready() -> void:
 	add_to_group("field_hud")
-	_setup_components()
-	_setup_kill_label()
-	_setup_grudge_popup()
-	_setup_town_popup()
-	_setup_bottom_party_cards()
+	_init_topbar()
+	_init_log_panel()
+	_init_party_cards()
+	_init_inventory_panel()
+	_init_popups()
 	_connect_signals()
-	_setup_inventory_panel()
 	update_all()
 	_update_trait_display()
 	_update_inventory_display()
 
 
-func _setup_components() -> void:
-	_setup_speed_button()
+#region 초기화
+func _init_topbar() -> void:
+	## TopBar: 배속 버튼 스타일, 킬 라벨 추가
+	if speed_button:
+		speed_button.visible = false
+		var style := _make_flat_style(STYLE.bg_btn, STYLE.border_accent, 3, 2)
+		speed_button.add_theme_stylebox_override("normal", style)
+		var hover := style.duplicate()
+		hover.bg_color = Color(0.18, 0.18, 0.22, 0.95)
+		speed_button.add_theme_stylebox_override("hover", hover)
 
-	# 배틀 로그
+	if gold_label:
+		var parent := gold_label.get_parent()
+		if parent:
+			kill_label = Label.new()
+			kill_label.name = "KillLabel"
+			kill_label.add_theme_font_size_override("font_size", STYLE.font_normal)
+			kill_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
+			var gold_idx := gold_label.get_index()
+			parent.add_child(kill_label)
+			parent.move_child(kill_label, gold_idx + 1)
+			var current_kills := BattleManager.get_global_kill_count() if BattleManager else 0
+			kill_label.text = "💀 %d" % current_kills
+
+
+func _init_log_panel() -> void:
+	## LogPanel: BattleLogUI 컴포넌트 생성
 	battle_log = BattleLogUI.new()
 	battle_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	if log_container:
 		log_container.add_child(battle_log)
 
 
-func _setup_speed_button() -> void:
-	if not speed_button:
-		return
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.border_width_bottom = 2
-	style.border_color = Color(0.4, 0.6, 0.9)
-	speed_button.add_theme_stylebox_override("normal", style)
-
-	var hover := style.duplicate()
-	hover.bg_color = Color(0.25, 0.25, 0.3, 0.95)
-	speed_button.add_theme_stylebox_override("hover", hover)
-
-
-func _setup_kill_label() -> void:
-	## 킬 카운트 라벨 생성 (골드 옆)
-	if not gold_label:
-		return
-
-	var parent := gold_label.get_parent()
-	if not parent:
-		return
-
-	kill_label = Label.new()
-	kill_label.name = "KillLabel"
-	kill_label.text = "💀 0"
-	kill_label.add_theme_font_size_override("font_size", 14)
-	kill_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
-
-	# 골드 라벨 뒤에 삽입
-	var gold_idx := gold_label.get_index()
-	parent.add_child(kill_label)
-	parent.move_child(kill_label, gold_idx + 1)
-
-	# 초기 킬 카운트 표시
-	var current_kills := BattleManager.get_global_kill_count() if BattleManager else 0
-	kill_label.text = "💀 %d" % current_kills
-
-
-func _setup_bottom_party_cards() -> void:
-	## 하단 파티 카드 씬 로드
+func _init_party_cards() -> void:
+	## 하단 파티 카드 씬 인스턴스 생성
 	var scene := preload("res://scenes/ui/BottomPartyCards.tscn")
 	bottom_party_cards = scene.instantiate() as BottomPartyCards
-
-	# 위치 설정 (하단 중앙)
 	var ctrl := get_node_or_null("Control")
 	if ctrl:
 		ctrl.add_child(bottom_party_cards)
 
 
+func _init_inventory_panel() -> void:
+	## 인벤토리 패널 초기 설정 및 드롭 타겟 생성
+	if not inventory_list:
+		return
+	if InventoryManager and not InventoryManager.inventory_changed.is_connected(_update_inventory_display):
+		InventoryManager.inventory_changed.connect(_update_inventory_display)
+	_setup_inventory_drop_target()
+
+
+func _init_popups() -> void:
+	## 팝업 레이어 생성 (원념, 마을)
+	grudge_popup = _create_popup_layer("GrudgePopup")
+	add_child(grudge_popup)
+	town_popup = _create_popup_layer("TownPopup")
+	add_child(town_popup)
+
+
+func _create_popup_layer(popup_name: String) -> CanvasLayer:
+	var layer := CanvasLayer.new()
+	layer.name = popup_name
+	layer.layer = 100
+	layer.visible = false
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	return layer
+#endregion
+
+
+#region 시그널 연결
 func _connect_signals() -> void:
 	if menu_button:
 		menu_button.pressed.connect(func(): menu_pressed.emit())
 	if speed_button:
-		speed_button.pressed.connect(_on_speed_button_pressed)
+		speed_button.pressed.connect(_on_speed_pressed)
 
 	if GameManager:
 		GameManager.gold_changed.connect(func(_g): update_top_bar())
 
 	if BattleManager:
-		if not BattleManager.battle_log_received.is_connected(_on_battle_log_received):
-			BattleManager.battle_log_received.connect(_on_battle_log_received)
+		if not BattleManager.battle_log_received.is_connected(_on_battle_log):
+			BattleManager.battle_log_received.connect(_on_battle_log)
 		if not BattleManager.party_hp_changed.is_connected(update_party_display):
 			BattleManager.party_hp_changed.connect(update_party_display)
-		if not BattleManager.loot_animation_requested.is_connected(_on_loot_animation_requested):
-			BattleManager.loot_animation_requested.connect(_on_loot_animation_requested)
+		if not BattleManager.loot_animation_requested.is_connected(_on_loot_anim):
+			BattleManager.loot_animation_requested.connect(_on_loot_anim)
 		if BattleManager.has_signal("global_kill_count_changed"):
-			if not BattleManager.global_kill_count_changed.is_connected(_on_global_kill_count_changed):
-				BattleManager.global_kill_count_changed.connect(_on_global_kill_count_changed)
+			if not BattleManager.global_kill_count_changed.is_connected(_on_kill_count_changed):
+				BattleManager.global_kill_count_changed.connect(_on_kill_count_changed)
 
-	# 하단 파티 카드 장비 드롭 시그널 연결
 	if bottom_party_cards:
-		if not bottom_party_cards.equipment_dropped.is_connected(_on_equipment_dropped):
-			bottom_party_cards.equipment_dropped.connect(_on_equipment_dropped)
+		if not bottom_party_cards.equipment_dropped.is_connected(_on_equip_dropped):
+			bottom_party_cards.equipment_dropped.connect(_on_equip_dropped)
+#endregion
 
+
+#region 스타일 유틸리티
+static func _make_flat_style(
+	bg: Color, border: Color = Color.TRANSPARENT,
+	radius: int = 6, border_w: int = 1
+) -> StyleBoxFlat:
+	## 일관된 StyleBoxFlat 생성 유틸리티
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.corner_radius_top_left = radius
+	s.corner_radius_top_right = radius
+	s.corner_radius_bottom_left = radius
+	s.corner_radius_bottom_right = radius
+	if border != Color.TRANSPARENT:
+		s.border_width_left = border_w
+		s.border_width_top = border_w
+		s.border_width_right = border_w
+		s.border_width_bottom = border_w
+		s.border_color = border
+	return s
+#endregion
 
 
 #region 인벤토리 패널
-func _setup_inventory_panel() -> void:
-	## 인벤토리 패널 초기 설정
-	if not inventory_list:
-		return
-
-	# 인벤토리 변경 시그널 연결
-	if InventoryManager and not InventoryManager.inventory_changed.is_connected(_update_inventory_display):
-		InventoryManager.inventory_changed.connect(_update_inventory_display)
-
-	_setup_inventory_drop_target()
-
-
 func _setup_inventory_drop_target() -> void:
 	if not inventory_panel:
 		return
-
 	if inventory_drop_target and is_instance_valid(inventory_drop_target):
 		return
-
 	inventory_drop_target = _InventoryDropTarget.new()
 	inventory_drop_target.hud_ref = self
 	inventory_drop_target.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -189,19 +241,15 @@ func _setup_inventory_drop_target() -> void:
 
 
 func _update_inventory_display() -> void:
-	## 인벤토리 UI 업데이트 (목록 형태)
+	## 인벤토리 UI 전체 갱신
 	if not inventory_list:
 		return
 
-	# 기존 아이템 제거
 	for child in inventory_list.get_children():
 		child.queue_free()
 	inventory_slots.clear()
 
-	# 인벤토리 아이템 가져오기
 	var items: Array = InventoryManager.get_all_items() if InventoryManager else []
-
-	# 아이템 행 생성 (최대 10개)
 	var count: int = 0
 	for item in items:
 		if count >= 10:
@@ -213,7 +261,7 @@ func _update_inventory_display() -> void:
 
 
 func _create_inventory_row(item: Dictionary) -> Control:
-	## 아이템 행 UI 생성: 드래그로 장착, 클릭 시 자동 장착
+	## 인벤토리 아이템 행 생성 (드래그 + 클릭 장착)
 	var row := _DraggableItemRow.new()
 	row.item_id = item.id
 	row.item_data = item.data
@@ -222,9 +270,8 @@ func _create_inventory_row(item: Dictionary) -> Control:
 	var rarity: String = item.data.get("rarity", "common")
 	var rarity_color: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.7, 0.7, 0.7))
 
-	# 라벨 텍스트
 	var item_type: String = item.data.get("type", "?")
-	var icon: String = _get_item_type_icon(item_type)
+	var icon: String = ITEM_TYPE_ICONS.get(item_type, "?")
 	var item_name: String = item.data.get("name", item.id)
 	var display_text: String
 	if item.quantity > 1:
@@ -234,7 +281,6 @@ func _create_inventory_row(item: Dictionary) -> Control:
 
 	row.setup(display_text, rarity_color, rarity)
 
-	# 툴팁
 	var stats: Dictionary = item.data.get("stats", {})
 	var tooltip: String = item_name + "\n"
 	tooltip += "희귀도: " + rarity + "\n"
@@ -246,7 +292,7 @@ func _create_inventory_row(item: Dictionary) -> Control:
 	return row
 
 
-## 드래그 가능한 인벤토리 아이템 행 (Button 기반)
+## 드래그 가능한 인벤토리 아이템 행
 class _DraggableItemRow extends Button:
 	var item_id: String = ""
 	var item_data: Dictionary = {}
@@ -262,56 +308,35 @@ class _DraggableItemRow extends Button:
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		alignment = HORIZONTAL_ALIGNMENT_LEFT
 
-		add_theme_font_size_override("font_size", 9)
+		add_theme_font_size_override("font_size", FieldHUD.STYLE.font_small)
 		add_theme_color_override("font_color", color)
 
-		# 기본 스타일 (normal)
-		var normal_style := StyleBoxFlat.new()
-		normal_style.bg_color = Color(0.1, 0.1, 0.12, 0.8)
-		normal_style.border_width_left = 1
-		normal_style.border_width_top = 1
-		normal_style.border_width_right = 1
-		normal_style.border_width_bottom = 1
-		normal_style.border_color = Color(0.35, 0.35, 0.4, 0.8)
-		normal_style.corner_radius_top_left = 3
-		normal_style.corner_radius_top_right = 3
-		normal_style.corner_radius_bottom_left = 3
-		normal_style.corner_radius_bottom_right = 3
+		var normal_style := FieldHUD._make_flat_style(
+			Color(0.08, 0.08, 0.1, 0.8),
+			Color(0.3, 0.3, 0.35, 0.6), 3, 1
+		)
 		normal_style.content_margin_left = 4
 		normal_style.content_margin_right = 4
 		add_theme_stylebox_override("normal", normal_style)
 
-		# 호버 스타일
-		var hover_style := StyleBoxFlat.new()
-		hover_style.bg_color = Color(0.3, 0.3, 0.15, 1.0)
-		hover_style.border_width_left = 2
-		hover_style.border_width_top = 2
-		hover_style.border_width_right = 2
-		hover_style.border_width_bottom = 2
-		hover_style.border_color = Color(1.0, 0.95, 0.3, 1.0)
-		hover_style.corner_radius_top_left = 3
-		hover_style.corner_radius_top_right = 3
-		hover_style.corner_radius_bottom_left = 3
-		hover_style.corner_radius_bottom_right = 3
+		var hover_style := FieldHUD._make_flat_style(
+			FieldHUD.STYLE.bg_btn_hover,
+			Color(1.0, 0.95, 0.3, 1.0), 3, 2
+		)
 		hover_style.content_margin_left = 4
 		hover_style.content_margin_right = 4
 		add_theme_stylebox_override("hover", hover_style)
 		add_theme_stylebox_override("pressed", hover_style)
 
-		# 클릭 연결
 		pressed.connect(_on_pressed)
 
 	func _on_pressed() -> void:
-		# 클릭 시 자동 장착
 		if hud_ref:
 			hud_ref._on_inventory_item_clicked(item_id)
 
 	func _get_drag_data(_pos: Vector2) -> Variant:
-		# 장비 아이템만 드래그 가능
 		if item_data.get("slot", "").is_empty():
 			return null
-
-		# 드래그 프리뷰 생성
 		var preview := Label.new()
 		preview.text = self.text
 		preview.add_theme_font_size_override("font_size", 10)
@@ -320,36 +345,28 @@ class _DraggableItemRow extends Button:
 		preview.add_theme_constant_override("outline_size", 2)
 		preview.modulate.a = 0.9
 		set_drag_preview(preview)
-
 		return {"type": "equipment", "item_id": item_id, "item_data": item_data}
 
 
-## 인벤토리 패널 드롭 타겟 (장비 해제)
+## 인벤토리 드롭 타겟 (장비 해제용)
 class _InventoryDropTarget extends Control:
 	var hud_ref: FieldHUD = null
 
 	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 		if not data is Dictionary:
 			return false
-		if data.get("type", "") != "equipment":
-			return false
-		if data.get("source", "") != "equipment":
-			return false
-		return true
+		return data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
 
 	func _drop_data(_pos: Vector2, data: Variant) -> void:
 		if not data is Dictionary:
 			return
-
 		var hero_index: int = data.get("hero_index", -1)
 		var source_slot: String = data.get("source_slot", "")
 		if hero_index < 0 or source_slot.is_empty():
 			return
-
 		var party: Array = PartyManager.get_party() if PartyManager else []
 		if hero_index >= party.size() or party[hero_index] == null:
 			return
-
 		var hero: Hero = party[hero_index]
 		if InventoryManager and InventoryManager.unequip_item(hero, source_slot):
 			if hud_ref:
@@ -358,155 +375,102 @@ class _InventoryDropTarget extends Control:
 
 
 func _on_inventory_item_clicked(item_id: String) -> void:
-	## 인벤토리 아이템 클릭 - 자동 장착 시도
+	## 인벤토리 아이템 클릭 → 자동 장착
 	if not InventoryManager:
 		return
-
 	var item_data: Dictionary = DataManager.get_equipment(item_id)
 	if item_data.is_empty():
-		# 장비가 아님 (소비 아이템 등)
 		return
-
-	# 자동 장착 시도
 	if InventoryManager.try_auto_equip(item_id):
-		# 장착 성공 - 로그 출력
-		var item_name: String = item_data.get("name", item_id)
-		add_log("%s 장착!" % item_name, Color(0.5, 1.0, 0.5))
+		add_log("%s 장착!" % item_data.get("name", item_id), STYLE.text_green)
 	else:
-		# 장착 실패 - 모든 슬롯이 더 좋은 장비로 채워져 있음
-		add_log("장착할 수 없습니다.", Color(1.0, 0.5, 0.5))
-
-
-func _get_item_type_icon(item_type: String) -> String:
-	## 아이템 타입별 아이콘 반환
-	match item_type:
-		"sword": return "⚔"
-		"dagger": return "🗡"
-		"staff": return "🪄"
-		"bow": return "🏹"
-		"axe": return "🪓"
-		"shield": return "🛡"
-		"helmet": return "⛑"
-		"heavy_armor", "medium_armor", "light_armor": return "🥋"
-		"robe": return "👘"
-		"ring": return "💍"
-		"amulet": return "📿"
-		"boots": return "👢"
-		"potion": return "🧪"
-		_: return "?"
+		add_log("장착할 수 없습니다.", STYLE.text_red)
 #endregion
 
 
 #region 이벤트 핸들러
-func _on_speed_button_pressed() -> void:
-	## 턴제 전투에서는 배속 버튼 미사용
+func _on_speed_pressed() -> void:
 	pass
 
 
-func _update_speed_button() -> void:
-	## 턴제 전투 - 배속 버튼 숨김
-	if speed_button:
-		speed_button.visible = false
-
-
-func _on_battle_log_received(message: String, color: Color) -> void:
+func _on_battle_log(message: String, color: Color) -> void:
 	add_log(message, color)
 
 
-func _on_global_kill_count_changed(count: int, _danger_level: int) -> void:
-	## 킬 카운트 변경 시 호출
-	# UI 업데이트
+func _on_kill_count_changed(count: int, _danger_level: int) -> void:
 	if kill_label:
 		kill_label.text = "💀 %d" % count
-
-	# 5킬마다 영웅 추가 체크
-	var current_threshold := (count / KILLS_PER_HERO) * KILLS_PER_HERO
-	if current_threshold > last_hero_kill_threshold and current_threshold > 0:
-		last_hero_kill_threshold = current_threshold
+	# 5킬마다 영웅 추가
+	var threshold := (count / KILLS_PER_HERO) * KILLS_PER_HERO
+	if threshold > last_hero_kill_threshold and threshold > 0:
+		last_hero_kill_threshold = threshold
 		_add_random_hero()
 
 
 func _add_random_hero() -> void:
-	## 랜덤 영웅 추가
 	if not PartyManager:
 		return
-
-	# 파티가 꽉 찼으면 추가하지 않음
 	var party: Array = PartyManager.get_party()
 	if party.size() >= 4:
-		add_log("파티가 가득 찼습니다!", Color(1.0, 0.8, 0.3))
+		add_log("파티가 가득 찼습니다!", STYLE.text_gold)
 		return
 
-	# 이미 파티에 있는 영웅 제외
-	var party_hero_ids: Array = []
+	var party_ids: Array = []
 	for hero in party:
 		if hero:
-			party_hero_ids.append(hero.id)
+			party_ids.append(hero.id)
 
 	var available: Array = []
 	for hero_id in AVAILABLE_HEROES:
-		if hero_id not in party_hero_ids:
+		if hero_id not in party_ids:
 			available.append(hero_id)
 
 	if available.is_empty():
-		add_log("추가할 수 있는 영웅이 없습니다.", Color(0.8, 0.8, 0.8))
+		add_log("추가할 수 있는 영웅이 없습니다.", STYLE.text_dim)
 		return
 
-	# 랜덤 선택
-	var random_hero_id: String = available[randi() % available.size()]
-	if PartyManager.add_hero_by_id(random_hero_id):
-		var hero_data: Dictionary = DataManager.get_hero(random_hero_id) if DataManager else {}
-		var hero_name: String = hero_data.get("name", random_hero_id)
+	var random_id: String = available[randi() % available.size()]
+	if PartyManager.add_hero_by_id(random_id):
+		var hero_data: Dictionary = DataManager.get_hero(random_id) if DataManager else {}
+		var hero_name: String = hero_data.get("name", random_id)
 		add_log("🎉 %s 합류!" % hero_name, Color(0.5, 1.0, 0.8))
-
-		# 파티 카드 갱신
 		if bottom_party_cards:
 			bottom_party_cards.update_display()
 
 
-func _on_loot_animation_requested(item_id: String, start_pos: Vector2) -> void:
-	# 미니맵 패널 위치로 애니메이션 (또는 하단 중앙)
-	var target_pos: Vector2 = _get_loot_target_position()
-	
+func _on_loot_anim(item_id: String, start_pos: Vector2) -> void:
+	var target_pos: Vector2
+	if inventory_panel and is_instance_valid(inventory_panel):
+		target_pos = inventory_panel.global_position + inventory_panel.size / 2
+	else:
+		target_pos = Vector2(420, 320)
+
 	var loot_anim := LootAnimationUI.new()
 	var ctrl := get_node_or_null("Control")
 	if ctrl:
 		ctrl.add_child(loot_anim)
 	else:
 		add_child(loot_anim)
-	
-	loot_anim.animation_completed.connect(_on_loot_animation_completed)
+	loot_anim.animation_completed.connect(_on_loot_anim_done)
 	loot_anim.setup(item_id, start_pos, target_pos)
 
 
-func _get_loot_target_position() -> Vector2:
-	# 인벤토리 패널 중앙으로 루팅 애니메이션
-	if inventory_panel and is_instance_valid(inventory_panel):
-		return inventory_panel.global_position + inventory_panel.size / 2
-	return Vector2(420, 320)
-
-
-func _on_loot_animation_completed(_item_id: String) -> void:
-	# 인벤토리 디스플레이 갱신
+func _on_loot_anim_done(_item_id: String) -> void:
 	_update_inventory_display()
 
 
-func _on_equipment_dropped(hero_index: int, item_id: String) -> void:
-	## 장비가 영웅에게 드롭되어 장착되었을 때 호출
+func _on_equip_dropped(hero_index: int, item_id: String) -> void:
 	_update_inventory_display()
-
-	# 로그 출력
 	var item_data: Dictionary = DataManager.get_equipment(item_id)
 	var item_name: String = item_data.get("name", item_id)
 	var party: Array = PartyManager.get_party() if PartyManager else []
 	var hero_name: String = ""
 	if hero_index >= 0 and hero_index < party.size() and party[hero_index] != null:
 		hero_name = party[hero_index].hero_name
-
 	if not hero_name.is_empty():
-		add_log("%s에게 %s 장착!" % [hero_name, item_name], Color(0.5, 1.0, 0.5))
+		add_log("%s에게 %s 장착!" % [hero_name, item_name], STYLE.text_green)
 	else:
-		add_log("%s 장착!" % item_name, Color(0.5, 1.0, 0.5))
+		add_log("%s 장착!" % item_name, STYLE.text_green)
 #endregion
 
 
@@ -514,7 +478,6 @@ func _on_equipment_dropped(hero_index: int, item_id: String) -> void:
 func update_all() -> void:
 	update_top_bar()
 	update_party_display()
-	_update_speed_button()
 
 
 func update_top_bar() -> void:
@@ -523,7 +486,6 @@ func update_top_bar() -> void:
 		stage_label.text = FieldManager.get_display_name() + (": " + fn if fn else "")
 	if gold_label and GameManager:
 		gold_label.text = "%d G" % GameManager.gold
-	_update_speed_button()
 
 
 func update_party_display() -> void:
@@ -571,17 +533,15 @@ func clear_logs() -> void:
 #endregion
 
 
-#region 특성 시스템
+#region 특성 표시
 func _update_trait_display() -> void:
-	## 파티원별 룬/특성을 패널에 표시
+	## 파티원별 룬/특성 패널 갱신
 	if trait_vbox == null:
 		return
 
-	# 기존 자식 제거
 	for child in trait_vbox.get_children():
 		child.queue_free()
 
-	# 룬을 가진 파티원 수집
 	var heroes_with_runes: Array = []
 	for hero in PartyManager.get_alive_heroes():
 		if not hero.equipped_rune_id.is_empty():
@@ -594,114 +554,84 @@ func _update_trait_display() -> void:
 
 	if trait_panel:
 		trait_panel.visible = true
-		# 반투명 배경 스타일
-		var panel_style := StyleBoxFlat.new()
-		panel_style.bg_color = Color(0, 0, 0, 0.5)
-		panel_style.corner_radius_top_left = 4
-		panel_style.corner_radius_bottom_left = 4
-		panel_style.content_margin_left = 8
-		panel_style.content_margin_right = 8
-		panel_style.content_margin_top = 6
-		panel_style.content_margin_bottom = 6
-		trait_panel.add_theme_stylebox_override("panel", panel_style)
 
 	# 제목
 	var title_label := Label.new()
 	title_label.text = "[ 장착 룬 ]"
-	title_label.add_theme_font_size_override("font_size", 10)
-	title_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	title_label.add_theme_font_size_override("font_size", STYLE.font_small)
+	title_label.add_theme_color_override("font_color", STYLE.text_dim)
 	trait_vbox.add_child(title_label)
 
-	# 구분선
-	var separator := HSeparator.new()
-	separator.add_theme_constant_override("separation", 4)
-	trait_vbox.add_child(separator)
+	var sep := HSeparator.new()
+	sep.add_theme_constant_override("separation", 4)
+	trait_vbox.add_child(sep)
 
-	# 파티원별 특성 표시
 	for hero in heroes_with_runes:
 		var rune_data: Dictionary = hero.get_equipped_rune()
 		var trait_data: Dictionary = DataManager.get_rune_trait(hero.equipped_rune_id)
 		if trait_data.is_empty():
 			continue
 
-		# 파티원별 컨테이너
 		var hero_container := VBoxContainer.new()
 		hero_container.add_theme_constant_override("separation", 0)
 		trait_vbox.add_child(hero_container)
 
-		# 상단: 영웅 이름 + 룬 아이콘
+		# 영웅 이름 + 룬 아이콘
 		var hero_hbox := HBoxContainer.new()
 		hero_hbox.add_theme_constant_override("separation", 4)
 		hero_container.add_child(hero_hbox)
 
-		# 영웅 이름
 		var hero_label := Label.new()
 		hero_label.text = hero.hero_name
-		hero_label.add_theme_font_size_override("font_size", 9)
+		hero_label.add_theme_font_size_override("font_size", STYLE.font_small)
 		hero_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 		hero_hbox.add_child(hero_label)
 
-		# 룬 아이콘
 		var rune_icon := Label.new()
 		rune_icon.text = rune_data.get("icon", "")
 		rune_icon.add_theme_font_size_override("font_size", 10)
 		hero_hbox.add_child(rune_icon)
 
-		# 중단: 특성 아이콘 + 이름
+		# 특성 아이콘 + 이름
 		var trait_hbox := HBoxContainer.new()
 		trait_hbox.add_theme_constant_override("separation", 4)
 		hero_container.add_child(trait_hbox)
 
-		# 특성 아이콘
 		var trait_icon := Label.new()
 		trait_icon.text = "  " + trait_data.get("icon", "")
 		trait_icon.add_theme_font_size_override("font_size", 10)
 		trait_hbox.add_child(trait_icon)
 
-		# 특성 이름
 		var trait_name := Label.new()
 		trait_name.text = trait_data.get("name", "")
-		trait_name.add_theme_font_size_override("font_size", 9)
+		trait_name.add_theme_font_size_override("font_size", STYLE.font_small)
 		trait_name.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
 		trait_name.add_theme_color_override("font_outline_color", Color.BLACK)
 		trait_name.add_theme_constant_override("outline_size", 2)
 		trait_hbox.add_child(trait_name)
 
-		# 하단: 설명
+		# 설명
 		var desc_label := Label.new()
 		desc_label.text = "    " + trait_data.get("description", "")
-		desc_label.add_theme_font_size_override("font_size", 8)
-		desc_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		desc_label.add_theme_font_size_override("font_size", STYLE.font_tiny)
+		desc_label.add_theme_color_override("font_color", STYLE.text_dim)
 		hero_container.add_child(desc_label)
 
 
 func refresh_traits() -> void:
-	## 외부에서 특성 갱신 요청 시 호출
 	_update_trait_display()
 #endregion
 
 
 #region 원념 선택 팝업
-func _setup_grudge_popup() -> void:
-	## 원념 레벨업 시 표시되는 전체 화면 선택 팝업
-	grudge_popup = CanvasLayer.new()
-	grudge_popup.name = "GrudgePopup"
-	grudge_popup.layer = 100  # 최상위 레이어
-	grudge_popup.visible = false
-	grudge_popup.process_mode = Node.PROCESS_MODE_ALWAYS  # 일시정지 중에도 동작
-	add_child(grudge_popup)
-
-
 func show_grudge_choice_popup(danger_level: int) -> void:
-	## 원념 레벨업 선택 팝업 표시
 	if is_grudge_popup_active:
 		return
 
 	is_grudge_popup_active = true
-	get_tree().paused = true  # 게임 일시정지
+	get_tree().paused = true
 	grudge_popup.visible = true
 
-	# 기존 내용 제거
 	for child in grudge_popup.get_children():
 		child.queue_free()
 
@@ -711,7 +641,7 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 	full_screen.process_mode = Node.PROCESS_MODE_ALWAYS
 	grudge_popup.add_child(full_screen)
 
-	# 어둡게 처리
+	# 딤 배경
 	var dimmer := ColorRect.new()
 	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dimmer.color = Color(0, 0, 0, 0.7)
@@ -726,17 +656,7 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 	center_panel.offset_bottom = 120
 	center_panel.process_mode = Node.PROCESS_MODE_ALWAYS
 
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.1, 0.05, 0.15, 0.95)
-	panel_style.border_width_left = 3
-	panel_style.border_width_top = 3
-	panel_style.border_width_right = 3
-	panel_style.border_width_bottom = 3
-	panel_style.border_color = Color(0.8, 0.4, 1.0)
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
+	var panel_style := _make_flat_style(STYLE.bg_popup, STYLE.border_popup, 8, 3)
 	panel_style.content_margin_left = 20
 	panel_style.content_margin_right = 20
 	panel_style.content_margin_top = 15
@@ -752,33 +672,30 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 	var title := Label.new()
 	title.text = "⚠ 원념 %d단계!" % danger_level
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", Color(1.0, 0.5, 0.8))
+	title.add_theme_font_size_override("font_size", STYLE.font_title)
+	title.add_theme_color_override("font_color", STYLE.text_purple)
 	vbox.add_child(title)
 
 	# 설명
 	var desc := Label.new()
 	desc.text = "적이 더 강해집니다.\n계속 원념을 쌓으시겠습니까?"
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc.add_theme_font_size_override("font_size", 11)
-	desc.add_theme_color_override("font_color", Color.WHITE)
+	desc.add_theme_font_size_override("font_size", STYLE.font_normal)
+	desc.add_theme_color_override("font_color", STYLE.text_normal)
 	vbox.add_child(desc)
 
-	# 구분선
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
+	vbox.add_child(HSeparator.new())
 
-	# 현재 보상 목록
+	# 보상 목록
 	var reward_title := Label.new()
 	reward_title.text = "[ 현재 보상 ]"
 	reward_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	reward_title.add_theme_font_size_override("font_size", 10)
-	reward_title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	reward_title.add_theme_font_size_override("font_size", STYLE.font_small)
+	reward_title.add_theme_color_override("font_color", STYLE.text_dim)
 	vbox.add_child(reward_title)
 
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
 
-	# EXP/Gold
 	var reward_info := HBoxContainer.new()
 	reward_info.alignment = BoxContainer.ALIGNMENT_CENTER
 	reward_info.add_theme_constant_override("separation", 20)
@@ -786,86 +703,51 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 
 	var gold_lbl := Label.new()
 	gold_lbl.text = "Gold: %d" % rewards.gold
-	gold_lbl.add_theme_font_size_override("font_size", 11)
-	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	gold_lbl.add_theme_font_size_override("font_size", STYLE.font_normal)
+	gold_lbl.add_theme_color_override("font_color", STYLE.text_gold)
 	reward_info.add_child(gold_lbl)
 
-	# 아이템 목록 (타입 + 희귀도 색상)
 	if rewards.items.size() > 0:
 		var items_hbox := HBoxContainer.new()
 		items_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		items_hbox.add_theme_constant_override("separation", 8)
 		vbox.add_child(items_hbox)
-
 		for item in rewards.items:
 			var item_lbl := Label.new()
-			var item_data: Dictionary = DataManager.get_equipment(item.id)
-			if item_data.is_empty():
-				item_data = DataManager.get_item(item.id)
-			var item_name: String = item_data.get("name", item.id)
-			item_lbl.text = item_name
+			var idata: Dictionary = DataManager.get_equipment(item.id)
+			if idata.is_empty():
+				idata = DataManager.get_item(item.id)
+			item_lbl.text = idata.get("name", item.id)
 			item_lbl.add_theme_font_size_override("font_size", 10)
-			var rarity_color: Color = InventoryManager.get_rarity_color(item.id)
-			item_lbl.add_theme_color_override("font_color", rarity_color)
+			item_lbl.add_theme_color_override("font_color", InventoryManager.get_rarity_color(item.id))
 			items_hbox.add_child(item_lbl)
 
-	# 구분선
-	var sep2 := HSeparator.new()
-	vbox.add_child(sep2)
+	vbox.add_child(HSeparator.new())
 
-	# 선택 버튼
+	# 버튼
 	var btn_hbox := HBoxContainer.new()
 	btn_hbox.add_theme_constant_override("separation", 30)
 	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(btn_hbox)
 
-	var go_btn := Button.new()
-	go_btn.text = "▶ 고 (계속) ◀"
-	go_btn.custom_minimum_size = Vector2(100, 35)
-	go_btn.add_theme_font_size_override("font_size", 12)
-	go_btn.focus_mode = Control.FOCUS_NONE
-	var go_style := StyleBoxFlat.new()
-	go_style.bg_color = Color(0.3, 0.6, 0.3)
-	go_style.border_width_left = 2
-	go_style.border_width_top = 2
-	go_style.border_width_right = 2
-	go_style.border_width_bottom = 2
-	go_style.border_color = Color.WHITE
-	go_style.corner_radius_top_left = 4
-	go_style.corner_radius_top_right = 4
-	go_style.corner_radius_bottom_left = 4
-	go_style.corner_radius_bottom_right = 4
-	go_btn.add_theme_stylebox_override("normal", go_style)
-	go_btn.add_theme_stylebox_override("hover", go_style)
+	var go_style := _make_flat_style(Color(0.3, 0.6, 0.3), Color.WHITE, 4, 2)
+	var go_btn := _make_popup_button("▶ 고 (계속) ◀", Vector2(100, 35), go_style)
 	btn_hbox.add_child(go_btn)
 
-	var stop_btn := Button.new()
-	stop_btn.text = "스톱 (보상)"
-	stop_btn.custom_minimum_size = Vector2(100, 35)
-	stop_btn.add_theme_font_size_override("font_size", 12)
-	stop_btn.focus_mode = Control.FOCUS_NONE
-	var stop_style := StyleBoxFlat.new()
-	stop_style.bg_color = Color(0.3, 0.2, 0.2)
-	stop_style.corner_radius_top_left = 4
-	stop_style.corner_radius_top_right = 4
-	stop_style.corner_radius_bottom_left = 4
-	stop_style.corner_radius_bottom_right = 4
-	stop_btn.add_theme_stylebox_override("normal", stop_style)
-	stop_btn.add_theme_stylebox_override("hover", stop_style)
-	stop_btn.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	var stop_style := _make_flat_style(Color(0.3, 0.2, 0.2), Color.TRANSPARENT, 4)
+	var stop_btn := _make_popup_button("스톱 (보상)", Vector2(100, 35), stop_style)
+	stop_btn.add_theme_color_override("font_color", STYLE.text_dim)
 	btn_hbox.add_child(stop_btn)
 
 	# 힌트
 	var hint := Label.new()
 	hint.text = "[← →] 선택  [Enter] 결정"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 9)
-	hint.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	hint.add_theme_font_size_override("font_size", STYLE.font_small)
+	hint.add_theme_color_override("font_color", STYLE.text_dim)
 	vbox.add_child(hint)
 
-	# 선택 상태 추적
-	var selection: int = 0  # 0 = 고, 1 = 스톱
-	var buttons: Array = [go_btn, stop_btn]
+	# 스타일 복사본 (선택 상태용)
 	var go_style_selected := go_style.duplicate()
 	var stop_style_selected := stop_style.duplicate()
 	stop_style_selected.bg_color = Color(0.6, 0.3, 0.3)
@@ -875,7 +757,7 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 	stop_style_selected.border_width_bottom = 2
 	stop_style_selected.border_color = Color.WHITE
 
-	# 입력 처리 노드
+	# 입력 처리
 	var input_handler := Node.new()
 	input_handler.name = "InputHandler"
 	input_handler.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -890,52 +772,40 @@ func show_grudge_choice_popup(danger_level: int) -> void:
 	full_screen.add_child(input_handler)
 
 
+func _make_popup_button(text: String, min_size: Vector2, style: StyleBoxFlat) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = min_size
+	btn.add_theme_font_size_override("font_size", STYLE.font_medium)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", style)
+	return btn
+
+
 func _on_grudge_go_selected() -> void:
-	## "고" 선택 - 계속 진행
 	is_grudge_popup_active = false
 	grudge_popup.visible = false
 	get_tree().paused = false
-
-	# 기존 내용 제거
 	for child in grudge_popup.get_children():
 		child.queue_free()
-
 	BattleManager.battle_log_received.emit("원념을 계속 쌓는다!", Color.MAGENTA)
 
 
 func _on_grudge_stop_selected() -> void:
-	## "스톱" 선택 - 보상 수령
 	is_grudge_popup_active = false
 	grudge_popup.visible = false
 	get_tree().paused = false
-
-	# 기존 내용 제거
 	for child in grudge_popup.get_children():
 		child.queue_free()
-
-	# 보상 수령
 	BattleManager.claim_accumulated_rewards()
-
-	# 모든 전투창 닫기
 	BattleManager.close_all_battles()
-
 	BattleManager.battle_log_received.emit("보상을 획득했다!", Color.CYAN)
 #endregion
 
 
-#region 마을 진입 확인 팝업
-func _setup_town_popup() -> void:
-	## 마을 진입 확인 팝업 초기화
-	town_popup = CanvasLayer.new()
-	town_popup.name = "TownPopup"
-	town_popup.layer = 100
-	town_popup.visible = false
-	town_popup.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(town_popup)
-
-
+#region 마을 진입 팝업
 func show_town_enter_popup() -> void:
-	## 마을 진입 시 누적 보상 확인 팝업 표시
 	if is_town_popup_active:
 		return
 
@@ -943,23 +813,19 @@ func show_town_enter_popup() -> void:
 	get_tree().paused = true
 	town_popup.visible = true
 
-	# 기존 내용 제거
 	for child in town_popup.get_children():
 		child.queue_free()
 
-	# 전체 화면 컨테이너
 	var full_screen := Control.new()
 	full_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
 	full_screen.process_mode = Node.PROCESS_MODE_ALWAYS
 	town_popup.add_child(full_screen)
 
-	# 어둡게 처리
 	var dimmer := ColorRect.new()
 	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dimmer.color = Color(0, 0, 0, 0.7)
 	full_screen.add_child(dimmer)
 
-	# 중앙 패널
 	var center_panel := PanelContainer.new()
 	center_panel.set_anchors_preset(Control.PRESET_CENTER)
 	center_panel.offset_left = -180
@@ -968,17 +834,7 @@ func show_town_enter_popup() -> void:
 	center_panel.offset_bottom = 140
 	center_panel.process_mode = Node.PROCESS_MODE_ALWAYS
 
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.08, 0.12, 0.18, 0.95)
-	panel_style.border_width_left = 3
-	panel_style.border_width_top = 3
-	panel_style.border_width_right = 3
-	panel_style.border_width_bottom = 3
-	panel_style.border_color = Color(0.4, 0.7, 1.0)
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
+	var panel_style := _make_flat_style(STYLE.bg_panel, Color(0.4, 0.7, 1.0), 8, 3)
 	panel_style.content_margin_left = 20
 	panel_style.content_margin_right = 20
 	panel_style.content_margin_top = 15
@@ -990,37 +846,31 @@ func show_town_enter_popup() -> void:
 	vbox.add_theme_constant_override("separation", 10)
 	center_panel.add_child(vbox)
 
-	# 제목
 	var title := Label.new()
 	title.text = "🏠 마을로 돌아가시겠습니까?"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 14)
+	title.add_theme_font_size_override("font_size", STYLE.font_large)
 	title.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
 	vbox.add_child(title)
 
-	# 설명
 	var desc := Label.new()
 	desc.text = "받지 않은 보상이 있습니다.\n보상을 받고 마을로 들어가시겠습니까?"
 	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc.add_theme_font_size_override("font_size", 11)
-	desc.add_theme_color_override("font_color", Color.WHITE)
+	desc.add_theme_font_size_override("font_size", STYLE.font_normal)
+	desc.add_theme_color_override("font_color", STYLE.text_normal)
 	vbox.add_child(desc)
 
-	# 구분선
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
+	vbox.add_child(HSeparator.new())
 
-	# 현재 보상 목록
 	var reward_title := Label.new()
 	reward_title.text = "[ 누적 보상 ]"
 	reward_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	reward_title.add_theme_font_size_override("font_size", 10)
-	reward_title.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	reward_title.add_theme_font_size_override("font_size", STYLE.font_small)
+	reward_title.add_theme_color_override("font_color", STYLE.text_dim)
 	vbox.add_child(reward_title)
 
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
 
-	# Gold
 	var reward_info := HBoxContainer.new()
 	reward_info.alignment = BoxContainer.ALIGNMENT_CENTER
 	reward_info.add_theme_constant_override("separation", 20)
@@ -1028,141 +878,86 @@ func show_town_enter_popup() -> void:
 
 	var gold_lbl := Label.new()
 	gold_lbl.text = "Gold: %d" % rewards.gold
-	gold_lbl.add_theme_font_size_override("font_size", 12)
-	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	gold_lbl.add_theme_font_size_override("font_size", STYLE.font_medium)
+	gold_lbl.add_theme_color_override("font_color", STYLE.text_gold)
 	reward_info.add_child(gold_lbl)
 
-	# 아이템 목록
 	if rewards.items.size() > 0:
 		var items_hbox := HBoxContainer.new()
 		items_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		items_hbox.add_theme_constant_override("separation", 8)
 		vbox.add_child(items_hbox)
-
 		for item in rewards.items:
 			var item_lbl := Label.new()
-			var item_data: Dictionary = DataManager.get_equipment(item.id)
-			if item_data.is_empty():
-				item_data = DataManager.get_item(item.id)
-			var item_name: String = item_data.get("name", item.id)
-			item_lbl.text = item_name
+			var idata: Dictionary = DataManager.get_equipment(item.id)
+			if idata.is_empty():
+				idata = DataManager.get_item(item.id)
+			item_lbl.text = idata.get("name", item.id)
 			item_lbl.add_theme_font_size_override("font_size", 10)
-			var rarity_color: Color = InventoryManager.get_rarity_color(item.id)
-			item_lbl.add_theme_color_override("font_color", rarity_color)
+			item_lbl.add_theme_color_override("font_color", InventoryManager.get_rarity_color(item.id))
 			items_hbox.add_child(item_lbl)
 
-	# 구분선
-	var sep2 := HSeparator.new()
-	vbox.add_child(sep2)
+	vbox.add_child(HSeparator.new())
 
-	# 선택 버튼
+	# 버튼들
 	var btn_vbox := VBoxContainer.new()
 	btn_vbox.add_theme_constant_override("separation", 8)
 	vbox.add_child(btn_vbox)
 
-	# 보상 받고 들어가기 버튼
-	var claim_btn := Button.new()
-	claim_btn.text = "✓ 보상을 받고 마을로"
-	claim_btn.custom_minimum_size = Vector2(200, 35)
-	claim_btn.add_theme_font_size_override("font_size", 12)
-	claim_btn.focus_mode = Control.FOCUS_NONE
-	var claim_style := StyleBoxFlat.new()
-	claim_style.bg_color = Color(0.2, 0.5, 0.3)
-	claim_style.border_width_left = 2
-	claim_style.border_width_top = 2
-	claim_style.border_width_right = 2
-	claim_style.border_width_bottom = 2
-	claim_style.border_color = Color.WHITE
-	claim_style.corner_radius_top_left = 4
-	claim_style.corner_radius_top_right = 4
-	claim_style.corner_radius_bottom_left = 4
-	claim_style.corner_radius_bottom_right = 4
-	claim_btn.add_theme_stylebox_override("normal", claim_style)
+	var claim_style := _make_flat_style(Color(0.2, 0.5, 0.3), Color.WHITE, 4, 2)
+	var claim_btn := _make_popup_button("✓ 보상을 받고 마을로", Vector2(200, 35), claim_style)
 	var claim_hover := claim_style.duplicate()
 	claim_hover.bg_color = Color(0.3, 0.6, 0.4)
 	claim_btn.add_theme_stylebox_override("hover", claim_hover)
 	claim_btn.pressed.connect(_on_town_claim_and_enter)
 	btn_vbox.add_child(claim_btn)
 
-	# 그냥 들어가기 버튼
-	var skip_btn := Button.new()
-	skip_btn.text = "보상 포기하고 마을로"
-	skip_btn.custom_minimum_size = Vector2(200, 30)
-	skip_btn.add_theme_font_size_override("font_size", 11)
-	skip_btn.focus_mode = Control.FOCUS_NONE
-	var skip_style := StyleBoxFlat.new()
-	skip_style.bg_color = Color(0.25, 0.2, 0.2)
-	skip_style.corner_radius_top_left = 4
-	skip_style.corner_radius_top_right = 4
-	skip_style.corner_radius_bottom_left = 4
-	skip_style.corner_radius_bottom_right = 4
-	skip_btn.add_theme_stylebox_override("normal", skip_style)
+	var skip_style := _make_flat_style(Color(0.25, 0.2, 0.2), Color.TRANSPARENT, 4)
+	var skip_btn := _make_popup_button("보상 포기하고 마을로", Vector2(200, 30), skip_style)
+	skip_btn.add_theme_font_size_override("font_size", STYLE.font_normal)
 	skip_btn.add_theme_color_override("font_color", Color(0.7, 0.6, 0.6))
 	skip_btn.pressed.connect(_on_town_skip_and_enter)
 	btn_vbox.add_child(skip_btn)
 
-	# 취소 버튼
-	var cancel_btn := Button.new()
-	cancel_btn.text = "돌아가기"
-	cancel_btn.custom_minimum_size = Vector2(200, 28)
+	var cancel_style := _make_flat_style(Color(0.2, 0.2, 0.25), Color.TRANSPARENT, 4)
+	var cancel_btn := _make_popup_button("돌아가기", Vector2(200, 28), cancel_style)
 	cancel_btn.add_theme_font_size_override("font_size", 10)
-	cancel_btn.focus_mode = Control.FOCUS_NONE
-	var cancel_style := StyleBoxFlat.new()
-	cancel_style.bg_color = Color(0.2, 0.2, 0.25)
-	cancel_style.corner_radius_top_left = 4
-	cancel_style.corner_radius_top_right = 4
-	cancel_style.corner_radius_bottom_left = 4
-	cancel_style.corner_radius_bottom_right = 4
-	cancel_btn.add_theme_stylebox_override("normal", cancel_style)
-	cancel_btn.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	cancel_btn.add_theme_color_override("font_color", STYLE.text_dim)
 	cancel_btn.pressed.connect(_on_town_cancel)
 	btn_vbox.add_child(cancel_btn)
 
 
 func _on_town_claim_and_enter() -> void:
-	## 보상 받고 마을로
 	is_town_popup_active = false
 	town_popup.visible = false
 	get_tree().paused = false
-
 	for child in town_popup.get_children():
 		child.queue_free()
-
-	# 보상 수령
 	BattleManager.claim_accumulated_rewards()
 	BattleManager.battle_log_received.emit("보상을 획득했다!", Color.CYAN)
-
 	town_enter_confirmed.emit(true)
 
 
 func _on_town_skip_and_enter() -> void:
-	## 보상 포기하고 마을로
 	is_town_popup_active = false
 	town_popup.visible = false
 	get_tree().paused = false
-
 	for child in town_popup.get_children():
 		child.queue_free()
-
-	# 보상 초기화 (포기)
 	BattleManager.reset_accumulated_rewards()
 	BattleManager.battle_log_received.emit("보상을 포기했다...", Color.GRAY)
-
 	town_enter_confirmed.emit(false)
 
 
 func _on_town_cancel() -> void:
-	## 마을 진입 취소
 	is_town_popup_active = false
 	town_popup.visible = false
 	get_tree().paused = false
-
 	for child in town_popup.get_children():
 		child.queue_free()
 
 
 func has_unclaimed_rewards() -> bool:
-	## 받지 않은 보상이 있는지 확인
 	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
 	return rewards.gold > 0 or rewards.items.size() > 0
 #endregion

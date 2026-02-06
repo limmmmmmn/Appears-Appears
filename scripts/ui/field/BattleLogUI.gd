@@ -1,6 +1,7 @@
 extends PanelContainer
 class_name BattleLogUI
-## 전투/시스템 로그 표시 UI
+## 전투/시스템 로그 UI (재구축)
+## FieldHUD.STYLE 상수를 공유하여 일관된 비주얼 유지
 
 var log_container: VBoxContainer
 
@@ -14,8 +15,10 @@ func _ready() -> void:
 
 
 func _setup_style() -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.1, 0.9)
+	var style := FieldHUD._make_flat_style(
+		Color(0.04, 0.04, 0.07, 0.9),
+		Color.TRANSPARENT, 0
+	)
 	style.content_margin_left = 4
 	style.content_margin_right = 4
 	style.content_margin_top = 4
@@ -32,42 +35,35 @@ func _create_layout() -> void:
 
 
 func add_log(message: String, color: Color = Color.WHITE) -> void:
-	# 아직 초기화 안됐으면 무시
 	if not log_container or not is_instance_valid(log_container):
 		return
-
-	# 노드가 트리에 없으면 무시
 	if not is_inside_tree():
 		return
 
 	var label := Label.new()
 	label.text = message
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_font_size_override("font_size", FieldHUD.STYLE.font_small)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	log_container.add_child(label)
 
-	# 최대 라인 제한 - 한 번에 하나만 제거
 	if log_container.get_child_count() > MAX_LOG_LINES:
 		var old: Node = log_container.get_child(0)
 		log_container.remove_child(old)
 		old.queue_free()
 
-	# 스크롤은 다음 프레임에 처리
 	call_deferred("_scroll_to_bottom")
 
 
 func _scroll_to_bottom() -> void:
-	# 부모 ScrollContainer를 찾아서 스크롤
 	var scroll := _find_parent_scroll()
 	if scroll:
 		scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value)
 
 
 func _find_parent_scroll() -> ScrollContainer:
-	## 부모 노드 중 ScrollContainer 찾기
 	var node: Node = get_parent()
 	while node != null:
 		if node is ScrollContainer:
@@ -82,13 +78,10 @@ func add_battle(message: String) -> void:
 
 
 func add_damage(attacker: String, target: String, damage: int, is_crit: bool = false) -> void:
-	var msg: String
 	if is_crit:
-		msg = "💥%s→%s 크리티컬 %d!" % [attacker, target, damage]
-		add_log(msg, Color.YELLOW)
+		add_log("💥%s→%s 크리티컬 %d!" % [attacker, target, damage], Color.YELLOW)
 	else:
-		msg = "⚔️%s→%s %d" % [attacker, target, damage]
-		add_log(msg, Color.WHITE)
+		add_log("⚔️%s→%s %d" % [attacker, target, damage], Color.WHITE)
 
 
 func add_heal(healer: String, target: String, amount: int) -> void:

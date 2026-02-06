@@ -10,6 +10,7 @@ anchor_bottom = 1.0
 offset_top = -160.0
 grow_horizontal = 2
 grow_vertical = 0
+mouse_filter = 2
 script = ExtResource("1_script")
 
 [node name="CardsContainer" type="HBoxContainer" parent="."]
@@ -21,4 +22,4 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 alignment = 1
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
