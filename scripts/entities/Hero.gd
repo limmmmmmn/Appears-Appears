@@ -194,7 +194,10 @@ func can_equip(equip_id: String) -> bool:
 	var data: Dictionary = DataManager.get_equipment(equip_id)
 	if data.is_empty():
 		return false
-	return true
+	var equip_type: String = data.get("type", "")
+	if equip_type.is_empty():
+		return true
+	return DataManager.can_class_equip(class_id, equip_type)
 
 
 func equip_item(equip_id: String, slot: String) -> String:

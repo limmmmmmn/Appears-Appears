@@ -74,7 +74,7 @@
 	  "luk": 1
 	},
 	"equip_restrictions": {
-	  "can_equip": ["staff", "mace", "shield", "robe", "medium_armor"],
+	  "can_equip": ["staff", "mace", "robe", "medium_armor"],
 	  "dual_wield": false
 	},
 	"tags": ["magic", "support", "healer"],
