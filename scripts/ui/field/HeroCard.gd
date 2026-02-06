@@ -249,31 +249,44 @@ func _on_gui_input(event: InputEvent) -> void:
 
 #region 장비 드롭 처리
 func handle_equipment_drop(target_slot: String, item_id: String, data: Dictionary) -> void:
-	if data.get("source", "inventory") == "equipment":
-		return
-
 	var party: Array = PartyManager.get_party() if PartyManager else []
 	if hero_index < 0 or hero_index >= party.size() or party[hero_index] == null:
 		return
-
 	var hero: Hero = party[hero_index]
 	if not hero.can_equip(item_id):
 		return
 
-	var edata: Dictionary = DataManager.get_equipment(item_id)
-	var eslot: String = edata.get("slot", "")
-	if eslot.is_empty():
-		return
+	var source: String = data.get("source", "inventory")
 
-	if eslot in ["accessory", "acc", "acc1", "acc2"]:
-		if target_slot not in ["acc1", "acc2"]:
+	if source == "equipment":
+		# 영웅 → 영웅 장비 이동
+		var src_hero_idx: int = data.get("hero_index", -1)
+		var src_slot: String = data.get("source_slot", "")
+		if src_hero_idx < 0 or src_slot.is_empty():
 			return
-	elif eslot != target_slot:
-		return
+		if src_hero_idx >= party.size() or party[src_hero_idx] == null:
+			return
+		var src_hero: Hero = party[src_hero_idx]
+		# 같은 영웅, 같은 슬롯이면 무시
+		if src_hero_idx == hero_index and src_slot == target_slot:
+			return
+		# 현재 타겟 슬롯의 장비
+		var old_target: String = hero.equipment.get(target_slot, "")
+		# 소스에서 해제
+		src_hero.unequip_slot(src_slot)
+		# 타겟에 기존 장비 있으면 소스로 이동
+		if not old_target.is_empty():
+			src_hero.equip_item(old_target, src_slot)
+		# 새 장비 타겟에 장착
+		hero.equip_item(item_id, target_slot)
+		PartyManager.party_changed.emit()
+	else:
+		# 인벤토리 → 영웅 장비 장착
+		if not InventoryManager:
+			return
+		InventoryManager.equip_item(hero, item_id, target_slot)
 
-	if InventoryManager and InventoryManager.equip_item(hero, item_id, target_slot):
-		update_from_hero(hero)
-		equipment_dropped.emit(hero_index, item_id)
+	equipment_dropped.emit(hero_index, item_id)
 #endregion
 
 

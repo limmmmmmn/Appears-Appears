@@ -234,5 +234,5 @@ class _DraggableItemButton extends Button:
 		preview.modulate.a = 0.9
 		set_drag_preview(preview)
 		var drag_data := equip_data if not equip_data.is_empty() else item_data
-		return {"type": "equipment", "item_id": item_id, "item_data": drag_data}
+		return {"type": "equipment", "item_id": item_id, "item_data": drag_data, "source": "inventory"}
 #endregion
