@@ -361,6 +361,9 @@ func _calculate_item_power(item_id: String) -> int:
 
 func _do_auto_equip(hero: Hero, item_id: String, slot: String, replaced_id: String) -> void:
 	## 실제 자동 장착 수행
+	# 인벤에서 제거
+	remove_item(item_id, 1)
+
 	# 기존 장비를 인벤으로 (교체인 경우)
 	if not replaced_id.is_empty():
 		add_item(replaced_id, 1)

@@ -19,10 +19,10 @@ const MAX_DISPLAY_ITEMS := 12
 
 
 func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_PASS
 	if InventoryManager:
 		if not InventoryManager.inventory_changed.is_connected(refresh):
 			InventoryManager.inventory_changed.connect(refresh)
-	_setup_unequip_drop()
 	call_deferred("refresh")
 
 
@@ -118,18 +118,16 @@ func _on_item_clicked(item_id: String) -> void:
 #endregion
 
 
-#region 장비 해제 드롭
-func _setup_unequip_drop() -> void:
-	# Panel 하단에 작은 드롭 영역 추가 (전체 덮기 X → 버튼 호버 방해 X)
-	var vbox := panel.get_child(0) as VBoxContainer
-	if not vbox:
+#region 장비 해제 드롭 (카드 전체가 드롭 타겟)
+func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+	if not data is Dictionary:
+		return false
+	return data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
+
+
+func _drop_data(_pos: Vector2, data: Variant) -> void:
+	if not data is Dictionary:
 		return
-	var drop_zone := _UnequipDropZone.new()
-	drop_zone.inv_card = self
-	vbox.add_child(drop_zone)
-
-
-func _do_unequip(data: Dictionary) -> void:
 	var hero_index: int = data.get("hero_index", -1)
 	var source_slot: String = data.get("source_slot", "")
 	if hero_index < 0 or source_slot.is_empty():
@@ -140,47 +138,6 @@ func _do_unequip(data: Dictionary) -> void:
 	var hero: Hero = party[hero_index]
 	if InventoryManager:
 		InventoryManager.unequip_item(hero, source_slot)
-
-
-class _UnequipDropZone extends PanelContainer:
-	var inv_card: InventoryCard = null
-	var _normal_style: StyleBoxFlat
-	var _hover_style: StyleBoxFlat
-
-	func _ready() -> void:
-		custom_minimum_size = Vector2(0, 18)
-		mouse_filter = Control.MOUSE_FILTER_STOP
-		_normal_style = FieldHUD._make_flat_style(
-			Color(0.08, 0.07, 0.1, 0.4), Color(0.3, 0.25, 0.15, 0.3), 2, 1
-		)
-		_hover_style = FieldHUD._make_flat_style(
-			FieldHUD.STYLE.bg_btn_hover, Color(1.0, 0.95, 0.3, 1.0), 2, 2
-		)
-		add_theme_stylebox_override("panel", _normal_style)
-		var label := Label.new()
-		label.text = "▼ 장비해제 ▼"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 7)
-		label.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(label)
-
-	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
-		if not data is Dictionary:
-			return false
-		var valid: bool = data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
-		if valid:
-			add_theme_stylebox_override("panel", _hover_style)
-		return valid
-
-	func _drop_data(_pos: Vector2, data: Variant) -> void:
-		add_theme_stylebox_override("panel", _normal_style)
-		if data is Dictionary and inv_card:
-			inv_card._do_unequip(data)
-
-	func _notification(what: int) -> void:
-		if what == NOTIFICATION_DRAG_END:
-			add_theme_stylebox_override("panel", _normal_style)
 #endregion
 
 
@@ -209,15 +166,6 @@ class _DraggableItemButton extends Button:
 	func _on_pressed() -> void:
 		if inv_card:
 			inv_card._on_item_clicked(item_id)
-
-	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
-		if not data is Dictionary:
-			return false
-		return data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
-
-	func _drop_data(_pos: Vector2, data: Variant) -> void:
-		if data is Dictionary and inv_card:
-			inv_card._do_unequip(data)
 
 	func _get_drag_data(_pos: Vector2) -> Variant:
 		# DataManager에서 장비 데이터 조회 (인벤토리 데이터에 slot이 없을 수 있음)
