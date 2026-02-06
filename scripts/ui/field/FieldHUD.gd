@@ -166,7 +166,13 @@ func _setup_inventory_panel() -> void:
 	if not inventory_list:
 		return
 
-	# ScrollContainer와 VBoxContainer의 mouse_filter 설정
+	# 모든 부모 컨테이너의 mouse_filter를 PASS로 설정
+	if inventory_panel:
+		inventory_panel.mouse_filter = Control.MOUSE_FILTER_PASS
+		# VBox 찾기
+		var vbox = inventory_panel.get_node_or_null("VBox")
+		if vbox:
+			vbox.mouse_filter = Control.MOUSE_FILTER_PASS
 	if inventory_scroll:
 		inventory_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	if inventory_list:
@@ -267,9 +273,13 @@ class _DraggableItemRow extends PanelContainer:
 		if what == NOTIFICATION_MOUSE_ENTER:
 			is_hovered = true
 			_apply_style(true)
+			# 커서를 손 모양으로 변경
+			Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 		elif what == NOTIFICATION_MOUSE_EXIT:
 			is_hovered = false
 			_apply_style(false)
+			# 커서를 기본으로 복원
+			Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
 	func _apply_style(hovered: bool) -> void:
 		var style := StyleBoxFlat.new()
