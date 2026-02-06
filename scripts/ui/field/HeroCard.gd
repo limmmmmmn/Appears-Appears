@@ -230,7 +230,7 @@ func show_item_info(item_id: String) -> void:
 	_finalize_popup()
 
 
-## 능력치 비교 표시 (다른 히어로 카드 위 — 현재장비 vs 새장비 나란히)
+## 능력치 비교 표시 (다른 히어로 카드 위 — 변화 수치만)
 func show_stat_compare(item_id: String) -> void:
 	hide_stat_compare()
 	var party: Array = PartyManager.get_party() if PartyManager else []
@@ -240,70 +240,34 @@ func show_stat_compare(item_id: String) -> void:
 	if not hero.can_equip(item_id):
 		return
 
-	var new_edata: Dictionary = DataManager.get_equipment(item_id)
-	if new_edata.is_empty():
+	var changes: Dictionary = StatCompareUtil.calculate_stat_changes(hero, item_id)
+	if changes.is_empty():
 		return
 
-	var slot: String = new_edata.get("slot", "")
-	var target_slot := StatCompareUtil._get_target_slot(hero, slot)
-	var cur_equip_id: String = hero.equipment.get(target_slot, "")
-	var cur_edata: Dictionary = {}
-	if not cur_equip_id.is_empty():
-		cur_edata = DataManager.get_equipment(cur_equip_id)
+	# 변화가 있는 스탯만 필터
+	var has_diff := false
+	for stat_name in changes:
+		if changes[stat_name]["diff"] != 0:
+			has_diff = true
+			break
+	if not has_diff:
+		return
 
 	_stat_popup = _create_popup_panel()
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 6)
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stat_popup.add_child(hbox)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 0)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stat_popup.add_child(vbox)
 
-	# 좌: 현재 장비
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 0)
-	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(left)
-
-	if cur_edata.is_empty():
-		_add_popup_label(left, "(없음)", 8, FieldHUD.STYLE.text_dim)
-	else:
-		var cur_rarity: String = cur_edata.get("rarity", "common")
-		_add_popup_label(left, cur_edata.get("name", cur_equip_id), 8, _get_rarity_color(cur_rarity))
-		var cur_stats: Dictionary = cur_edata.get("stats", {})
-		for sk in cur_stats:
-			_add_popup_label(left, "%s +%d" % [sk.to_upper(), int(cur_stats[sk])], 8, Color(0.6, 0.6, 0.7))
-
-	# 화살표
-	var arrow := Label.new()
-	arrow.text = "→"
-	arrow.add_theme_font_size_override("font_size", 9)
-	arrow.add_theme_color_override("font_color", Color(0.8, 0.8, 0.5))
-	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	hbox.add_child(arrow)
-
-	# 우: 새 장비 (스탯 색상은 현재 대비 비교)
-	var right := VBoxContainer.new()
-	right.add_theme_constant_override("separation", 0)
-	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(right)
-
-	var new_rarity: String = new_edata.get("rarity", "common")
-	_add_popup_label(right, new_edata.get("name", item_id), 8, _get_rarity_color(new_rarity))
-
-	var new_stats: Dictionary = new_edata.get("stats", {})
-	var cur_stats_ref: Dictionary = cur_edata.get("stats", {}) if not cur_edata.is_empty() else {}
-	for sk in new_stats:
-		var nv: int = int(new_stats[sk])
-		var cv: int = int(cur_stats_ref.get(sk, 0))
-		var diff: int = nv - cv
-		var color: Color
+	for stat_name in changes:
+		var data: Dictionary = changes[stat_name]
+		var diff: int = data["diff"]
+		if diff == 0:
+			continue
 		if diff > 0:
-			color = Color(0.4, 1.0, 0.4)
-		elif diff < 0:
-			color = Color(1.0, 0.4, 0.4)
+			_add_popup_label(vbox, "%s +%d" % [stat_name, diff], 8, Color(0.4, 1.0, 0.4))
 		else:
-			color = Color(0.7, 0.85, 1.0)
-		_add_popup_label(right, "%s +%d" % [sk.to_upper(), nv], 8, color)
+			_add_popup_label(vbox, "%s %d" % [stat_name, diff], 8, Color(1.0, 0.4, 0.4))
 
 	_finalize_popup()
 
