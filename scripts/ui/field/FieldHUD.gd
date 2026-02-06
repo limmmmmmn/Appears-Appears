@@ -56,6 +56,12 @@ var last_hero_kill_threshold: int = 0  # 마지막으로 영웅을 추가한 킬
 
 func _ready() -> void:
 	add_to_group("field_hud")
+
+	# Control 노드의 mouse_filter 설정 (마우스 이벤트 전달 허용)
+	var ctrl = get_node_or_null("Control")
+	if ctrl:
+		ctrl.mouse_filter = Control.MOUSE_FILTER_PASS
+
 	_setup_components()
 	_setup_kill_label()
 	_setup_grudge_popup()
