@@ -20,6 +20,7 @@ signal field_heal_requested(hero_index: int)
 
 @onready var panel: PanelContainer = %Panel
 @onready var name_label: Label = %NameLabel
+@onready var skill_label: Label = %SkillLabel
 @onready var equip_section: VBoxContainer = %EquipSection
 
 var hero_index: int = -1
@@ -93,6 +94,7 @@ func update_from_hero(hero: Hero) -> void:
 		return
 	hero_id = hero.id
 	_update_name_hp(hero)
+	_update_skill_info(hero)
 	_update_equips(hero)
 
 
@@ -110,6 +112,22 @@ func _update_name_hp(hero: Hero) -> void:
 	else:
 		color = HP_COLOR_HIGH
 	name_label.add_theme_color_override("font_color", color)
+
+
+func _update_skill_info(hero: Hero) -> void:
+	var class_name_str: String = hero.hero_class_name
+	var skills: Array = hero.get_available_skills()
+	var skill_names: Array = []
+	for skill_id in skills:
+		if skill_id == "basic_attack":
+			continue
+		var sdata: Dictionary = DataManager.get_skill(skill_id)
+		var sname: String = sdata.get("name", skill_id)
+		skill_names.append(sname)
+	if skill_names.is_empty():
+		skill_label.text = class_name_str
+	else:
+		skill_label.text = "%s %s" % [class_name_str, " ".join(skill_names)]
 
 
 func _update_equips(hero: Hero) -> void:
