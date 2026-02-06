@@ -80,7 +80,6 @@ func _create_item_row(item: Dictionary) -> Button:
 	normal_style.content_margin_right = 3
 	normal_style.content_margin_top = 0
 	normal_style.content_margin_bottom = 0
-	row.add_theme_stylebox_override("normal", normal_style)
 
 	var hover_style := FieldHUD._make_flat_style(
 		FieldHUD.STYLE.bg_btn_hover, Color(1.0, 0.95, 0.3, 1.0), 2, 2
@@ -89,6 +88,10 @@ func _create_item_row(item: Dictionary) -> Button:
 	hover_style.content_margin_right = 3
 	hover_style.content_margin_top = 0
 	hover_style.content_margin_bottom = 0
+
+	row._normal_style = normal_style
+	row._hover_style = hover_style
+	row.add_theme_stylebox_override("normal", normal_style)
 	row.add_theme_stylebox_override("hover", hover_style)
 	row.add_theme_stylebox_override("pressed", hover_style)
 
@@ -155,9 +158,21 @@ class _DraggableItemButton extends Button:
 	var item_id: String = ""
 	var item_data: Dictionary = {}
 	var rarity_color: Color = Color.WHITE
+	var _normal_style: StyleBoxFlat
+	var _hover_style: StyleBoxFlat
 
 	func _ready() -> void:
 		pressed.connect(_on_pressed)
+		mouse_entered.connect(_on_mouse_entered)
+		mouse_exited.connect(_on_mouse_exited)
+
+	func _on_mouse_entered() -> void:
+		if _hover_style:
+			add_theme_stylebox_override("normal", _hover_style)
+
+	func _on_mouse_exited() -> void:
+		if _normal_style:
+			add_theme_stylebox_override("normal", _normal_style)
 
 	func _on_pressed() -> void:
 		if inv_card:
