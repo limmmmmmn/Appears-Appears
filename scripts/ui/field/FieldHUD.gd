@@ -235,22 +235,62 @@ class _DraggableItemRow extends Control:
 	var item_data: Dictionary = {}
 	var hud_ref: FieldHUD = null
 	var label: Label
+	var bg_panel: Panel
 	var rarity_color: Color = Color.WHITE
 	var rarity: String = "common"
 
 	func setup(text: String, color: Color, p_rarity: String) -> void:
 		rarity_color = color
 		rarity = p_rarity
-		custom_minimum_size = Vector2(0, 16)
+		custom_minimum_size = Vector2(0, 18)
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+		# 배경 패널 (테두리용)
+		bg_panel = Panel.new()
+		bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_apply_style(false)
+		add_child(bg_panel)
 
 		label = Label.new()
 		label.text = text
 		label.add_theme_font_size_override("font_size", 9)
 		label.add_theme_color_override("font_color", color)
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.position = Vector2(4, 1)
 		add_child(label)
+
+		mouse_entered.connect(_on_mouse_entered)
+		mouse_exited.connect(_on_mouse_exited)
+
+	func _apply_style(hovered: bool) -> void:
+		var style := StyleBoxFlat.new()
+		if hovered:
+			style.bg_color = Color(0.2, 0.2, 0.15, 0.8)
+			style.border_width_left = 2
+			style.border_width_top = 2
+			style.border_width_right = 2
+			style.border_width_bottom = 2
+			style.border_color = Color(0.9, 0.9, 0.3, 1.0)
+		else:
+			style.bg_color = Color(0.1, 0.1, 0.12, 0.5)
+			style.border_width_left = 1
+			style.border_width_top = 1
+			style.border_width_right = 1
+			style.border_width_bottom = 1
+			style.border_color = Color(0.3, 0.3, 0.35, 0.5)
+		style.corner_radius_top_left = 2
+		style.corner_radius_top_right = 2
+		style.corner_radius_bottom_left = 2
+		style.corner_radius_bottom_right = 2
+		bg_panel.add_theme_stylebox_override("panel", style)
+
+	func _on_mouse_entered() -> void:
+		_apply_style(true)
+
+	func _on_mouse_exited() -> void:
+		_apply_style(false)
 
 	func _get_drag_data(_pos: Vector2) -> Variant:
 		# 장비 아이템만 드래그 가능
