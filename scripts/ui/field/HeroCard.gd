@@ -1,7 +1,8 @@
-extends PanelContainer
+extends Control
 class_name HeroCard
 ## 개별 영웅 카드 (씬 인스턴스 방식)
 ## HeroCard.tscn과 1:1 대응
+## 루트=Control(레이아웃용), Panel=PanelContainer(애니메이션 대상)
 ## 이름, HP바, ATB/쿨타임 바, 장비 슬롯 6개
 
 const SLOT_ICONS := {
@@ -23,6 +24,7 @@ const BAR_BG := Color(0.12, 0.1, 0.15)
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
 
+@onready var panel: PanelContainer = %Panel
 @onready var name_label: Label = %NameLabel
 @onready var hp_bar: ProgressBar = %HpBar
 @onready var hp_label: Label = %HpLabel
@@ -40,9 +42,9 @@ var _anim_tween: Tween = null
 
 
 func _ready() -> void:
-	mouse_entered.connect(_on_mouse_entered)
-	mouse_exited.connect(_on_mouse_exited)
-	gui_input.connect(_on_gui_input)
+	panel.mouse_entered.connect(_on_mouse_entered)
+	panel.mouse_exited.connect(_on_mouse_exited)
+	panel.gui_input.connect(_on_gui_input)
 	_build_equip_slots()
 
 
@@ -205,34 +207,35 @@ func update_atb(hero: Hero) -> void:
 #endregion
 
 
-#region 애니메이션
+#region 애니메이션 (panel의 position을 조작 - 레이아웃과 충돌 없음)
 func _kill_anim() -> void:
 	if _anim_tween and _anim_tween.is_valid():
 		_anim_tween.kill()
 		_anim_tween = null
-		position = Vector2.ZERO
+	if panel:
+		panel.position = Vector2.ZERO
 
 
 func play_attack_anim() -> void:
-	if is_hovered:
+	if is_hovered or not panel:
 		return
 	_kill_anim()
 	_anim_tween = create_tween()
-	_anim_tween.tween_property(self, "position:y", -15.0, 0.1).set_ease(Tween.EASE_OUT)
-	_anim_tween.tween_property(self, "position:y", 0.0, 0.15).set_ease(Tween.EASE_IN)
+	_anim_tween.tween_property(panel, "position:y", -15.0, 0.1).set_ease(Tween.EASE_OUT)
+	_anim_tween.tween_property(panel, "position:y", 0.0, 0.15).set_ease(Tween.EASE_IN)
 
 
 func play_damage_anim() -> void:
-	if is_hovered:
+	if is_hovered or not panel:
 		return
 	_kill_anim()
 	_anim_tween = create_tween()
-	_anim_tween.tween_property(self, "position:x", 4.0, 0.03)
-	_anim_tween.tween_property(self, "position:x", -4.0, 0.03)
-	_anim_tween.tween_property(self, "position:x", 3.0, 0.03)
-	_anim_tween.tween_property(self, "position:x", -3.0, 0.03)
-	_anim_tween.tween_property(self, "position:x", 2.0, 0.03)
-	_anim_tween.tween_property(self, "position:x", 0.0, 0.03)
+	_anim_tween.tween_property(panel, "position:x", 4.0, 0.03)
+	_anim_tween.tween_property(panel, "position:x", -4.0, 0.03)
+	_anim_tween.tween_property(panel, "position:x", 3.0, 0.03)
+	_anim_tween.tween_property(panel, "position:x", -3.0, 0.03)
+	_anim_tween.tween_property(panel, "position:x", 2.0, 0.03)
+	_anim_tween.tween_property(panel, "position:x", 0.0, 0.03)
 #endregion
 
 

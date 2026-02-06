@@ -39,16 +39,26 @@ corner_radius_top_right = 2
 corner_radius_bottom_left = 2
 corner_radius_bottom_right = 2
 
-[node name="HeroCard" type="PanelContainer"]
+[node name="HeroCard" type="Control"]
 custom_minimum_size = Vector2(108, 142)
-theme_override_styles/panel = SubResource("card_panel_style")
+mouse_filter = 2
 script = ExtResource("1_script")
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="Panel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("card_panel_style")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
 layout_mode = 2
 theme_override_constants/separation = 1
 
-[node name="NameLabel" type="Label" parent="VBox"]
+[node name="NameLabel" type="Label" parent="Panel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 9
@@ -56,12 +66,12 @@ theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
 horizontal_alignment = 1
 text = "영웅"
 
-[node name="HpContainer" type="Control" parent="VBox"]
+[node name="HpContainer" type="Control" parent="Panel/VBox"]
 custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="HpBar" type="ProgressBar" parent="VBox/HpContainer"]
+[node name="HpBar" type="ProgressBar" parent="Panel/VBox/HpContainer"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -76,7 +86,7 @@ max_value = 100.0
 value = 100.0
 show_percentage = false
 
-[node name="HpLabel" type="Label" parent="VBox/HpContainer"]
+[node name="HpLabel" type="Label" parent="Panel/VBox/HpContainer"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -92,18 +102,18 @@ theme_override_constants/outline_size = 2
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="AtbSection" type="VBoxContainer" parent="VBox"]
+[node name="AtbSection" type="VBoxContainer" parent="Panel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 1
 
-[node name="BasicAtbRow" type="HBoxContainer" parent="VBox/AtbSection"]
+[node name="BasicAtbRow" type="HBoxContainer" parent="Panel/VBox/AtbSection"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 3
 
-[node name="Label" type="Label" parent="VBox/AtbSection/BasicAtbRow"]
+[node name="Label" type="Label" parent="Panel/VBox/AtbSection/BasicAtbRow"]
 custom_minimum_size = Vector2(24, 0)
 layout_mode = 2
 mouse_filter = 2
@@ -111,7 +121,7 @@ theme_override_font_sizes/font_size = 8
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
 text = "공격"
 
-[node name="BasicAtbBar" type="ProgressBar" parent="VBox/AtbSection/BasicAtbRow"]
+[node name="BasicAtbBar" type="ProgressBar" parent="Panel/VBox/AtbSection/BasicAtbRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(60, 5)
 layout_mode = 2
@@ -123,12 +133,12 @@ max_value = 100.0
 value = 0.0
 show_percentage = false
 
-[node name="Sep" type="HSeparator" parent="VBox"]
+[node name="Sep" type="HSeparator" parent="Panel/VBox"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 1
 
-[node name="EquipSection" type="VBoxContainer" parent="VBox"]
+[node name="EquipSection" type="VBoxContainer" parent="Panel/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
