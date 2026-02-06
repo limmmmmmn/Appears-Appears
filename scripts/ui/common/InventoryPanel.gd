@@ -156,10 +156,6 @@ func _get_item_icon(item_type: String) -> String:
 			return "👕"
 		"shoes", "necklace", "ring1", "ring2":
 			return "💍"
-		"potion":
-			return "🧪"
-		"seed":
-			return "🌱"
 		_:
 			return "📦"
 #endregion

@@ -8,9 +8,9 @@
     },
     {
       "id": "find_potion",
-      "text": "수상한 상인이 포션을 하나 건네주었다.",
+      "text": "수상한 상인이 동전 몇 닢을 건네주었다.",
       "weight": 15,
-      "effect": { "type": "item", "item_id": "potion_small", "count": 1 }
+      "effect": { "type": "gold", "min": 10, "max": 25 }
     },
     {
       "id": "rumor_monster",
@@ -46,7 +46,7 @@
       "id": "find_herb",
       "text": "마을 외곽에서 약초를 발견했다!",
       "weight": 8,
-      "effect": { "type": "item", "item_id": "revive_herb", "count": 1 }
+      "effect": { "type": "gold", "min": 15, "max": 30 }
     },
     {
       "id": "merchant_deal",

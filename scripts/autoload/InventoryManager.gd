@@ -195,20 +195,6 @@ func get_equipment_items() -> Array:
 	return result
 
 
-func get_consumable_items() -> Array:
-	## 소비 아이템만 반환
-	var result: Array = []
-	for item_id in items.keys():
-		var equip_data: Dictionary = DataManager.get_equipment(item_id)
-		if equip_data.is_empty():
-			var item_data: Dictionary = DataManager.get_item(item_id)
-			if not item_data.is_empty():
-				result.append({
-					"id": item_id,
-					"quantity": int(items[item_id]),
-					"data": item_data
-				})
-	return result
 
 
 func get_unique_item_count() -> int:
@@ -387,5 +373,5 @@ func clear() -> void:
 
 func add_starting_items() -> void:
 	## 시작 아이템 지급
-	add_item("potion_small", 3)
+	pass
 #endregion

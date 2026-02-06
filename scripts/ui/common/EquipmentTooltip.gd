@@ -52,12 +52,7 @@ func setup_for_item(p_item_id: String, p_anchor: Control = null) -> void:
 	# 장비인지 소비 아이템인지 확인
 	item_data = DataManager.get_equipment(p_item_id)
 	if item_data.is_empty():
-		# 소비 아이템 체크
-		item_data = DataManager.get_item(p_item_id)
-		if not item_data.is_empty() and item_data.get("type", "") == "consumable":
-			_build_consumable_tooltip()
-		else:
-			return
+		return
 	else:
 		_build_tooltip_all_heroes()
 	
@@ -251,76 +246,3 @@ func _can_hero_equip(hero: Hero, item_slot: String) -> bool:
 	return true
 
 
-func _build_consumable_tooltip() -> void:
-	## 소비 아이템용 툴팁 빌드
-	for child in get_children():
-		child.queue_free()
-	
-	if item_data.is_empty():
-		return
-	
-	var main_vbox := VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", 4)
-	add_child(main_vbox)
-	
-	# 아이템 이름
-	var name_label := Label.new()
-	name_label.text = str(item_data.get("name", item_id))
-	name_label.add_theme_font_size_override("font_size", 11)
-	name_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))  # 녹색 계열
-	main_vbox.add_child(name_label)
-	
-	# 카테고리
-	var category: String = str(item_data.get("category", ""))
-	var category_display: Dictionary = {
-		"recovery": "회복",
-		"revival": "부활",
-		"camping": "야영",
-		"escape": "도주",
-		"seed": "씨앗"
-	}
-	var category_label := Label.new()
-	category_label.text = category_display.get(category, category)
-	category_label.add_theme_font_size_override("font_size", 8)
-	category_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
-	main_vbox.add_child(category_label)
-	
-	# 구분선
-	var sep := HSeparator.new()
-	main_vbox.add_child(sep)
-	
-	# 설명
-	var desc_label := Label.new()
-	desc_label.text = str(item_data.get("description", ""))
-	desc_label.add_theme_font_size_override("font_size", 9)
-	desc_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
-	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_label.custom_minimum_size.x = 150
-	main_vbox.add_child(desc_label)
-	
-	# 사용 가능 여부
-	var usable_hbox := HBoxContainer.new()
-	usable_hbox.add_theme_constant_override("separation", 8)
-	main_vbox.add_child(usable_hbox)
-	
-	var field_usable: bool = item_data.get("usable_in_field", false)
-	var battle_usable: bool = item_data.get("usable_in_battle", false)
-	
-	var field_label := Label.new()
-	field_label.text = "필드: " + ("⭕" if field_usable else "❌")
-	field_label.add_theme_font_size_override("font_size", 8)
-	field_label.add_theme_color_override("font_color", Color.LIME if field_usable else Color.GRAY)
-	usable_hbox.add_child(field_label)
-	
-	var battle_label := Label.new()
-	battle_label.text = "전투: " + ("⭕" if battle_usable else "❌")
-	battle_label.add_theme_font_size_override("font_size", 8)
-	battle_label.add_theme_color_override("font_color", Color.LIME if battle_usable else Color.GRAY)
-	usable_hbox.add_child(battle_label)
-	
-	# 드래그 힌트
-	var hint_label := Label.new()
-	hint_label.text = "▶ 파티원에게 드래그하여 사용"
-	hint_label.add_theme_font_size_override("font_size", 8)
-	hint_label.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0))
-	main_vbox.add_child(hint_label)

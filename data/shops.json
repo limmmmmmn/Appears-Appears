@@ -27,23 +27,7 @@
   "item_shop": {
 	"name": "도구상",
 	"greeting": "여행에 필요한 물건들이 다 있어요~",
-	"items": [
-	  "potion_small",
-	  "potion_medium",
-	  "potion_large",
-	  "mana_potion",
-	  "revive_herb",
-	  "tent",
-	  "flash_bomb",
-	  "smoke_bomb",
-	  "seed_str",
-	  "seed_def",
-	  "seed_int",
-	  "seed_spd",
-	  "seed_luk",
-	  "seed_hp",
-      "seed_mp"
-	]
+	"items": []
   },
   "inn": {
 	"name": "여관",

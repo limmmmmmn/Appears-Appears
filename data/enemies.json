@@ -15,7 +15,6 @@
 	  "gold_max": 10
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.30},
 	  {"item_id": "ring_hp", "chance": 0.15},
 	  {"item_id": "leather_helmet", "chance": 0.12}
 	],
@@ -39,7 +38,6 @@
 	  "gold_max": 18
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.25},
 	  {"item_id": "dagger_common", "chance": 0.20},
 	  {"item_id": "leather_armor", "chance": 0.15},
 	  {"item_id": "sword_common", "chance": 0.10},
@@ -65,7 +63,6 @@
 	  "gold_max": 8
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.20},
 	  {"item_id": "ring_luck", "chance": 0.08},
 	  {"item_id": "boots_speed", "chance": 0.10}
 	],
@@ -89,7 +86,6 @@
 	  "gold_max": 20
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.25},
 	  {"item_id": "sword_common", "chance": 0.18},
 	  {"item_id": "iron_helmet", "chance": 0.15},
 	  {"item_id": "shield_common", "chance": 0.12},
@@ -115,7 +111,6 @@
 	  "gold_max": 12
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.25},
 	  {"item_id": "leather_armor", "chance": 0.15},
 	  {"item_id": "boots_speed", "chance": 0.12},
 	  {"item_id": "amulet_crit", "chance": 0.05}
@@ -140,7 +135,6 @@
 	  "gold_max": 10
 	},
 	"drop_table": [
-	  {"item_id": "potion_small", "chance": 0.25},
 	  {"item_id": "robe_common", "chance": 0.12},
 	  {"item_id": "ring_hp", "chance": 0.10}
 	],
@@ -164,7 +158,6 @@
 	  "gold_max": 50
 	},
 	"drop_table": [
-	  {"item_id": "potion_medium", "chance": 1.0},
 	  {"item_id": "axe_magic", "chance": 0.60},
 	  {"item_id": "heavy_armor_magic", "chance": 0.40},
 	  {"item_id": "shield_magic", "chance": 0.30}
@@ -190,7 +183,6 @@
 	  "gold_max": 70
 	},
 	"drop_table": [
-	  {"item_id": "potion_medium", "chance": 1.0},
 	  {"item_id": "staff_magic", "chance": 0.50},
 	  {"item_id": "robe_magic", "chance": 0.40},
 	  {"item_id": "ring_int", "chance": 0.30}
@@ -217,7 +209,6 @@
 	},
 	"drop_table": [
 	  {"item_id": "crown_legendary", "chance": 1.0},
-	  {"item_id": "potion_large", "chance": 1.0},
 	  {"item_id": "sword_magic", "chance": 0.5},
 	  {"item_id": "shield_magic", "chance": 0.5}
 	],

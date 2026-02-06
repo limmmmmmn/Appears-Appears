@@ -8,7 +8,7 @@ const ITEM_TYPE_ICONS := {
 	"sword": "⚔", "dagger": "🗡", "staff": "🪄", "bow": "🏹", "axe": "🪓",
 	"shield": "🛡", "helmet": "⛑", "heavy_armor": "🥋", "medium_armor": "🥋",
 	"light_armor": "🥋", "robe": "👘", "ring": "💍", "amulet": "📿",
-	"boots": "👢", "potion": "🧪",
+	"shoes": "👟", "necklace": "📿",
 }
 const MAX_DISPLAY_ITEMS := 12
 

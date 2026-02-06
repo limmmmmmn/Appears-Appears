@@ -47,10 +47,6 @@ const TYPE_ICONS: Dictionary = {
 	# 악세서리
 	"ring": "💍",
 	"amulet": "📿",
-	# 소비 아이템
-	"potion": "🧪",
-	"seed": "🌱",
-	"consumable": "📦"
 }
 
 const RARITY_COLORS: Dictionary = {
@@ -313,11 +309,6 @@ func _try_equip_to_hero(item_id: String, hero_index: int, target_slot: String) -
 	
 	var hero: Hero = party[hero_index]
 	
-	# 먼저 소비 아이템인지 체크
-	var item_data: Dictionary = DataManager.get_item(item_id)
-	if not item_data.is_empty() and item_data.get("type", "") == "consumable":
-		return _try_use_consumable(item_id, hero)
-	
 	var data: Dictionary = DataManager.get_equipment(item_id)
 	
 	if data.is_empty():
@@ -341,105 +332,6 @@ func _try_equip_to_hero(item_id: String, hero_index: int, target_slot: String) -
 	else:
 		log_message.emit("장착 실패: %s" % item_name)
 		return false
-
-
-func _try_use_consumable(item_id: String, hero: Hero) -> bool:
-	## 소비 아이템 사용
-	var item_data: Dictionary = DataManager.get_item(item_id)
-	if item_data.is_empty():
-		return false
-	
-	var item_name: String = str(item_data.get("name", item_id))
-	var effect: Dictionary = item_data.get("effect", {})
-	var effect_type: String = str(effect.get("type", ""))
-	var usable_in_field: bool = item_data.get("usable_in_field", false)
-	
-	# 필드에서 사용 가능한지 체크
-	if not usable_in_field:
-		log_message.emit("%s: 전투 중에만 사용 가능" % item_name)
-		return false
-	
-	var success: bool = false
-	
-	match effect_type:
-		"heal_percent":
-			# HP 퍼센트 회복
-			if hero.is_dead:
-				log_message.emit("%s: 사망한 대상에게 사용 불가" % item_name)
-				return false
-			var heal_percent: float = float(effect.get("value", 0.3))
-			var heal_amount: int = int(hero.get_max_hp() * heal_percent)
-			var actual_heal: int = hero.heal(heal_amount)
-			if actual_heal > 0:
-				log_message.emit("%s: %s HP +%d" % [hero.hero_name, item_name, actual_heal])
-				success = true
-			else:
-				log_message.emit("%s: HP가 이미 가득 참" % hero.hero_name)
-				return false
-		
-		"full_restore":
-			# HP 완전 회복
-			if hero.is_dead:
-				log_message.emit("%s: 사망한 대상에게 사용 불가" % item_name)
-				return false
-			hero.heal(hero.get_max_hp())
-			log_message.emit("%s: %s 사용 - 완전 회복!" % [hero.hero_name, item_name])
-			success = true
-		
-		"revive":
-			# 부활 (사망한 대상만)
-			if not hero.is_dead:
-				log_message.emit("%s: 살아있는 대상에게 사용 불가" % item_name)
-				return false
-			var hp_percent: float = float(effect.get("hp_percent", 0.3))
-			hero.revive(hp_percent)
-			log_message.emit("%s: %s 부활!" % [hero.hero_name, item_name])
-			success = true
-		
-		"permanent_stat":
-			# 영구 스탯 증가 (씨앗)
-			if hero.is_dead:
-				log_message.emit("%s: 사망한 대상에게 사용 불가" % item_name)
-				return false
-			var stat: String = str(effect.get("stat", ""))
-			var value: int = int(effect.get("value", 1))
-			hero.apply_seed_bonus(stat, value)
-			log_message.emit("%s: %s 사용 - %s +%d!" % [hero.hero_name, item_name, stat.to_upper(), value])
-			success = true
-		
-		"full_restore_party":
-			# 파티 전원 회복 (텐트) - 드래그 대상 무관하게 전원 적용
-			var all_party: Array = PartyManager.get_party() if PartyManager else []
-			for member in all_party:
-				if not member.is_dead:
-					member.heal(member.get_max_hp())
-			log_message.emit("%s 사용 - 파티 전원 완전 회복!" % item_name)
-			success = true
-		
-		"revive_all":
-			# 파티 전원 부활
-			var all_party: Array = PartyManager.get_party() if PartyManager else []
-			var hp_percent: float = float(effect.get("hp_percent", 0.5))
-			var revived_count: int = 0
-			for member in all_party:
-				if member.is_dead:
-					member.revive(hp_percent)
-					revived_count += 1
-			if revived_count > 0:
-				log_message.emit("%s 사용 - %d명 부활!" % [item_name, revived_count])
-				success = true
-			else:
-				log_message.emit("부활시킬 대상이 없음")
-				return false
-		
-		_:
-			log_message.emit("%s: 알 수 없는 효과" % item_name)
-			return false
-	
-	if success:
-		InventoryManager.remove_item(item_id, 1)
-	
-	return success
 
 
 func _try_move_equipment(item_id: String, from_hero_index: int, from_slot: String, to_hero_index: int, to_slot: String) -> bool:

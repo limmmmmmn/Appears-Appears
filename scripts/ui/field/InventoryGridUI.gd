@@ -47,11 +47,8 @@ const TYPE_ICONS: Dictionary = {
 	"robe": "👗",
 	# 악세서리
 	"ring": "💍",
-	"amulet": "📿",
-	# 소비 아이템
-	"potion": "🧪",
-	"seed": "🌱",
-	"consumable": "📦"
+	"necklace": "📿",
+	"shoes": "👟"
 }
 
 const RARITY_COLORS: Dictionary = {

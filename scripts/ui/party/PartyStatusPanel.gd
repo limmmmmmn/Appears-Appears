@@ -254,23 +254,18 @@ func _refresh_inventory() -> void:
 		return
 	
 	var equipments: Array = []
-	var consumables: Array = []
-	
+
 	for item_id in inventory:
 		var count: int = inventory[item_id]
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
 		if not equip_data.is_empty():
 			equipments.append({"id": item_id, "count": count, "data": equip_data})
-		else:
-			var item_data: Dictionary = DataManager.get_item(item_id)
-			if not item_data.is_empty():
-				consumables.append({"id": item_id, "count": count, "data": item_data})
-	
+
 	if not equipments.is_empty():
 		var equip_title := Label.new()
 		equip_title.text = "[장비]"
 		inventory_container.add_child(equip_title)
-		
+
 		for item in equipments:
 			var btn := Button.new()
 			btn.text = "%s x%d" % [item["data"].get("name", "???"), item["count"]]
@@ -282,41 +277,6 @@ func _refresh_inventory() -> void:
 			btn.mouse_exited.connect(_on_item_unhovered)
 			btn.focus_exited.connect(_on_item_unhovered)
 			inventory_container.add_child(btn)
-	
-	if not consumables.is_empty():
-		# 씨앗과 일반 아이템 분리
-		var seeds: Array = []
-		var others: Array = []
-		for item in consumables:
-			if item["data"].get("category", "") == "seed":
-				seeds.append(item)
-			else:
-				others.append(item)
-		
-		# 씨앗 (사용 가능)
-		if not seeds.is_empty():
-			var seed_title := Label.new()
-			seed_title.text = "[씨앗] (클릭 = 사용)"
-			inventory_container.add_child(seed_title)
-			
-			for item in seeds:
-				var btn := Button.new()
-				btn.text = "%s x%d" % [item["data"].get("name", "???"), item["count"]]
-				btn.custom_minimum_size.x = 160
-				btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-				btn.pressed.connect(_on_seed_used.bind(item["id"]))
-				inventory_container.add_child(btn)
-		
-		# 일반 아이템
-		if not others.is_empty():
-			var item_title := Label.new()
-			item_title.text = "[아이템]"
-			inventory_container.add_child(item_title)
-			
-			for item in others:
-				var lbl := Label.new()
-				lbl.text = "%s x%d" % [item["data"].get("name", "???"), item["count"]]
-				inventory_container.add_child(lbl)
 
 
 func _on_hero_selected(index: int) -> void:
