@@ -837,6 +837,12 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	else:
 		_send_log("%s [%s] → %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
 
+	# 도발 효과 적용 (방패 강타 등)
+	var taunt_count: int = _get_skill_effect_int(skill_data, "taunt", 0)
+	if taunt_count > 0:
+		hero.apply_taunt(taunt_count)
+		_send_log("%s 도발! (다음 %d회 공격 흡수)" % [hero.hero_name, taunt_count], Color.STEEL_BLUE)
+
 	if not target.is_alive():
 		_on_enemy_defeated(target)
 
@@ -973,6 +979,18 @@ func _get_skill_effect_value(skill_data: Dictionary, effect_type: String, defaul
 	return default_value
 
 
+func _get_skill_effect_int(skill_data: Dictionary, effect_type: String, default_value: int) -> int:
+	## 스킬 효과 정수 값 가져오기 (count 또는 value)
+	var effects: Array = skill_data.get("effects", [])
+	for effect in effects:
+		if effect.get("type", "") == effect_type:
+			# count 먼저 확인, 없으면 value
+			if effect.has("count"):
+				return int(effect.get("count", default_value))
+			return int(effect.get("value", default_value))
+	return default_value
+
+
 func _select_smart_target(hero: Hero) -> BattleEnemy:
 	var alive: Array = []
 	for e in enemies:
@@ -1003,14 +1021,17 @@ func has_alive_enemies() -> bool:
 func _enemy_attack(enemy: BattleEnemy) -> void:
 	if not enemy.is_alive():
 		return
-	
+
 	var alive_heroes := PartyManager.get_alive_heroes()
 	if alive_heroes.is_empty():
 		return
-	
+
 	_bring_to_front()
 
-	var target: Hero = alive_heroes[randi() % alive_heroes.size()]
+	# 도발 상태인 영웅이 있으면 우선 타겟
+	var target: Hero = _find_taunt_target(alive_heroes)
+	if target == null:
+		target = alive_heroes[randi() % alive_heroes.size()]
 
 	enemy.play_attack_effect()
 
@@ -1026,13 +1047,17 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	var is_crit := randf() * 100 < enemy.get_crit()
 	var damage := _calc_enemy_damage(enemy, target, is_crit)
 
+	# 도발 상태였으면 카운트 소모
+	var was_taunting := target.consume_taunt()
+
 	PartyManager.on_hero_damaged(target, damage)
 	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
-	
+
 	var log_color: Color = Color.RED if is_crit else Color.YELLOW
 	var crit_text: String = " (강타!)" if is_crit else ""
-	_send_log("%s → %s에게 %d%s" % [enemy.enemy_name, target.hero_name, damage, crit_text], log_color)
+	var taunt_text: String = " [도발]" if was_taunting else ""
+	_send_log("%s → %s에게 %d%s%s" % [enemy.enemy_name, target.hero_name, damage, crit_text, taunt_text], log_color)
 	
 	if target.is_dead:
 		_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
@@ -1045,6 +1070,14 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 	if is_crit:
 		return maxi(1, atk)
 	return maxi(1, atk - int(p_def / 2))
+
+
+func _find_taunt_target(alive_heroes: Array) -> Hero:
+	## 도발 상태인 영웅 찾기
+	for hero in alive_heroes:
+		if hero.has_taunt():
+			return hero
+	return null
 #endregion
 
 

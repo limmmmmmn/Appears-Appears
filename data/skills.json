@@ -17,14 +17,14 @@
   "power_strike": {
 	"id": "power_strike",
 	"name": "강타",
-	"description": "강력한 일격을 가한다",
+	"description": "공격력의 2배 데미지 (크리티컬 적용)",
 	"type": "physical",
 	"target": "single_enemy",
 	"cooldown": 5.0,
-	"damage_base": 5,
+	"damage_base": 0,
 	"damage_scaling": {
 	  "stat": "str",
-	  "multiplier": 1.5
+	  "multiplier": 2.0
 	},
 	"effects": [],
 	"default_on": true
@@ -47,14 +47,15 @@
   "heal": {
 	"id": "heal",
 	"name": "힐",
-	"description": "아군 한 명의 HP를 회복한다",
+	"description": "아군 한 명의 HP를 회복한다 (필드에서도 사용 가능)",
 	"type": "heal",
 	"target": "single_ally",
 	"cooldown": 10.0,
 	"base_damage": 25,
 	"scaling": 1.2,
 	"effects": [],
-	"default_on": true
+	"default_on": true,
+	"usable_on_field": true
   },
   "backstab": {
 	"id": "backstab",
@@ -93,17 +94,17 @@
   "shield_bash": {
 	"id": "shield_bash",
 	"name": "방패 강타",
-	"description": "방패로 적을 강타하여 기절시킨다",
+	"description": "공격력 절반 데미지 + 다음 2회 공격을 대신 받음",
 	"type": "physical",
 	"target": "single_enemy",
-	"cooldown": 6.0,
-	"damage_base": 5,
+	"cooldown": 8.0,
+	"damage_base": 0,
 	"damage_scaling": {
-	  "stat": "def",
-	  "multiplier": 0.8
+	  "stat": "str",
+	  "multiplier": 0.5
 	},
 	"effects": [
-	  {"type": "stun", "chance": 0.25, "duration": 1}
+	  {"type": "taunt", "count": 2}
 	],
 	"default_on": true
   }

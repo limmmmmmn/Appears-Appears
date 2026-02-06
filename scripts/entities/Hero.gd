@@ -22,6 +22,9 @@ var seed_bonus: Dictionary = {"hp": 0, "str": 0, "def": 0, "int": 0, "dex": 0, "
 var current_hp: int = 0
 var is_dead: bool = false
 
+# 도발 상태 (기사 방패 강타)
+var taunt_count: int = 0
+
 # 장비
 var equipment: Dictionary = {
 	"main_hand": "", "off_hand": "", "head": "", "body": "", "acc1": "", "acc2": ""
@@ -165,6 +168,24 @@ func apply_seed_bonus(stat: String, value: int) -> void:
 func full_restore() -> void:
 	current_hp = get_max_hp()
 	is_dead = false
+
+
+func apply_taunt(count: int) -> void:
+	## 도발 효과 적용
+	taunt_count = count
+
+
+func consume_taunt() -> bool:
+	## 도발 카운트 소모 (피격 시 호출)
+	if taunt_count > 0:
+		taunt_count -= 1
+		return true
+	return false
+
+
+func has_taunt() -> bool:
+	## 도발 상태인지 확인
+	return taunt_count > 0
 #endregion
 
 

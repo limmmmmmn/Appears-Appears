@@ -107,6 +107,7 @@ func _create_hero_card(index: int) -> HeroCard:
 	card.panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
 	card.panel.set_meta("card_index", index)
 	_style_card_panel(card.panel)
+	card.panel.gui_input.connect(_on_card_gui_input.bind(card))
 	card.wrapper.add_child(card.panel)
 
 	# 내부 VBox
@@ -513,3 +514,88 @@ func _play_damage_animation(card: HeroCard) -> void:
 	tween.tween_property(panel, "position:x", original_x - 3, 0.03)
 	tween.tween_property(panel, "position:x", original_x + 2, 0.03)
 	tween.tween_property(panel, "position:x", original_x, 0.03)
+
+
+# === 필드 힐 시스템 ===
+
+func _on_card_gui_input(event: InputEvent, card: HeroCard) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_try_field_heal(card)
+
+
+func _try_field_heal(card: HeroCard) -> void:
+	## 필드에서 힐 시도 (전투 중이 아닐 때)
+	# 전투 중이면 무시
+	if BattleManager and BattleManager.get_active_battle_count() > 0:
+		return
+
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	if card.hero_index >= party.size():
+		return
+
+	var target: Hero = party[card.hero_index]
+	if target == null or target.is_dead:
+		return
+
+	# 이미 풀피면 무시
+	if target.current_hp >= target.get_max_hp():
+		return
+
+	# 힐 가능한 영웅 찾기
+	var healer := _find_available_healer()
+	if healer == null:
+		return
+
+	# 힐 실행
+	_execute_field_heal(healer, target)
+
+
+func _find_available_healer() -> Hero:
+	## 필드 힐 가능한 힐러 찾기
+	var party: Array = PartyManager.get_party() if PartyManager else []
+
+	for hero in party:
+		if hero == null or hero.is_dead:
+			continue
+
+		# 힐러 클래스 확인
+		if hero.class_id != "cleric":
+			continue
+
+		# 힐 스킬 쿨타임 확인
+		if CooldownManager and not CooldownManager.is_skill_ready(hero.id, "heal"):
+			continue
+
+		return hero
+
+	return null
+
+
+func _execute_field_heal(healer: Hero, target: Hero) -> void:
+	## 필드에서 힐 실행
+	var skill_data: Dictionary = DataManager.get_skill("heal")
+	var base_value: int = int(skill_data.get("base_damage", 25))
+	var scaling: float = skill_data.get("scaling", 1.2)
+	var int_stat: int = healer.get_int()
+	var heal_amount: int = int(base_value + int_stat * scaling)
+
+	var actual_heal := target.heal(heal_amount)
+
+	# 쿨타임 시작
+	if CooldownManager:
+		CooldownManager.start_cooldown(healer.id, "heal")
+
+	# 효과음
+	if SoundManager:
+		SoundManager.play_heal()
+
+	# UI 업데이트
+	update_display()
+
+	# 로그 (배틀 로그 시그널 사용)
+	if BattleManager:
+		BattleManager.battle_log_received.emit(
+			"[필드] %s → %s HP +%d" % [healer.hero_name, target.hero_name, actual_heal],
+			Color.LIGHT_GREEN
+		)

@@ -140,9 +140,12 @@ func _create_item_button(item_info: Dictionary) -> Button:
 	btn.set_meta("quantity", quantity)
 	
 	btn.gui_input.connect(_on_button_gui_input.bind(btn, item_id))
-	btn.mouse_entered.connect(_on_item_hover.bind(item_id))
-	btn.mouse_exited.connect(_on_item_hover_end)
-	
+	btn.mouse_entered.connect(_on_item_hover.bind(btn, item_id))
+	btn.mouse_exited.connect(_on_item_hover_end.bind(btn))
+
+	# 기본 스타일 설정
+	_apply_button_style(btn, false)
+
 	return btn
 
 
@@ -160,31 +163,48 @@ func _on_button_gui_input(event: InputEvent, btn: Button, item_id: String) -> vo
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			item_right_clicked.emit(item_id, event.global_position)
 			return
-		
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				drag_start_pos = event.global_position
-				pending_drag_item = item_id
-			else:
-				# 드래그 안 했으면 클릭
-				if pending_drag_item == item_id:
-					item_clicked.emit(item_id)
-				pending_drag_item = ""
-	
-	elif event is InputEventMouseMotion:
-		if pending_drag_item == item_id:
-			var distance = event.global_position.distance_to(drag_start_pos)
-			if distance > DRAG_THRESHOLD:
-				item_drag_started.emit(item_id)
-				pending_drag_item = ""
+
+		# 드래그 비활성화 - 클릭만 처리
+		if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+			item_clicked.emit(item_id)
 
 
-func _on_item_hover(item_id: String) -> void:
+func _on_item_hover(btn: Button, item_id: String) -> void:
+	_apply_button_style(btn, true)
 	item_hover_started.emit(item_id)
 
 
-func _on_item_hover_end() -> void:
+func _on_item_hover_end(btn: Button) -> void:
+	_apply_button_style(btn, false)
 	item_hover_ended.emit()
+
+
+func _apply_button_style(btn: Button, hovered: bool) -> void:
+	## 버튼 스타일 적용 (호버 시 테두리)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.15, 0.18, 0.9)
+
+	if hovered:
+		style.border_width_left = 2
+		style.border_width_top = 2
+		style.border_width_right = 2
+		style.border_width_bottom = 2
+		style.border_color = Color(0.8, 0.8, 0.3, 1.0)
+	else:
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.border_color = Color(0.3, 0.3, 0.35, 0.8)
+
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", style)
+	btn.add_theme_stylebox_override("pressed", style)
 
 
 #region 툴팁

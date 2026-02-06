@@ -158,11 +158,12 @@ func _create_equipment_row(parent: VBoxContainer) -> void:
 		btn.add_theme_font_size_override("font_size", SLOT_FONT_SIZE)
 		btn.tooltip_text = SLOT_NAMES_KR.get(slot_name, slot_name) + ": (없음)"
 		btn.set_meta("slot_name", slot_name)
-		
+
 		btn.gui_input.connect(_on_equip_gui_input.bind(slot_name))
-		btn.mouse_entered.connect(_on_equip_mouse_entered.bind(slot_name))
-		btn.mouse_exited.connect(_on_equip_mouse_exited)
-		
+		btn.mouse_entered.connect(_on_equip_mouse_entered.bind(btn, slot_name))
+		btn.mouse_exited.connect(_on_equip_mouse_exited.bind(btn))
+
+		_apply_equip_button_style(btn, false)
 		equip_container.add_child(btn)
 		equip_buttons[slot_name] = btn
 
@@ -239,15 +240,45 @@ func _on_equip_gui_input(event: InputEvent, slot_name: String) -> void:
 	equipment_slot_gui_input.emit(event, slot_name)
 
 
-func _on_equip_mouse_entered(slot_name: String) -> void:
+func _on_equip_mouse_entered(btn: Button, slot_name: String) -> void:
+	_apply_equip_button_style(btn, true)
 	if not hero:
 		return
 	var equip_id: String = hero.equipment.get(slot_name, "")
 	equipment_slot_hovered.emit(slot_name, equip_id)
 
 
-func _on_equip_mouse_exited() -> void:
+func _on_equip_mouse_exited(btn: Button) -> void:
+	_apply_equip_button_style(btn, false)
 	equipment_slot_unhovered.emit()
+
+
+func _apply_equip_button_style(btn: Button, hovered: bool) -> void:
+	## 장비 버튼 스타일 적용 (호버 시 테두리)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.12, 0.15, 0.9)
+
+	if hovered:
+		style.border_width_left = 2
+		style.border_width_top = 2
+		style.border_width_right = 2
+		style.border_width_bottom = 2
+		style.border_color = Color(0.8, 0.8, 0.3, 1.0)
+	else:
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.border_color = Color(0.3, 0.3, 0.35, 0.6)
+
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", style)
+	btn.add_theme_stylebox_override("pressed", style)
 #endregion
 
 
