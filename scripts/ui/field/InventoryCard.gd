@@ -17,9 +17,15 @@ const MAX_DISPLAY_ITEMS := 12
 @onready var item_scroll: ScrollContainer = %ItemScroll
 @onready var item_list: VBoxContainer = %ItemList
 
+var _panel_normal_style: StyleBoxFlat
+var _panel_highlight_style: StyleBoxFlat
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
+	_panel_normal_style = panel.get_theme_stylebox("panel").duplicate()
+	_panel_highlight_style = _panel_normal_style.duplicate()
+	_panel_highlight_style.border_color = Color(1.0, 0.95, 0.3, 1.0)
 	if InventoryManager:
 		if not InventoryManager.inventory_changed.is_connected(refresh):
 			InventoryManager.inventory_changed.connect(refresh)
@@ -122,10 +128,14 @@ func _on_item_clicked(item_id: String) -> void:
 func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 	if not data is Dictionary:
 		return false
-	return data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
+	var valid: bool = data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
+	if valid and panel and _panel_highlight_style:
+		panel.add_theme_stylebox_override("panel", _panel_highlight_style)
+	return valid
 
 
 func _drop_data(_pos: Vector2, data: Variant) -> void:
+	_restore_panel_style()
 	if not data is Dictionary:
 		return
 	var hero_index: int = data.get("hero_index", -1)
@@ -138,6 +148,16 @@ func _drop_data(_pos: Vector2, data: Variant) -> void:
 	var hero: Hero = party[hero_index]
 	if InventoryManager:
 		InventoryManager.unequip_item(hero, source_slot)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAG_END:
+		_restore_panel_style()
+
+
+func _restore_panel_style() -> void:
+	if panel and _panel_normal_style:
+		panel.add_theme_stylebox_override("panel", _panel_normal_style)
 #endregion
 
 
