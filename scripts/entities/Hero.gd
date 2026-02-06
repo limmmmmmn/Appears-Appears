@@ -194,11 +194,7 @@ func can_equip(equip_id: String) -> bool:
 	var data: Dictionary = DataManager.get_equipment(equip_id)
 	if data.is_empty():
 		return false
-	# 액세서리는 모든 클래스가 장착 가능
-	var item_slot: String = data.get("slot", "")
-	if item_slot in ["accessory", "acc", "acc1", "acc2"]:
-		return true
-	return DataManager.can_class_equip(class_id, data.get("type", ""))
+	return true
 
 
 func equip_item(equip_id: String, slot: String) -> String:
