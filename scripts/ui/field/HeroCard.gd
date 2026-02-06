@@ -350,7 +350,13 @@ static func _get_rarity_color(rarity: String) -> Color:
 
 
 #region 슬롯 하이라이트
-func highlight_slot(p_slot_name: String) -> void:
+func highlight_slot(p_slot_name: String, equip_id: String = "") -> void:
+	if not equip_id.is_empty():
+		var party: Array = PartyManager.get_party() if PartyManager else []
+		if hero_index < 0 or hero_index >= party.size() or party[hero_index] == null:
+			return
+		if not party[hero_index].can_equip(equip_id):
+			return
 	var rd: Dictionary = equip_rows.get(p_slot_name, {})
 	if rd.is_empty():
 		return
@@ -441,7 +447,7 @@ class _EquipSlotRow extends PanelContainer:
 		for child in container.get_children():
 			if child is HeroCard and child != card_ref:
 				if on:
-					child.highlight_slot(slot_name)
+					child.highlight_slot(slot_name, item_id)
 				else:
 					child.clear_slot_highlights()
 

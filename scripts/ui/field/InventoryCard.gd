@@ -200,7 +200,7 @@ class _DraggableItemButton extends Button:
 			if child is HeroCard:
 				if on:
 					for ts in target_slots:
-						child.highlight_slot(ts)
+						child.highlight_slot(ts, item_id)
 				else:
 					child.clear_slot_highlights()
 
