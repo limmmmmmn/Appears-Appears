@@ -1,8 +1,10 @@
 extends Control
 class_name InventoryCard
-## 인벤토리 카드 (파티카드 패널 우측 고정)
+## 인벤토리 카드 (우측 끝 독립 배치)
 ## InventoryCard.tscn과 1:1 대응
 ## 아이템 목록 표시, 클릭 자동장착, 드래그 장착, 장비해제 드롭 타겟
+
+var hero_cards_container: Node = null
 
 const ITEM_TYPE_ICONS := {
 	"sword": "⚔", "dagger": "🗡", "staff": "🪄", "bow": "🏹", "axe": "🪓",
@@ -193,7 +195,9 @@ class _DraggableItemButton extends Button:
 		if eslot.is_empty():
 			return
 		var target_slots: Array = HeroCard.get_target_slots(eslot)
-		var container = inv_card.get_parent()
+		var container = inv_card.hero_cards_container
+		if not container:
+			container = inv_card.get_parent()
 		if not container:
 			return
 		for child in container.get_children():

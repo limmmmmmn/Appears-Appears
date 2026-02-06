@@ -19,8 +19,9 @@ corner_radius_bottom_left = 6
 corner_radius_bottom_right = 6
 
 [node name="InventoryCard" type="Control"]
-custom_minimum_size = Vector2(120, 142)
+custom_minimum_size = Vector2(120, 135)
 mouse_filter = 2
+size_flags_vertical = 8
 script = ExtResource("1_script")
 
 [node name="Panel" type="PanelContainer" parent="."]

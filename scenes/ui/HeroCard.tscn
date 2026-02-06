@@ -21,6 +21,7 @@ corner_radius_bottom_right = 6
 [node name="HeroCard" type="Control"]
 custom_minimum_size = Vector2(108, 135)
 mouse_filter = 2
+size_flags_vertical = 8
 script = ExtResource("1_script")
 
 [node name="Panel" type="PanelContainer" parent="."]
