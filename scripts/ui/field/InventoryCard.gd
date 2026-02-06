@@ -1,0 +1,179 @@
+extends Control
+class_name InventoryCard
+## 인벤토리 카드 (파티카드 패널 우측 고정)
+## InventoryCard.tscn과 1:1 대응
+## 아이템 목록 표시, 클릭 자동장착, 드래그 장착, 장비해제 드롭 타겟
+
+const ITEM_TYPE_ICONS := {
+	"sword": "⚔", "dagger": "🗡", "staff": "🪄", "bow": "🏹", "axe": "🪓",
+	"shield": "🛡", "helmet": "⛑", "heavy_armor": "🥋", "medium_armor": "🥋",
+	"light_armor": "🥋", "robe": "👘", "ring": "💍", "amulet": "📿",
+	"boots": "👢", "potion": "🧪",
+}
+const MAX_DISPLAY_ITEMS := 12
+
+@onready var panel: PanelContainer = %Panel
+@onready var title_label: Label = %TitleLabel
+@onready var item_scroll: ScrollContainer = %ItemScroll
+@onready var item_list: VBoxContainer = %ItemList
+
+
+func _ready() -> void:
+	if InventoryManager:
+		if not InventoryManager.inventory_changed.is_connected(refresh):
+			InventoryManager.inventory_changed.connect(refresh)
+	_setup_unequip_drop()
+	call_deferred("refresh")
+
+
+#region 아이템 리스트 갱신
+func refresh() -> void:
+	if not item_list or not is_inside_tree():
+		return
+
+	for child in item_list.get_children():
+		child.queue_free()
+
+	var items: Array = InventoryManager.get_all_items() if InventoryManager else []
+	var count: int = 0
+	for item in items:
+		if count >= MAX_DISPLAY_ITEMS:
+			break
+		var row := _create_item_row(item)
+		item_list.add_child(row)
+		count += 1
+
+	title_label.text = "[ 인벤토리 %d ]" % items.size() if items.size() > 0 else "[ 인벤토리 ]"
+#endregion
+
+
+#region 아이템 행 생성
+func _create_item_row(item: Dictionary) -> Button:
+	var row := _DraggableItemButton.new()
+	row.inv_card = self
+	row.item_id = item.id
+	row.item_data = item.data
+
+	var rarity: String = item.data.get("rarity", "common")
+	var rarity_color: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.7, 0.7, 0.7))
+	row.rarity_color = rarity_color
+
+	var item_type: String = item.data.get("type", "?")
+	var icon: String = ITEM_TYPE_ICONS.get(item_type, "?")
+	var item_name: String = item.data.get("name", item.id)
+	if item.quantity > 1:
+		row.text = "%s%s x%d" % [icon, item_name, item.quantity]
+	else:
+		row.text = "%s%s" % [icon, item_name]
+
+	row.custom_minimum_size = Vector2(0, 16)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+	row.add_theme_font_size_override("font_size", 8)
+	row.add_theme_color_override("font_color", rarity_color)
+
+	var normal_style := FieldHUD._make_flat_style(
+		Color(0.06, 0.06, 0.08, 0.0), Color.TRANSPARENT, 2
+	)
+	normal_style.content_margin_left = 3
+	normal_style.content_margin_right = 3
+	normal_style.content_margin_top = 0
+	normal_style.content_margin_bottom = 0
+	row.add_theme_stylebox_override("normal", normal_style)
+
+	var hover_style := FieldHUD._make_flat_style(
+		FieldHUD.STYLE.bg_btn_hover, Color(1.0, 0.95, 0.3, 1.0), 2, 2
+	)
+	hover_style.content_margin_left = 3
+	hover_style.content_margin_right = 3
+	hover_style.content_margin_top = 0
+	hover_style.content_margin_bottom = 0
+	row.add_theme_stylebox_override("hover", hover_style)
+	row.add_theme_stylebox_override("pressed", hover_style)
+
+	# 툴팁
+	var stats: Dictionary = item.data.get("stats", {})
+	var tip: String = item_name + " [" + rarity + "]\n"
+	for stat_key in stats:
+		tip += "%s: %+d\n" % [stat_key.to_upper(), stats[stat_key]]
+	tip += "[클릭: 자동장착] [드래그: 영웅에게]"
+	row.tooltip_text = tip
+
+	return row
+#endregion
+
+
+#region 클릭 자동장착
+func _on_item_clicked(item_id: String) -> void:
+	if not InventoryManager:
+		return
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	if item_data.is_empty():
+		return
+	InventoryManager.try_auto_equip(item_id)
+#endregion
+
+
+#region 장비 해제 드롭
+func _setup_unequip_drop() -> void:
+	var drop_target := _UnequipDropTarget.new()
+	drop_target.inv_card = self
+	drop_target.set_anchors_preset(Control.PRESET_FULL_RECT)
+	drop_target.mouse_filter = Control.MOUSE_FILTER_PASS
+	if panel:
+		panel.add_child(drop_target)
+
+
+class _UnequipDropTarget extends Control:
+	var inv_card: InventoryCard = null
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		if not data is Dictionary:
+			return false
+		return data.get("type", "") == "equipment" and data.get("source", "") == "equipment"
+
+	func _drop_data(_pos: Vector2, data: Variant) -> void:
+		if not data is Dictionary:
+			return
+		var hero_index: int = data.get("hero_index", -1)
+		var source_slot: String = data.get("source_slot", "")
+		if hero_index < 0 or source_slot.is_empty():
+			return
+		var party: Array = PartyManager.get_party() if PartyManager else []
+		if hero_index >= party.size() or party[hero_index] == null:
+			return
+		var hero: Hero = party[hero_index]
+		if InventoryManager:
+			InventoryManager.unequip_item(hero, source_slot)
+#endregion
+
+
+#region 드래그 가능 아이템 버튼
+class _DraggableItemButton extends Button:
+	var inv_card: InventoryCard = null
+	var item_id: String = ""
+	var item_data: Dictionary = {}
+	var rarity_color: Color = Color.WHITE
+
+	func _ready() -> void:
+		pressed.connect(_on_pressed)
+
+	func _on_pressed() -> void:
+		if inv_card:
+			inv_card._on_item_clicked(item_id)
+
+	func _get_drag_data(_pos: Vector2) -> Variant:
+		var slot: String = item_data.get("slot", "")
+		if slot.is_empty():
+			return null
+		var preview := Label.new()
+		preview.text = self.text
+		preview.add_theme_font_size_override("font_size", 9)
+		preview.add_theme_color_override("font_color", rarity_color)
+		preview.add_theme_color_override("font_outline_color", Color.BLACK)
+		preview.add_theme_constant_override("outline_size", 2)
+		preview.modulate.a = 0.9
+		set_drag_preview(preview)
+		return {"type": "equipment", "item_id": item_id, "item_data": item_data}
+#endregion

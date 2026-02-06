@@ -2,14 +2,17 @@ extends Control
 class_name BottomPartyCards
 ## 하단 파티 카드 컨테이너
 ## HeroCard.tscn을 인스턴스하여 파티원별 카드를 표시
+## InventoryCard.tscn을 가장 오른쪽에 고정 배치
 
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
+const InventoryCardScene := preload("res://scenes/ui/InventoryCard.tscn")
 
 signal equipment_dropped(hero_index: int, item_id: String)
 
 @onready var cards_container: HBoxContainer = %CardsContainer
 
 var cards: Array[HeroCard] = []
+var inventory_card: InventoryCard = null
 
 
 func _ready() -> void:
@@ -19,6 +22,7 @@ func _ready() -> void:
 
 func _initial_setup() -> void:
 	if cards_container:
+		_create_inventory_card()
 		update_display()
 
 
@@ -50,11 +54,22 @@ func _on_party_changed() -> void:
 	update_display()
 
 
+#region 인벤토리 카드
+func _create_inventory_card() -> void:
+	if inventory_card and is_instance_valid(inventory_card):
+		return
+	inventory_card = InventoryCardScene.instantiate()
+	cards_container.add_child(inventory_card)
+#endregion
+
+
 #region 카드 관리
 func _rebuild_cards() -> void:
 	cards.clear()
 	if cards_container:
 		for child in cards_container.get_children():
+			if child == inventory_card:
+				continue
 			cards_container.remove_child(child)
 			child.queue_free()
 
@@ -68,6 +83,10 @@ func _rebuild_cards() -> void:
 		card.field_heal_requested.connect(_on_field_heal_requested)
 		cards_container.add_child(card)
 		cards.append(card)
+
+	# 인벤토리 카드를 항상 맨 오른쪽으로
+	if inventory_card and is_instance_valid(inventory_card):
+		cards_container.move_child(inventory_card, -1)
 
 
 func update_display() -> void:
