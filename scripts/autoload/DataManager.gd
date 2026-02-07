@@ -63,7 +63,11 @@ func can_class_dual_wield(class_id: String) -> bool:
 func can_class_equip(class_id: String, equip_type: String) -> bool:
 	var c := get_class_data(class_id)
 	var can_equip: Array = c.get("equip_restrictions", {}).get("can_equip", [])
-	return equip_type in can_equip
+	# 악세사리 타입 통합: ring/necklace/shoes → acc
+	var check_type := equip_type
+	if equip_type in ["ring", "necklace", "shoes"]:
+		check_type = "acc"
+	return check_type in can_equip
 
 
 # 영웅

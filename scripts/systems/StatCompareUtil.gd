@@ -2,7 +2,7 @@ extends RefCounted
 class_name StatCompareUtil
 ## 스탯 비교 유틸리티: 장비 변경 시 스탯 변화 계산
 
-const STAT_KEYS := ["atk", "def", "p_def", "int", "dex", "luk", "hp", "str"]
+const STAT_KEYS := ["atk", "def", "p_def", "int", "dex", "luk", "hp", "str", "spd"]
 
 const SLOT_DISPLAY_NAMES := {
 	"main_hand": "주무기",
@@ -82,6 +82,14 @@ static func calculate_stat_changes(hero: Hero, new_item_id: String) -> Dictionar
 		var new_val := cur - old_bonus + new_bonus
 		result["HP"] = {"current": cur, "new": new_val, "diff": new_val - cur}
 
+	# SPD 계산
+	if new_stats.has("spd") or current_stats.has("spd"):
+		var cur := hero.get_spd()
+		var old_bonus: int = int(current_stats.get("spd", 0))
+		var new_bonus: int = int(new_stats.get("spd", 0))
+		var new_val := cur - old_bonus + new_bonus
+		result["SPD"] = {"current": cur, "new": new_val, "diff": new_val - cur}
+
 	return result
 
 
@@ -149,6 +157,8 @@ static func format_equipment_stats(stats: Dictionary) -> String:
 		parts.append("LUK +%d" % int(stats["luk"]))
 	if stats.has("hp"):
 		parts.append("HP +%d" % int(stats["hp"]))
+	if stats.has("spd"):
+		parts.append("SPD +%d" % int(stats["spd"]))
 
 	return "  ".join(parts) if not parts.is_empty() else "(스탯 없음)"
 

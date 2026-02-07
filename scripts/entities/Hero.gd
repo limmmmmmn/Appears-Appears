@@ -112,6 +112,9 @@ func get_p_def() -> int:
 func get_m_def() -> int:
 	return get_int()
 
+func get_spd() -> int:
+	return _get_equipment_stat("spd")
+
 func get_eva() -> float:
 	return get_dex() * 0.5 + get_luk() * 0.2
 
