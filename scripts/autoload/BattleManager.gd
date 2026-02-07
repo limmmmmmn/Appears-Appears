@@ -107,7 +107,7 @@ func start_boss_battle(enemy_id: String, parent_node: Node = null, is_elite: boo
 
 
 func _find_available_window() -> BattleWindow:
-	## 적을 추가할 수 있는 전투창 찾기 (보스 제외, 여유 있는 창)
+	## 적을 추가할 수 있는 전투창 찾기 (보스/봉쇄 제외, 여유 있는 창)
 	for battle_id in active_battles:
 		var battle_data: Dictionary = active_battles[battle_id]
 		if battle_data.get("is_boss", false):
@@ -119,6 +119,8 @@ func _find_available_window() -> BattleWindow:
 
 		var window: BattleWindow = window_ref as BattleWindow
 		if window:
+			if window.is_blockaded:
+				continue
 			# charm 효과로 인한 동적 최대 적 수 사용
 			if window.get_enemy_count() < window.get_max_enemies():
 				return window
@@ -127,7 +129,7 @@ func _find_available_window() -> BattleWindow:
 
 
 func _get_oldest_non_boss_window() -> BattleWindow:
-	## 가장 먼저 생성된 비보스 전투창 반환
+	## 가장 먼저 생성된 비보스/비봉쇄 전투창 반환
 	var oldest_id: int = -1
 	var oldest_window: BattleWindow = null
 
@@ -138,6 +140,10 @@ func _get_oldest_non_boss_window() -> BattleWindow:
 
 		var window_ref = battle_data.get("window")
 		if window_ref == null or not is_instance_valid(window_ref):
+			continue
+
+		var window: BattleWindow = window_ref as BattleWindow
+		if window and window.is_blockaded:
 			continue
 
 		if oldest_id == -1 or battle_id < oldest_id:

@@ -49,6 +49,7 @@ var kill_count: int = 0  # 원념 (적 처치 횟수)
 # === 전투창 모드 ===
 enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
 var window_mode: WindowMode = WindowMode.NORMAL
+var is_blockaded: bool = false  # 봉쇄 모드 (적 추가 차단)
 
 # === UI 참조 ===
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
@@ -163,6 +164,9 @@ func _ready() -> void:
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
 
+	# 봉쇄 버튼 생성
+	_setup_blockade_button()
+
 	# 적 호버 툴팁 생성
 	_setup_enemy_tooltip()
 
@@ -226,8 +230,8 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 
 func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
-	# 패배 상태에서는 적 추가 불가
-	if current_state == BattleState.DEFEAT:
+	# 패배/봉쇄 상태에서는 적 추가 불가
+	if current_state == BattleState.DEFEAT or is_blockaded:
 		return
 
 	enemy_data_list.append(enemy_id)
@@ -1959,6 +1963,36 @@ func _hide_claim_ui() -> void:
 	## 보상 UI 숨기기
 	if claim_reward_panel:
 		claim_reward_panel.visible = false
+#endregion
+
+
+#region 봉쇄 버튼
+var blockade_button: Button = null
+
+func _setup_blockade_button() -> void:
+	## 좌측 하단에 봉쇄 토글 버튼 생성
+	var bottom_bar = get_node_or_null("MainVBox/BottomBar")
+	if not bottom_bar:
+		return
+
+	blockade_button = Button.new()
+	blockade_button.text = "봉쇄"
+	blockade_button.toggle_mode = true
+	blockade_button.tooltip_text = "활성화 시 적이 더 이상 이 전투창에 들어오지 않습니다"
+	blockade_button.custom_minimum_size = Vector2(50, 26)
+	blockade_button.add_theme_font_size_override("font_size", 10)
+	blockade_button.toggled.connect(_on_blockade_toggled)
+	bottom_bar.add_child(blockade_button)
+	bottom_bar.move_child(blockade_button, 0)
+
+
+func _on_blockade_toggled(toggled_on: bool) -> void:
+	is_blockaded = toggled_on
+	if blockade_button:
+		if toggled_on:
+			blockade_button.modulate = Color(1.0, 0.5, 0.5)
+		else:
+			blockade_button.modulate = Color.WHITE
 #endregion
 
 
