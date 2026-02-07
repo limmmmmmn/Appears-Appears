@@ -12,7 +12,6 @@ signal atb_updated  # ATB 업데이트됨 (UI 갱신용)
 # ATB 설정
 const ATB_MAX: float = 100.0
 const ATB_FILL_RATE: float = 30.0  # 기본 충전 속도
-const ALLY_SPEED_MULT: float = 1.2  # 아군 속도 배율 (소폭 우위)
 
 # 영웅 ATB 상태
 var hero_atb: Dictionary = {}  # hero_id -> {hero: Hero, atb: float, speed: int}
@@ -111,10 +110,10 @@ func _update_hero_atb(delta: float) -> void:
 		if hero.is_dead:
 			continue
 
-		# ATB 충전 (아군은 2배 속도)
+		# ATB 충전
 		if data["atb"] < ATB_MAX:
 			var speed: int = data["speed"]
-			var fill_amount: float = ATB_FILL_RATE * (speed / 10.0) * ALLY_SPEED_MULT * delta
+			var fill_amount: float = ATB_FILL_RATE * (speed / 10.0) * delta
 			data["atb"] = minf(data["atb"] + fill_amount, ATB_MAX)
 
 		# 가장 높은 ATB를 가진 준비된 영웅 찾기
