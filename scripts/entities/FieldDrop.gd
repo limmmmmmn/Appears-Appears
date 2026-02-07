@@ -288,20 +288,27 @@ func _spawn_fly_icon(icon_text: String, icon_color: Color, target_screen_pos: Ve
 	fly.pivot_offset = Vector2(8, 8)
 	hud.add_child(fly)
 
-	# 팝 → 날아감 연출
+	# 위로 팝 → 포물선으로 목표 도달
 	fly.scale = Vector2(1.5, 1.5)
 	var tween := fly.create_tween()
-	# 팝 효과 (0.1초)
-	tween.tween_property(fly, "scale", Vector2(1.0, 1.0), 0.1) \
-		.set_ease(Tween.EASE_OUT)
-	# 목표로 날아감 (0.4초)
+
+	# Phase 1: 위로 떠오름 (0.15초)
 	tween.set_parallel(true)
-	tween.tween_property(fly, "position", target_screen_pos, 0.4) \
+	tween.tween_property(fly, "position:y", screen_pos.y - 30.0, 0.15) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(fly, "scale", Vector2(1.0, 1.0), 0.15) \
+		.set_ease(Tween.EASE_OUT)
+
+	# Phase 2: 포물선으로 목표 (0.35초)
+	tween.chain()
+	tween.set_parallel(true)
+	tween.tween_property(fly, "position:x", target_screen_pos.x, 0.35) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(fly, "position:y", target_screen_pos.y, 0.35) \
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(fly, "scale", Vector2(0.4, 0.4), 0.4) \
+	tween.tween_property(fly, "scale", Vector2(0.5, 0.5), 0.35) \
 		.set_ease(Tween.EASE_IN)
-	tween.tween_property(fly, "modulate:a", 0.0, 0.15) \
-		.set_delay(0.3)
+
 	tween.chain().tween_callback(fly.queue_free)
 
 
