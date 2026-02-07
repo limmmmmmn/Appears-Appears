@@ -64,10 +64,9 @@ var is_waiting_for_claim: bool = false  # 보상 대기 상태 (적 전멸 후)
 var claim_reward_panel: CenterContainer = null
 var claim_button: Button = null
 var claim_gold_label: Label = null
-var claim_items_label: Label = null
-var claim_grudge_section: VBoxContainer = null
-var claim_grudge_gold_label: Label = null
-var claim_grudge_items_label: Label = null
+var claim_item_list_label: Label = null
+var claim_chest_label: Label = null
+var claim_chest_tier_label: Label = null
 
 var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
@@ -1863,22 +1862,7 @@ func _setup_claim_reward_ui() -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
-	# 보상받기 버튼
-	claim_button = Button.new()
-	claim_button.text = "보상받기"
-	claim_button.custom_minimum_size = Vector2(80, 32)
-	claim_button.add_theme_font_size_override("font_size", 14)
-	claim_button.pressed.connect(_on_claim_button_pressed)
-	vbox.add_child(claim_button)
-
-	# 현재까지 보상 라벨
-	var rewards_title_label := Label.new()
-	rewards_title_label.text = "현재까지 보상"
-	rewards_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rewards_title_label.add_theme_font_size_override("font_size", 10)
-	rewards_title_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	vbox.add_child(rewards_title_label)
-
+	# --- 상단: 아이템 목록 ---
 	# 골드 라벨
 	claim_gold_label = Label.new()
 	claim_gold_label.text = "💰 0 Gold"
@@ -1887,44 +1871,42 @@ func _setup_claim_reward_ui() -> void:
 	claim_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	vbox.add_child(claim_gold_label)
 
-	# 아이템 라벨
-	claim_items_label = Label.new()
-	claim_items_label.text = ""
-	claim_items_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	claim_items_label.add_theme_font_size_override("font_size", 10)
-	claim_items_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
-	vbox.add_child(claim_items_label)
+	# 아이템 목록 라벨 (멀티라인)
+	claim_item_list_label = Label.new()
+	claim_item_list_label.text = ""
+	claim_item_list_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	claim_item_list_label.add_theme_font_size_override("font_size", 10)
+	claim_item_list_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
+	vbox.add_child(claim_item_list_label)
 
-	# --- 원념 보너스 섹션 ---
-	claim_grudge_section = VBoxContainer.new()
-	claim_grudge_section.add_theme_constant_override("separation", 2)
-	claim_grudge_section.visible = false
-	vbox.add_child(claim_grudge_section)
-
+	# --- 구분선 ---
 	var sep := HSeparator.new()
 	sep.modulate = Color(1, 1, 1, 0.3)
-	claim_grudge_section.add_child(sep)
+	vbox.add_child(sep)
 
-	var grudge_title := Label.new()
-	grudge_title.text = "원념 보너스"
-	grudge_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	grudge_title.add_theme_font_size_override("font_size", 9)
-	grudge_title.add_theme_color_override("font_color", Color(0.8, 0.5, 1.0))
-	claim_grudge_section.add_child(grudge_title)
+	# --- 하단: 보물상자 ---
+	# 보물상자 이모지
+	claim_chest_label = Label.new()
+	claim_chest_label.text = "📦"
+	claim_chest_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	claim_chest_label.add_theme_font_size_override("font_size", 28)
+	vbox.add_child(claim_chest_label)
 
-	claim_grudge_gold_label = Label.new()
-	claim_grudge_gold_label.text = ""
-	claim_grudge_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	claim_grudge_gold_label.add_theme_font_size_override("font_size", 10)
-	claim_grudge_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	claim_grudge_section.add_child(claim_grudge_gold_label)
+	# 보물상자 보상단계
+	claim_chest_tier_label = Label.new()
+	claim_chest_tier_label.text = "보상단계 1"
+	claim_chest_tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	claim_chest_tier_label.add_theme_font_size_override("font_size", 10)
+	claim_chest_tier_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+	vbox.add_child(claim_chest_tier_label)
 
-	claim_grudge_items_label = Label.new()
-	claim_grudge_items_label.text = ""
-	claim_grudge_items_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	claim_grudge_items_label.add_theme_font_size_override("font_size", 10)
-	claim_grudge_items_label.add_theme_color_override("font_color", Color(0.6, 0.5, 0.8))
-	claim_grudge_section.add_child(claim_grudge_items_label)
+	# 보상받기 버튼
+	claim_button = Button.new()
+	claim_button.text = "보상받기"
+	claim_button.custom_minimum_size = Vector2(80, 32)
+	claim_button.add_theme_font_size_override("font_size", 14)
+	claim_button.pressed.connect(_on_claim_button_pressed)
+	vbox.add_child(claim_button)
 
 	battle_area.add_child(claim_reward_panel)
 
@@ -1940,28 +1922,56 @@ func _show_claim_ui() -> void:
 	if not claim_reward_panel:
 		return
 
-	# 기본 보상 표시
+	# --- 상단: 아이템 목록 ---
 	claim_gold_label.text = "💰 %d Gold" % total_gold
 
 	if drop_items.is_empty():
-		claim_items_label.text = ""
+		claim_item_list_label.text = ""
+		claim_item_list_label.visible = false
 	else:
-		claim_items_label.text = "아이템 %d개" % drop_items.size()
+		var item_lines: Array = []
+		for item_id in drop_items:
+			var item_name: String = _get_item_display_name(item_id)
+			item_lines.append(item_name)
+		claim_item_list_label.text = "\n".join(item_lines)
+		claim_item_list_label.visible = true
 
-	# 원념 보너스 표시
+	# --- 하단: 보물상자 보상단계 ---
 	var dl: int = get_local_danger_level()
-	if dl > 0 and claim_grudge_section:
-		claim_grudge_section.visible = true
-		var grudge_percent: int = dl * 10
-		var grudge_gold: int = int(total_gold * dl * 0.1)
-		claim_grudge_gold_label.text = "💰 +%d Gold (+%d%%)" % [grudge_gold, grudge_percent]
+	var tier: int = dl + 1
+	var chest_emojis: Array = ["📦", "🎁", "💎", "👑", "🏆", "🌟"]
+	var chest_idx: int = mini(dl, chest_emojis.size() - 1)
+	claim_chest_label.text = chest_emojis[chest_idx]
 
-		var grudge_item_count: int = dl
-		claim_grudge_items_label.text = "  ???" if grudge_item_count == 1 else "  ??? x%d" % grudge_item_count
-	elif claim_grudge_section:
-		claim_grudge_section.visible = false
+	var tier_text: String = "보상단계 %d" % tier
+	if dl > 0:
+		var grudge_percent: int = dl * 10
+		tier_text += " (+%d%%)" % grudge_percent
+		claim_chest_tier_label.add_theme_color_override("font_color", DANGER_BORDER_COLORS[mini(dl, DANGER_BORDER_COLORS.size() - 1)])
+	else:
+		claim_chest_tier_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+	claim_chest_tier_label.text = tier_text
 
 	claim_reward_panel.visible = true
+
+
+func _get_item_display_name(item_id: String) -> String:
+	## 아이템 ID로 표시용 이름 반환
+	var equip_data: Dictionary = DataManager.get_equipment(item_id)
+	if not equip_data.is_empty():
+		var rarity: String = str(equip_data.get("rarity", "common"))
+		var item_name: String = str(equip_data.get("name", item_id))
+		match rarity:
+			"magic":
+				return "🔷 %s" % item_name
+			"legendary":
+				return "🌟 %s" % item_name
+			_:
+				return "⚔️ %s" % item_name
+	var item_data: Dictionary = DataManager.get_item(item_id)
+	if not item_data.is_empty():
+		return "📜 %s" % str(item_data.get("name", item_id))
+	return item_id
 
 
 func _hide_claim_ui() -> void:
