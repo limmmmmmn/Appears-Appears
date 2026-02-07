@@ -495,20 +495,17 @@ func _calculate_window_position() -> Vector2:
 	safe_right = maxf(safe_right, safe_left)
 	safe_bottom = maxf(safe_bottom, safe_top)
 
-	# 현재 전투창 개수
-	var window_count: int = active_battles.size()
-
-	# 첫 2개는 고정 위치 (좌상단, 우상단)
-	if window_count == 0:
-		return Vector2(safe_left, safe_top)  # 좌상단
-	elif window_count == 1:
-		return Vector2(safe_right, safe_top)  # 우상단
-
-	# 3개째부터는 랜덤 위치 (겹쳐도 됨, 단 중앙은 피함)
+	# 중앙 회피 영역 (파티 리더가 보통 가운데 있으므로)
 	var center := viewport_size / 2
-	var center_avoid := Rect2(center.x - 50, center.y - 30, 100, 60)  # 가로100 세로60 영역
+	var center_avoid := Rect2(
+		center.x - CENTER_SAFE_SIZE * 0.5,
+		center.y - CENTER_SAFE_SIZE * 0.5,
+		CENTER_SAFE_SIZE,
+		CENTER_SAFE_SIZE
+	)
 
-	for _i in range(20):
+	# 항상 랜덤 배치 (중앙 + 하단 HUD 회피)
+	for _i in range(30):
 		var x := randf_range(safe_left, safe_right)
 		var y := randf_range(safe_top, safe_bottom)
 		var window_rect := Rect2(x, y, WINDOW_SIZE.x, WINDOW_SIZE.y)
@@ -517,7 +514,7 @@ func _calculate_window_position() -> Vector2:
 		if not window_rect.intersects(center_avoid):
 			return Vector2(x, y)
 
-	# 못 찾으면 상단 영역에 배치
+	# 못 찾으면 상단 좌우 랜덤
 	return Vector2(randf_range(safe_left, safe_right), safe_top)
 
 
