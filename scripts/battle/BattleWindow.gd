@@ -1307,8 +1307,7 @@ func _report_rewards_and_close() -> void:
 	set_process(false)
 	battle_ended.emit(battle_id, true)
 
-	# 보상 날아가는 연출 후 닫기
-	_play_reward_fly_animation()
+	_play_close_effect()
 
 
 func _update_buttons_for_no_enemies() -> void:
@@ -1352,8 +1351,7 @@ func _end_battle_victory() -> void:
 
 	battle_ended.emit(battle_id, true)
 
-	# 보상 날아가는 연출 후 닫기
-	_play_reward_fly_animation()
+	_play_close_effect()
 
 
 func _play_reward_fly_animation() -> void:
