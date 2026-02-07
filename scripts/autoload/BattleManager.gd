@@ -45,6 +45,7 @@ var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite, 
 var _battle_id_counter: int = 0
 var last_battle_pos: Vector2 = Vector2.ZERO
 var last_window_rect: Rect2 = Rect2()
+var last_window_danger: int = 0
 
 # === 턴제 전투 설정 ===
 const TURN_DELAY: float = 0.5  # 턴 사이 딜레이 (초)
@@ -345,12 +346,14 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 				window_items = window.drop_items.duplicate()
 				window_screen_rect = Rect2(window.position, window.size)
 				last_window_rect = window_screen_rect
+				var window_danger: int = window.get_local_danger_level()
+				last_window_danger = window_danger
 
 	end_battle(battle_id, victory)
 
-	# 필드 드롭 스폰 요청 (전투창 영역 정보 포함)
+	# 필드 드롭 스폰 요청 (전투창별 로컬 위험도 사용)
 	if victory and (window_gold > 0 or not window_items.is_empty()):
-		field_drops_requested.emit(window_gold, window_items, get_danger_level(), battle_pos, window_screen_rect)
+		field_drops_requested.emit(window_gold, window_items, last_window_danger, battle_pos, window_screen_rect)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -424,19 +427,18 @@ func claim_accumulated_rewards() -> void:
 		items_arr.append(item.id)
 
 	if accumulated_gold > 0 or not items_arr.is_empty():
-		field_drops_requested.emit(accumulated_gold, items_arr, get_danger_level(), last_battle_pos, last_window_rect)
+		field_drops_requested.emit(accumulated_gold, items_arr, last_window_danger, last_battle_pos, last_window_rect)
 
 	# 초기화
 	reset_accumulated_rewards()
 
 
 func reset_accumulated_rewards() -> void:
-	## 보상 및 원념 초기화
+	## 보상 초기화
 	accumulated_gold = 0
 	accumulated_items.clear()
-	global_kill_count = 0
+	last_window_danger = 0
 	accumulated_rewards_changed.emit(0, [])
-	global_kill_count_changed.emit(0, 0)
 
 
 func get_accumulated_rewards() -> Dictionary:

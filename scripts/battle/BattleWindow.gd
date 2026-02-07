@@ -1102,8 +1102,8 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	# 원념 증가 (로컬)
 	kill_count += 1
 
-	# 글로벌 킬 카운트 즉시 증가 (적 처치할 때마다)
-	BattleManager.increment_global_kill_count()
+	# 글로벌 킬 카운트 (HUD 표시용, 위험도 계산에는 사용 안함)
+	BattleManager.add_global_kill_count(1)
 
 	# 특성: 적 3마리 이상일 때 보너스 원념
 	if _check_trait_condition("enemies_gte_3"):
@@ -1118,9 +1118,9 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		_shake_window()
 		_show_danger_level_up_message(new_danger)
 
-	# 보상 계산 (위험도 + 특성 적용)
-	var global_danger: int = BattleManager.get_danger_level()
-	var danger_reward_mult: float = 1.0 + (global_danger * 0.1)  # 위험도당 10% 보상 증가
+	# 보상 계산 (로컬 위험도 + 특성 적용)
+	var local_danger: int = get_local_danger_level()
+	var danger_reward_mult: float = 1.0 + (local_danger * 0.1)  # 위험도당 10% 보상 증가
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
 
 	var gold_reward: int = int(enemy.get_gold_reward() * danger_reward_mult * gold_trait_mult)
@@ -1277,10 +1277,6 @@ func _check_battle_end() -> bool:
 func _report_rewards_and_close() -> void:
 	## 보상을 BattleManager에 누적하고 전투창 닫기
 	BattleManager.add_accumulated_reward(0, total_gold, drop_items)
-
-	# 킬카운트 증가 (원념 레벨 체크는 BattleManager에서)
-	for i in range(kill_count):
-		BattleManager.increment_global_kill_count()
 
 	_send_log("전투 종료! (Gold +%d)" % total_gold, Color.LIME)
 
