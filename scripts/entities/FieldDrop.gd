@@ -191,38 +191,38 @@ func _collect_hp() -> void:
 		actual_total += actual
 	if PartyManager:
 		PartyManager.party_changed.emit()
-	if actual_total > 0:
-		# 필드 위 파티원 머리 위에 +10 연출
-		_spawn_heal_popups()
-		if BattleManager:
-			BattleManager.battle_log_received.emit(
-				"💗 파티 전체 HP +%d" % actual_total, Color(0.4, 1.0, 0.4)
-			)
+	# 항상 팝업 표시 (만피여도 연출)
+	_spawn_heal_popups()
+	if actual_total > 0 and BattleManager:
+		BattleManager.battle_log_received.emit(
+			"💗 파티 전체 HP +%d" % actual_total, Color(0.4, 1.0, 0.4)
+		)
 
 
 func _spawn_heal_popups() -> void:
 	## 필드 파티원 머리 위에 "+10" 초록색 팝업 연출
-	var field_members: Array[Node] = []
-	field_members.append_array(get_tree().get_nodes_in_group("party_leader"))
-	field_members.append_array(get_tree().get_nodes_in_group("party"))
+	var field_members: Array = get_tree().get_nodes_in_group("party")
 
 	for member in field_members:
 		if not is_instance_valid(member) or not member is Node2D:
 			continue
+		var member_2d: Node2D = member as Node2D
+		# 부모(Field)에 직접 추가하여 캐릭터 이동 영향 안 받게
 		var popup := Label.new()
 		popup.text = "+%d" % heal_amount
 		popup.add_theme_font_size_override("font_size", 10)
 		popup.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 		popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-		popup.add_theme_constant_override("outline_size", 2)
-		popup.position = Vector2(-10, -20)
+		popup.add_theme_constant_override("outline_size", 3)
 		popup.z_index = 100
 		popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		member.add_child(popup)
+		popup.position = member_2d.global_position + Vector2(-10, -20)
+		get_tree().current_scene.add_child(popup)
 
+		var start_y: float = popup.position.y
 		var tween := popup.create_tween()
 		tween.set_parallel(true)
-		tween.tween_property(popup, "position:y", -40.0, 0.6) \
+		tween.tween_property(popup, "position:y", start_y - 20.0, 0.6) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 		tween.tween_property(popup, "modulate:a", 0.0, 0.6) \
 			.set_ease(Tween.EASE_IN).set_delay(0.3)
