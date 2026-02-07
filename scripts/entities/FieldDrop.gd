@@ -161,10 +161,41 @@ func collect() -> void:
 func _collect_gold() -> void:
 	if GameManager:
 		GameManager.add_gold(gold_amount)
+	_spawn_gold_popup()
 	if BattleManager:
 		BattleManager.battle_log_received.emit(
 			"💰 Gold +%d" % gold_amount, Color(1.0, 0.9, 0.3)
 		)
+
+
+func _spawn_gold_popup() -> void:
+	## 리더 머리 위에 "+골드" 노란색 팝업 연출
+	var leaders: Array = get_tree().get_nodes_in_group("party_leader")
+	if leaders.is_empty():
+		return
+	var leader: Node2D = leaders[0] as Node2D
+	if leader == null or not is_instance_valid(leader):
+		return
+
+	var popup := Label.new()
+	popup.text = "+%d" % gold_amount
+	popup.add_theme_font_size_override("font_size", 10)
+	popup.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	popup.add_theme_constant_override("outline_size", 3)
+	popup.z_index = 100
+	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	popup.position = leader.global_position + Vector2(-12, -20)
+	get_tree().current_scene.add_child(popup)
+
+	var start_y: float = popup.position.y
+	var tween := popup.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(popup, "position:y", start_y - 20.0, 0.6) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.6) \
+		.set_ease(Tween.EASE_IN).set_delay(0.3)
+	tween.chain().tween_callback(popup.queue_free)
 
 
 func _collect_item() -> void:

@@ -634,8 +634,8 @@ func _on_field_drops_requested(gold: int, items: Array, danger_level: int, world
 		})
 		delay += delay_step
 
-	# HP 회복 오브 (원념 레벨 × 1, 최소 1개)
-	var hp_orb_count: int = maxi(1, danger_level)
+	# HP 회복 오브 (원념 레벨 × 1, 레벨은 1부터 시작)
+	var hp_orb_count: int = danger_level + 1
 	for i in range(hp_orb_count):
 		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
 		delay += delay_step
