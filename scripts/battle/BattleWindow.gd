@@ -1347,11 +1347,7 @@ func _end_battle_victory() -> void:
 
 	_send_log("승리! Gold +%d" % total_gold, Color.CYAN)
 
-	GameManager.add_gold(total_gold)
-
-	if not drop_items.is_empty():
-		_start_loot_animations()
-
+	# 보상은 BattleManager에서 필드 드롭으로 처리
 	call_deferred("_emit_party_updated")
 
 	battle_ended.emit(battle_id, true)

@@ -1,0 +1,176 @@
+extends Area2D
+class_name FieldDrop
+## 필드 드롭 오브젝트: 전투 종료 후 필드에 떨어지는 보상
+## 플레이어가 위를 지나가면 수집
+
+enum DropType { GOLD, ITEM, HP_ORB }
+
+const DROP_ICONS := {
+	DropType.GOLD: "💰",
+	DropType.ITEM: "🎁",
+	DropType.HP_ORB: "💗",
+}
+const DROP_COLORS := {
+	DropType.GOLD: Color(1.0, 0.9, 0.3),
+	DropType.ITEM: Color(0.9, 0.6, 1.0),
+	DropType.HP_ORB: Color(1.0, 0.4, 0.6),
+}
+const PICKUP_RADIUS := 12.0
+const HP_PER_ORB := 20
+
+var drop_type: DropType = DropType.GOLD
+var gold_amount: int = 0
+var item_id: String = ""
+var heal_amount: int = HP_PER_ORB
+var spawn_delay: float = 0.0
+
+var _collected: bool = false
+var _label: Label
+var _shadow: Label
+
+
+func _ready() -> void:
+	collision_layer = 0
+	collision_mask = 2  # party layer
+	monitoring = false  # 스폰 애니메이션 후 활성화
+
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = PICKUP_RADIUS
+	shape.shape = circle
+	add_child(shape)
+
+	# 그림자
+	_shadow = Label.new()
+	_shadow.text = "●"
+	_shadow.add_theme_font_size_override("font_size", 6)
+	_shadow.add_theme_color_override("font_color", Color(0, 0, 0, 0.3))
+	_shadow.position = Vector2(-3, -2)
+	_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_shadow)
+
+	# 아이콘
+	_label = Label.new()
+	_label.text = DROP_ICONS.get(drop_type, "?")
+	_label.add_theme_font_size_override("font_size", 12)
+	_label.position = Vector2(-8, -18)
+	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_label)
+
+	body_entered.connect(_on_body_entered)
+
+	if spawn_delay > 0:
+		visible = false
+		get_tree().create_timer(spawn_delay).timeout.connect(_delayed_spawn)
+	else:
+		_play_spawn_anim()
+
+
+func _delayed_spawn() -> void:
+	visible = true
+	_play_spawn_anim()
+
+
+func _play_spawn_anim() -> void:
+	var target_y := position.y
+	position.y -= 25
+	modulate.a = 0.0
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "position:y", target_y, 0.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BOUNCE)
+	tween.tween_property(self, "modulate:a", 1.0, 0.15)
+	tween.chain().tween_callback(_on_spawn_complete)
+
+
+func _on_spawn_complete() -> void:
+	monitoring = true
+	_start_float_anim()
+	# 스폰 직후 이미 위에 서 있는 경우 체크
+	for body in get_overlapping_bodies():
+		_on_body_entered(body)
+
+
+func _start_float_anim() -> void:
+	var base_y := _label.position.y
+	var tween := create_tween().set_loops()
+	tween.tween_property(_label, "position:y", base_y - 3, 0.5) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(_label, "position:y", base_y, 0.5) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+
+func _on_body_entered(body: Node2D) -> void:
+	if _collected:
+		return
+	if body.is_in_group("party_leader") or body.is_in_group("party"):
+		collect()
+
+
+func collect() -> void:
+	_collected = true
+	monitoring = false
+
+	match drop_type:
+		DropType.GOLD:
+			_collect_gold()
+		DropType.ITEM:
+			_collect_item()
+		DropType.HP_ORB:
+			_collect_hp()
+
+	_play_collect_anim()
+
+
+func _collect_gold() -> void:
+	if GameManager:
+		GameManager.add_gold(gold_amount)
+	if BattleManager:
+		BattleManager.battle_log_received.emit(
+			"💰 Gold +%d" % gold_amount, Color(1.0, 0.9, 0.3)
+		)
+
+
+func _collect_item() -> void:
+	if InventoryManager:
+		if not InventoryManager.try_auto_equip(item_id):
+			InventoryManager.add_item(item_id)
+	var edata: Dictionary = DataManager.get_equipment(item_id) if DataManager else {}
+	var item_name: String = edata.get("name", item_id)
+	if BattleManager:
+		BattleManager.battle_log_received.emit(
+			"🎁 %s 획득!" % item_name, Color(0.9, 0.6, 1.0)
+		)
+
+
+func _collect_hp() -> void:
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	var healed_name := ""
+	var actual_total := 0
+	for hero in party:
+		if hero == null or hero.is_dead:
+			continue
+		if hero.current_hp >= hero.get_max_hp():
+			continue
+		var actual := hero.heal(heal_amount)
+		if actual > 0:
+			healed_name = hero.hero_name
+			actual_total = actual
+			break  # 1개 오브당 1명 회복
+	if PartyManager:
+		PartyManager.party_changed.emit()
+	if actual_total > 0 and BattleManager:
+		BattleManager.battle_log_received.emit(
+			"💗 %s HP +%d" % [healed_name, actual_total], Color(0.4, 1.0, 0.4)
+		)
+
+
+func _play_collect_anim() -> void:
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "position:y", position.y - 20, 0.25) \
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "modulate:a", 0.0, 0.25)
+	tween.tween_property(self, "scale", Vector2(1.5, 1.5), 0.25)
+	tween.chain().tween_callback(queue_free)

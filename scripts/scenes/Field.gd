@@ -130,6 +130,9 @@ func _connect_signals() -> void:
 			BattleManager.boss_battle_started.connect(_on_boss_battle_started)
 		if not BattleManager.boss_battle_ended.is_connected(_on_boss_battle_ended):
 			BattleManager.boss_battle_ended.connect(_on_boss_battle_ended)
+		# 필드 드롭 시스템
+		if not BattleManager.field_drops_requested.is_connected(_on_field_drops_requested):
+			BattleManager.field_drops_requested.connect(_on_field_drops_requested)
 
 
 #=============================================================================
@@ -600,6 +603,60 @@ func _get_camera_rect() -> Rect2:
 		return Rect2(camera.global_position - view_size / 2, view_size)
 
 	return Rect2(player_pos - viewport_size / 2, viewport_size)
+
+
+#=============================================================================
+# 필드 드롭 시스템
+#=============================================================================
+func _on_field_drops_requested(gold: int, items: Array, danger_level: int, world_pos: Vector2) -> void:
+	## 전투 종료 시 필드에 보상 드롭 스폰
+	var drops: Array[Dictionary] = []
+	var delay: float = 0.0
+	var delay_step: float = 0.08
+
+	# 골드 꾸러미
+	if gold > 0:
+		drops.append({"type": FieldDrop.DropType.GOLD, "gold": gold, "delay": delay})
+		delay += delay_step
+
+	# 아이템 꾸러미
+	for item_id in items:
+		drops.append({"type": FieldDrop.DropType.ITEM, "item_id": item_id, "delay": delay})
+		delay += delay_step
+
+	# HP 회복 오브 (원념 레벨에 따라)
+	var hp_orb_count: int = danger_level
+	for i in range(hp_orb_count):
+		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
+		delay += delay_step
+
+	# 드롭 위치가 없으면 플레이어 위치 사용
+	if world_pos == Vector2.ZERO and party_leader:
+		world_pos = party_leader.global_position
+
+	# 원형 배치로 드롭 스폰
+	var drop_count: int = drops.size()
+	for i in range(drop_count):
+		var data: Dictionary = drops[i]
+		var drop := FieldDrop.new()
+		drop.drop_type = data.type
+		drop.spawn_delay = data.delay
+
+		match data.type:
+			FieldDrop.DropType.GOLD:
+				drop.gold_amount = data.gold
+			FieldDrop.DropType.ITEM:
+				drop.item_id = data.item_id
+			FieldDrop.DropType.HP_ORB:
+				drop.heal_amount = FieldDrop.HP_PER_ORB
+
+		# 원형 산개 배치
+		var angle: float = (float(i) / maxf(drop_count, 1)) * TAU
+		var radius: float = 12.0 if drop_count > 1 else 0.0
+		var offset := Vector2(cos(angle), sin(angle)) * radius
+		drop.position = world_pos + offset
+
+		add_child(drop)
 
 
 #=============================================================================

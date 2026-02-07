@@ -22,6 +22,7 @@ signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal global_kill_count_changed(count: int, danger_level: int)
 signal accumulated_rewards_changed(gold: int, items: Array)
 signal danger_level_up(new_level: int)  # 원념 레벨업 시 (선택창 표시용)
+signal field_drops_requested(gold: int, items: Array, danger_level: int, world_pos: Vector2)
 
 # === 전투창 증식 시스템 설정 ===
 const MAX_ENEMIES_PER_WINDOW: int = 3  # 전투창 하나당 최대 적 수
@@ -40,8 +41,9 @@ var accumulated_items: Array = []  # [{id, type, rarity, identified}]
 signal window_created(window_count: int)      # 새 전투창 생성 시
 signal threshold_reached(window_count: int)   # 임계치 도달 시
 
-var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite}
+var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite, collision_pos}
 var _battle_id_counter: int = 0
+var last_battle_pos: Vector2 = Vector2.ZERO
 
 # === 턴제 전투 설정 ===
 const TURN_DELAY: float = 0.5  # 턴 사이 딜레이 (초)
@@ -204,8 +206,10 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 	active_battles[battle_id] = {
 		"window": window,
 		"is_boss": is_boss,
-		"is_elite": is_elite
+		"is_elite": is_elite,
+		"collision_pos": _collision_pos
 	}
+	last_battle_pos = _collision_pos
 
 	# === 창 생성 효과 (비워둠) ===
 	var window_count := get_active_battle_count()
@@ -322,11 +326,27 @@ func end_battle(battle_id: int, victory: bool) -> void:
 func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	var was_elite: bool = false
 	var was_boss: bool = false
+	var window_gold: int = 0
+	var window_items: Array = []
+	var battle_pos: Vector2 = Vector2.ZERO
+
 	if active_battles.has(battle_id):
-		was_elite = active_battles[battle_id].get("is_elite", false)
-		was_boss = active_battles[battle_id].get("is_boss", false)
+		var bd: Dictionary = active_battles[battle_id]
+		was_elite = bd.get("is_elite", false)
+		was_boss = bd.get("is_boss", false)
+		battle_pos = bd.get("collision_pos", Vector2.ZERO)
+		# 전투창 보상 데이터 읽기 (닫히기 전)
+		if victory:
+			var window = bd.get("window")
+			if window != null and is_instance_valid(window):
+				window_gold = window.total_gold
+				window_items = window.drop_items.duplicate()
 
 	end_battle(battle_id, victory)
+
+	# 필드 드롭 스폰 요청
+	if victory and (window_gold > 0 or not window_items.is_empty()):
+		field_drops_requested.emit(window_gold, window_items, get_danger_level(), battle_pos)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -334,10 +354,10 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 			boss_victory.emit(battle_id)
 	elif victory and was_elite:
 		elite_victory.emit(battle_id)
-	
+
 	if victory and SaveManager:
 		SaveManager.auto_save("전투 승리")
-	
+
 	if not victory and PartyManager.is_party_wiped():
 		GameManager.trigger_game_over()
 
@@ -394,17 +414,13 @@ func increment_global_kill_count() -> void:
 
 
 func claim_accumulated_rewards() -> void:
-	## 누적 보상 수령 (스톱 선택 시)
-	if accumulated_gold > 0:
-		GameManager.add_gold(accumulated_gold)
-
-	# 아이템 자동 장착 시도, 실패 시 인벤토리에 추가
+	## 누적 보상 수령 → 필드 드롭으로 스폰
+	var items_arr: Array = []
 	for item in accumulated_items:
-		if not InventoryManager.try_auto_equip(item.id):
-			InventoryManager.add_item(item.id, 1)
+		items_arr.append(item.id)
 
-	# 로그
-	battle_log_received.emit("보상 획득! Gold +%d" % accumulated_gold, Color.CYAN)
+	if accumulated_gold > 0 or not items_arr.is_empty():
+		field_drops_requested.emit(accumulated_gold, items_arr, get_danger_level(), last_battle_pos)
 
 	# 초기화
 	reset_accumulated_rewards()
