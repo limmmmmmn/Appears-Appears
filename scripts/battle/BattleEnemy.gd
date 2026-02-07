@@ -208,7 +208,7 @@ func roll_drops() -> Array:
 	
 	# 2. 일반몹 추가 장비 드랍 (common 등급만)
 	if enemy_type == "normal" and not is_elite_version:
-		var equip_drop_chance: float = 0.50 * luk_multiplier  # 기본 50% 확률 (테스트용)
+		var equip_drop_chance: float = 0.08 * luk_multiplier  # 기본 8% 확률
 		if randf() < equip_drop_chance:
 			var common_equip: String = _roll_random_common_equipment()
 			if not common_equip.is_empty():
