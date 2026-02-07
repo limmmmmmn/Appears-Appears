@@ -12,7 +12,7 @@ signal atb_updated  # ATB 업데이트됨 (UI 갱신용)
 # ATB 설정
 const ATB_MAX: float = 100.0
 const ATB_FILL_RATE: float = 30.0  # 기본 충전 속도
-const ALLY_SPEED_MULT: float = 2.0  # 아군 속도 배율 (2배)
+const ALLY_SPEED_MULT: float = 1.2  # 아군 속도 배율 (소폭 우위)
 
 # 영웅 ATB 상태
 var hero_atb: Dictionary = {}  # hero_id -> {hero: Hero, atb: float, speed: int}
@@ -44,7 +44,7 @@ func initialize_battle() -> void:
 	var heroes: Array = PartyManager.get_alive_heroes()
 	for hero in heroes:
 		var hero_dex: int = hero.get_dex()
-		var initial_atb: float = randf_range(0, 30) + hero_dex * 0.5
+		var initial_atb: float = randf_range(0, 20) + hero_dex * 0.3
 		hero_atb[hero.id] = {
 			"hero": hero,
 			"atb": minf(initial_atb, ATB_MAX - 1),
@@ -87,7 +87,7 @@ func _sync_party_heroes() -> void:
 	for hero in heroes:
 		if not hero_atb.has(hero.id):
 			var hero_dex: int = hero.get_dex()
-			var initial_atb: float = randf_range(0, 30) + hero_dex * 0.5
+			var initial_atb: float = randf_range(0, 20) + hero_dex * 0.3
 			hero_atb[hero.id] = {
 				"hero": hero,
 				"atb": minf(initial_atb, ATB_MAX - 1),

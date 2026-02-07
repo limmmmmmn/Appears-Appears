@@ -551,7 +551,7 @@ func _add_enemy_to_atb(enemy: BattleEnemy) -> void:
 			return
 
 	var enemy_spd: int = enemy.get_atb_speed()
-	var initial_atb: float = randf_range(0, 15) + enemy_spd * 0.2
+	var initial_atb: float = randf_range(0, 20) + enemy_spd * 0.3
 	enemy_atb_units.append({
 		"ref": enemy,
 		"atb": minf(initial_atb, ATB_MAX - 1),
