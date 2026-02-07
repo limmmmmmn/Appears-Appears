@@ -1941,7 +1941,7 @@ func _on_gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _is_dragging:
 		global_position = event.global_position - _drag_offset
 		# 화면 밖으로 나가지 않도록 제한
-		var vp_size := Vector2(480, 270)
+		var vp_size := get_viewport().get_visible_rect().size
 		global_position.x = clampf(global_position.x, -size.x + 40, vp_size.x - 40)
 		global_position.y = clampf(global_position.y, 0, vp_size.y - 30)
 
