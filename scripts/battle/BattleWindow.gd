@@ -259,8 +259,8 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 		current_state = BattleState.RUNNING
 		set_process(true)
 		_send_log("전투 재개!", Color.GREEN)
-		_update_buttons_for_enemies()
 
+	_update_buttons_for_enemies()
 	_shake_window()
 
 
@@ -276,8 +276,9 @@ func _cancel_claim_waiting() -> void:
 
 
 func _update_buttons_for_enemies() -> void:
-	## 적이 있을 때 버튼 상태 업데이트 (현재 고/스톱 시스템 사용)
-	pass
+	## 적 존재 여부에 따라 버튼 상태 업데이트
+	if run_button:
+		run_button.disabled = not has_alive_enemies()
 
 
 func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
@@ -475,6 +476,7 @@ func _create_atb_bar(unit_ref, unit_name: String, is_hero: bool) -> void:
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_init_atb_system()
+	_update_buttons_for_enemies()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
 #endregion
@@ -1247,6 +1249,8 @@ func _animate_popup(canvas_layer: CanvasLayer, bg: PanelContainer) -> void:
 
 func _check_all_enemies_dead() -> void:
 	## 모든 적이 처치되었는지 확인하고 보상 UI 표시
+	_update_buttons_for_enemies()
+
 	if is_waiting_for_claim:
 		return  # 이미 보상 대기 중
 
@@ -1269,6 +1273,7 @@ func _check_battle_end() -> bool:
 
 	if alive_enemies.is_empty():
 		# 적이 모두 사라짐 - 보상 버튼 표시 (각 전투창 독립 보상)
+		_update_buttons_for_enemies()
 		_show_claim_reward_button()
 		return true
 
