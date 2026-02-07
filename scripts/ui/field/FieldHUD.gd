@@ -4,7 +4,6 @@ class_name FieldHUD
 ## 구성:
 ##   TopBar     - 스테이지, 골드, 킬, 배속, 메뉴 (상단)
 ##   PartyCards - 파티 카드 (하단 중앙)
-##   TraitPanel - 룬/특성 (우측 중앙)
 ##   GrudgePopup - 팝업
 
 signal menu_pressed
@@ -48,10 +47,6 @@ var kill_label: Label = null
 
 # BottomPartyCards
 var bottom_party_cards: BottomPartyCards = null
-
-# TraitPanel
-@onready var trait_panel: PanelContainer = %TraitPanel
-@onready var trait_vbox: VBoxContainer = %TraitVBox
 #endregion
 
 
@@ -74,7 +69,6 @@ func _ready() -> void:
 	_init_popups()
 	_connect_signals()
 	update_all()
-	_update_trait_display()
 
 
 #region 초기화
@@ -273,91 +267,6 @@ func add_system_log(_msg: String) -> void:
 
 func clear_logs() -> void:
 	pass
-#endregion
-
-
-#region 특성 표시
-func _update_trait_display() -> void:
-	if trait_vbox == null:
-		return
-
-	for child in trait_vbox.get_children():
-		child.queue_free()
-
-	var heroes_with_runes: Array = []
-	for hero in PartyManager.get_alive_heroes():
-		if not hero.equipped_rune_id.is_empty():
-			heroes_with_runes.append(hero)
-
-	if heroes_with_runes.is_empty():
-		if trait_panel:
-			trait_panel.visible = false
-		return
-
-	if trait_panel:
-		trait_panel.visible = true
-
-	var title_label := Label.new()
-	title_label.text = "[ 장착 룬 ]"
-	title_label.add_theme_font_size_override("font_size", STYLE.font_small)
-	title_label.add_theme_color_override("font_color", STYLE.text_dim)
-	trait_vbox.add_child(title_label)
-
-	var sep := HSeparator.new()
-	sep.add_theme_constant_override("separation", 4)
-	trait_vbox.add_child(sep)
-
-	for hero in heroes_with_runes:
-		var rune_data: Dictionary = hero.get_equipped_rune()
-		var trait_data: Dictionary = DataManager.get_rune_trait(hero.equipped_rune_id)
-		if trait_data.is_empty():
-			continue
-
-		var hero_container := VBoxContainer.new()
-		hero_container.add_theme_constant_override("separation", 0)
-		trait_vbox.add_child(hero_container)
-
-		var hero_hbox := HBoxContainer.new()
-		hero_hbox.add_theme_constant_override("separation", 4)
-		hero_container.add_child(hero_hbox)
-
-		var hero_label := Label.new()
-		hero_label.text = hero.hero_name
-		hero_label.add_theme_font_size_override("font_size", STYLE.font_small)
-		hero_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
-		hero_hbox.add_child(hero_label)
-
-		var rune_icon := Label.new()
-		rune_icon.text = rune_data.get("icon", "")
-		rune_icon.add_theme_font_size_override("font_size", 10)
-		hero_hbox.add_child(rune_icon)
-
-		var trait_hbox := HBoxContainer.new()
-		trait_hbox.add_theme_constant_override("separation", 4)
-		hero_container.add_child(trait_hbox)
-
-		var trait_icon := Label.new()
-		trait_icon.text = "  " + trait_data.get("icon", "")
-		trait_icon.add_theme_font_size_override("font_size", 10)
-		trait_hbox.add_child(trait_icon)
-
-		var trait_name := Label.new()
-		trait_name.text = trait_data.get("name", "")
-		trait_name.add_theme_font_size_override("font_size", STYLE.font_small)
-		trait_name.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
-		trait_name.add_theme_color_override("font_outline_color", Color.BLACK)
-		trait_name.add_theme_constant_override("outline_size", 2)
-		trait_hbox.add_child(trait_name)
-
-		var desc_label := Label.new()
-		desc_label.text = "    " + trait_data.get("description", "")
-		desc_label.add_theme_font_size_override("font_size", STYLE.font_tiny)
-		desc_label.add_theme_color_override("font_color", STYLE.text_dim)
-		hero_container.add_child(desc_label)
-
-
-func refresh_traits() -> void:
-	_update_trait_display()
 #endregion
 
 
