@@ -64,6 +64,9 @@ var claim_reward_panel: CenterContainer = null
 var claim_button: Button = null
 var claim_gold_label: Label = null
 var claim_items_label: Label = null
+var claim_grudge_section: VBoxContainer = null
+var claim_grudge_gold_label: Label = null
+var claim_grudge_items_label: Label = null
 
 var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
@@ -1118,12 +1121,10 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		_shake_window()
 		_show_danger_level_up_message(new_danger)
 
-	# 보상 계산 (로컬 위험도 + 특성 적용)
-	var local_danger: int = get_local_danger_level()
-	var danger_reward_mult: float = 1.0 + (local_danger * 0.1)  # 위험도당 10% 보상 증가
+	# 보상 계산 (특성 적용, 원념 보너스는 보상 수령 시 별도 적용)
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
 
-	var gold_reward: int = int(enemy.get_gold_reward() * danger_reward_mult * gold_trait_mult)
+	var gold_reward: int = int(enemy.get_gold_reward() * gold_trait_mult)
 	var items: Array = enemy.roll_drops()
 
 	total_gold += gold_reward
@@ -1306,11 +1307,18 @@ func _show_claim_reward_button() -> void:
 
 
 func _claim_rewards_now() -> void:
-	## 즉시 보상 획득
+	## 즉시 보상 획득 (원념 보너스 적용 후 종료)
 	if not is_waiting_for_claim:
 		return
 	is_waiting_for_claim = false
 	_hide_claim_ui()
+
+	# 원념 보너스 골드 적용
+	var dl: int = get_local_danger_level()
+	if dl > 0:
+		var grudge_gold: int = int(total_gold * dl * 0.1)
+		total_gold += grudge_gold
+
 	_end_battle_victory()
 
 
@@ -1878,6 +1886,37 @@ func _setup_claim_reward_ui() -> void:
 	claim_items_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
 	vbox.add_child(claim_items_label)
 
+	# --- 원념 보너스 섹션 ---
+	claim_grudge_section = VBoxContainer.new()
+	claim_grudge_section.add_theme_constant_override("separation", 2)
+	claim_grudge_section.visible = false
+	vbox.add_child(claim_grudge_section)
+
+	var sep := HSeparator.new()
+	sep.modulate = Color(1, 1, 1, 0.3)
+	claim_grudge_section.add_child(sep)
+
+	var grudge_title := Label.new()
+	grudge_title.text = "원념 보너스"
+	grudge_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	grudge_title.add_theme_font_size_override("font_size", 9)
+	grudge_title.add_theme_color_override("font_color", Color(0.8, 0.5, 1.0))
+	claim_grudge_section.add_child(grudge_title)
+
+	claim_grudge_gold_label = Label.new()
+	claim_grudge_gold_label.text = ""
+	claim_grudge_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	claim_grudge_gold_label.add_theme_font_size_override("font_size", 10)
+	claim_grudge_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	claim_grudge_section.add_child(claim_grudge_gold_label)
+
+	claim_grudge_items_label = Label.new()
+	claim_grudge_items_label.text = ""
+	claim_grudge_items_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	claim_grudge_items_label.add_theme_font_size_override("font_size", 10)
+	claim_grudge_items_label.add_theme_color_override("font_color", Color(0.6, 0.5, 0.8))
+	claim_grudge_section.add_child(claim_grudge_items_label)
+
 	battle_area.add_child(claim_reward_panel)
 
 
@@ -1892,14 +1931,26 @@ func _show_claim_ui() -> void:
 	if not claim_reward_panel:
 		return
 
-	# 골드 표시
+	# 기본 보상 표시
 	claim_gold_label.text = "💰 %d Gold" % total_gold
 
-	# 아이템 표시 (갯수만 간소화)
 	if drop_items.is_empty():
 		claim_items_label.text = ""
 	else:
 		claim_items_label.text = "아이템 %d개" % drop_items.size()
+
+	# 원념 보너스 표시
+	var dl: int = get_local_danger_level()
+	if dl > 0 and claim_grudge_section:
+		claim_grudge_section.visible = true
+		var grudge_percent: int = dl * 10
+		var grudge_gold: int = int(total_gold * dl * 0.1)
+		claim_grudge_gold_label.text = "💰 +%d Gold (+%d%%)" % [grudge_gold, grudge_percent]
+
+		var grudge_item_count: int = dl
+		claim_grudge_items_label.text = "  ???" if grudge_item_count == 1 else "  ??? x%d" % grudge_item_count
+	elif claim_grudge_section:
+		claim_grudge_section.visible = false
 
 	claim_reward_panel.visible = true
 
