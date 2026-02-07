@@ -10,7 +10,7 @@ const MAX_PARTY_SIZE: int = 4
 var party: Array[Hero] = []
 var inventory: Dictionary = {}  # item_id -> 수량
 
-const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "acc1", "acc2", "acc3", "acc4"]
+const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 
 
 func _ready() -> void:
@@ -188,7 +188,7 @@ func auto_equip_to_party(equip_id: String) -> bool:
 	if slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
 		for hero in party:
 			if hero.can_equip(equip_id):
-				for s in ["acc1", "acc2", "acc3", "acc4"]:
+				for s in ["acc1", "acc2"]:
 					if hero.equipment[s].is_empty():
 						return equip_to_hero(hero, equip_id, s)
 	else:

@@ -21,6 +21,7 @@ const MAX_DISPLAY_ITEMS := 12
 
 var _panel_normal_style: StyleBoxFlat
 var _panel_highlight_style: StyleBoxFlat
+var _stat_popup: PanelContainer = null
 
 
 func _ready() -> void:
@@ -126,6 +127,62 @@ func _on_item_clicked(item_id: String) -> void:
 #endregion
 
 
+#region 아이템 정보 팝업
+func show_item_info(item_id: String) -> void:
+	hide_item_info()
+	if item_id.is_empty():
+		return
+	var edata: Dictionary = DataManager.get_equipment(item_id)
+	if edata.is_empty():
+		return
+
+	_stat_popup = PanelContainer.new()
+	var style := FieldHUD._make_flat_style(
+		Color(0.05, 0.05, 0.08, 0.95), Color(0.4, 0.6, 0.9, 0.8), 4, 1
+	)
+	style.content_margin_left = 4
+	style.content_margin_right = 4
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	_stat_popup.add_theme_stylebox_override("panel", style)
+	_stat_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 0)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stat_popup.add_child(vbox)
+
+	var rarity: String = edata.get("rarity", "common")
+	var rcolor: Color = InventoryManager.RARITY_COLORS.get(rarity, Color(0.7, 0.7, 0.7))
+	var name_lbl := Label.new()
+	name_lbl.text = edata.get("name", item_id)
+	name_lbl.add_theme_font_size_override("font_size", 8)
+	name_lbl.add_theme_color_override("font_color", rcolor)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(name_lbl)
+
+	var stats: Dictionary = edata.get("stats", {})
+	for sk in stats:
+		var lbl := Label.new()
+		lbl.text = "%s +%d" % [sk.to_upper(), int(stats[sk])]
+		lbl.add_theme_font_size_override("font_size", 8)
+		lbl.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vbox.add_child(lbl)
+
+	add_child(_stat_popup)
+	_stat_popup.reset_size()
+	var popup_h: float = _stat_popup.get_combined_minimum_size().y
+	_stat_popup.position = Vector2(0, -popup_h - 2)
+
+
+func hide_item_info() -> void:
+	if _stat_popup and is_instance_valid(_stat_popup):
+		_stat_popup.queue_free()
+		_stat_popup = null
+#endregion
+
+
 #region 장비 해제 드롭 (카드 전체가 드롭 타겟)
 func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 	if not data is Dictionary:
@@ -180,11 +237,15 @@ class _DraggableItemButton extends Button:
 	func _on_mouse_entered() -> void:
 		if _hover_style:
 			add_theme_stylebox_override("normal", _hover_style)
+		if inv_card:
+			inv_card.show_item_info(item_id)
 		_highlight_compatible_slots(true)
 
 	func _on_mouse_exited() -> void:
 		if _normal_style:
 			add_theme_stylebox_override("normal", _normal_style)
+		if inv_card:
+			inv_card.hide_item_info()
 		_highlight_compatible_slots(false)
 
 	func _highlight_compatible_slots(on: bool) -> void:

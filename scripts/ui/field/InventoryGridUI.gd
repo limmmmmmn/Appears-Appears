@@ -26,9 +26,7 @@ const SLOT_ICONS: Dictionary = {
 	"head": "👑",
 	"body": "👕",
 	"acc1": "💍",
-	"acc2": "💍",
-	"acc3": "💍",
-	"acc4": "💍"
+	"acc2": "💍"
 }
 
 const TYPE_ICONS: Dictionary = {

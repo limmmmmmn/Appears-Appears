@@ -20,9 +20,7 @@ const SLOT_NAMES := {
 	"head": "머리",
 	"body": "몸통",
 	"acc1": "악세1",
-	"acc2": "악세2",
-	"acc3": "악세3",
-	"acc4": "악세4"
+	"acc2": "악세2"
 }
 
 
@@ -428,7 +426,7 @@ func _on_inventory_item_pressed(item_id: String) -> void:
 	var slot: String = equip_data.get("slot", "")
 	if slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
 		slot = "acc1"
-		for s in ["acc1", "acc2", "acc3", "acc4"]:
+		for s in ["acc1", "acc2"]:
 			if hero.equipment[s].is_empty():
 				slot = s
 				break

@@ -24,9 +24,7 @@ const SLOT_NAMES_KR: Dictionary = {
 	"head": "머리",
 	"body": "몸통",
 	"acc1": "악세1",
-	"acc2": "악세2",
-	"acc3": "악세3",
-	"acc4": "악세4"
+	"acc2": "악세2"
 }
 
 

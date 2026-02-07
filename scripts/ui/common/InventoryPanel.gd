@@ -27,9 +27,7 @@ const SLOT_NAMES: Dictionary = {
 	"body": "몸통",
 	"acc": "악세서리",
 	"acc1": "악세1",
-	"acc2": "악세2",
-	"acc3": "악세3",
-	"acc4": "악세4"
+	"acc2": "악세2"
 }
 
 const RARITY_COLORS: Dictionary = {
@@ -155,7 +153,7 @@ func _get_item_icon(item_type: String) -> String:
 			return "👑"
 		"body", "armor":
 			return "👕"
-		"shoes", "necklace", "ring", "ring1", "ring2", "acc", "acc1", "acc2", "acc3", "acc4":
+		"shoes", "necklace", "ring", "ring1", "ring2", "acc", "acc1", "acc2":
 			return "💍"
 		_:
 			return "📦"

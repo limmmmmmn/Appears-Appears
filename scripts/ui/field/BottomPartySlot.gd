@@ -38,12 +38,12 @@ const SLOT_FONT_SIZE: int = 10
 
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑",
-	"body": "👕", "acc1": "💍", "acc2": "💍", "acc3": "💍", "acc4": "💍"
+	"body": "👕", "acc1": "💍", "acc2": "💍"
 }
 
 const SLOT_NAMES_KR: Dictionary = {
 	"main_hand": "주무기", "off_hand": "보조", "head": "머리",
-	"body": "몸통", "acc1": "악세1", "acc2": "악세2", "acc3": "악세3", "acc4": "악세4"
+	"body": "몸통", "acc1": "악세1", "acc2": "악세2"
 }
 
 const ITEM_ICONS: Dictionary = {
@@ -118,7 +118,7 @@ func _create_layout() -> void:
 	equip_row2.add_theme_constant_override("separation", 1)
 	add_child(equip_row2)
 	
-	for slot_name in ["body", "acc1", "acc2", "acc3", "acc4"]:
+	for slot_name in ["body", "acc1", "acc2"]:
 		_create_equip_button(equip_row2, slot_name)
 	
 	# 5행: 스킬 토글

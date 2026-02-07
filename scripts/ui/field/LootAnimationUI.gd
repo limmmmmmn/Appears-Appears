@@ -56,7 +56,7 @@ const TYPE_ICONS: Dictionary = {
 }
 
 const SLOT_ICONS: Dictionary = {
-	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑", "body": "👕", "acc1": "💍", "acc2": "💍", "acc3": "💍", "acc4": "💍"
+	"main_hand": "⚔️", "off_hand": "🛡️", "head": "👑", "body": "👕", "acc1": "💍", "acc2": "💍"
 }
 
 

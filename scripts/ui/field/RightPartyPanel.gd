@@ -3,8 +3,8 @@ class_name RightPartyPanel
 ## 우측 파티 패널 - 정보 + 장비 목록
 ## 레이아웃: 이름+HP바, ATB바들, 장비목록(6줄)
 
-const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍", "acc3": "💍", "acc4": "💍"}
-const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2", "acc3", "acc4"]
+const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
+const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
@@ -509,7 +509,7 @@ func _on_equipment_dropped(hero_index: int, item_id: String) -> void:
 	var target_slot: String = item_slot
 	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
 		target_slot = "acc1"
-		for s in ["acc1", "acc2", "acc3", "acc4"]:
+		for s in ["acc1", "acc2"]:
 			if hero.equipment.get(s, "").is_empty():
 				target_slot = s
 				break
