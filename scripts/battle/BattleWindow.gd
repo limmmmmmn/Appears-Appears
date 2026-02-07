@@ -1577,11 +1577,8 @@ func _update_rewards_ui() -> void:
 		else:
 			loot_label.text = "x%d" % int(loot_multiplier)
 	if kill_count_label:
-		# 킬카운트 + 위험도 레벨 표시
-		if danger_level > 0:
-			kill_count_label.text = "%d (Lv.%d)" % [kill_count, danger_level]
-		else:
-			kill_count_label.text = str(kill_count)
+		# 킬카운트 + 위험도 레벨 표시 (레벨은 1부터 시작)
+		kill_count_label.text = "%d (Lv.%d)" % [kill_count, danger_level + 1]
 
 
 func set_loot_multiplier(multiplier: float) -> void:
