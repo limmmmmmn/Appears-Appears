@@ -19,7 +19,7 @@ corner_radius_bottom_left = 6
 corner_radius_bottom_right = 6
 
 [node name="HeroCard" type="Control"]
-custom_minimum_size = Vector2(108, 148)
+custom_minimum_size = Vector2(108, 0)
 mouse_filter = 2
 size_flags_vertical = 8
 script = ExtResource("1_script")

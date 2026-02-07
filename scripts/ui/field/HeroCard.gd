@@ -37,6 +37,12 @@ func _ready() -> void:
 	panel.mouse_exited.connect(_on_mouse_exited)
 	panel.gui_input.connect(_on_gui_input)
 	_build_equip_slots()
+	call_deferred("_update_min_size")
+
+
+func _update_min_size() -> void:
+	if panel:
+		custom_minimum_size.y = panel.get_combined_minimum_size().y
 
 
 #region 초기화
