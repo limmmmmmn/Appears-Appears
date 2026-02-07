@@ -19,7 +19,7 @@ const DROP_COLORS := {
 const ITEM_TYPE_ICONS: Dictionary = {
 	"sword": "🗡️", "dagger": "🔪", "axe": "🪓", "staff": "🪄", "bow": "🏹",
 	"shield": "🛡️", "helmet": "⛑️", "light_armor": "👘", "medium_armor": "🦺",
-	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "📿", "shoes": "👟",
+	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "💍", "shoes": "💍",
 	"acc": "💍", "weapon": "⚔️", "head": "👑", "body": "👕"
 }
 

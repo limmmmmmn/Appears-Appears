@@ -45,8 +45,8 @@ const TYPE_ICONS: Dictionary = {
 	"robe": "👗",
 	# 악세서리
 	"ring": "💍",
-	"necklace": "📿",
-	"shoes": "👟",
+	"necklace": "💍",
+	"shoes": "💍",
 	"acc": "💍"
 }
 

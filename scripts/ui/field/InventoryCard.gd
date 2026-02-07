@@ -9,8 +9,8 @@ var hero_cards_container: Node = null
 const ITEM_TYPE_ICONS := {
 	"sword": "⚔", "dagger": "🗡", "staff": "🪄", "bow": "🏹", "axe": "🪓",
 	"shield": "🛡", "helmet": "⛑", "heavy_armor": "🥋", "medium_armor": "🥋",
-	"light_armor": "🥋", "robe": "👘", "ring": "💍", "amulet": "📿",
-	"shoes": "👟", "necklace": "📿", "acc": "💍",
+	"light_armor": "🥋", "robe": "👘", "ring": "💍", "amulet": "💍",
+	"shoes": "💍", "necklace": "💍", "acc": "💍",
 }
 const MAX_DISPLAY_ITEMS := 12
 

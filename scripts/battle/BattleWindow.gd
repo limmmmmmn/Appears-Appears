@@ -65,10 +65,6 @@ var claim_button: Button = null
 var claim_gold_label: Label = null
 var claim_items_label: Label = null
 
-# === 원념 레벨업 알림 ===
-var go_stop_panel: PanelContainer = null
-var go_button: Button = null
-var is_go_stop_active: bool = false  # 원념 레벨업 알림 표시 중 (적 진입 차단)
 var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
 # === 활성 특성 ===
@@ -161,9 +157,6 @@ func _ready() -> void:
 	# ATB UI 생성
 	_setup_atb_ui()
 
-	# 고/스톱 UI 생성
-	_setup_go_stop_ui()
-
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
 
@@ -173,11 +166,6 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if current_state != BattleState.RUNNING:
-		return
-
-	# 고/스톱 선택 대기 중이면 전투 일시정지
-	if is_go_stop_active:
-		_update_background_effect(delta)
 		return
 
 	_update_atb_system(delta)
@@ -237,10 +225,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	# 패배 상태에서는 적 추가 불가
 	if current_state == BattleState.DEFEAT:
-		return
-
-	# 원념 레벨업 선택 중에는 적 추가 불가
-	if is_go_stop_active:
 		return
 
 	enemy_data_list.append(enemy_id)
@@ -1127,14 +1111,12 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		if bonus_kill > 0:
 			kill_count += bonus_kill
 
-	# 위험도 테두리 업데이트 + 레벨업 알림 표시
+	# 위험도 테두리 업데이트
 	var new_danger: int = get_local_danger_level()
 	if new_danger > danger_level:
-		var old_level: int = danger_level
 		update_danger_level()
 		_shake_window()
-		# 원념 레벨업 알림 표시
-		_show_go_stop_choice(new_danger, "")
+		_show_danger_level_up_message(new_danger)
 
 	# 보상 계산 (위험도 + 특성 적용)
 	var global_danger: int = BattleManager.get_danger_level()
@@ -1940,102 +1922,6 @@ func _hide_claim_ui() -> void:
 #endregion
 
 
-#region 원념 레벨업 알림 시스템
-func _setup_go_stop_ui() -> void:
-	## 원념 레벨업 알림 UI 생성 (숨겨진 상태로)
-	go_stop_panel = PanelContainer.new()
-	go_stop_panel.visible = false
-	go_stop_panel.z_index = 50
-	go_stop_panel.process_mode = Node.PROCESS_MODE_ALWAYS
-
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.1, 0.05, 0.15, 0.95)
-	panel_style.border_width_left = 3
-	panel_style.border_width_top = 3
-	panel_style.border_width_right = 3
-	panel_style.border_width_bottom = 3
-	panel_style.border_color = Color.ORANGE_RED
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
-	panel_style.content_margin_left = 20
-	panel_style.content_margin_right = 20
-	panel_style.content_margin_top = 15
-	panel_style.content_margin_bottom = 15
-	go_stop_panel.add_theme_stylebox_override("panel", panel_style)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	go_stop_panel.add_child(vbox)
-
-	# 제목
-	var title_label := Label.new()
-	title_label.name = "TitleLabel"
-	title_label.text = "⚠ 원념 레벨이 오릅니다!"
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 13)
-	title_label.add_theme_color_override("font_color", Color.ORANGE)
-	vbox.add_child(title_label)
-
-	# 설명
-	var desc_label := Label.new()
-	desc_label.name = "DescLabel"
-	desc_label.text = "적들이 더 강해집니다."
-	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_label.add_theme_font_size_override("font_size", 11)
-	desc_label.add_theme_color_override("font_color", Color.WHITE)
-	vbox.add_child(desc_label)
-
-	# 확인 버튼
-	go_button = Button.new()
-	go_button.text = "확인"
-	go_button.custom_minimum_size = Vector2(80, 32)
-	go_button.add_theme_font_size_override("font_size", 12)
-	go_button.focus_mode = Control.FOCUS_NONE
-	go_button.pressed.connect(_on_level_up_confirm_pressed)
-	vbox.add_child(go_button)
-
-	add_child(go_stop_panel)
-
-
-func _on_level_up_confirm_pressed() -> void:
-	## 원념 레벨업 확인 버튼 클릭
-	_hide_level_up_panel()
-
-
-func _hide_level_up_panel() -> void:
-	## 원념 레벨업 알림 패널 숨기기
-	if go_stop_panel:
-		go_stop_panel.visible = false
-	is_go_stop_active = false
-	get_tree().paused = false
-
-
-func _show_go_stop_choice(new_level: int, _message: String) -> void:
-	## 원념 레벨업 시 알림 UI 표시
-	if not go_stop_panel:
-		return
-
-	is_go_stop_active = true
-	get_tree().paused = true  # 게임 일시정지
-
-	# 패널 위치 (전투창 중앙)
-	go_stop_panel.visible = true
-	await get_tree().create_timer(0.01).timeout
-	go_stop_panel.position = (size - go_stop_panel.size) / 2
-
-	# 제목 업데이트
-	var title := go_stop_panel.get_child(0).get_child(0) as Label
-	if title:
-		title.text = "⚠ 원념 레벨이 오릅니다! (%d단계)" % new_level
-
-	# 설명 업데이트
-	var desc := go_stop_panel.get_child(0).get_child(1) as Label
-	if desc:
-		desc.text = "적들이 더 강해집니다."
-
-
 func _enter_waiting_mode() -> void:
 	## 적 대기 모드 진입 (반투명 + 비활성화)
 	current_state = BattleState.VICTORY  # 임시 상태
@@ -2050,18 +1936,6 @@ func _exit_waiting_mode() -> void:
 	current_state = BattleState.RUNNING
 	set_process(true)
 	_send_log("전투 재개!", Color.GREEN)
-
-
-func _input(event: InputEvent) -> void:
-	## 키보드 입력으로 원념 레벨업 확인
-	if not is_go_stop_active:
-		return
-
-	if event is InputEventKey and event.pressed:
-		if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER or event.keycode == KEY_SPACE:
-			_hide_level_up_panel()
-			get_viewport().set_input_as_handled()
-#endregion
 
 
 #region 마우스 인터랙션

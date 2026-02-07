@@ -35,7 +35,7 @@ const SLOT_NAMES_KR: Dictionary = {
 const ITEM_ICONS: Dictionary = {
 	"sword": "🗡️", "dagger": "🔪", "axe": "🪓", "staff": "🪄", "bow": "🏹",
 	"shield": "🛡️", "helmet": "⛑️", "light_armor": "👘", "medium_armor": "🦺",
-	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "📿", "shoes": "👟", "acc": "💍",
+	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "💍", "shoes": "💍", "acc": "💍",
 	"weapon": "⚔️", "head": "👑", "body": "👕"
 }
 
