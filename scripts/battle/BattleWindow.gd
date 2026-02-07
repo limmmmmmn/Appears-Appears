@@ -67,6 +67,7 @@ var claim_gold_label: Label = null
 var claim_item_list_label: Label = null
 var claim_chest_label: Label = null
 var claim_chest_tier_label: Label = null
+var claim_chest_separator: HSeparator = null
 
 # === 원념 레벨업 알림 UI ===
 var danger_up_panel: CenterContainer = null
@@ -1152,9 +1153,10 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 
 func _show_danger_level_up_message(new_level: int) -> void:
-	## 위험도 상승 시 전투창 내 알림 표시
+	## 위험도 상승 시 전투창 내 알림 표시 (레벨 2부터)
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
+		"",  # 레벨 1 (알림 없음)
 		"이곳에서 적의 분노가 깨어나기 시작합니다...",
 		"이곳에서 적의 분노가 더 커지고 있습니다!",
 		"적의 분노가 걷잡을 수 없이 커집니다!",
@@ -1167,13 +1169,15 @@ func _show_danger_level_up_message(new_level: int) -> void:
 
 	# 로그에도 보내기
 	_send_log("━━━ 원념 %d단계 ━━━" % new_level, Color.ORANGE_RED)
-	_send_log(message, Color.ORANGE)
+	if not message.is_empty():
+		_send_log(message, Color.ORANGE)
 
 	# 화면 흔들림 효과
 	_shake_window()
 
-	# 알림 팝업 표시
-	_show_danger_up_notification(new_level, message)
+	# 레벨 2부터 알림 팝업 표시
+	if new_level >= 2:
+		_show_danger_up_notification(new_level, message)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -1891,25 +1895,28 @@ func _setup_claim_reward_ui() -> void:
 	claim_item_list_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
 	vbox.add_child(claim_item_list_label)
 
-	# --- 구분선 ---
-	var sep := HSeparator.new()
-	sep.modulate = Color(1, 1, 1, 0.3)
-	vbox.add_child(sep)
+	# --- 구분선 (보물상자 구분, 레벨 2부터 표시) ---
+	claim_chest_separator = HSeparator.new()
+	claim_chest_separator.modulate = Color(1, 1, 1, 0.3)
+	claim_chest_separator.visible = false
+	vbox.add_child(claim_chest_separator)
 
-	# --- 하단: 보물상자 ---
+	# --- 하단: 보물상자 (레벨 2부터 표시) ---
 	# 보물상자 이모지
 	claim_chest_label = Label.new()
-	claim_chest_label.text = "📦"
+	claim_chest_label.text = ""
 	claim_chest_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	claim_chest_label.add_theme_font_size_override("font_size", 28)
+	claim_chest_label.visible = false
 	vbox.add_child(claim_chest_label)
 
 	# 보물상자 보상단계
 	claim_chest_tier_label = Label.new()
-	claim_chest_tier_label.text = "보상단계 1"
+	claim_chest_tier_label.text = ""
 	claim_chest_tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	claim_chest_tier_label.add_theme_font_size_override("font_size", 10)
 	claim_chest_tier_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
+	claim_chest_tier_label.visible = false
 	vbox.add_child(claim_chest_tier_label)
 
 	# 보상받기 버튼
@@ -1950,21 +1957,27 @@ func _show_claim_ui() -> void:
 		claim_item_list_label.text = "\n".join(item_lines)
 		claim_item_list_label.visible = true
 
-	# --- 하단: 보물상자 보상단계 ---
+	# --- 하단: 보물상자 보상단계 (레벨 2부터 표시) ---
 	var dl: int = get_local_danger_level()
-	var tier: int = dl + 1
-	var chest_emojis: Array = ["📦", "🎁", "💎", "👑", "🏆", "🌟"]
-	var chest_idx: int = mini(dl, chest_emojis.size() - 1)
-	claim_chest_label.text = chest_emojis[chest_idx]
+	if dl >= 2:
+		claim_chest_separator.visible = true
+		claim_chest_label.visible = true
+		claim_chest_tier_label.visible = true
 
-	var tier_text: String = "보상단계 %d" % tier
-	if dl > 0:
+		# 레벨 2부터 시작하므로 인덱스 조정 (dl-2)
+		var chest_emojis: Array = ["🎁", "💎", "👑", "🏆", "🌟"]
+		var chest_idx: int = mini(dl - 2, chest_emojis.size() - 1)
+		claim_chest_label.text = chest_emojis[chest_idx]
+
+		var tier: int = dl - 1  # 보상단계 1부터 시작 (원념 Lv.2 = 보상단계 1)
 		var grudge_percent: int = dl * 10
-		tier_text += " (+%d%%)" % grudge_percent
+		var tier_text: String = "보상단계 %d (+%d%%)" % [tier, grudge_percent]
+		claim_chest_tier_label.text = tier_text
 		claim_chest_tier_label.add_theme_color_override("font_color", DANGER_BORDER_COLORS[mini(dl, DANGER_BORDER_COLORS.size() - 1)])
 	else:
-		claim_chest_tier_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
-	claim_chest_tier_label.text = tier_text
+		claim_chest_separator.visible = false
+		claim_chest_label.visible = false
+		claim_chest_tier_label.visible = false
 
 	claim_reward_panel.visible = true
 
