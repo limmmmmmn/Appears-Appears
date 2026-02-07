@@ -94,32 +94,7 @@ func _ready() -> void:
 
 	body_entered.connect(_on_body_entered)
 
-	if spawn_delay > 0:
-		visible = false
-		get_tree().create_timer(spawn_delay).timeout.connect(_delayed_spawn)
-	else:
-		_play_spawn_anim()
-
-
-func _delayed_spawn() -> void:
-	visible = true
-	_play_spawn_anim()
-
-
-func _play_spawn_anim() -> void:
-	var target_y := position.y
-	position.y -= 25
-	modulate.a = 0.0
-
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(self, "position:y", target_y, 0.4) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BOUNCE)
-	tween.tween_property(self, "modulate:a", 1.0, 0.15)
-	tween.chain().tween_callback(_on_spawn_complete)
-
-
-func _on_spawn_complete() -> void:
+	# 즉시 활성화 (스폰 애니메이션 없음)
 	monitoring = true
 	_start_float_anim()
 	# 스폰 직후 이미 위에 서 있는 경우 체크
