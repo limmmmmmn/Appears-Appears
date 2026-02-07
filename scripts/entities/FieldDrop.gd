@@ -33,7 +33,7 @@ const RARITY_COLORS: Dictionary = {
 }
 
 const PICKUP_RADIUS := 12.0
-const HP_PER_ORB := 20
+const HP_PER_ORB := 10
 
 var drop_type: DropType = DropType.GOLD
 var gold_amount: int = 0
@@ -181,7 +181,6 @@ func _collect_item() -> void:
 
 func _collect_hp() -> void:
 	var party: Array = PartyManager.get_party() if PartyManager else []
-	var healed_name := ""
 	var actual_total := 0
 	for hero in party:
 		if hero == null or hero.is_dead:
@@ -189,15 +188,12 @@ func _collect_hp() -> void:
 		if hero.current_hp >= hero.get_max_hp():
 			continue
 		var actual: int = hero.heal(heal_amount)
-		if actual > 0:
-			healed_name = hero.hero_name
-			actual_total = actual
-			break  # 1개 오브당 1명 회복
+		actual_total += actual
 	if PartyManager:
 		PartyManager.party_changed.emit()
 	if actual_total > 0 and BattleManager:
 		BattleManager.battle_log_received.emit(
-			"💗 %s HP +%d" % [healed_name, actual_total], Color(0.4, 1.0, 0.4)
+			"💗 파티 전체 HP +%d" % actual_total, Color(0.4, 1.0, 0.4)
 		)
 
 
