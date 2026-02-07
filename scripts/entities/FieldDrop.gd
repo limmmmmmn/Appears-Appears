@@ -6,8 +6,8 @@ class_name FieldDrop
 enum DropType { GOLD, ITEM, HP_ORB }
 
 const DROP_ICONS := {
-	DropType.GOLD: "💰",
-	DropType.ITEM: "🎁",
+	DropType.GOLD: "🪙",
+	DropType.ITEM: "📦",
 	DropType.HP_ORB: "💗",
 }
 const DROP_COLORS := {
@@ -15,12 +15,31 @@ const DROP_COLORS := {
 	DropType.ITEM: Color(0.9, 0.6, 1.0),
 	DropType.HP_ORB: Color(1.0, 0.4, 0.6),
 }
+
+const ITEM_TYPE_ICONS: Dictionary = {
+	"sword": "🗡️", "dagger": "🔪", "axe": "🪓", "staff": "🪄", "bow": "🏹",
+	"shield": "🛡️", "helmet": "⛑️", "light_armor": "👘", "medium_armor": "🦺",
+	"heavy_armor": "🛡️", "robe": "👗", "ring": "💍", "necklace": "📿", "shoes": "👟",
+	"acc": "💍", "weapon": "⚔️", "head": "👑", "body": "👕"
+}
+
+const RARITY_COLORS: Dictionary = {
+	"common": Color(0.7, 0.7, 0.7),
+	"uncommon": Color(0.4, 0.8, 0.4),
+	"magic": Color(0.4, 0.6, 1.0),
+	"rare": Color(0.8, 0.5, 1.0),
+	"epic": Color(1.0, 0.5, 0.2),
+	"legendary": Color(1.0, 0.8, 0.2),
+}
+
 const PICKUP_RADIUS := 12.0
 const HP_PER_ORB := 20
 
 var drop_type: DropType = DropType.GOLD
 var gold_amount: int = 0
 var item_id: String = ""
+var item_type: String = ""
+var item_rarity: String = ""
 var heal_amount: int = HP_PER_ORB
 var spawn_delay: float = 0.0
 
@@ -51,10 +70,26 @@ func _ready() -> void:
 
 	# 아이콘
 	_label = Label.new()
-	_label.text = DROP_ICONS.get(drop_type, "?")
 	_label.add_theme_font_size_override("font_size", 12)
 	_label.position = Vector2(-8, -18)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# 드롭 타입별 아이콘 및 색상 설정
+	match drop_type:
+		DropType.GOLD:
+			_label.text = "🪙"
+		DropType.ITEM:
+			if not item_type.is_empty():
+				_label.text = ITEM_TYPE_ICONS.get(item_type, "📦")
+			else:
+				_label.text = "📦"
+			if not item_rarity.is_empty():
+				_label.self_modulate = RARITY_COLORS.get(item_rarity, Color.WHITE)
+		DropType.HP_ORB:
+			_label.text = "💗"
+		_:
+			_label.text = "?"
+
 	add_child(_label)
 
 	body_entered.connect(_on_body_entered)

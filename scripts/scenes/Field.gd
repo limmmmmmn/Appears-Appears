@@ -608,8 +608,8 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(gold: int, items: Array, danger_level: int, world_pos: Vector2) -> void:
-	## 전투 종료 시 필드에 보상 드롭 스폰
+func _on_field_drops_requested(gold: int, items: Array, danger_level: int, world_pos: Vector2, window_rect: Rect2) -> void:
+	## 전투 종료 시 필드에 보상 드롭 스폰 (전투창 영역에 흩뿌림)
 	var drops: Array[Dictionary] = []
 	var delay: float = 0.0
 	var delay_step: float = 0.08
@@ -619,9 +619,19 @@ func _on_field_drops_requested(gold: int, items: Array, danger_level: int, world
 		drops.append({"type": FieldDrop.DropType.GOLD, "gold": gold, "delay": delay})
 		delay += delay_step
 
-	# 아이템 꾸러미
+	# 아이템 꾸러미 (장비 타입/등급 정보 포함)
 	for item_id in items:
-		drops.append({"type": FieldDrop.DropType.ITEM, "item_id": item_id, "delay": delay})
+		var equip_data: Dictionary = DataManager.get_equipment(item_id) if DataManager else {}
+		var i_type: String = str(equip_data.get("type", ""))
+		var i_slot: String = str(equip_data.get("slot", ""))
+		var i_rarity: String = str(equip_data.get("rarity", "common"))
+		drops.append({
+			"type": FieldDrop.DropType.ITEM,
+			"item_id": item_id,
+			"item_type": i_type if not i_type.is_empty() else i_slot,
+			"item_rarity": i_rarity,
+			"delay": delay
+		})
 		delay += delay_step
 
 	# HP 회복 오브 (원념 레벨에 따라)
@@ -630,13 +640,22 @@ func _on_field_drops_requested(gold: int, items: Array, danger_level: int, world
 		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
 		delay += delay_step
 
-	# 드롭 위치가 없으면 플레이어 위치 사용
-	if world_pos == Vector2.ZERO and party_leader:
-		world_pos = party_leader.global_position
+	# 전투창 스크린 영역 → 월드 좌표 변환
+	var scatter_rect: Rect2
+	if window_rect.size != Vector2.ZERO:
+		var canvas_xform: Transform2D = get_viewport().get_canvas_transform()
+		var inv_xform: Transform2D = canvas_xform.affine_inverse()
+		var world_tl: Vector2 = inv_xform * window_rect.position
+		var world_br: Vector2 = inv_xform * (window_rect.position + window_rect.size)
+		scatter_rect = Rect2(world_tl, world_br - world_tl)
+	else:
+		# Fallback: 플레이어 위치 주변
+		if world_pos == Vector2.ZERO and party_leader:
+			world_pos = party_leader.global_position
+		scatter_rect = Rect2(world_pos - Vector2(40, 30), Vector2(80, 60))
 
-	# 원형 배치로 드롭 스폰
-	var drop_count: int = drops.size()
-	for i in range(drop_count):
+	# 드롭 스폰 (전투창 영역 내 랜덤 산개)
+	for i in range(drops.size()):
 		var data: Dictionary = drops[i]
 		var drop := FieldDrop.new()
 		drop.drop_type = data.type
@@ -647,14 +666,15 @@ func _on_field_drops_requested(gold: int, items: Array, danger_level: int, world
 				drop.gold_amount = data.gold
 			FieldDrop.DropType.ITEM:
 				drop.item_id = data.item_id
+				drop.item_type = data.get("item_type", "")
+				drop.item_rarity = data.get("item_rarity", "")
 			FieldDrop.DropType.HP_ORB:
 				drop.heal_amount = FieldDrop.HP_PER_ORB
 
-		# 원형 산개 배치
-		var angle: float = (float(i) / maxf(drop_count, 1)) * TAU
-		var radius: float = 12.0 if drop_count > 1 else 0.0
-		var offset := Vector2(cos(angle), sin(angle)) * radius
-		drop.position = world_pos + offset
+		# 전투창 영역 내 랜덤 위치
+		var rand_x: float = randf_range(scatter_rect.position.x, scatter_rect.end.x)
+		var rand_y: float = randf_range(scatter_rect.position.y, scatter_rect.end.y)
+		drop.position = Vector2(rand_x, rand_y)
 
 		add_child(drop)
 
