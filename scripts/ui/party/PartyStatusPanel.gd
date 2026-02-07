@@ -181,7 +181,7 @@ func _refresh_all() -> void:
 
 
 func _refresh_hero_buttons() -> void:
-	var party := PartyManager.get_party()
+	var party: Array = PartyManager.get_party()
 	for i in range(4):
 		if i < party.size():
 			var hero: Hero = party[i]
@@ -200,7 +200,7 @@ func _refresh_hero_buttons() -> void:
 
 
 func _refresh_hero_info() -> void:
-	var party := PartyManager.get_party()
+	var party: Array = PartyManager.get_party()
 	if selected_hero_index >= party.size():
 		selected_hero_index = 0
 	
@@ -243,7 +243,7 @@ func _refresh_inventory() -> void:
 	
 	await get_tree().process_frame
 	
-	var inventory := PartyManager.get_all_items()
+	var inventory: Dictionary = PartyManager.get_all_items()
 	
 	if inventory.is_empty():
 		var empty := Label.new()
@@ -278,7 +278,7 @@ func _refresh_inventory() -> void:
 
 
 func _on_hero_selected(index: int) -> void:
-	var party := PartyManager.get_party()
+	var party: Array = PartyManager.get_party()
 	if index < party.size():
 		selected_hero_index = index
 		_refresh_hero_buttons()
@@ -288,7 +288,7 @@ func _on_hero_selected(index: int) -> void:
 
 
 func _on_equip_slot_pressed(slot: String) -> void:
-	var party := PartyManager.get_party()
+	var party: Array = PartyManager.get_party()
 	if selected_hero_index >= party.size():
 		return
 	
@@ -311,7 +311,7 @@ func _on_item_unhovered() -> void:
 
 
 func _update_preview(item_id: String) -> void:
-	var party := PartyManager.get_party()
+	var party: Array = PartyManager.get_party()
 	if selected_hero_index >= party.size():
 		preview_label.text = "영웅을 선택해주세요."
 		return
@@ -410,7 +410,7 @@ func _format_stat_change(stat_name: String, cur: int, new_val: int, diff: int) -
 
 
 func _on_inventory_item_pressed(item_id: String) -> void:
-	var party := PartyManager.get_party()
+	var party: Array = PartyManager.get_party()
 	if selected_hero_index >= party.size():
 		return
 	
@@ -441,7 +441,7 @@ func _on_close_pressed() -> void:
 
 
 func _on_seed_used(item_id: String) -> void:
-	var party := PartyManager.get_party()
+	var party: Array = PartyManager.get_party()
 	if selected_hero_index >= party.size():
 		return
 	

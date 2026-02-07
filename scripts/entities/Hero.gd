@@ -77,7 +77,7 @@ func _initialize(hero_id: String) -> void:
 func _init_skill_toggles() -> void:
 	## 클래스 스킬에 대한 토글 초기화 (기본값: 모두 활성화)
 	skill_toggles.clear()
-	var class_skills := DataManager.get_class_skills(class_id)
+	var class_skills: Array = DataManager.get_class_skills(class_id)
 	for skill_id in class_skills:
 		skill_toggles[skill_id] = true  # 기본적으로 모든 스킬 활성화
 
@@ -259,7 +259,7 @@ func get_available_skills() -> Array:
 func get_usable_skills() -> Array:
 	## 토글 ON이고 쿨타임이 없는 스킬 목록 반환 (기본 공격 제외)
 	var result: Array = []
-	var skills := get_available_skills()
+	var skills: Array = get_available_skills()
 	for skill_id in skills:
 		if skill_id == "basic_attack":
 			continue
@@ -299,7 +299,7 @@ func get_traits() -> Array:
 	## 영웅의 특성 데이터 목록 반환 (장착된 룬에서 가져옴)
 	var result: Array = []
 	if not equipped_rune_id.is_empty():
-		var trait_data := DataManager.get_rune_trait(equipped_rune_id)
+		var trait_data: Dictionary = DataManager.get_rune_trait(equipped_rune_id)
 		if not trait_data.is_empty():
 			result.append(trait_data)
 	return result
@@ -308,7 +308,7 @@ func get_traits() -> Array:
 func has_trait(trait_id: String) -> bool:
 	if equipped_rune_id.is_empty():
 		return false
-	var rune_data := DataManager.get_rune(equipped_rune_id)
+	var rune_data: Dictionary = DataManager.get_rune(equipped_rune_id)
 	return rune_data.get("trait_id", "") == trait_id
 
 

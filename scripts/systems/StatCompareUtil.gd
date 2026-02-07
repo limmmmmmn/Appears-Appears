@@ -25,7 +25,7 @@ static func calculate_stat_changes(hero: Hero, new_item_id: String) -> Dictionar
 	
 	var new_stats: Dictionary = equip_data.get("stats", {})
 	var slot: String = equip_data.get("slot", "")
-	var target_slot := _get_target_slot(hero, slot)
+	var target_slot: String = _get_target_slot(hero, slot)
 	
 	# 현재 장착 장비 스탯
 	var current_equip_id: String = hero.equipment.get(target_slot, "")

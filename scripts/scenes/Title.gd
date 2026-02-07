@@ -15,14 +15,14 @@ func _ready() -> void:
 
 
 func _update_ui() -> void:
-	var has_save := SaveManager.has_save()
+	var has_save: bool = SaveManager.has_save()
 	
 	# 이어하기 버튼 활성화/비활성화
 	continue_button.disabled = not has_save
 	
 	if has_save:
 		# 저장 정보 표시
-		var info := SaveManager.get_save_info()
+		var info: Dictionary = SaveManager.get_save_info()
 		var timestamp: String = info.get("timestamp", "")
 		var stage: int = info.get("stage", 1)
 		var field: int = info.get("field", 1)

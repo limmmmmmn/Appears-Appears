@@ -737,11 +737,11 @@ func _process_enemy_turn(enemy: BattleEnemy) -> void:
 
 func _select_hero_skill(hero: Hero) -> String:
 	## 영웅의 스킬 선택 (간단한 AI)
-	var skills := hero.get_available_skills()
+	var skills: Array = hero.get_available_skills()
 
 	# 클레릭은 체력이 낮은 아군이 있으면 힐 우선
 	if hero.class_id == "cleric":
-		var wounded := _get_wounded_heroes()
+		var wounded: Array = _get_wounded_heroes()
 		if not wounded.is_empty():
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
@@ -1052,7 +1052,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	if not enemy.is_alive():
 		return
 
-	var alive_heroes := PartyManager.get_alive_heroes()
+	var alive_heroes: Array = PartyManager.get_alive_heroes()
 	if alive_heroes.is_empty():
 		return
 
@@ -1278,7 +1278,7 @@ func _check_battle_end() -> bool:
 		if e != null and e.is_alive():
 			alive_enemies.append(e)
 
-	var alive_heroes := PartyManager.get_alive_heroes()
+	var alive_heroes: Array = PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
 		# 적이 모두 사라짐 - 보상 버튼 표시 (각 전투창 독립 보상)
@@ -1547,7 +1547,7 @@ func _on_run_pressed() -> void:
 
 
 func _calculate_escape_chance() -> float:
-	var party_avg_dex := PartyManager.get_party_average_dex()
+	var party_avg_dex: int = PartyManager.get_party_average_dex()
 
 	var enemy_total_dex: float = 0.0
 	var alive_count: int = 0

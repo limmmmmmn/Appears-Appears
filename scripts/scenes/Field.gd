@@ -570,7 +570,7 @@ func _on_boss_victory(_battle_id: int) -> void:
 
 func _on_boss_battle_started(_battle_id: int) -> void:
 	## 보스전 시작 - 모든 필드 적이 관전 모드로 전환
-	var camera_rect := _get_camera_rect()
+	var camera_rect: Rect2 = _get_camera_rect()
 
 	for enemy in field_enemies:
 		if is_instance_valid(enemy) and enemy.has_method("start_spectating"):

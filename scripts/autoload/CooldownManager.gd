@@ -60,7 +60,7 @@ func get_cooldown_percent(hero_id: String, skill_id: String) -> float:
 	var remaining := get_remaining_cooldown(hero_id, skill_id)
 	if remaining <= 0:
 		return 0.0
-	var total := DataManager.get_skill_cooldown(skill_id)
+	var total: float = DataManager.get_skill_cooldown(skill_id)
 	if total <= 0:
 		return 0.0
 	return remaining / total

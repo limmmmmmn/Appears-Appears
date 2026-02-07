@@ -153,7 +153,7 @@ func _collect_hp() -> void:
 			continue
 		if hero.current_hp >= hero.get_max_hp():
 			continue
-		var actual := hero.heal(heal_amount)
+		var actual: int = hero.heal(heal_amount)
 		if actual > 0:
 			healed_name = hero.hero_name
 			actual_total = actual

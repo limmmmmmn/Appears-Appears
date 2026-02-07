@@ -97,7 +97,7 @@ func _init_topbar() -> void:
 			var gold_idx := gold_label.get_index()
 			parent.add_child(kill_label)
 			parent.move_child(kill_label, gold_idx + 1)
-			var current_kills := BattleManager.get_global_kill_count() if BattleManager else 0
+			var current_kills: int = BattleManager.get_global_kill_count() if BattleManager else 0
 			kill_label.text = "💀 %d" % current_kills
 
 

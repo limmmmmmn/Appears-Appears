@@ -193,8 +193,8 @@ func get_gold_reward() -> int:
 func roll_drops() -> Array:
 	## 드랍 판정 - LUK 보정 적용
 	var drops: Array = []
-	var party_luk := PartyManager.get_party_average_luk()
-	var luk_multiplier := 1.0 + (party_luk / 100.0)
+	var party_luk: int = PartyManager.get_party_average_luk()
+	var luk_multiplier: float = 1.0 + (party_luk / 100.0)
 	
 	# 1. 기존 드랍 테이블 판정
 	for drop in drop_table:

@@ -41,7 +41,7 @@ func initialize_battle() -> void:
 	is_paused = false
 	is_processing_action = false
 
-	var heroes := PartyManager.get_alive_heroes()
+	var heroes: Array = PartyManager.get_alive_heroes()
 	for hero in heroes:
 		var hero_dex: int = hero.get_dex()
 		var initial_atb: float = randf_range(0, 30) + hero_dex * 0.5
@@ -83,7 +83,7 @@ func set_paused(paused: bool) -> void:
 
 func _sync_party_heroes() -> void:
 	## 파티 영웅과 ATB 목록 동기화 (새 영웅 추가)
-	var heroes := PartyManager.get_alive_heroes()
+	var heroes: Array = PartyManager.get_alive_heroes()
 	for hero in heroes:
 		if not hero_atb.has(hero.id):
 			var hero_dex: int = hero.get_dex()
@@ -166,7 +166,7 @@ func _execute_auto_attack(hero: Hero) -> void:
 func _select_best_skill(hero: Hero) -> String:
 	## 사용 가능한 최적 스킬 선택 (쿨타임 체크)
 	## 우선순위: 특수 스킬 > 기본 공격
-	var skills := hero.get_available_skills()
+	var skills: Array = hero.get_available_skills()
 
 	# 힐러 클래스면 아군 체력 체크
 	if hero.class_id in ["cleric"]:
@@ -204,7 +204,7 @@ func _select_best_skill(hero: Hero) -> String:
 
 func _find_low_hp_ally() -> Hero:
 	## HP가 50% 이하인 아군 찾기
-	var heroes := PartyManager.get_alive_heroes()
+	var heroes: Array = PartyManager.get_alive_heroes()
 	for hero in heroes:
 		var hp_percent: float = float(hero.current_hp) / float(hero.get_max_hp())
 		if hp_percent < 0.5:
@@ -279,7 +279,7 @@ func _execute_ally_heal_all(hero: Hero, skill_id: String) -> void:
 	var int_stat: int = hero.get_int()
 	var heal_amount: int = int(base_value + int_stat * scaling)
 
-	var heroes := PartyManager.get_alive_heroes()
+	var heroes: Array = PartyManager.get_alive_heroes()
 	for target in heroes:
 		target.heal(heal_amount)
 
@@ -291,7 +291,7 @@ func _execute_ally_heal_all(hero: Hero, skill_id: String) -> void:
 
 func _find_lowest_hp_ally() -> Hero:
 	## 가장 체력 낮은 아군 찾기
-	var heroes := PartyManager.get_alive_heroes()
+	var heroes: Array = PartyManager.get_alive_heroes()
 	var lowest_hero: Hero = null
 	var lowest_percent: float = 1.0
 

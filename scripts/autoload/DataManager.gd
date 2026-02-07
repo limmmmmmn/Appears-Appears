@@ -57,11 +57,11 @@ func get_class_growth(class_id: String) -> Dictionary:
 	return get_class_data(class_id).get("growth", {})
 
 func can_class_dual_wield(class_id: String) -> bool:
-	var c := get_class_data(class_id)
+	var c: Dictionary = get_class_data(class_id)
 	return c.get("equip_restrictions", {}).get("dual_wield", false)
 
 func can_class_equip(class_id: String, equip_type: String) -> bool:
-	var c := get_class_data(class_id)
+	var c: Dictionary = get_class_data(class_id)
 	var can_equip: Array = c.get("equip_restrictions", {}).get("can_equip", [])
 	# 악세사리 타입 통합: ring/necklace/shoes → acc
 	var check_type := equip_type
@@ -99,7 +99,7 @@ func get_skill_cooldown(skill_id: String) -> float:
 
 func get_class_skills(class_id: String) -> Array:
 	## 클래스의 스킬 목록 반환
-	var class_data := get_class_data(class_id)
+	var class_data: Dictionary = get_class_data(class_id)
 	return class_data.get("skills", ["basic_attack"])
 
 
@@ -147,7 +147,7 @@ func get_trait(trait_id: String) -> Dictionary:
 
 func get_hero_traits(hero_id: String) -> Array:
 	## 영웅의 특성 ID 목록 반환
-	var hero_data := get_hero(hero_id)
+	var hero_data: Dictionary = get_hero(hero_id)
 	return hero_data.get("traits", [])
 
 
@@ -160,7 +160,7 @@ func get_all_rune_ids() -> Array:
 
 func get_rune_trait(rune_id: String) -> Dictionary:
 	## 룬에 부여된 특성 반환
-	var rune_data := get_rune(rune_id)
+	var rune_data: Dictionary = get_rune(rune_id)
 	var trait_id: String = rune_data.get("trait_id", "")
 	if trait_id.is_empty():
 		return {}

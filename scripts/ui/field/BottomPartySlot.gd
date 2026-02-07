@@ -215,7 +215,7 @@ func _update_skill_toggles() -> void:
 	if not hero:
 		return
 	
-	var current_skills := hero.get_available_skills()
+	var current_skills: Array = hero.get_available_skills()
 	
 	# 기존 버튼 중 더 이상 없는 스킬 제거
 	var to_remove: Array = []

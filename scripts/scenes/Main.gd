@@ -37,7 +37,7 @@ func _go_to_field_from_save() -> void:
 	## 저장된 필드 위치로 복귀
 	_clear_current_scene()
 	
-	var field_info := SaveManager.get_saved_field_info()
+	var field_info: Dictionary = SaveManager.get_saved_field_info()
 	var stage_id: String = field_info.get("stage_id", "")
 	var field_id: String = field_info.get("field_id", "")
 	
@@ -101,7 +101,7 @@ func _clear_current_scene() -> void:
 
 func _add_random_companions(count: int) -> void:
 	## 랜덤 동료 추가 (롤랜드 및 이미 파티에 있는 영웅 제외)
-	var all_heroes := DataManager.get_all_hero_ids()
+	var all_heroes: Array = DataManager.get_all_hero_ids()
 	var available: Array[String] = []
 
 	# 이미 파티에 있는 영웅 ID 수집
@@ -122,7 +122,7 @@ func _add_random_companions(count: int) -> void:
 
 func _add_random_runes(count: int) -> void:
 	## 랜덤 룬 추가
-	var all_runes := DataManager.get_all_rune_ids()
+	var all_runes: Array = DataManager.get_all_rune_ids()
 	if all_runes.is_empty():
 		return
 
