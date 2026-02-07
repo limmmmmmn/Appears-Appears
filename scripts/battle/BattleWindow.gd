@@ -68,6 +68,11 @@ var claim_item_list_label: Label = null
 var claim_chest_label: Label = null
 var claim_chest_tier_label: Label = null
 
+# === 원념 레벨업 알림 UI ===
+var danger_up_panel: CenterContainer = null
+var danger_up_text_label: Label = null
+var bonus_rewards: Array = []  # 원념 추가보상 아이템 ID 목록
+
 var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
 # === 활성 특성 ===
@@ -163,6 +168,9 @@ func _ready() -> void:
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
 
+	# 원념 레벨업 알림 UI 생성
+	_setup_danger_up_ui()
+
 	# 봉쇄 버튼 생성
 	_setup_blockade_button()
 
@@ -189,6 +197,7 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	# 보상 초기화
 	total_gold = 0
 	drop_items.clear()
+	bonus_rewards.clear()
 	kill_count = 0
 	window_mode = WindowMode.HOLD  # 기본값: Hold 모드
 
@@ -1143,14 +1152,14 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 
 func _show_danger_level_up_message(new_level: int) -> void:
-	## 위험도 상승 시 로그 메시지만 표시 (선택 UI는 FieldHUD에서 글로벌하게 처리)
+	## 위험도 상승 시 전투창 내 알림 표시
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
-		"적들의 원념이 깨어나기 시작한다...",
-		"원념이 짙어진다!",
-		"분노한 영혼들이 힘을 불어넣는다!",
-		"원념이 폭발한다!",
-		"죽음의 기운으로 가득 찼다!",
+		"이곳에서 적의 분노가 깨어나기 시작합니다...",
+		"이곳에서 적의 분노가 더 커지고 있습니다!",
+		"적의 분노가 걷잡을 수 없이 커집니다!",
+		"적의 분노가 폭발합니다!",
+		"이곳은 적의 분노로 가득 찼습니다!",
 	]
 
 	var msg_idx: int = mini(new_level, messages.size() - 1)
@@ -1162,6 +1171,9 @@ func _show_danger_level_up_message(new_level: int) -> void:
 
 	# 화면 흔들림 효과
 	_shake_window()
+
+	# 알림 팝업 표시
+	_show_danger_up_notification(new_level, message)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -1932,6 +1944,8 @@ func _show_claim_ui() -> void:
 		var item_lines: Array = []
 		for item_id in drop_items:
 			var item_name: String = _get_item_display_name(item_id)
+			if item_id in bonus_rewards:
+				item_name += " (추가)"
 			item_lines.append(item_name)
 		claim_item_list_label.text = "\n".join(item_lines)
 		claim_item_list_label.visible = true
@@ -1978,6 +1992,139 @@ func _hide_claim_ui() -> void:
 	## 보상 UI 숨기기
 	if claim_reward_panel:
 		claim_reward_panel.visible = false
+#endregion
+
+
+#region 원념 레벨업 알림
+func _setup_danger_up_ui() -> void:
+	## 원념 레벨업 알림 UI 생성 (숨겨진 상태로)
+	danger_up_panel = CenterContainer.new()
+	danger_up_panel.visible = false
+	danger_up_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	danger_up_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var panel := PanelContainer.new()
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.15, 0.05, 0.05, 0.95)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = Color(0.8, 0.3, 0.1)
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	panel_style.content_margin_left = 15
+	panel_style.content_margin_right = 15
+	panel_style.content_margin_top = 12
+	panel_style.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", panel_style)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	danger_up_panel.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(vbox)
+
+	# 분노 이모지
+	var emoji_label := Label.new()
+	emoji_label.text = "🔥"
+	emoji_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	emoji_label.add_theme_font_size_override("font_size", 24)
+	vbox.add_child(emoji_label)
+
+	# 메시지 텍스트
+	danger_up_text_label = Label.new()
+	danger_up_text_label.text = ""
+	danger_up_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	danger_up_text_label.add_theme_font_size_override("font_size", 10)
+	danger_up_text_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
+	danger_up_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(danger_up_text_label)
+
+	# 확인 버튼
+	var confirm_button := Button.new()
+	confirm_button.text = "확인"
+	confirm_button.custom_minimum_size = Vector2(60, 28)
+	confirm_button.add_theme_font_size_override("font_size", 12)
+	confirm_button.pressed.connect(_on_danger_up_confirmed)
+	vbox.add_child(confirm_button)
+
+	battle_area.add_child(danger_up_panel)
+
+
+func _show_danger_up_notification(new_level: int, message: String) -> void:
+	## 원념 레벨업 알림 표시
+	if not danger_up_panel:
+		return
+
+	# ATB 일시정지
+	atb_paused = true
+
+	danger_up_text_label.text = message
+
+	# 레벨 2 이상이면 추가보상 안내 추가
+	if new_level >= 2:
+		danger_up_text_label.text += "\n\n추가 보상이 생겼습니다!"
+
+	danger_up_panel.visible = true
+
+
+func _on_danger_up_confirmed() -> void:
+	## 원념 레벨업 확인 버튼 클릭
+	if not danger_up_panel:
+		return
+
+	danger_up_panel.visible = false
+
+	# 레벨 2 이상이면 추가보상 생성
+	var dl: int = get_local_danger_level()
+	if dl >= 2:
+		_generate_grudge_bonus_rewards(dl)
+
+	# ATB 재개
+	atb_paused = false
+
+
+func _generate_grudge_bonus_rewards(level: int) -> void:
+	## 원념 레벨에 따른 추가보상 생성
+	var new_items: Array = []
+
+	if level >= 5:
+		# 레벨 5+: 레전더리 1개
+		var legendary_list: Array[String] = DataManager.get_equipment_by_rarity("legendary")
+		if not legendary_list.is_empty():
+			new_items.append(legendary_list[randi() % legendary_list.size()])
+	elif level >= 4:
+		# 레벨 4: 매직 2개
+		var magic_list: Array[String] = DataManager.get_equipment_by_rarity("magic")
+		if not magic_list.is_empty():
+			for i in range(2):
+				new_items.append(magic_list[randi() % magic_list.size()])
+	elif level >= 3:
+		# 레벨 3: 매직 1개
+		var magic_list: Array[String] = DataManager.get_equipment_by_rarity("magic")
+		if not magic_list.is_empty():
+			new_items.append(magic_list[randi() % magic_list.size()])
+	else:
+		# 레벨 2: 커먼 1개
+		var common_list: Array[String] = DataManager.get_equipment_by_rarity("common")
+		if not common_list.is_empty():
+			new_items.append(common_list[randi() % common_list.size()])
+
+	if new_items.is_empty():
+		return
+
+	# 보상에 추가
+	for item_id in new_items:
+		drop_items.append(item_id)
+		bonus_rewards.append(item_id)
+		var item_name: String = _get_item_display_name(item_id)
+		_send_log("추가보상: %s" % item_name, Color.GOLD)
+
+	_update_rewards_ui()
 #endregion
 
 
