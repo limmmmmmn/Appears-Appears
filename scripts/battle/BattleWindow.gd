@@ -1815,7 +1815,7 @@ func play_aoe_flash() -> void:
 
 #region 보상 받기 UI
 func _setup_claim_reward_ui() -> void:
-	## 전투창 중앙에 이탈 UI 생성 (숨겨진 상태로)
+	## 전투창 중앙에 보상받기 UI 생성 (숨겨진 상태로)
 	claim_reward_panel = CenterContainer.new()
 	claim_reward_panel.visible = false
 	claim_reward_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1846,9 +1846,9 @@ func _setup_claim_reward_ui() -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
-	# 이탈 버튼
+	# 보상받기 버튼
 	claim_button = Button.new()
-	claim_button.text = "이탈"
+	claim_button.text = "보상받기"
 	claim_button.custom_minimum_size = Vector2(80, 32)
 	claim_button.add_theme_font_size_override("font_size", 14)
 	claim_button.pressed.connect(_on_claim_button_pressed)
@@ -1895,18 +1895,11 @@ func _show_claim_ui() -> void:
 	# 골드 표시
 	claim_gold_label.text = "💰 %d Gold" % total_gold
 
-	# 아이템 표시 (각 아이템 줄바꿈으로 나열)
+	# 아이템 표시 (갯수만 간소화)
 	if drop_items.is_empty():
 		claim_items_label.text = ""
 	else:
-		var item_lines: Array[String] = []
-		for item_id in drop_items:
-			var item_data: Dictionary = DataManager.get_item(item_id)
-			if item_data.is_empty():
-				item_data = DataManager.get_equipment(item_id)
-			var item_name: String = str(item_data.get("name", item_id))
-			item_lines.append("• " + item_name)
-		claim_items_label.text = "\n".join(item_lines)
+		claim_items_label.text = "아이템 %d개" % drop_items.size()
 
 	claim_reward_panel.visible = true
 
