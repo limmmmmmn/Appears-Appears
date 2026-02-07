@@ -1664,20 +1664,13 @@ func _check_trait_condition(condition: String) -> bool:
 #region 전투창 모드 시스템
 func _close_with_rewards() -> void:
 	## 현재까지 쌓인 보상을 받고 창 닫기
+	## 골드/아이템은 필드 드롭으로 처리됨 (FieldDrop에서 수집 시 지급)
 	if total_gold > 0:
-		GameManager.add_gold(total_gold)
 		_send_log("보상 획득! Gold +%d" % total_gold, Color.CYAN)
-
-	if not drop_items.is_empty():
-		_start_loot_animations()
 
 	call_deferred("_emit_party_updated")
 	current_state = BattleState.ENDED
 	battle_ended.emit(battle_id, true)
-
-	# 잠시 후 창 닫기 (애니메이션 시간)
-	await get_tree().create_timer(0.3).timeout
-	queue_free()
 
 
 func _run_with_partial_rewards() -> void:
@@ -1698,7 +1691,9 @@ func _run_with_partial_rewards() -> void:
 
 	if not partial_drops.is_empty():
 		drop_items = partial_drops
-		_start_loot_animations()
+		for item_id in drop_items:
+			if not InventoryManager.try_auto_equip(item_id):
+				InventoryManager.add_item(item_id)
 
 	call_deferred("_emit_party_updated")
 	current_state = BattleState.ESCAPED
