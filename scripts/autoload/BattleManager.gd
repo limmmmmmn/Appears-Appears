@@ -1,6 +1,6 @@
 extends Node
 ## BattleManager: 전투창 시스템
-## - 필드 적 1마리 = 전투창 1개 (1:1 대응)
+## - 필드 조우 시 전투창 1개 생성 (1~3마리)
 ## - 전투창 최대 MAX_BATTLE_WINDOWS 개
 
 const BATTLE_WINDOW_SCENE = preload("res://scenes/battle/BattleWindow.tscn")
@@ -51,23 +51,27 @@ func _ready() -> void:
 
 
 #region 전투창 시스템 - 핵심 로직
-func add_enemy_to_battle(enemy_id: String, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
-	## 필드에서 적 1마리와 충돌 시 호출
-	## 항상 새 전투창을 생성 (1마리 = 1전투창)
+func add_enemy_to_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
+	## 필드에서 적과 충돌 시 호출
+	## 전투창 1개 생성 (1~3마리)
 
-	var is_boss := _check_boss_enemy(enemy_id)
+	if enemy_ids.is_empty():
+		return -1
+
+	var first_enemy_id: String = str(enemy_ids[0])
+	var is_boss := _check_boss_enemy(first_enemy_id)
 
 	# 보스전 시작 시 다른 전투 모두 강제 종료
 	if is_boss:
 		force_end_all_non_boss()
-		return _create_new_battle([enemy_id], parent_node, is_elite, is_boss, collision_pos)
+		return _create_new_battle(enemy_ids, parent_node, is_elite, is_boss, collision_pos)
 
 	# 최대 전투창 도달 시 무시
 	if get_active_battle_count() >= MAX_BATTLE_WINDOWS:
 		return -1
 
 	# 새 전투창 생성
-	return _create_new_battle([enemy_id], parent_node, is_elite, false, collision_pos)
+	return _create_new_battle(enemy_ids, parent_node, is_elite, false, collision_pos)
 
 
 func start_boss_battle(enemy_id: String, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
@@ -190,20 +194,8 @@ func _on_threshold_max_effect() -> void:
 #region 레거시 호환 - start_battle
 func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
 	## 레거시 호환용: 여러 적을 한번에 전투에 추가
-	## 각 적마다 새 전투창 생성
-
-	if enemy_ids.is_empty():
-		return -1
-
-	var first_battle_id: int = -1
-	for i in range(enemy_ids.size()):
-		var enemy_id: String = str(enemy_ids[i])
-		var make_elite: bool = (i == 0 and is_elite)
-		var bid: int = add_enemy_to_battle(enemy_id, parent_node, make_elite, collision_pos)
-		if first_battle_id == -1:
-			first_battle_id = bid
-
-	return first_battle_id
+	## 전체를 하나의 전투창에 생성
+	return add_enemy_to_battle(enemy_ids, parent_node, is_elite, collision_pos)
 #endregion
 
 
