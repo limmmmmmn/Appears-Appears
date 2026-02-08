@@ -36,10 +36,6 @@ const ATB_FILL_RATE: float = 30.0  # 기본 ATB 충전 속도
 const ATB_MAX: float = 100.0  # ATB 최대값
 const ACTION_DELAY: float = 0.3  # 액션 후 딜레이
 
-# ATB UI
-var atb_panel: PanelContainer = null
-var atb_bars_container: VBoxContainer = null
-var atb_bars: Dictionary = {}  # ref -> ProgressBar
 
 # === 보상 ===
 var total_gold: int = 0
@@ -71,10 +67,6 @@ var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 
-# === 보상 UI 참조 ===
-@onready var gold_label: Label = %GoldLabel
-@onready var exp_label: Label = %ExpLabel
-@onready var loot_label: Label = %LootLabel
 
 # === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
@@ -131,12 +123,6 @@ func _ready() -> void:
 	# 배경 셰이더 설정
 	_setup_background_shader()
 
-	# 보상 UI 초기화
-	_update_rewards_ui()
-
-	# ATB UI 생성
-	_setup_atb_ui()
-
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
 
@@ -189,9 +175,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	visible = true
 	current_state = BattleState.STARTING
 
-	# 보상 UI 업데이트
-	_update_rewards_ui()
-
 	# 배경 효과 초기화 (한 번만)
 	_init_background_effect()
 
@@ -243,10 +226,6 @@ func _cancel_claim_waiting() -> void:
 	is_waiting_for_claim = false
 	is_processing_action = false  # 액션 처리 상태 초기화
 	_hide_claim_ui()
-	# ATB UI 다시 표시
-	if atb_panel:
-		atb_panel.visible = true
-	_update_atb_ui()
 
 
 func _update_buttons_for_enemies() -> void:
@@ -327,118 +306,6 @@ func _init_atb_system() -> void:
 			})
 
 	_send_log("전투 시작!", Color.LIGHT_GRAY)
-	_update_atb_ui()
-
-
-func _setup_atb_ui() -> void:
-	## ATB UI 패널 생성
-	var main_vbox = get_node_or_null("MainVBox")
-	if not main_vbox:
-		return
-
-	# ATB 패널 컨테이너
-	atb_panel = PanelContainer.new()
-	atb_panel.name = "ATBPanel"
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.1, 0.1, 0.15, 0.9)
-	panel_style.content_margin_left = 6
-	panel_style.content_margin_right = 6
-	panel_style.content_margin_top = 3
-	panel_style.content_margin_bottom = 3
-	atb_panel.add_theme_stylebox_override("panel", panel_style)
-
-	# 세로 컨테이너 (ATB 바들)
-	atb_bars_container = VBoxContainer.new()
-	atb_bars_container.name = "ATBBarsVBox"
-	atb_bars_container.add_theme_constant_override("separation", 2)
-	atb_panel.add_child(atb_bars_container)
-
-	# RewardsPanel 다음에 삽입 (인덱스 1)
-	main_vbox.add_child(atb_panel)
-	main_vbox.move_child(atb_panel, 1)
-
-
-func _update_atb_ui() -> void:
-	## ATB UI 업데이트 (적만 표시)
-	if atb_bars_container == null:
-		return
-
-	# 기존 바들 업데이트 또는 생성
-	for unit in enemy_atb_units:
-		var unit_ref: BattleEnemy = unit["ref"]
-		var is_valid: bool = unit_ref != null and unit_ref.is_alive()
-		var unit_name: String = ""
-
-		if is_valid:
-			unit_name = unit_ref.enemy_name
-
-		if not is_valid:
-			# 죽은 유닛의 바 제거
-			if atb_bars.has(unit_ref):
-				var bar_container = atb_bars[unit_ref].get_parent()
-				if bar_container:
-					bar_container.queue_free()
-				atb_bars.erase(unit_ref)
-			continue
-
-		# 바가 없으면 생성
-		if not atb_bars.has(unit_ref):
-			_create_atb_bar(unit_ref, unit_name, false)
-
-		# 바 값 업데이트
-		if atb_bars.has(unit_ref):
-			var bar: ProgressBar = atb_bars[unit_ref]
-			bar.value = unit["atb"]
-			# 게이지가 가득 차면 색상 변경
-			if unit["atb"] >= ATB_MAX:
-				bar.modulate = Color.YELLOW
-			else:
-				bar.modulate = Color.WHITE
-
-
-func _create_atb_bar(unit_ref, unit_name: String, is_hero: bool) -> void:
-	## 개별 ATB 바 생성
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 4)
-
-	# 이름 라벨
-	var name_label := Label.new()
-	if unit_name.length() > 5:
-		name_label.text = unit_name.substr(0, 4) + ".."
-	else:
-		name_label.text = unit_name
-	name_label.add_theme_font_size_override("font_size", 9)
-	name_label.custom_minimum_size.x = 40
-	if is_hero:
-		name_label.add_theme_color_override("font_color", Color.LIGHT_BLUE)
-	else:
-		name_label.add_theme_color_override("font_color", Color.INDIAN_RED)
-	hbox.add_child(name_label)
-
-	# ATB 바
-	var bar := ProgressBar.new()
-	bar.min_value = 0
-	bar.max_value = ATB_MAX
-	bar.value = 0
-	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(60, 8)
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-
-	# 바 스타일
-	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.2, 0.2, 0.25)
-	bar.add_theme_stylebox_override("background", bg_style)
-
-	var fill_style := StyleBoxFlat.new()
-	if is_hero:
-		fill_style.bg_color = Color(0.3, 0.6, 0.9)
-	else:
-		fill_style.bg_color = Color(0.9, 0.4, 0.3)
-	bar.add_theme_stylebox_override("fill", fill_style)
-
-	hbox.add_child(bar)
-	atb_bars_container.add_child(hbox)
-	atb_bars[unit_ref] = bar
 
 
 func _start_battle() -> void:
@@ -478,9 +345,6 @@ func _update_atb_system(delta: float) -> void:
 		if unit["atb"] >= ATB_MAX:
 			ready_enemies.append(unit)
 
-	# UI 업데이트
-	_update_atb_ui()
-
 	# 준비된 적 중 가장 빠른 적이 행동
 	if not ready_enemies.is_empty():
 		ready_enemies.sort_custom(_compare_enemy_atb_priority)
@@ -513,9 +377,6 @@ func _execute_enemy_atb_action(unit: Dictionary) -> void:
 	is_processing_action = false
 	action_delay_timer = ACTION_DELAY
 
-	# UI 업데이트
-	_update_atb_ui()
-
 
 func _add_enemy_to_atb(enemy: BattleEnemy) -> void:
 	## 새로운 적을 ATB 시스템에 추가
@@ -534,7 +395,6 @@ func _add_enemy_to_atb(enemy: BattleEnemy) -> void:
 		"atb": minf(initial_atb, ATB_MAX - 1),
 		"speed": enemy_spd
 	})
-	_update_atb_ui()
 
 
 func set_atb_paused(paused: bool) -> void:
@@ -1087,7 +947,6 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	total_gold += gold_reward
 	drop_items.append_array(items)
-	_update_rewards_ui()
 
 	enemy.play_death_effect()
 
@@ -1236,10 +1095,6 @@ func _update_buttons_for_no_enemies() -> void:
 func _show_claim_reward_button() -> void:
 	## 적이 모두 처치됨 - 보상 대기 상태로 전환
 	is_waiting_for_claim = true
-
-	# ATB UI 숨기기
-	if atb_panel:
-		atb_panel.visible = false
 
 	# 보상 UI 표시
 	_show_claim_ui()
@@ -1479,27 +1334,17 @@ func _calculate_escape_chance() -> float:
 
 
 #region 보상 UI 시스템
-func _update_rewards_ui() -> void:
-	## 상단 보상 패널 UI 업데이트
-	if gold_label:
-		gold_label.text = str(total_gold)
-	if exp_label:
-		exp_label.get_parent().visible = false  # EXP 시스템 제거됨
-	if loot_label:
-		loot_label.text = "x%d" % int(loot_multiplier)
 
 
 func set_loot_multiplier(multiplier: float) -> void:
 	## 루팅 배율 설정 (외부에서 호출 가능)
 	loot_multiplier = maxf(1.0, multiplier)
-	_update_rewards_ui()
 
 
 func _add_rewards(_exp: int, gold: int, items: Array) -> void:
 	## 보상 추가 (전투창에 쌓임)
 	total_gold += gold
 	drop_items.append_array(items)
-	_update_rewards_ui()
 #endregion
 
 
