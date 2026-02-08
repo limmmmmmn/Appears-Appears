@@ -155,9 +155,6 @@ func _ready() -> void:
 	# 마우스 GUI 입력 연결
 	gui_input.connect(_on_gui_input)
 
-	# 마우스 호버 시 전투 일시정지
-	mouse_entered.connect(_on_window_mouse_entered)
-	mouse_exited.connect(_on_window_mouse_exited)
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
@@ -187,6 +184,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if current_state != BattleState.RUNNING:
 		return
+
+	# 마우스 호버 일시정지 체크 (전투창 영역 전체)
+	_is_hover_paused = get_global_rect().has_point(get_global_mouse_position())
 
 	_update_atb_system(delta)
 	_update_background_effect(delta)
@@ -2187,16 +2187,6 @@ func _exit_waiting_mode() -> void:
 
 
 #region 마우스 인터랙션
-func _on_window_mouse_entered() -> void:
-	## 마우스가 전투창에 올라오면 이 전투창만 일시정지
-	_is_hover_paused = true
-
-
-func _on_window_mouse_exited() -> void:
-	## 마우스가 전투창에서 벗어나면 재개
-	_is_hover_paused = false
-
-
 func _on_gui_input(event: InputEvent) -> void:
 	## 마우스 드래그로 전투창 이동
 	if event is InputEventMouseButton:
