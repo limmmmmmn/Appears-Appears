@@ -1,7 +1,6 @@
 extends Node
-## BattleManager: 전투창 증식 시스템
-## - 필드 적 1마리 = 전투창 적 1마리 (1:1 대응)
-## - 전투창 하나에 최대 MAX_ENEMIES_PER_WINDOW 마리
+## BattleManager: 전투창 시스템
+## - 필드 적 1마리 = 전투창 1개 (1:1 대응)
 ## - 전투창 최대 MAX_BATTLE_WINDOWS 개
 
 const BATTLE_WINDOW_SCENE = preload("res://scenes/battle/BattleWindow.tscn")
@@ -22,8 +21,7 @@ signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal accumulated_rewards_changed(gold: int, items: Array)
 signal field_drops_requested(gold: int, items: Array, world_pos: Vector2, window_rect: Rect2)
 
-# === 전투창 증식 시스템 설정 ===
-const MAX_ENEMIES_PER_WINDOW: int = 3  # 전투창 하나당 최대 적 수
+# === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
 
 # === 누적 보상 시스템 ===
@@ -39,9 +37,6 @@ var _battle_id_counter: int = 0
 var last_battle_pos: Vector2 = Vector2.ZERO
 var last_window_rect: Rect2 = Rect2()
 
-# === Charm 효과 ===
-var extra_enemy_slots: int = 0  # 추가 적 슬롯 (charm1 효과)
-
 # 전투창 배치 설정
 const WINDOW_SIZE := Vector2(280, 200)
 const BOSS_WINDOW_SIZE := Vector2(420, 300)  # 보스전 전투창 (약 2배 크기)
@@ -55,91 +50,30 @@ func _ready() -> void:
 	pass
 
 
-#region 전투창 증식 시스템 - 핵심 로직
+#region 전투창 시스템 - 핵심 로직
 func add_enemy_to_battle(enemy_id: String, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
 	## 필드에서 적 1마리와 충돌 시 호출
-	## 기존 전투창에 추가하거나 새 전투창 생성
-	
+	## 항상 새 전투창을 생성 (1마리 = 1전투창)
+
 	var is_boss := _check_boss_enemy(enemy_id)
-	
+
 	# 보스전 시작 시 다른 전투 모두 강제 종료
 	if is_boss:
 		force_end_all_non_boss()
 		return _create_new_battle([enemy_id], parent_node, is_elite, is_boss, collision_pos)
-	
-	# 기존 전투창 중 여유 있는 곳 찾기
-	var available_window: BattleWindow = _find_available_window()
-	
-	if available_window != null:
-		# 기존 전투창에 적 추가
-		available_window.add_enemy(enemy_id, is_elite)
-		return available_window.battle_id
-	else:
-		# 새 전투창 필요
-		if get_active_battle_count() >= MAX_BATTLE_WINDOWS:
-			# 최대 전투창 도달 - 오버플로 처리 (현재는 가장 오래된 창에 강제 추가)
-			var oldest_window: BattleWindow = _get_oldest_non_boss_window()
-			if oldest_window:
-				oldest_window.add_enemy(enemy_id, is_elite)
-				return oldest_window.battle_id
-			# 그래도 없으면 무시 (보스전만 있는 경우)
-			return -1
-		
-		# 새 전투창 생성
-		return _create_new_battle([enemy_id], parent_node, is_elite, false, collision_pos)
+
+	# 최대 전투창 도달 시 무시
+	if get_active_battle_count() >= MAX_BATTLE_WINDOWS:
+		return -1
+
+	# 새 전투창 생성
+	return _create_new_battle([enemy_id], parent_node, is_elite, false, collision_pos)
 
 
 func start_boss_battle(enemy_id: String, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
 	## 보스 전투 시작 (Field에서 직접 호출)
 	force_end_all_non_boss()
 	return _create_new_battle([enemy_id], parent_node, is_elite, true, collision_pos)
-
-
-func _find_available_window() -> BattleWindow:
-	## 적을 추가할 수 있는 전투창 찾기 (보스/봉쇄 제외, 여유 있는 창)
-	for battle_id in active_battles:
-		var battle_data: Dictionary = active_battles[battle_id]
-		if battle_data.get("is_boss", false):
-			continue
-
-		var window_ref = battle_data.get("window")
-		if window_ref == null or not is_instance_valid(window_ref):
-			continue
-
-		var window: BattleWindow = window_ref as BattleWindow
-		if window:
-			if window.is_blockaded:
-				continue
-			# charm 효과로 인한 동적 최대 적 수 사용
-			if window.get_enemy_count() < window.get_max_enemies():
-				return window
-
-	return null
-
-
-func _get_oldest_non_boss_window() -> BattleWindow:
-	## 가장 먼저 생성된 비보스/비봉쇄 전투창 반환
-	var oldest_id: int = -1
-	var oldest_window: BattleWindow = null
-
-	for battle_id in active_battles:
-		var battle_data: Dictionary = active_battles[battle_id]
-		if battle_data.get("is_boss", false):
-			continue
-
-		var window_ref = battle_data.get("window")
-		if window_ref == null or not is_instance_valid(window_ref):
-			continue
-
-		var window: BattleWindow = window_ref as BattleWindow
-		if window and window.is_blockaded:
-			continue
-
-		if oldest_id == -1 or battle_id < oldest_id:
-			oldest_id = battle_id
-			oldest_window = window_ref as BattleWindow
-
-	return oldest_window
 
 
 func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_boss: bool, _collision_pos: Vector2) -> int:
@@ -263,28 +197,20 @@ func _on_threshold_max_effect() -> void:
 #region 레거시 호환 - start_battle
 func start_battle(enemy_ids: Array, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
 	## 레거시 호환용: 여러 적을 한번에 전투에 추가
-	## 새 시스템에서는 add_enemy_to_battle 사용 권장
-	
+	## 각 적마다 새 전투창 생성
+
 	if enemy_ids.is_empty():
 		return -1
-	
-	var first_enemy_id: String = str(enemy_ids[0])
-	var is_boss := _check_boss_enemy(first_enemy_id)
-	
-	# 보스전은 별도 창으로 처리
-	if is_boss:
-		force_end_all_non_boss()
-		return _create_new_battle(enemy_ids, parent_node, is_elite, true, collision_pos)
-	
-	# 첫 번째 적으로 전투 시작/추가
-	var battle_id: int = add_enemy_to_battle(first_enemy_id, parent_node, is_elite, collision_pos)
-	
-	# 나머지 적들 추가 (1:1 대응이므로 순차 추가)
-	for i in range(1, enemy_ids.size()):
+
+	var first_battle_id: int = -1
+	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
-		add_enemy_to_battle(enemy_id, parent_node, false, collision_pos)
-	
-	return battle_id
+		var make_elite: bool = (i == 0 and is_elite)
+		var bid: int = add_enemy_to_battle(enemy_id, parent_node, make_elite, collision_pos)
+		if first_battle_id == -1:
+			first_battle_id = bid
+
+	return first_battle_id
 #endregion
 
 
@@ -533,21 +459,6 @@ func _is_position_available(pos: Vector2) -> bool:
 	return true
 #endregion
 
-
-#region Charm 시스템
-func set_extra_enemy_slots(slots: int) -> void:
-	## Charm 효과: 추가 적 슬롯 설정
-	extra_enemy_slots = maxi(0, slots)
-
-
-func get_extra_enemy_slots() -> int:
-	return extra_enemy_slots
-
-
-func get_max_enemies_per_window() -> int:
-	## 전투창당 최대 적 수 반환 (기본값 + charm 효과)
-	return MAX_ENEMIES_PER_WINDOW + extra_enemy_slots
-#endregion
 
 
 

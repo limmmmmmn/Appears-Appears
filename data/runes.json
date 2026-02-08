@@ -1,20 +1,4 @@
 {
-  "rune_bloodlust": {
-    "id": "rune_bloodlust",
-    "name": "광기의 룬",
-    "description": "붉은 빛이 맥동하는 룬",
-    "icon": "🔴",
-    "rarity": "rare",
-    "trait_id": "bloodlust"
-  },
-  "rune_intimidating": {
-    "id": "rune_intimidating",
-    "name": "위압의 룬",
-    "description": "서늘한 기운이 감도는 룬",
-    "icon": "🟣",
-    "rarity": "uncommon",
-    "trait_id": "intimidating"
-  },
   "rune_gold": {
     "id": "rune_gold",
     "name": "황금의 룬",

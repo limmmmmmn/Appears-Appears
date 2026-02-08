@@ -1,24 +1,4 @@
 {
-  "bloodlust": {
-    "id": "bloodlust",
-    "name": "피의 갈증",
-    "description": "전투창 적 +1",
-    "icon": "🔥",
-    "effect": {
-      "type": "max_enemies",
-      "value": 1
-    }
-  },
-  "intimidating": {
-    "id": "intimidating",
-    "name": "위압감",
-    "description": "전투창 적 -1",
-    "icon": "😨",
-    "effect": {
-      "type": "max_enemies",
-      "value": -1
-    }
-  },
   "gold_finder": {
     "id": "gold_finder",
     "name": "금화 탐지",

@@ -2,7 +2,6 @@ extends PanelContainer
 class_name BattleWindow
 ## BattleWindow: 턴제 전투창
 ## - ATBManager에서 턴 순서를 관리 (DEX 기반)
-## - 전투 중 적 동적 추가 지원
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
@@ -36,7 +35,6 @@ var elite_items: Array = []  # 엘리트 확정 아이템 (페널티 면제)
 # === 전투창 모드 ===
 enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
 var window_mode: WindowMode = WindowMode.NORMAL
-var is_blockaded: bool = false  # 봉쇄 모드 (적 추가 차단)
 
 # === UI 참조 ===
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
@@ -53,7 +51,6 @@ var claim_button: Button = null
 var claim_gold_label: Label = null
 var claim_item_list_label: Label = null
 
-var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
@@ -117,9 +114,6 @@ func _ready() -> void:
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
 
-	# 봉쇄 버튼 생성
-	_setup_blockade_button()
-
 	# 적 호버 툴팁 생성
 	_setup_enemy_tooltip()
 
@@ -176,44 +170,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 	await get_tree().create_timer(0.3).timeout
 	_start_battle()
-
-
-func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
-	# 패배/봉쇄 상태에서는 적 추가 불가
-	if current_state == BattleState.DEFEAT or is_blockaded:
-		return
-
-	enemy_data_list.append(enemy_id)
-	_spawn_single_enemy(enemy_id, is_elite)
-
-	var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
-	var enemy_name: String = str(enemy_data.get("name", enemy_id))
-	if is_elite:
-		_send_log("⭐ 엘리트 %s 합류!" % enemy_name, Color.PURPLE)
-	else:
-		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
-
-	# 대기 모드에서 적이 추가되면 활성화
-	if is_waiting_for_enemies:
-		_exit_waiting_mode()
-	# 보상 대기 중 적이 추가되면 전투 재개
-	elif is_waiting_for_claim:
-		_cancel_claim_waiting()
-		_send_log("전투 재개!", Color.GREEN)
-	# 승리 상태에서 적이 추가되면 전투 재개
-	elif current_state == BattleState.VICTORY:
-		current_state = BattleState.RUNNING
-		set_process(true)
-		_send_log("전투 재개!", Color.GREEN)
-
-	_update_buttons_for_enemies()
-	_shake_window()
-
-
-func _cancel_claim_waiting() -> void:
-	## 보상 대기 상태 취소 (적이 추가되었을 때)
-	is_waiting_for_claim = false
-	_hide_claim_ui()
 
 
 func _update_buttons_for_enemies() -> void:
@@ -1297,13 +1253,6 @@ func _add_rewards(_exp: int, gold: int, items: Array) -> void:
 #endregion
 
 
-func get_max_enemies() -> int:
-	## 이 전투창의 최대 적 수 반환 (기본 3 + 특성 효과)
-	var base_max: int = BattleManager.get_max_enemies_per_window()
-	var trait_bonus: int = _get_trait_effect_value("max_enemies")
-	return maxi(1, base_max + trait_bonus)  # 최소 1
-
-
 #region 특성 시스템
 func _collect_party_traits() -> void:
 	## 파티원들의 특성 수집
@@ -1656,52 +1605,6 @@ func _hide_claim_ui() -> void:
 	if claim_reward_panel:
 		claim_reward_panel.visible = false
 #endregion
-
-#region 봉쇄 버튼
-var blockade_button: Button = null
-
-func _setup_blockade_button() -> void:
-	## 좌측 하단에 봉쇄 토글 버튼 생성
-	var bottom_bar = get_node_or_null("MainVBox/BottomBar")
-	if not bottom_bar:
-		return
-
-	blockade_button = Button.new()
-	blockade_button.text = "봉쇄"
-	blockade_button.toggle_mode = true
-	blockade_button.tooltip_text = "활성화 시 적이 더 이상 이 전투창에 들어오지 않습니다"
-	blockade_button.custom_minimum_size = Vector2(50, 26)
-	blockade_button.add_theme_font_size_override("font_size", 10)
-	blockade_button.toggled.connect(_on_blockade_toggled)
-	bottom_bar.add_child(blockade_button)
-	bottom_bar.move_child(blockade_button, 0)
-
-
-func _on_blockade_toggled(toggled_on: bool) -> void:
-	is_blockaded = toggled_on
-	if blockade_button:
-		if toggled_on:
-			blockade_button.modulate = Color(1.0, 0.5, 0.5)
-		else:
-			blockade_button.modulate = Color.WHITE
-#endregion
-
-
-func _enter_waiting_mode() -> void:
-	## 적 대기 모드 진입 (반투명 + 비활성화)
-	current_state = BattleState.VICTORY  # 임시 상태
-	set_process(false)
-	modulate.a = 0.4  # 반투명
-
-
-func _exit_waiting_mode() -> void:
-	## 적 대기 모드 해제 (활성화)
-	is_waiting_for_enemies = false
-	modulate.a = 1.0  # 불투명
-	current_state = BattleState.RUNNING
-	set_process(true)
-	_send_log("전투 재개!", Color.GREEN)
-
 
 #region 마우스 인터랙션
 func _on_gui_input(event: InputEvent) -> void:
