@@ -110,6 +110,7 @@ const GRUDGE_PER_KILL: float = 5.0  # 적 1마리 처치 시 증가량
 const GRUDGE_LEVEL_THRESHOLDS: Array = [0.0, 25.0, 50.0, 75.0, 100.0]  # Lv1~5 경계값
 const GRUDGE_LEVEL_ICONS: Array = ["⚔", "💢", "👁", "💀"]  # Lv2/3/4/5 노치 아이콘
 const GRUDGE_LEVEL_LABELS: Array = ["증원", "분노", "전조", "엘리트"]  # 노치 설명
+const GRUDGE_RAGE_ATB_MULT: float = 1.5  # Lv3+ 적 ATB 속도 배율
 
 # 원념 UI 참조
 var grudge_panel: PanelContainer = null
@@ -117,6 +118,10 @@ var grudge_bar: Control = null  # 게이지 바 배경
 var grudge_fill: ColorRect = null  # 게이지 채움
 var grudge_level_label: Label = null  # 레벨 텍스트
 var grudge_notch_icons: Array = []  # 노치 아이콘들
+
+# 원념 Lv4+ 테두리 펄스
+var _grudge_border_style: StyleBoxFlat = null
+var _grudge_border_pulse_time: float = 0.0
 
 
 func _ready() -> void:
@@ -162,6 +167,10 @@ func _process(delta: float) -> void:
 	_update_atb_system(delta)
 	_update_background_effect(delta)
 
+	# 원념 Lv4+ 테두리 펄스
+	if grudge_level >= 4 and _grudge_border_style:
+		_update_grudge_border_pulse(delta)
+
 
 #region 전투 초기화 (새 시스템)
 func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_is_boss: bool = false) -> void:
@@ -178,6 +187,9 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	# 원념 초기화
 	grudge_value = 0.0
 	grudge_level = 1
+	_grudge_border_style = null
+	_grudge_border_pulse_time = 0.0
+	modulate = Color.WHITE
 	_update_grudge_ui()
 
 	# 루팅 배율 계산 (엘리트: x2, 보스: x4, 기본: x1)
@@ -362,7 +374,8 @@ func _update_atb_system(delta: float) -> void:
 		# 아직 행동 준비 안 된 적은 게이지 충전
 		if unit["atb"] < ATB_MAX:
 			var unit_speed: float = float(unit["speed"])
-			var fill_amount: float = ATB_FILL_RATE * (unit_speed / 10.0) * delta
+			var rage_mult: float = GRUDGE_RAGE_ATB_MULT if grudge_level >= 3 else 1.0
+			var fill_amount: float = ATB_FILL_RATE * (unit_speed / 10.0) * rage_mult * delta
 			unit["atb"] = minf(unit["atb"] + fill_amount, ATB_MAX)
 
 		# 게이지가 가득 찬 적은 준비 목록에 추가
@@ -2077,6 +2090,18 @@ func _on_grudge_level_up(old_level: int, new_level: int) -> void:
 	if new_level == 2:
 		call_deferred("_grudge_spawn_reinforcement")
 
+	# 6) Lv3 효과: 분노 - 적 ATB 속도 증가 (ATB 시스템에서 자동 적용)
+	if new_level == 3:
+		_send_log("💢 적의 공격 속도가 빨라졌다!", Color.ORANGE_RED)
+
+	# 7) Lv4 효과: 전조 - 위험 테두리 활성화
+	if new_level == 4:
+		_activate_grudge_danger_border()
+
+	# 8) Lv5 효과: 엘리트 등장
+	if new_level == 5:
+		call_deferred("_grudge_spawn_elite")
+
 
 func _bounce_grudge_notch_icon(level: int) -> void:
 	## 레벨업한 노치 아이콘 튀어오르기 연출
@@ -2100,8 +2125,8 @@ func _show_grudge_level_up_message(new_level: int) -> void:
 	var messages: Array = [
 		"",
 		"원념이 강해졌다. 적이 더 몰려온다!",  # Lv2
-		"적의 분노가 거세집니다!",  # Lv3
-		"불길한 전조가 감지됩니다...",  # Lv4
+		"원념이 폭발했다. 적이 분노했다!",  # Lv3
+		"무언가가 오고 있다…",  # Lv4
 		"원념이 극에 달했습니다!!",  # Lv5
 	]
 	var msg_idx: int = clampi(new_level - 1, 0, messages.size() - 1)
@@ -2143,6 +2168,56 @@ func _grudge_spawn_reinforcement() -> void:
 	# 현재 전투창에 있던 적 종류 중 랜덤 선택
 	var random_enemy_id: String = enemy_data_list[randi() % enemy_data_list.size()]
 	add_enemy(random_enemy_id, false)
+
+
+func _activate_grudge_danger_border() -> void:
+	## Lv4 전조: 위험한 빨간 테두리 펄스 활성화
+	_grudge_border_style = StyleBoxFlat.new()
+	_grudge_border_style.bg_color = Color(0.1, 0.05, 0.05, 0.95)
+
+	_grudge_border_style.border_width_left = 3
+	_grudge_border_style.border_width_top = 3
+	_grudge_border_style.border_width_right = 3
+	_grudge_border_style.border_width_bottom = 3
+	_grudge_border_style.border_color = Color(0.8, 0.1, 0.1)
+
+	_grudge_border_style.corner_radius_top_left = 4
+	_grudge_border_style.corner_radius_top_right = 4
+	_grudge_border_style.corner_radius_bottom_left = 4
+	_grudge_border_style.corner_radius_bottom_right = 4
+
+	add_theme_stylebox_override("panel", _grudge_border_style)
+	_grudge_border_pulse_time = 0.0
+
+
+func _update_grudge_border_pulse(delta: float) -> void:
+	## Lv4+ 테두리 펄스 연출
+	_grudge_border_pulse_time += delta
+	var pulse_speed: float = 3.0 if grudge_level >= 5 else 2.0
+	var pulse: float = (sin(_grudge_border_pulse_time * pulse_speed) + 1.0) / 2.0
+
+	var base_color := Color(0.8, 0.1, 0.1)
+	if grudge_level >= 5:
+		base_color = Color(0.9, 0.05, 0.4)  # Lv5: 더 강렬한 색
+	var bright_color: Color = base_color.lightened(0.4)
+	_grudge_border_style.border_color = base_color.lerp(bright_color, pulse)
+
+	# Lv5에서 배경 살짝 붉게
+	if grudge_level >= 5:
+		var bg_tint: float = pulse * 0.08
+		modulate = Color(1.0 + bg_tint, 1.0 - bg_tint * 0.3, 1.0 - bg_tint * 0.3)
+
+
+func _grudge_spawn_elite() -> void:
+	## 원념 Lv5: 엘리트 적 1마리 소환
+	if current_state != BattleState.RUNNING:
+		return
+	if enemy_data_list.is_empty():
+		return
+
+	var random_enemy_id: String = enemy_data_list[randi() % enemy_data_list.size()]
+	add_enemy(random_enemy_id, true)  # is_elite = true
+	_send_log("💀 엘리트가 나타났다!", Color.DARK_MAGENTA)
 
 
 func get_grudge_level() -> int:
