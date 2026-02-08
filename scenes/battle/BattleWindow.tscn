@@ -141,19 +141,6 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "x1"
 
-[node name="KillCountContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="KillCountIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/KillCountContainer"]
-layout_mode = 2
-text = "💀"
-
-[node name="KillCountLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/KillCountContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "0"
-
 [node name="TopBar" type="HBoxContainer" parent="MainVBox" unique_id=1913141494]
 visible = false
 layout_mode = 2

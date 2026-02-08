@@ -352,8 +352,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 				window_items = window.drop_items.duplicate()
 				window_screen_rect = Rect2(window.position, window.size)
 				last_window_rect = window_screen_rect
-				var window_danger: int = window.get_local_danger_level()
-				last_window_danger = window_danger
+				last_window_danger = get_danger_level()
 
 	end_battle(battle_id, victory)
 

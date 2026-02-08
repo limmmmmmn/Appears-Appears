@@ -45,7 +45,6 @@ var atb_bars: Dictionary = {}  # ref -> ProgressBar
 var total_gold: int = 0
 var drop_items: Array = []
 var loot_multiplier: float = 1.0  # 루팅 배율 (아이템 등장 확률 배수)
-var kill_count: int = 0  # 원념 (적 처치 횟수)
 
 # === 전투창 모드 ===
 enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
@@ -66,14 +65,6 @@ var claim_reward_panel: CenterContainer = null
 var claim_button: Button = null
 var claim_gold_label: Label = null
 var claim_item_list_label: Label = null
-var claim_chest_label: Label = null
-var claim_chest_tier_label: Label = null
-var claim_chest_separator: HSeparator = null
-
-# === 원념 레벨업 알림 UI ===
-var danger_up_panel: CenterContainer = null
-var danger_up_text_label: Label = null
-var bonus_rewards: Array = []  # 원념 추가보상 아이템 ID 목록
 
 var is_waiting_for_enemies: bool = false  # 적 대기 모드 (반투명)
 
@@ -84,7 +75,6 @@ var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 @onready var gold_label: Label = %GoldLabel
 @onready var exp_label: Label = %ExpLabel
 @onready var loot_label: Label = %LootLabel
-@onready var kill_count_label: Label = %KillCountLabel
 
 # === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
@@ -111,24 +101,6 @@ const COLOR_PALETTES: Array = [
 
 const EFFECT_CHANGE_INTERVAL: float = 4.0
 var effect_timer: float = 0.0
-
-# === 위험도 테두리 효과 ===
-var danger_level: int = 0
-var border_style: StyleBoxFlat = null
-var border_pulse_time: float = 0.0
-
-# 위험도별 테두리 색상 (레벨 0~5+)
-# 위험도 레벨 설정
-const DANGER_LEVEL_INTERVAL: int = 5  # 킬카운트 N마다 위험도 1 증가
-
-const DANGER_BORDER_COLORS: Array = [
-	Color(0.3, 0.3, 0.3),      # 0: 회색 (기본)
-	Color(0.8, 0.7, 0.2),      # 1: 노란색
-	Color(1.0, 0.5, 0.1),      # 2: 주황색
-	Color(1.0, 0.2, 0.2),      # 3: 빨간색
-	Color(0.8, 0.1, 0.3),      # 4: 진홍색
-	Color(0.6, 0.0, 0.6),      # 5+: 보라색 (최고 위험)
-]
 
 # === 마우스 드래그 이동 ===
 var _is_dragging: bool = false
@@ -159,9 +131,6 @@ func _ready() -> void:
 	# 배경 셰이더 설정
 	_setup_background_shader()
 
-	# 위험도 테두리 설정
-	_setup_danger_border()
-
 	# 보상 UI 초기화
 	_update_rewards_ui()
 
@@ -170,9 +139,6 @@ func _ready() -> void:
 
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
-
-	# 원념 레벨업 알림 UI 생성
-	_setup_danger_up_ui()
 
 	# 봉쇄 버튼 생성
 	_setup_blockade_button()
@@ -190,7 +156,6 @@ func _process(delta: float) -> void:
 
 	_update_atb_system(delta)
 	_update_background_effect(delta)
-	_update_danger_border_pulse(delta)
 
 
 #region 전투 초기화 (새 시스템)
@@ -203,8 +168,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	# 보상 초기화
 	total_gold = 0
 	drop_items.clear()
-	bonus_rewards.clear()
-	kill_count = 0
 	window_mode = WindowMode.HOLD  # 기본값: Hold 모드
 
 	# 루팅 배율 계산 (엘리트: x2, 보스: x4, 기본: x1)
@@ -231,9 +194,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 	# 배경 효과 초기화 (한 번만)
 	_init_background_effect()
-
-	# 위험도 테두리 초기화
-	_setup_danger_border()
 
 	# 파티 특성 수집 및 적용
 	_collect_party_traits()
@@ -298,16 +258,10 @@ func _update_buttons_for_enemies() -> void:
 func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
 	var battle_enemy: BattleEnemy = BATTLE_ENEMY_SCENE.instantiate()
 	enemy_container.add_child(battle_enemy)
-	# 전투창별 위험도를 적에게 전달
-	battle_enemy.setup(enemy_id, make_elite, get_local_danger_level())
+	battle_enemy.setup(enemy_id, make_elite)
 	enemies.append(battle_enemy)
 	# 마우스 호버 이벤트 연결
 	_connect_enemy_hover(battle_enemy)
-
-
-func get_local_danger_level() -> int:
-	## 이 전투창의 위험도 (킬카운트 / DANGER_LEVEL_INTERVAL)
-	return kill_count / DANGER_LEVEL_INTERVAL
 
 
 func _shake_window() -> void:
@@ -1122,26 +1076,10 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
-	# 원념 증가 (로컬)
-	kill_count += 1
-
-	# 글로벌 킬 카운트 (HUD 표시용, 위험도 계산에는 사용 안함)
+	# 글로벌 킬 카운트 (HUD 표시용)
 	BattleManager.add_global_kill_count(1)
 
-	# 특성: 적 3마리 이상일 때 보너스 원념
-	if _check_trait_condition("enemies_gte_3"):
-		var bonus_kill: int = _get_trait_effect_value("bonus_kill_count", "enemies_gte_3")
-		if bonus_kill > 0:
-			kill_count += bonus_kill
-
-	# 위험도 테두리 업데이트
-	var new_danger: int = get_local_danger_level()
-	if new_danger > danger_level:
-		update_danger_level()
-		_shake_window()
-		_show_danger_level_up_message(new_danger)
-
-	# 보상 계산 (특성 적용, 원념 보너스는 보상 수령 시 별도 적용)
+	# 보상 계산 (특성 적용)
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
 
 	var gold_reward: int = int(enemy.get_gold_reward() * gold_trait_mult)
@@ -1155,34 +1093,6 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	# 모든 적이 처치되었는지 확인 후 보상 UI 표시
 	call_deferred("_check_all_enemies_dead")
-
-
-func _show_danger_level_up_message(new_level: int) -> void:
-	## 위험도 상승 시 전투창 내 알림 표시 (레벨 2부터)
-	var messages: Array[String] = [
-		"",  # 레벨 0 (사용 안함)
-		"",  # 레벨 1 (알림 없음)
-		"적의 분노가 깨어난다...",
-		"분노가 더 커진다!",
-		"분노가 걷잡을 수 없다!",
-		"분노가 폭발한다!",
-		"분노로 가득 찼다!",
-	]
-
-	var msg_idx: int = mini(new_level, messages.size() - 1)
-	var message: String = messages[msg_idx]
-
-	# 로그에도 보내기
-	_send_log("━━━ 원념 %d단계 ━━━" % new_level, Color.ORANGE_RED)
-	if not message.is_empty():
-		_send_log(message, Color.ORANGE)
-
-	# 화면 흔들림 효과
-	_shake_window()
-
-	# 레벨 2부터 알림 팝업 표시
-	if new_level >= 2:
-		_show_danger_up_notification(new_level, message)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -1336,18 +1246,11 @@ func _show_claim_reward_button() -> void:
 
 
 func _claim_rewards_now() -> void:
-	## 즉시 보상 획득 (원념 보너스 적용 후 종료)
+	## 즉시 보상 획득 후 종료
 	if not is_waiting_for_claim:
 		return
 	is_waiting_for_claim = false
 	_hide_claim_ui()
-
-	# 원념 보너스 골드 적용
-	var dl: int = get_local_danger_level()
-	if dl > 0:
-		var grudge_gold: int = int(total_gold * dl * 0.1)
-		total_gold += grudge_gold
-
 	_end_battle_victory()
 
 
@@ -1370,7 +1273,7 @@ func _end_battle_victory() -> void:
 
 
 func _play_reward_fly_animation() -> void:
-	## 보상이 원념 패널로 날아가는 연출
+	## 보상이 HUD로 날아가는 연출
 	# 보상이 없으면 바로 닫기
 	if total_gold <= 0 and drop_items.is_empty():
 		_play_close_effect()
@@ -1583,26 +1486,13 @@ func _update_rewards_ui() -> void:
 	if exp_label:
 		exp_label.get_parent().visible = false  # EXP 시스템 제거됨
 	if loot_label:
-		# 루팅 배율 + 위험도 보너스 표시
-		var total_mult: float = loot_multiplier * (1.0 + danger_level * 0.1)
-		if danger_level > 0:
-			loot_label.text = "x%.1f" % total_mult
-		else:
-			loot_label.text = "x%d" % int(loot_multiplier)
-	if kill_count_label:
-		# 킬카운트 + 위험도 레벨 표시 (레벨은 1부터 시작)
-		kill_count_label.text = "%d (Lv.%d)" % [kill_count, danger_level + 1]
+		loot_label.text = "x%d" % int(loot_multiplier)
 
 
 func set_loot_multiplier(multiplier: float) -> void:
 	## 루팅 배율 설정 (외부에서 호출 가능)
 	loot_multiplier = maxf(1.0, multiplier)
 	_update_rewards_ui()
-
-
-func get_kill_count() -> int:
-	## 원념 (적 처치 횟수) 반환
-	return kill_count
 
 
 func _add_rewards(_exp: int, gold: int, items: Array) -> void:
@@ -1900,30 +1790,6 @@ func _setup_claim_reward_ui() -> void:
 	claim_item_list_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
 	vbox.add_child(claim_item_list_label)
 
-	# --- 구분선 (보물상자 구분, 레벨 2부터 표시) ---
-	claim_chest_separator = HSeparator.new()
-	claim_chest_separator.modulate = Color(1, 1, 1, 0.3)
-	claim_chest_separator.visible = false
-	vbox.add_child(claim_chest_separator)
-
-	# --- 하단: 보물상자 (레벨 2부터 표시) ---
-	# 보물상자 이모지
-	claim_chest_label = Label.new()
-	claim_chest_label.text = ""
-	claim_chest_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	claim_chest_label.add_theme_font_size_override("font_size", 28)
-	claim_chest_label.visible = false
-	vbox.add_child(claim_chest_label)
-
-	# 보물상자 보상단계
-	claim_chest_tier_label = Label.new()
-	claim_chest_tier_label.text = ""
-	claim_chest_tier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	claim_chest_tier_label.add_theme_font_size_override("font_size", 10)
-	claim_chest_tier_label.add_theme_color_override("font_color", Color(0.8, 0.7, 0.5))
-	claim_chest_tier_label.visible = false
-	vbox.add_child(claim_chest_tier_label)
-
 	# 보상받기 버튼
 	claim_button = Button.new()
 	claim_button.text = "보상받기"
@@ -1946,7 +1812,6 @@ func _show_claim_ui() -> void:
 	if not claim_reward_panel:
 		return
 
-	# --- 상단: 아이템 목록 ---
 	claim_gold_label.text = "💰 %d Gold" % total_gold
 
 	if drop_items.is_empty():
@@ -1956,33 +1821,9 @@ func _show_claim_ui() -> void:
 		var item_lines: Array = []
 		for item_id in drop_items:
 			var item_name: String = _get_item_display_name(item_id)
-			if item_id in bonus_rewards:
-				item_name += " (추가)"
 			item_lines.append(item_name)
 		claim_item_list_label.text = "\n".join(item_lines)
 		claim_item_list_label.visible = true
-
-	# --- 하단: 보물상자 보상단계 (레벨 2부터 표시) ---
-	var dl: int = get_local_danger_level()
-	if dl >= 2:
-		claim_chest_separator.visible = true
-		claim_chest_label.visible = true
-		claim_chest_tier_label.visible = true
-
-		# 레벨 2부터 시작하므로 인덱스 조정 (dl-2)
-		var chest_emojis: Array = ["🎁", "💎", "👑", "🏆", "🌟"]
-		var chest_idx: int = mini(dl - 2, chest_emojis.size() - 1)
-		claim_chest_label.text = chest_emojis[chest_idx]
-
-		var tier: int = dl - 1  # 보상단계 1부터 시작 (원념 Lv.2 = 보상단계 1)
-		var grudge_percent: int = dl * 10
-		var tier_text: String = "보상단계 %d (+%d%%)" % [tier, grudge_percent]
-		claim_chest_tier_label.text = tier_text
-		claim_chest_tier_label.add_theme_color_override("font_color", DANGER_BORDER_COLORS[mini(dl, DANGER_BORDER_COLORS.size() - 1)])
-	else:
-		claim_chest_separator.visible = false
-		claim_chest_label.visible = false
-		claim_chest_tier_label.visible = false
 
 	claim_reward_panel.visible = true
 
@@ -2011,134 +1852,6 @@ func _hide_claim_ui() -> void:
 	if claim_reward_panel:
 		claim_reward_panel.visible = false
 #endregion
-
-
-#region 원념 레벨업 알림
-func _setup_danger_up_ui() -> void:
-	## 원념 레벨업 알림 UI 생성 (숨겨진 상태로)
-	danger_up_panel = CenterContainer.new()
-	danger_up_panel.visible = false
-	danger_up_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	danger_up_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	var panel := PanelContainer.new()
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.15, 0.05, 0.05, 0.95)
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 2
-	panel_style.border_color = Color(0.8, 0.3, 0.1)
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
-	panel_style.content_margin_left = 10
-	panel_style.content_margin_right = 10
-	panel_style.content_margin_top = 8
-	panel_style.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", panel_style)
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.custom_minimum_size = Vector2(160, 0)
-	danger_up_panel.add_child(panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	panel.add_child(vbox)
-
-	# 메시지 텍스트 (이모지 + 텍스트 한 줄)
-	danger_up_text_label = Label.new()
-	danger_up_text_label.text = ""
-	danger_up_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	danger_up_text_label.add_theme_font_size_override("font_size", 10)
-	danger_up_text_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
-	danger_up_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	vbox.add_child(danger_up_text_label)
-
-	# 확인 버튼
-	var confirm_button := Button.new()
-	confirm_button.text = "확인"
-	confirm_button.custom_minimum_size = Vector2(50, 24)
-	confirm_button.add_theme_font_size_override("font_size", 11)
-	confirm_button.pressed.connect(_on_danger_up_confirmed)
-	vbox.add_child(confirm_button)
-
-	battle_area.add_child(danger_up_panel)
-
-
-func _show_danger_up_notification(new_level: int, message: String) -> void:
-	## 원념 레벨업 알림 표시
-	if not danger_up_panel:
-		return
-
-	# ATB 일시정지
-	atb_paused = true
-
-	danger_up_text_label.text = "🔥 " + message
-
-	# 레벨 2 이상이면 추가보상 안내 추가
-	if new_level >= 2:
-		danger_up_text_label.text += "\n📦 추가 보상!"
-
-	danger_up_panel.visible = true
-
-
-func _on_danger_up_confirmed() -> void:
-	## 원념 레벨업 확인 버튼 클릭
-	if not danger_up_panel:
-		return
-
-	danger_up_panel.visible = false
-
-	# 레벨 2 이상이면 추가보상 생성
-	var dl: int = get_local_danger_level()
-	if dl >= 2:
-		_generate_grudge_bonus_rewards(dl)
-
-	# ATB 재개
-	atb_paused = false
-
-
-func _generate_grudge_bonus_rewards(level: int) -> void:
-	## 원념 레벨에 따른 추가보상 생성
-	var new_items: Array = []
-
-	if level >= 5:
-		# 레벨 5+: 레전더리 1개
-		var legendary_list: Array[String] = DataManager.get_equipment_by_rarity("legendary")
-		if not legendary_list.is_empty():
-			new_items.append(legendary_list[randi() % legendary_list.size()])
-	elif level >= 4:
-		# 레벨 4: 매직 2개
-		var magic_list: Array[String] = DataManager.get_equipment_by_rarity("magic")
-		if not magic_list.is_empty():
-			for i in range(2):
-				new_items.append(magic_list[randi() % magic_list.size()])
-	elif level >= 3:
-		# 레벨 3: 매직 1개
-		var magic_list: Array[String] = DataManager.get_equipment_by_rarity("magic")
-		if not magic_list.is_empty():
-			new_items.append(magic_list[randi() % magic_list.size()])
-	else:
-		# 레벨 2: 커먼 1개
-		var common_list: Array[String] = DataManager.get_equipment_by_rarity("common")
-		if not common_list.is_empty():
-			new_items.append(common_list[randi() % common_list.size()])
-
-	if new_items.is_empty():
-		return
-
-	# 보상에 추가
-	for item_id in new_items:
-		drop_items.append(item_id)
-		bonus_rewards.append(item_id)
-		var item_name: String = _get_item_display_name(item_id)
-		_send_log("추가보상: %s" % item_name, Color.GOLD)
-
-	_update_rewards_ui()
-#endregion
-
 
 #region 봉쇄 버튼
 var blockade_button: Button = null
@@ -2323,65 +2036,3 @@ func _hide_enemy_tooltip() -> void:
 #endregion
 
 
-#region 위험도 테두리 효과
-func _setup_danger_border() -> void:
-	## 위험도에 따른 테두리 스타일 설정 (전투창별 로컬)
-	danger_level = get_local_danger_level()
-
-	# StyleBoxFlat 생성
-	border_style = StyleBoxFlat.new()
-	border_style.bg_color = Color(0.1, 0.1, 0.1, 0.95)
-
-	# 테두리 두께 설정 (위험도에 따라 증가)
-	var border_width: int = 2 + mini(danger_level, 4)
-	border_style.border_width_left = border_width
-	border_style.border_width_top = border_width
-	border_style.border_width_right = border_width
-	border_style.border_width_bottom = border_width
-
-	# 테두리 색상 설정
-	var color_idx: int = mini(danger_level, DANGER_BORDER_COLORS.size() - 1)
-	var border_color: Color = DANGER_BORDER_COLORS[color_idx]
-	border_style.border_color = border_color
-
-	# 코너 라운드
-	border_style.corner_radius_top_left = 4
-	border_style.corner_radius_top_right = 4
-	border_style.corner_radius_bottom_left = 4
-	border_style.corner_radius_bottom_right = 4
-
-	# 스타일 적용
-	add_theme_stylebox_override("panel", border_style)
-
-
-func _update_danger_border_pulse(delta: float) -> void:
-	## 높은 위험도에서 테두리 펄스 효과
-	if danger_level < 2 or border_style == null:
-		return
-
-	border_pulse_time += delta
-
-	# 펄스 속도는 위험도에 따라 증가
-	var pulse_speed: float = 2.0 + (danger_level * 0.5)
-	var pulse: float = (sin(border_pulse_time * pulse_speed) + 1.0) / 2.0
-
-	# 테두리 색상 펄스
-	var color_idx: int = mini(danger_level, DANGER_BORDER_COLORS.size() - 1)
-	var base_color: Color = DANGER_BORDER_COLORS[color_idx]
-	var bright_color: Color = base_color.lightened(0.3 + (danger_level * 0.05))
-
-	border_style.border_color = base_color.lerp(bright_color, pulse)
-
-	# 높은 위험도(4+)에서는 배경도 살짝 붉게
-	if danger_level >= 4 and background:
-		var bg_tint: float = pulse * 0.1
-		modulate = Color(1.0 + bg_tint, 1.0 - bg_tint * 0.5, 1.0 - bg_tint * 0.5)
-
-
-func update_danger_level() -> void:
-	## 위험도 레벨 업데이트 (전투창별 로컬)
-	var new_level: int = get_local_danger_level()
-	if new_level != danger_level:
-		danger_level = new_level
-		_setup_danger_border()
-#endregion
