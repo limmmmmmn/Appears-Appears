@@ -121,6 +121,9 @@ func _find_available_window() -> BattleWindow:
 		if window:
 			if window.is_blockaded:
 				continue
+			# 원념 Lv5 전투창은 엘리트 전용 (일반 적 추가 불가)
+			if window.grudge_level >= 5:
+				continue
 			# charm 효과로 인한 동적 최대 적 수 사용
 			if window.get_enemy_count() < window.get_max_enemies():
 				return window
@@ -144,6 +147,9 @@ func _get_oldest_non_boss_window() -> BattleWindow:
 
 		var window: BattleWindow = window_ref as BattleWindow
 		if window and window.is_blockaded:
+			continue
+		# 원념 Lv5 전투창은 엘리트 전용
+		if window and window.grudge_level >= 5:
 			continue
 
 		if oldest_id == -1 or battle_id < oldest_id:
