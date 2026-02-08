@@ -226,7 +226,7 @@ func _execute_single_attack(hero: Hero, skill_id: String) -> void:
 
 
 func _find_random_enemy() -> Dictionary:
-	## 모든 전투창에서 랜덤 적 찾기
+	## 모든 전투창에서 랜덤 적 찾기 (호버 일시정지 중인 전투창 제외)
 	var all_enemies: Array = []
 
 	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
@@ -237,6 +237,10 @@ func _find_random_enemy() -> Dictionary:
 		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
 		var window = battle_data.get("window")
 		if window == null or not is_instance_valid(window):
+			continue
+
+		# 마우스 호버 일시정지 중인 전투창은 스킵
+		if window._is_hover_paused:
 			continue
 
 		var enemies: Array = window.get_alive_enemies()
@@ -320,6 +324,10 @@ func _execute_aoe_attack(hero: Hero, skill_id: String) -> void:
 		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
 		var window = battle_data.get("window")
 		if window == null or not is_instance_valid(window):
+			continue
+
+		# 마우스 호버 일시정지 중인 전투창은 스킵
+		if window._is_hover_paused:
 			continue
 
 		var enemies: Array = window.get_alive_enemies()
