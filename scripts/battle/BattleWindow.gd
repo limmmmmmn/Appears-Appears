@@ -1157,11 +1157,11 @@ func _show_danger_level_up_message(new_level: int) -> void:
 	var messages: Array[String] = [
 		"",  # 레벨 0 (사용 안함)
 		"",  # 레벨 1 (알림 없음)
-		"이곳에서 적의 분노가 깨어나기 시작합니다...",
-		"이곳에서 적의 분노가 더 커지고 있습니다!",
-		"적의 분노가 걷잡을 수 없이 커집니다!",
-		"적의 분노가 폭발합니다!",
-		"이곳은 적의 분노로 가득 찼습니다!",
+		"적의 분노가 깨어난다...",
+		"분노가 더 커진다!",
+		"분노가 걷잡을 수 없다!",
+		"분노가 폭발한다!",
+		"분노로 가득 찼다!",
 	]
 
 	var msg_idx: int = mini(new_level, messages.size() - 1)
@@ -2028,27 +2028,21 @@ func _setup_danger_up_ui() -> void:
 	panel_style.corner_radius_top_right = 8
 	panel_style.corner_radius_bottom_left = 8
 	panel_style.corner_radius_bottom_right = 8
-	panel_style.content_margin_left = 15
-	panel_style.content_margin_right = 15
-	panel_style.content_margin_top = 12
-	panel_style.content_margin_bottom = 12
+	panel_style.content_margin_left = 10
+	panel_style.content_margin_right = 10
+	panel_style.content_margin_top = 8
+	panel_style.content_margin_bottom = 8
 	panel.add_theme_stylebox_override("panel", panel_style)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.custom_minimum_size = Vector2(160, 0)
 	danger_up_panel.add_child(panel)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 4)
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
-	# 분노 이모지
-	var emoji_label := Label.new()
-	emoji_label.text = "🔥"
-	emoji_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	emoji_label.add_theme_font_size_override("font_size", 24)
-	vbox.add_child(emoji_label)
-
-	# 메시지 텍스트
+	# 메시지 텍스트 (이모지 + 텍스트 한 줄)
 	danger_up_text_label = Label.new()
 	danger_up_text_label.text = ""
 	danger_up_text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2060,8 +2054,8 @@ func _setup_danger_up_ui() -> void:
 	# 확인 버튼
 	var confirm_button := Button.new()
 	confirm_button.text = "확인"
-	confirm_button.custom_minimum_size = Vector2(60, 28)
-	confirm_button.add_theme_font_size_override("font_size", 12)
+	confirm_button.custom_minimum_size = Vector2(50, 24)
+	confirm_button.add_theme_font_size_override("font_size", 11)
 	confirm_button.pressed.connect(_on_danger_up_confirmed)
 	vbox.add_child(confirm_button)
 
@@ -2076,11 +2070,11 @@ func _show_danger_up_notification(new_level: int, message: String) -> void:
 	# ATB 일시정지
 	atb_paused = true
 
-	danger_up_text_label.text = message
+	danger_up_text_label.text = "🔥 " + message
 
 	# 레벨 2 이상이면 추가보상 안내 추가
 	if new_level >= 2:
-		danger_up_text_label.text += "\n\n추가 보상이 생겼습니다!"
+		danger_up_text_label.text += "\n📦 추가 보상!"
 
 	danger_up_panel.visible = true
 
