@@ -1376,10 +1376,12 @@ func _add_rewards(_exp: int, gold: int, items: Array) -> void:
 
 
 func get_max_enemies() -> int:
-	## 이 전투창의 최대 적 수 반환 (기본 3 + 특성 효과)
+	## 이 전투창의 최대 적 수 반환 (기본 3 + 특성 효과 + 원념 보너스)
 	var base_max: int = BattleManager.get_max_enemies_per_window()
 	var trait_bonus: int = _get_trait_effect_value("max_enemies")
-	return maxi(1, base_max + trait_bonus)  # 최소 1
+	# 원념 Lv2~4에서 각각 +1 (최대 +3)
+	var grudge_bonus: int = clampi(grudge_level - 1, 0, 3)
+	return maxi(1, base_max + trait_bonus + grudge_bonus)  # 최소 1
 
 
 #region 특성 시스템
@@ -2051,16 +2053,53 @@ func _add_grudge(amount: float) -> void:
 
 	_update_grudge_ui()
 
-	# 레벨업 시 메시지 표시
+	# 레벨업 시 연출 + 효과
 	if grudge_level > old_level:
-		_show_grudge_level_up_message(grudge_level)
+		_on_grudge_level_up(old_level, grudge_level)
+
+
+func _on_grudge_level_up(old_level: int, new_level: int) -> void:
+	## 원념 레벨업 시 모든 연출 + 효과 처리
+	# 1) 전투창 흔들기
+	_shake_window()
+
+	# 2) 해당 레벨 노치 아이콘 튀어오르기
+	_bounce_grudge_notch_icon(new_level)
+
+	# 3) 레벨업 메시지 표시
+	_show_grudge_level_up_message(new_level)
+
+	# 4) Lv2~4: 최대 적 수 +1 알림
+	if new_level >= 2 and new_level <= 4:
+		_send_log("⚠ 원념 Lv%d! 전투창 적 슬롯 +1" % new_level, Color(1.0, 0.5, 0.2))
+
+	# 5) Lv2 효과: 증원 - 즉시 적 1마리 추가
+	if new_level == 2:
+		call_deferred("_grudge_spawn_reinforcement")
+
+
+func _bounce_grudge_notch_icon(level: int) -> void:
+	## 레벨업한 노치 아이콘 튀어오르기 연출
+	var icon_idx: int = level - 2  # Lv2 → index 0, Lv3 → 1, ...
+	if icon_idx < 0 or icon_idx >= grudge_notch_icons.size():
+		return
+
+	var icon: Label = grudge_notch_icons[icon_idx]
+	var original_pos: float = icon.offset_top
+	var bounce_tween := create_tween()
+	bounce_tween.tween_property(icon, "offset_top", original_pos - 8, 0.1).set_ease(Tween.EASE_OUT)
+	bounce_tween.tween_property(icon, "offset_top", original_pos, 0.15).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_BOUNCE)
+	# 깜빡이기
+	var flash_tween := create_tween()
+	flash_tween.tween_property(icon, "modulate", Color(1.5, 1.5, 0.5), 0.1)
+	flash_tween.tween_property(icon, "modulate", Color.WHITE, 0.2)
 
 
 func _show_grudge_level_up_message(new_level: int) -> void:
 	## 원념 레벨업 메시지를 전투창 안에 짧게 표시 (0.7초)
 	var messages: Array = [
 		"",
-		"원념이 깨어나기 시작합니다...",  # Lv2
+		"원념이 강해졌다. 적이 더 몰려온다!",  # Lv2
 		"적의 분노가 거세집니다!",  # Lv3
 		"불길한 전조가 감지됩니다...",  # Lv4
 		"원념이 극에 달했습니다!!",  # Lv5
@@ -2092,6 +2131,18 @@ func _show_grudge_level_up_message(new_level: int) -> void:
 	tween.tween_interval(0.5)
 	tween.tween_property(msg_label, "modulate:a", 0.0, 0.2)
 	tween.tween_callback(msg_label.queue_free)
+
+
+func _grudge_spawn_reinforcement() -> void:
+	## 원념 증원: 현재 전투창 적 목록에서 랜덤 1마리 추가 소환
+	if current_state != BattleState.RUNNING:
+		return
+	if enemy_data_list.is_empty():
+		return
+
+	# 현재 전투창에 있던 적 종류 중 랜덤 선택
+	var random_enemy_id: String = enemy_data_list[randi() % enemy_data_list.size()]
+	add_enemy(random_enemy_id, false)
 
 
 func get_grudge_level() -> int:
