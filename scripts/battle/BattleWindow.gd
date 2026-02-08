@@ -31,6 +31,7 @@ var enemy_atb_units: Array = []  # [{ref: BattleEnemy, atb: float, speed: int}]
 var is_processing_action: bool = false
 var action_delay_timer: float = 0.0
 var atb_paused: bool = false  # ATBManager에서 일시정지 제어
+var _is_hover_paused: bool = false  # 마우스 호버 시 일시정지
 const ATB_FILL_RATE: float = 30.0  # 기본 ATB 충전 속도
 const ATB_MAX: float = 100.0  # ATB 최대값
 const ACTION_DELAY: float = 0.3  # 액션 후 딜레이
@@ -153,6 +154,10 @@ func _ready() -> void:
 
 	# 마우스 GUI 입력 연결
 	gui_input.connect(_on_gui_input)
+
+	# 마우스 호버 시 전투 일시정지
+	mouse_entered.connect(_on_window_mouse_entered)
+	mouse_exited.connect(_on_window_mouse_exited)
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
@@ -494,7 +499,7 @@ func _start_battle() -> void:
 #region ATB 시스템
 func _update_atb_system(delta: float) -> void:
 	## ATB 게이지 충전 및 액션 처리 (적만 처리, 영웅은 ATBManager에서 중앙 관리)
-	if is_processing_action or atb_paused:
+	if is_processing_action or atb_paused or _is_hover_paused:
 		return
 
 	# 액션 딜레이 처리
@@ -2182,6 +2187,16 @@ func _exit_waiting_mode() -> void:
 
 
 #region 마우스 인터랙션
+func _on_window_mouse_entered() -> void:
+	## 마우스가 전투창에 올라오면 이 전투창만 일시정지
+	_is_hover_paused = true
+
+
+func _on_window_mouse_exited() -> void:
+	## 마우스가 전투창에서 벗어나면 재개
+	_is_hover_paused = false
+
+
 func _on_gui_input(event: InputEvent) -> void:
 	## 마우스 드래그로 전투창 이동
 	if event is InputEventMouseButton:
