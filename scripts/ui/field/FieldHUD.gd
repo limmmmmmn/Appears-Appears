@@ -47,6 +47,9 @@ var kill_label: Label = null
 
 # BottomPartyCards
 var bottom_party_cards: BottomPartyCards = null
+
+# 철수 버튼
+var retreat_button: Button = null
 #endregion
 
 
@@ -66,6 +69,7 @@ func _ready() -> void:
 	add_to_group("field_hud")
 	_init_topbar()
 	_init_party_cards()
+	_init_retreat_button()
 	_init_popups()
 	_connect_signals()
 	update_all()
@@ -101,6 +105,45 @@ func _init_party_cards() -> void:
 	var ctrl := get_node_or_null("Control")
 	if ctrl:
 		ctrl.add_child(bottom_party_cards)
+
+
+func _init_retreat_button() -> void:
+	## 우측 하단 철수 버튼 생성
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	retreat_button = Button.new()
+	retreat_button.text = "🏰 철수"
+	retreat_button.custom_minimum_size = Vector2(70, 36)
+	retreat_button.add_theme_font_size_override("font_size", STYLE.font_normal)
+
+	var style := _make_flat_style(Color(0.2, 0.12, 0.1, 0.9), Color(0.6, 0.3, 0.2, 0.8), STYLE.corner_radius, 1)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	retreat_button.add_theme_stylebox_override("normal", style)
+
+	var hover := style.duplicate()
+	hover.bg_color = Color(0.3, 0.15, 0.12, 0.95)
+	hover.border_color = Color(0.8, 0.4, 0.3)
+	retreat_button.add_theme_stylebox_override("hover", hover)
+
+	retreat_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	retreat_button.offset_left = -80
+	retreat_button.offset_top = -46
+	retreat_button.offset_right = -8
+	retreat_button.offset_bottom = -8
+	retreat_button.pressed.connect(_on_retreat_pressed)
+	ctrl.add_child(retreat_button)
+
+
+func _on_retreat_pressed() -> void:
+	## 철수: 전투 종료 후 기지로 이동
+	if BattleManager:
+		BattleManager.close_all_battles()
+	GameManager.go_to_den()
 
 
 func _init_popups() -> void:

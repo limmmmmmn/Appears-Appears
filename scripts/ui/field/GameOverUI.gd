@@ -53,49 +53,42 @@ func _build_ui() -> void:
 	
 	# 타이틀
 	title_label = Label.new()
-	title_label.text = "GAME OVER"
-	title_label.add_theme_font_size_override("font_size", 32)
-	title_label.add_theme_color_override("font_color", Color.RED)
+	title_label.text = "전멸"
+	title_label.add_theme_font_size_override("font_size", 28)
+	title_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner_vbox.add_child(title_label)
-	
+
 	# 메시지
 	message_label = Label.new()
-	message_label.text = "파티가 전멸했습니다..."
+	message_label.text = "파티가 전멸했습니다...\n기지로 이동합니다."
 	message_label.add_theme_font_size_override("font_size", 14)
+	message_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inner_vbox.add_child(message_label)
-	
+
 	# 스페이서
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 10)
 	inner_vbox.add_child(spacer)
-	
-	# 버튼 컨테이너
+
+	# 확인 버튼 (기지로 이동)
 	var button_container := HBoxContainer.new()
 	button_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	button_container.add_theme_constant_override("separation", 20)
 	inner_vbox.add_child(button_container)
-	
-	# 타이틀로 버튼
+
 	restart_button = Button.new()
-	restart_button.text = "타이틀로"
-	restart_button.custom_minimum_size = Vector2(100, 40)
+	restart_button.text = "확인"
+	restart_button.custom_minimum_size = Vector2(120, 40)
+	restart_button.add_theme_font_size_override("font_size", 14)
 	restart_button.pressed.connect(_on_restart_pressed)
 	button_container.add_child(restart_button)
-	
-	# 종료 버튼
-	quit_button = Button.new()
-	quit_button.text = "종료"
-	quit_button.custom_minimum_size = Vector2(100, 40)
-	quit_button.pressed.connect(_on_quit_pressed)
-	button_container.add_child(quit_button)
 
 
-func show_game_over(message: String = "파티가 전멸했습니다...") -> void:
+func show_game_over(message: String = "파티가 전멸했습니다...\n기지로 이동합니다.") -> void:
 	message_label.text = message
 	show()
-	
+
 	# 게임 일시정지
 	get_tree().paused = true
 
@@ -104,9 +97,4 @@ func _on_restart_pressed() -> void:
 	get_tree().paused = false
 	restart_pressed.emit()
 	hide()
-
-
-func _on_quit_pressed() -> void:
-	get_tree().paused = false
-	quit_pressed.emit()
-	hide()
+	GameManager.go_to_den()

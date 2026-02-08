@@ -532,14 +532,12 @@ func _on_title_pressed() -> void:
 
 func _on_party_wiped() -> void:
 	spawner.stop_respawn()
-	
+
 	if BattleManager:
 		BattleManager.close_all_battles()
-	
-	SaveManager.delete_save()
-	
+
 	if game_over_ui:
-		game_over_ui.show_game_over("파티가 전멸했습니다...")
+		game_over_ui.show_game_over("파티가 전멸했습니다...\n기지로 이동합니다.")
 
 
 func _on_restart_game() -> void:
