@@ -109,12 +109,31 @@ func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0
 		if name_label:
 			name_label.add_theme_color_override("font_color", Color.PURPLE)
 		modulate = Color(1.2, 0.9, 1.3)  # 보라빛 틴트
+		_add_elite_star()
 	elif enemy_type == "boss":
 		if name_label:
 			name_label.add_theme_color_override("font_color", Color.ORANGE)
 	elif enemy_type == "elite":
 		if name_label:
 			name_label.add_theme_color_override("font_color", Color.PURPLE)
+
+
+func _add_elite_star() -> void:
+	## 엘리트 머리 위에 ⭐ 표시
+	var star := Label.new()
+	star.text = "⭐"
+	star.add_theme_font_size_override("font_size", 14)
+	star.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	star.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	star.z_index = 10
+	add_child(star)
+	# 스프라이트 위 중앙에 배치
+	await get_tree().process_frame
+	if is_instance_valid(star) and is_instance_valid(sprite):
+		star.position = Vector2(
+			sprite.position.x - star.size.x / 2,
+			sprite.position.y - sprite.texture.get_height() / 2 - star.size.y
+		)
 
 
 #region 스탯 계산
