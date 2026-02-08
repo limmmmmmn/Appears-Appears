@@ -102,6 +102,22 @@ var _drag_offset: Vector2 = Vector2.ZERO
 var _enemy_tooltip: PanelContainer = null
 var _hovered_enemy: BattleEnemy = null
 
+# === 원념 (Grudge) 게이지 시스템 ===
+var grudge_value: float = 0.0  # 현재 원념 수치 (0 ~ GRUDGE_MAX)
+var grudge_level: int = 1  # 현재 원념 레벨 (1~5)
+const GRUDGE_MAX: float = 100.0  # 전체 게이지 최대값
+const GRUDGE_PER_KILL: float = 5.0  # 적 1마리 처치 시 증가량
+const GRUDGE_LEVEL_THRESHOLDS: Array = [0.0, 25.0, 50.0, 75.0, 100.0]  # Lv1~5 경계값
+const GRUDGE_LEVEL_ICONS: Array = ["⚔", "💢", "👁", "💀"]  # Lv2/3/4/5 노치 아이콘
+const GRUDGE_LEVEL_LABELS: Array = ["증원", "분노", "전조", "엘리트"]  # 노치 설명
+
+# 원념 UI 참조
+var grudge_panel: PanelContainer = null
+var grudge_bar: Control = null  # 게이지 바 배경
+var grudge_fill: ColorRect = null  # 게이지 채움
+var grudge_level_label: Label = null  # 레벨 텍스트
+var grudge_notch_icons: Array = []  # 노치 아이콘들
+
 
 func _ready() -> void:
 	visible = false
@@ -122,6 +138,9 @@ func _ready() -> void:
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
+
+	# 원념 게이지 UI 생성
+	_setup_grudge_ui()
 
 	# 보상 받기 UI 생성
 	_setup_claim_reward_ui()
@@ -155,6 +174,11 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	total_gold = 0
 	drop_items.clear()
 	window_mode = WindowMode.HOLD  # 기본값: Hold 모드
+
+	# 원념 초기화
+	grudge_value = 0.0
+	grudge_level = 1
+	_update_grudge_ui()
 
 	# 루팅 배율 계산 (엘리트: x2, 보스: x4, 기본: x1)
 	if is_boss_battle:
@@ -949,6 +973,9 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	drop_items.append_array(items)
 
 	enemy.play_death_effect()
+
+	# 원념 게이지 증가
+	_add_grudge(GRUDGE_PER_KILL)
 
 	# 모든 적이 처치되었는지 확인 후 보상 UI 표시
 	call_deferred("_check_all_enemies_dead")
@@ -1878,6 +1905,201 @@ func _show_enemy_tooltip(enemy: BattleEnemy) -> void:
 func _hide_enemy_tooltip() -> void:
 	if _enemy_tooltip:
 		_enemy_tooltip.visible = false
+#endregion
+
+
+#region 원념 (Grudge) 게이지 시스템
+func _setup_grudge_ui() -> void:
+	## 전투창 하단 바 위에 원념 게이지 UI 생성
+	var main_vbox = get_node_or_null("MainVBox")
+	if not main_vbox:
+		return
+
+	# 원념 패널 컨테이너
+	grudge_panel = PanelContainer.new()
+	grudge_panel.name = "GrudgePanel"
+	grudge_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.06, 0.12, 0.95)
+	panel_style.content_margin_left = 6
+	panel_style.content_margin_right = 6
+	panel_style.content_margin_top = 2
+	panel_style.content_margin_bottom = 2
+	grudge_panel.add_theme_stylebox_override("panel", panel_style)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 4)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grudge_panel.add_child(hbox)
+
+	# 레벨 표시 라벨
+	grudge_level_label = Label.new()
+	grudge_level_label.text = "Lv1"
+	grudge_level_label.add_theme_font_size_override("font_size", 9)
+	grudge_level_label.add_theme_color_override("font_color", Color(0.7, 0.5, 0.9))
+	grudge_level_label.custom_minimum_size.x = 22
+	grudge_level_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(grudge_level_label)
+
+	# 게이지 바 영역 (노치 포함)
+	var bar_container := Control.new()
+	bar_container.custom_minimum_size = Vector2(0, 12)
+	bar_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(bar_container)
+
+	# 게이지 바 배경
+	grudge_bar = ColorRect.new()
+	grudge_bar.color = Color(0.15, 0.12, 0.2)
+	grudge_bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grudge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar_container.add_child(grudge_bar)
+
+	# 게이지 채움 바
+	grudge_fill = ColorRect.new()
+	grudge_fill.color = Color(0.6, 0.2, 0.8)
+	grudge_fill.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	grudge_fill.anchor_right = 0.0
+	grudge_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar_container.add_child(grudge_fill)
+
+	# 노치(경계선) + 아이콘 4개 (Lv2/3/4/5 경계)
+	grudge_notch_icons.clear()
+	for i in range(4):
+		var threshold_ratio: float = GRUDGE_LEVEL_THRESHOLDS[i + 1] / GRUDGE_MAX
+		# 노치 세로선
+		var notch := ColorRect.new()
+		notch.color = Color(0.4, 0.3, 0.5, 0.8)
+		notch.custom_minimum_size = Vector2(1, 0)
+		notch.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+		notch.anchor_left = threshold_ratio
+		notch.anchor_right = threshold_ratio
+		notch.offset_right = 1
+		notch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar_container.add_child(notch)
+
+		# 노치 위 아이콘 라벨
+		var icon_label := Label.new()
+		icon_label.text = GRUDGE_LEVEL_ICONS[i]
+		icon_label.add_theme_font_size_override("font_size", 7)
+		icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		icon_label.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+		icon_label.anchor_left = threshold_ratio
+		icon_label.anchor_right = threshold_ratio
+		icon_label.offset_left = -6
+		icon_label.offset_right = 6
+		icon_label.offset_top = -2
+		icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar_container.add_child(icon_label)
+		grudge_notch_icons.append(icon_label)
+
+	# BottomBar 바로 위에 삽입
+	var bottom_bar = main_vbox.get_node_or_null("BottomBar")
+	if bottom_bar:
+		var idx: int = bottom_bar.get_index()
+		main_vbox.add_child(grudge_panel)
+		main_vbox.move_child(grudge_panel, idx)
+	else:
+		main_vbox.add_child(grudge_panel)
+
+
+func _update_grudge_ui() -> void:
+	## 원념 게이지 UI 업데이트
+	if grudge_fill == null:
+		return
+
+	# 채움 바 비율 업데이트
+	var fill_ratio: float = clampf(grudge_value / GRUDGE_MAX, 0.0, 1.0)
+	grudge_fill.anchor_right = fill_ratio
+
+	# 레벨에 따른 색상 변화
+	var level_colors: Array = [
+		Color(0.5, 0.3, 0.7),   # Lv1: 연보라
+		Color(0.6, 0.2, 0.8),   # Lv2: 보라
+		Color(0.8, 0.2, 0.5),   # Lv3: 자홍
+		Color(0.9, 0.15, 0.2),  # Lv4: 붉은색
+		Color(1.0, 0.1, 0.1),   # Lv5: 진홍
+	]
+	var color_idx: int = clampi(grudge_level - 1, 0, level_colors.size() - 1)
+	grudge_fill.color = level_colors[color_idx]
+
+	# 레벨 라벨 업데이트
+	if grudge_level_label:
+		grudge_level_label.text = "Lv%d" % grudge_level
+		grudge_level_label.add_theme_color_override("font_color", level_colors[color_idx].lightened(0.3))
+
+	# 통과한 노치 아이콘 밝게, 미통과 어둡게
+	for i in range(grudge_notch_icons.size()):
+		var icon: Label = grudge_notch_icons[i]
+		if grudge_level >= (i + 2):  # Lv2부터 시작
+			icon.modulate = Color.WHITE
+		else:
+			icon.modulate = Color(1, 1, 1, 0.3)
+
+
+func _add_grudge(amount: float) -> void:
+	## 원념 수치 증가 및 레벨업 체크
+	var old_level: int = grudge_level
+	grudge_value = minf(grudge_value + amount, GRUDGE_MAX)
+
+	# 레벨 재계산
+	grudge_level = 1
+	for i in range(GRUDGE_LEVEL_THRESHOLDS.size() - 1, 0, -1):
+		if grudge_value >= GRUDGE_LEVEL_THRESHOLDS[i]:
+			grudge_level = i + 1
+			break
+
+	_update_grudge_ui()
+
+	# 레벨업 시 메시지 표시
+	if grudge_level > old_level:
+		_show_grudge_level_up_message(grudge_level)
+
+
+func _show_grudge_level_up_message(new_level: int) -> void:
+	## 원념 레벨업 메시지를 전투창 안에 짧게 표시 (0.7초)
+	var messages: Array = [
+		"",
+		"원념이 깨어나기 시작합니다...",  # Lv2
+		"적의 분노가 거세집니다!",  # Lv3
+		"불길한 전조가 감지됩니다...",  # Lv4
+		"원념이 극에 달했습니다!!",  # Lv5
+	]
+	var msg_idx: int = clampi(new_level - 1, 0, messages.size() - 1)
+	var msg: String = messages[msg_idx]
+	if msg.is_empty():
+		return
+
+	# 전투창 내부에 메시지 라벨 생성
+	var msg_label := Label.new()
+	msg_label.text = "⚠ Lv%d - %s" % [new_level, msg]
+	msg_label.add_theme_font_size_override("font_size", 9)
+	msg_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+	msg_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	msg_label.add_theme_constant_override("outline_size", 3)
+	msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	msg_label.anchor_top = 0.3
+	msg_label.anchor_bottom = 0.3
+	msg_label.anchor_left = 0.0
+	msg_label.anchor_right = 1.0
+	msg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	battle_area.add_child(msg_label)
+
+	# 0.7초 후 자동 제거
+	var tween := create_tween()
+	tween.tween_interval(0.5)
+	tween.tween_property(msg_label, "modulate:a", 0.0, 0.2)
+	tween.tween_callback(msg_label.queue_free)
+
+
+func get_grudge_level() -> int:
+	return grudge_level
+
+
+func get_grudge_value() -> float:
+	return grudge_value
 #endregion
 
 
