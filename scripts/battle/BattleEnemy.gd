@@ -84,11 +84,13 @@ func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0
 
 	current_hp = max_hp
 	
-	# 보상 (엘리트는 2배)
+	# 보상 (엘리트는 3배 + 최소 보장)
 	var rewards: Dictionary = data.get("rewards", {})
-	var reward_mult: float = 2.0 if is_elite_version else 1.0
+	var reward_mult: float = 3.0 if is_elite_version else 1.0
 	gold_min = int(int(rewards.get("gold_min", 1)) * reward_mult)
 	gold_max = int(int(rewards.get("gold_max", 5)) * reward_mult)
+	if is_elite_version:
+		gold_min = maxi(gold_min, 20)  # 엘리트 최소 골드 보장
 	
 	# 드랍 테이블
 	drop_table = data.get("drop_table", [])
@@ -232,8 +234,38 @@ func roll_drops() -> Array:
 			var common_equip: String = _roll_random_common_equipment()
 			if not common_equip.is_empty():
 				drops.append(common_equip)
-	
+
+	# 3. 엘리트 확정 보상 (반드시 장비 1개 + 추가 장비 50%)
+	if is_elite_version:
+		var elite_equip: String = _roll_random_elite_equipment()
+		if not elite_equip.is_empty():
+			drops.append(elite_equip)
+		# 50% 확률로 추가 장비 1개 더
+		if randf() < 0.5:
+			var bonus_equip: String = _roll_random_elite_equipment()
+			if not bonus_equip.is_empty():
+				drops.append(bonus_equip)
+
 	return drops
+
+
+func _roll_random_elite_equipment() -> String:
+	## 엘리트 확정 보상: uncommon~rare 등급 장비
+	var elite_equipment: Array[String] = [
+		"sword_uncommon", "dagger_uncommon", "staff_uncommon", "bow_uncommon",
+		"shield_uncommon", "iron_helmet", "chainmail",
+		"ring_hp", "boots_speed", "ring_str", "ring_def",
+	]
+	# rare 장비도 30% 확률로
+	var rare_pool: Array[String] = [
+		"sword_rare", "dagger_rare", "staff_rare", "bow_rare",
+		"shield_rare", "plate_helmet", "plate_armor",
+	]
+	if randf() < 0.3 and not rare_pool.is_empty():
+		return rare_pool[randi() % rare_pool.size()]
+	if elite_equipment.is_empty():
+		return ""
+	return elite_equipment[randi() % elite_equipment.size()]
 
 
 func _roll_random_common_equipment() -> String:

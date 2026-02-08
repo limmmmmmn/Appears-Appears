@@ -41,6 +41,8 @@ const ACTION_DELAY: float = 0.3  # 액션 후 딜레이
 var total_gold: int = 0
 var drop_items: Array = []
 var loot_multiplier: float = 1.0  # 루팅 배율 (아이템 등장 확률 배수)
+var elite_gold: int = 0  # 엘리트 확정 보상 (페널티 면제)
+var elite_items: Array = []  # 엘리트 확정 아이템 (페널티 면제)
 
 # === 전투창 모드 ===
 enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
@@ -182,6 +184,8 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	# 보상 초기화
 	total_gold = 0
 	drop_items.clear()
+	elite_gold = 0
+	elite_items.clear()
 	window_mode = WindowMode.HOLD  # 기본값: Hold 모드
 
 	# 원념 초기화
@@ -985,13 +989,73 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	total_gold += gold_reward
 	drop_items.append_array(items)
 
-	enemy.play_death_effect()
+	# 엘리트 보상은 별도 저장 (도주 페널티 면제)
+	if enemy.is_elite_version:
+		elite_gold += gold_reward
+		elite_items.append_array(items)
 
 	# 원념 게이지 증가
 	_add_grudge(GRUDGE_PER_KILL)
 
+	# 엘리트 처치 시 특수 연출
+	if enemy.is_elite_version:
+		_play_elite_death_cinematic(enemy)
+		return
+
+	enemy.play_death_effect()
+
 	# 모든 적이 처치되었는지 확인 후 보상 UI 표시
 	call_deferred("_check_all_enemies_dead")
+
+
+func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
+	## 엘리트 처치 특수 연출: 느려짐 → 나머지 해산 → 자동 보상
+	is_processing_action = true  # ATB 멈춤
+
+	# 1) 엘리트 느려지며 떨림 + "으어어…"
+	_send_log("⭐ %s: 으어어…!" % elite.enemy_name, Color.MAGENTA)
+
+	if elite.sprite:
+		var slow_tween := create_tween()
+		# 느리게 떨림
+		for i in range(6):
+			slow_tween.tween_property(elite, "position:x", elite.position.x + 3, 0.08)
+			slow_tween.tween_property(elite, "position:x", elite.position.x - 3, 0.08)
+		slow_tween.tween_property(elite, "position:x", elite.position.x, 0.05)
+		await slow_tween.finished
+
+	# 2) 엘리트 폭발 이펙트
+	if elite.sprite:
+		var burst_tween := create_tween()
+		burst_tween.tween_property(elite, "scale", Vector2(1.3, 1.3), 0.1)
+		burst_tween.tween_property(elite, "modulate", Color(2.0, 1.0, 2.0, 1.0), 0.1)
+		burst_tween.tween_property(elite, "modulate:a", 0.0, 0.15)
+		burst_tween.tween_property(elite, "scale", Vector2(0.0, 0.0), 0.1)
+		await burst_tween.finished
+	elite.visible = false
+
+	# 3) 메시지: 엘리트 처치 + 전의 상실
+	_send_log("⭐ 엘리트 적을 처치했다!", Color.GOLD)
+	await get_tree().create_timer(0.3).timeout
+	_send_log("적들은 전의를 상실했다.", Color.LIGHT_CORAL)
+	await get_tree().create_timer(0.2).timeout
+
+	# 4) 남은 적 즉시 해산 (보상 없이 소멸)
+	for enemy in enemies:
+		if enemy != null and enemy.is_alive() and enemy != elite:
+			if enemy.sprite:
+				var fade := create_tween()
+				fade.tween_property(enemy, "modulate:a", 0.0, 0.3)
+				fade.tween_callback(func(): enemy.visible = false)
+			enemy.current_hp = 0
+
+	await get_tree().create_timer(0.4).timeout
+
+	# 5) 자동 보상 → 자동 닫기 (팡!)
+	is_processing_action = false
+	is_waiting_for_claim = false
+	_hide_claim_ui()
+	_end_battle_victory()
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -1464,18 +1528,28 @@ func _close_with_rewards() -> void:
 
 
 func _run_with_partial_rewards() -> void:
-	## Run: 50% 보상만 받고 즉시 닫기
-	var partial_gold: int = int(total_gold * 0.5)
+	## Run: 50% 보상만 받고 즉시 닫기 (엘리트 보상은 100% 보장)
+	# 일반 보상에서 엘리트 보상 분리
+	var normal_gold: int = total_gold - elite_gold
+	var partial_gold: int = int(normal_gold * 0.5) + elite_gold  # 엘리트 골드는 전액
 
 	if partial_gold > 0:
 		GameManager.add_gold(partial_gold)
-		_send_log("도주! 보상 50%%만 획득: Gold +%d" % partial_gold, Color.ORANGE)
+		if elite_gold > 0:
+			_send_log("도주! 보상 50%% + 엘리트 보상: Gold +%d" % partial_gold, Color.ORANGE)
+		else:
+			_send_log("도주! 보상 50%%만 획득: Gold +%d" % partial_gold, Color.ORANGE)
 	else:
 		_send_log("도주!", Color.ORANGE)
 
-	# 드랍 아이템은 50% 확률로 획득
+	# 드랍 아이템: 일반은 50% 확률, 엘리트는 확정
 	var partial_drops: Array = []
+	# 엘리트 아이템 전부 확보
+	partial_drops.append_array(elite_items)
+	# 일반 아이템은 50% 확률
 	for item in drop_items:
+		if item in elite_items:
+			continue  # 이미 추가됨
 		if randf() < 0.5:
 			partial_drops.append(item)
 
