@@ -160,6 +160,10 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# 일시정지 메뉴 등으로 게임이 멈춰있으면 전투도 멈춤
+	if get_tree().paused:
+		return
+
 	if current_state != BattleState.RUNNING:
 		return
 
