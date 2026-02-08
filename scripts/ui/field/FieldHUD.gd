@@ -7,6 +7,7 @@ class_name FieldHUD
 ##   GrudgePopup - 팝업
 
 signal menu_pressed
+signal hero_recruited(hero_id: String)
 
 
 #region 공통 스타일 상수
@@ -205,6 +206,7 @@ func _on_recruit_pressed() -> void:
 	if PartyManager.add_hero_by_id(random_id):
 		if bottom_party_cards:
 			bottom_party_cards.update_display()
+		hero_recruited.emit(random_id)
 
 
 func _init_pause_menu() -> void:

@@ -99,6 +99,8 @@ func _setup_systems() -> void:
 		add_child(hud)
 	if not hud.menu_pressed.is_connected(_on_menu_pressed):
 		hud.menu_pressed.connect(_on_menu_pressed)
+	if not hud.hero_recruited.is_connected(_on_hero_recruited):
+		hud.hero_recruited.connect(_on_hero_recruited)
 	
 	# 게임오버 UI
 	game_over_ui = GameOverUI.new()
@@ -691,3 +693,23 @@ func get_party_leader() -> PartyMember:
 
 func get_hud() -> FieldHUD:
 	return hud
+
+
+func _on_hero_recruited(hero_id: String) -> void:
+	## 영입된 영웅을 필드에 팔로워로 추가
+	if not party_leader:
+		return
+	var party: Array = PartyManager.get_party()
+	# 새로 추가된 영웅 찾기 (마지막 멤버)
+	var hero_data: Hero = null
+	for h in party:
+		if h and h.id == hero_id:
+			hero_data = h
+			break
+	if not hero_data:
+		return
+	var follower_index: int = party_followers.size() + 1
+	var follower: PartyMember = party_follower_scene.instantiate()
+	add_child(follower)
+	follower.setup_as_follower(hero_data, party_leader, follower_index)
+	party_followers.append(follower)
