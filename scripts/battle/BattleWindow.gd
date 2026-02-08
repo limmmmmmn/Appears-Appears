@@ -231,6 +231,10 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	if current_state == BattleState.DEFEAT or is_blockaded:
 		return
 
+	# 원념 Lv5: 엘리트 외 일반 적 추가 차단
+	if grudge_level >= 5 and not is_elite:
+		return
+
 	enemy_data_list.append(enemy_id)
 	_spawn_single_enemy(enemy_id, is_elite)
 
