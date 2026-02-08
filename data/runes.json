@@ -15,14 +15,6 @@
     "rarity": "uncommon",
     "trait_id": "intimidating"
   },
-  "rune_grudge": {
-    "id": "rune_grudge",
-    "name": "원한의 룬",
-    "description": "원념을 흡수하는 어두운 룬",
-    "icon": "⚫",
-    "rarity": "rare",
-    "trait_id": "grudge_collector"
-  },
   "rune_gold": {
     "id": "rune_gold",
     "name": "황금의 룬",
@@ -46,14 +38,6 @@
     "icon": "🌈",
     "rarity": "rare",
     "trait_id": "lucky_looter"
-  },
-  "rune_rage": {
-    "id": "rune_rage",
-    "name": "분노의 룬",
-    "description": "불꽃이 이글거리는 룬",
-    "icon": "🔶",
-    "rarity": "epic",
-    "trait_id": "berserker"
   },
   "rune_speed": {
     "id": "rune_speed",

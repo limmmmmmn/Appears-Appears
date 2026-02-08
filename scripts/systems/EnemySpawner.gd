@@ -384,7 +384,7 @@ func _spawn_enemy_at(tile_data: Dictionary, field_enemies: Array, force_elite: b
 
 	var tile_type: String = str(tile_data.get("tile_type", "grass"))
 	var enemy_id: String = FieldManager.select_field_enemy_for_tile(tile_type)
-	var is_elite: bool = force_elite  # 엘리트는 원념 Lv5에서만 등장
+	var is_elite: bool = force_elite
 
 	enemy.setup(enemy_id, tile_type, tile_data.get("position", Vector2.ZERO), is_elite)
 	enemy.add_to_group("field_enemy")

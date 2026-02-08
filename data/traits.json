@@ -19,17 +19,6 @@
       "value": -1
     }
   },
-  "grudge_collector": {
-    "id": "grudge_collector",
-    "name": "원념 수집가",
-    "description": "적 3마리 이상 시 원념 +1",
-    "icon": "💀",
-    "effect": {
-      "type": "bonus_kill_count",
-      "condition": "enemies_gte_3",
-      "value": 1
-    }
-  },
   "gold_finder": {
     "id": "gold_finder",
     "name": "금화 탐지",
@@ -58,16 +47,6 @@
     "effect": {
       "type": "loot_mult",
       "value": 0.25
-    }
-  },
-  "berserker": {
-    "id": "berserker",
-    "name": "광전사",
-    "description": "원념이 높을수록 공격력 증가",
-    "icon": "⚔️",
-    "effect": {
-      "type": "damage_per_danger",
-      "value": 0.05
     }
   },
   "quick_battle": {

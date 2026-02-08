@@ -41,7 +41,7 @@ var original_modulate: Color = Color.WHITE
 
 var is_elite_version: bool = false  # 엘리트 버전 여부
 
-func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0) -> void:
+func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	enemy_id = p_enemy_id
 	is_elite_version = p_is_elite
 
@@ -66,13 +66,6 @@ func setup(p_enemy_id: String, p_is_elite: bool = false, p_danger_level: int = 0
 	base_dex = int(stats.get("dex", 5))
 	base_luk = int(stats.get("luk", 2))
 	damage_type = str(data.get("damage_type", "physical"))
-
-	# 전투창별 위험도에 따른 스탯 스케일링 (레벨당 5%)
-	if p_danger_level > 0:
-		var stat_mult: float = 1.0 + (p_danger_level * 0.05)
-		max_hp = int(max_hp * stat_mult)
-		base_str = int(base_str * stat_mult)
-		base_def = int(base_def * stat_mult)
 
 	# 엘리트 버전이면 스탯 강화!
 	if is_elite_version:

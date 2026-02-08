@@ -609,7 +609,7 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(gold: int, items: Array, grudge_level: int, world_pos: Vector2, window_rect: Rect2) -> void:
+func _on_field_drops_requested(gold: int, items: Array, world_pos: Vector2, window_rect: Rect2) -> void:
 	## 전투 종료 시 필드에 보상 드롭 스폰 (전투창 영역에 흩뿌림)
 	var drops: Array[Dictionary] = []
 	var delay: float = 0.0
@@ -633,12 +633,6 @@ func _on_field_drops_requested(gold: int, items: Array, grudge_level: int, world
 			"item_rarity": i_rarity,
 			"delay": delay
 		})
-		delay += delay_step
-
-	# HP 회복 오브 (전투창 원념 레벨에 비례)
-	var hp_orb_count: int = grudge_level
-	for i in range(hp_orb_count):
-		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
 		delay += delay_step
 
 	# 전투창 스크린 영역 → 월드 좌표 변환
