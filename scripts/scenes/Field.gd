@@ -516,7 +516,8 @@ func _on_exit_body_entered(body: Node2D) -> void:
 # 메뉴 & 게임오버
 #=============================================================================
 func _on_menu_pressed() -> void:
-	pass
+	if hud:
+		hud.toggle_pause_menu()
 
 
 func _on_title_pressed() -> void:
@@ -549,7 +550,7 @@ func _on_quit_game() -> void:
 
 
 func _input(_event: InputEvent) -> void:
-	pass
+	pass  # ESC 처리는 FieldHUD._unhandled_input에서 담당
 
 
 func _on_elite_victory(_battle_id: int) -> void:

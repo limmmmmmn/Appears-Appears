@@ -50,6 +50,10 @@ var bottom_party_cards: BottomPartyCards = null
 
 # 철수 버튼
 var retreat_button: Button = null
+
+# 일시정지 메뉴
+var pause_menu: CanvasLayer = null
+var is_pause_menu_active: bool = false
 #endregion
 
 
@@ -67,12 +71,26 @@ var last_hero_kill_threshold: int = 0
 
 func _ready() -> void:
 	add_to_group("field_hud")
+	# ESC로 일시정지 메뉴를 열고 닫기 위해 ALWAYS 설정
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_init_topbar()
 	_init_party_cards()
 	_init_retreat_button()
+	_init_pause_menu()
 	_init_popups()
 	_connect_signals()
 	update_all()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if is_grudge_popup_active:
+			return  # 원념 팝업 중에는 무시
+		# 이미 다른 이유(게임오버, 보스 팝업 등)로 일시정지 중이면 무시
+		if get_tree().paused and not is_pause_menu_active:
+			return
+		toggle_pause_menu()
+		get_viewport().set_input_as_handled()
 
 
 #region 초기화
@@ -144,6 +162,139 @@ func _on_retreat_pressed() -> void:
 	if BattleManager:
 		BattleManager.close_all_battles()
 	GameManager.go_to_den()
+
+
+func _init_pause_menu() -> void:
+	pause_menu = CanvasLayer.new()
+	pause_menu.name = "PauseMenu"
+	pause_menu.layer = 110
+	pause_menu.visible = false
+	pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(pause_menu)
+
+
+func show_pause_menu() -> void:
+	if is_pause_menu_active or is_grudge_popup_active:
+		return
+
+	is_pause_menu_active = true
+	get_tree().paused = true
+	pause_menu.visible = true
+
+	# 기존 내용 정리
+	for child in pause_menu.get_children():
+		child.queue_free()
+
+	# 전체 화면 컨테이너
+	var full_screen := Control.new()
+	full_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	full_screen.process_mode = Node.PROCESS_MODE_ALWAYS
+	pause_menu.add_child(full_screen)
+
+	# 어두운 배경 (클릭으로 닫기)
+	var dimmer := ColorRect.new()
+	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dimmer.color = Color(0, 0, 0, 0.6)
+	dimmer.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed:
+			hide_pause_menu()
+	)
+	full_screen.add_child(dimmer)
+
+	# 중앙 패널
+	var center_panel := PanelContainer.new()
+	center_panel.set_anchors_preset(Control.PRESET_CENTER)
+	center_panel.offset_left = -120
+	center_panel.offset_right = 120
+	center_panel.offset_top = -100
+	center_panel.offset_bottom = 100
+	center_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+
+	var panel_style := _make_flat_style(STYLE.bg_popup, STYLE.border_accent, 8, 2)
+	panel_style.content_margin_left = 24
+	panel_style.content_margin_right = 24
+	panel_style.content_margin_top = 20
+	panel_style.content_margin_bottom = 20
+	center_panel.add_theme_stylebox_override("panel", panel_style)
+	full_screen.add_child(center_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	center_panel.add_child(vbox)
+
+	# 타이틀
+	var title := Label.new()
+	title.text = "메뉴"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", STYLE.font_title)
+	title.add_theme_color_override("font_color", STYLE.text_normal)
+	vbox.add_child(title)
+
+	vbox.add_child(HSeparator.new())
+
+	# 계속하기 버튼
+	var resume_btn := _create_menu_button("▶ 계속하기", Color(0.2, 0.35, 0.2))
+	resume_btn.pressed.connect(hide_pause_menu)
+	vbox.add_child(resume_btn)
+
+	# 기지로 철수 버튼
+	var retreat_btn := _create_menu_button("🏰 기지로 철수", Color(0.3, 0.18, 0.12))
+	retreat_btn.pressed.connect(func():
+		hide_pause_menu()
+		if BattleManager:
+			BattleManager.close_all_battles()
+		GameManager.go_to_den()
+	)
+	vbox.add_child(retreat_btn)
+
+	# 타이틀로 버튼
+	var title_btn := _create_menu_button("🏠 타이틀 화면", Color(0.15, 0.15, 0.25))
+	title_btn.pressed.connect(func():
+		hide_pause_menu()
+		if BattleManager:
+			BattleManager.close_all_battles()
+		get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+	)
+	vbox.add_child(title_btn)
+
+
+func hide_pause_menu() -> void:
+	if not is_pause_menu_active:
+		return
+	is_pause_menu_active = false
+	pause_menu.visible = false
+	get_tree().paused = false
+	for child in pause_menu.get_children():
+		child.queue_free()
+
+
+func toggle_pause_menu() -> void:
+	if is_pause_menu_active:
+		hide_pause_menu()
+	else:
+		show_pause_menu()
+
+
+func _create_menu_button(text: String, bg_color: Color) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = Vector2(180, 38)
+	btn.add_theme_font_size_override("font_size", STYLE.font_medium)
+	btn.focus_mode = Control.FOCUS_NONE
+
+	var style := _make_flat_style(bg_color, STYLE.border_default, 5, 1)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover := style.duplicate()
+	hover.bg_color = bg_color.lightened(0.2)
+	hover.border_color = Color.WHITE
+	btn.add_theme_stylebox_override("hover", hover)
+
+	return btn
 
 
 func _init_popups() -> void:
