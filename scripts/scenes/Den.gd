@@ -124,6 +124,13 @@ func _ready() -> void:
 		GameManager.gold_changed.connect(_on_gold_changed)
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if popup_layer and popup_layer.visible:
+			_close_popup()
+			get_viewport().set_input_as_handled()
+
+
 func _build_ui() -> void:
 	## 전체 UI 구성
 	# 배경
