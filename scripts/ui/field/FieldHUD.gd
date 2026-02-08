@@ -71,6 +71,7 @@ func _ready() -> void:
 	_init_party_cards()
 	_init_retreat_button()
 	_init_pause_menu()
+	_init_recruit_button()
 	_init_popups()
 	_connect_signals()
 	update_all()
@@ -144,6 +145,66 @@ func _on_retreat_pressed() -> void:
 	if BattleManager:
 		BattleManager.close_all_battles()
 	GameManager.go_to_den()
+
+
+func _init_recruit_button() -> void:
+	## 좌측 하단 테스트용 영입 버튼
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	var btn := Button.new()
+	btn.text = "👤+ 영입"
+	btn.custom_minimum_size = Vector2(70, 36)
+	btn.add_theme_font_size_override("font_size", STYLE.font_normal)
+
+	var style := _make_flat_style(Color(0.1, 0.15, 0.25, 0.9), Color(0.3, 0.4, 0.6, 0.8), STYLE.corner_radius, 1)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover := style.duplicate()
+	hover.bg_color = Color(0.15, 0.22, 0.35, 0.95)
+	hover.border_color = Color(0.5, 0.6, 0.9)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	btn.offset_left = 8
+	btn.offset_top = -46
+	btn.offset_right = 88
+	btn.offset_bottom = -8
+	btn.pressed.connect(_on_recruit_pressed)
+	ctrl.add_child(btn)
+
+
+func _on_recruit_pressed() -> void:
+	## 테스트: 랜덤 동료 영입 (최대 4명)
+	if not PartyManager:
+		return
+	var party: Array = PartyManager.get_party()
+	if party.size() >= 4:
+		return
+
+	var party_ids: Array = []
+	for hero in party:
+		if hero:
+			party_ids.append(hero.id)
+
+	var all_heroes: Array = DataManager.get_all_hero_ids()
+	var available: Array = []
+	for hero_id in all_heroes:
+		if hero_id not in party_ids:
+			available.append(hero_id)
+
+	if available.is_empty():
+		return
+
+	var random_id: String = available[randi() % available.size()]
+	if PartyManager.add_hero_by_id(random_id):
+		if bottom_party_cards:
+			bottom_party_cards.update_display()
 
 
 func _init_pause_menu() -> void:
