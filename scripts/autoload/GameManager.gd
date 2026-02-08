@@ -158,4 +158,9 @@ func go_to_ending() -> void:
 	## 엔딩 화면으로 이동
 	change_state(GameState.GAME_OVER)  # 게임 종료 상태
 	get_tree().change_scene_to_file("res://scenes/main/Ending.tscn")
+
+
+func go_to_den() -> void:
+	## 기지 화면으로 이동
+	get_tree().change_scene_to_file("res://scenes/main/Den.tscn")
 #endregion
