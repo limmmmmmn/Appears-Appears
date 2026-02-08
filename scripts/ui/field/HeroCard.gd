@@ -164,8 +164,6 @@ func _update_equips(hero: Hero) -> void:
 			name_lbl.add_theme_color_override("font_color", rcolor)
 
 
-func update_atb(_hero: Hero) -> void:
-	pass
 #endregion
 
 

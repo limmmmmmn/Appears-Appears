@@ -38,13 +38,5 @@
     "icon": "🌈",
     "rarity": "rare",
     "trait_id": "lucky_looter"
-  },
-  "rune_speed": {
-    "id": "rune_speed",
-    "name": "신속의 룬",
-    "description": "번개가 감도는 푸른 룬",
-    "icon": "🔵",
-    "rarity": "uncommon",
-    "trait_id": "quick_battle"
   }
 }

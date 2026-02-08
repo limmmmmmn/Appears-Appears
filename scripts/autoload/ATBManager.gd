@@ -1,147 +1,157 @@
 extends Node
-## ATBManager: 중앙 ATB 관리 시스템 (자동 공격)
-## - 모든 영웅의 ATB를 중앙에서 관리
-## - 적 ATB는 각 전투창에서 관리
-## - 영웅 ATB가 차면 자동으로 공격
+## ATBManager: 턴제 전투 관리 시스템
+## - 모든 유닛(영웅+적)의 턴을 DEX 기반으로 정렬
+## - 높은 DEX = 먼저 행동
+## - 매 라운드 턴 순서 재계산
 
-signal hero_atb_ready(hero: Hero)  # 영웅 ATB 충전 완료
-signal hero_action_completed(hero: Hero)  # 영웅 행동 완료
 signal action_executed  # 액션 실행됨
-signal atb_updated  # ATB 업데이트됨 (UI 갱신용)
+signal round_started(round_number: int)  # 새 라운드 시작
 
-# ATB 설정
-const ATB_MAX: float = 100.0
-const ATB_FILL_RATE: float = 30.0  # 기본 충전 속도
+# 턴 설정
+const TURN_DELAY: float = 0.4  # 턴 사이 딜레이 (초)
 
-# 영웅 ATB 상태
-var hero_atb: Dictionary = {}  # hero_id -> {hero: Hero, atb: float, speed: int}
-var is_paused: bool = false  # 타겟 선택 중 일시정지
-var is_processing_action: bool = false  # 액션 처리 중
+# 턴 상태
+var turn_queue: Array = []  # [{type, unit, window, dex}]
+var current_turn_index: int = 0
+var current_round: int = 0
+var is_processing_turn: bool = false
+var is_active: bool = false
 
 
 func _ready() -> void:
 	pass
 
 
-func _process(delta: float) -> void:
-	if is_paused or is_processing_action:
+func _process(_delta: float) -> void:
+	if not is_active or is_processing_turn:
 		return
 
-	# 활성 전투가 없으면 ATB 충전 안함
 	if BattleManager.get_active_battle_count() == 0:
 		return
 
-	_update_hero_atb(delta)
+	_process_next_turn()
 
 
 func initialize_battle() -> void:
-	## 전투 시작 시 영웅 ATB 초기화
-	hero_atb.clear()
-	is_paused = false
-	is_processing_action = false
-
-	var heroes: Array = PartyManager.get_alive_heroes()
-	for hero in heroes:
-		var hero_dex: int = hero.get_dex()
-		var initial_atb: float = randf_range(0, 20) + hero_dex * 0.3
-		hero_atb[hero.id] = {
-			"hero": hero,
-			"atb": minf(initial_atb, ATB_MAX - 1),
-			"speed": hero_dex
-		}
+	## 전투 시작 시 턴 시스템 초기화
+	is_active = true
+	is_processing_turn = false
+	current_round = 0
+	_start_new_round()
 
 
 func reset() -> void:
-	## ATB 시스템 리셋
-	hero_atb.clear()
-	is_paused = false
-	is_processing_action = false
-
-
-func get_hero_atb(hero_id: String) -> float:
-	## 특정 영웅의 ATB 값 반환
-	if hero_atb.has(hero_id):
-		return hero_atb[hero_id]["atb"]
-	return 0.0
-
-
-func get_hero_atb_percent(hero_id: String) -> float:
-	## 특정 영웅의 ATB 퍼센트 반환 (0.0 ~ 1.0)
-	return get_hero_atb(hero_id) / ATB_MAX
-
-
-func get_all_hero_atb() -> Dictionary:
-	## 모든 영웅 ATB 반환
-	return hero_atb
+	## 턴 시스템 리셋
+	turn_queue.clear()
+	current_turn_index = 0
+	current_round = 0
+	is_processing_turn = false
+	is_active = false
 
 
 func set_paused(paused: bool) -> void:
-	## ATB 일시정지/재개
-	is_paused = paused
+	## 턴 시스템 일시정지/재개
+	is_active = not paused
 
 
-func _sync_party_heroes() -> void:
-	## 파티 영웅과 ATB 목록 동기화 (새 영웅 추가)
+func _start_new_round() -> void:
+	## 새 라운드 시작: 턴 순서 재계산
+	current_round += 1
+	_build_turn_order()
+	current_turn_index = 0
+	round_started.emit(current_round)
+
+
+func _build_turn_order() -> void:
+	## 모든 유닛의 턴 순서를 DEX 기반으로 정렬
+	turn_queue.clear()
+
+	# 살아있는 영웅 추가
 	var heroes: Array = PartyManager.get_alive_heroes()
 	for hero in heroes:
-		if not hero_atb.has(hero.id):
-			var hero_dex: int = hero.get_dex()
-			var initial_atb: float = randf_range(0, 20) + hero_dex * 0.3
-			hero_atb[hero.id] = {
-				"hero": hero,
-				"atb": minf(initial_atb, ATB_MAX - 1),
-				"speed": hero_dex
-			}
+		turn_queue.append({
+			"type": "hero",
+			"unit": hero,
+			"window": null,
+			"dex": hero.get_dex()
+		})
 
-
-func _update_hero_atb(delta: float) -> void:
-	## 영웅 ATB 업데이트
-	# 새 영웅이 파티에 추가되었으면 ATB에 등록
-	_sync_party_heroes()
-
-	var ready_hero: Hero = null
-	var highest_atb: float = 0.0
-
-	for hero_id in hero_atb:
-		var data: Dictionary = hero_atb[hero_id]
-		var hero: Hero = data["hero"]
-
-		# 죽은 영웅은 스킵
-		if hero.is_dead:
+	# 모든 전투창의 살아있는 적 추가
+	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
+	for battle_id in battle_ids:
+		if not BattleManager.active_battles.has(battle_id):
 			continue
+		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
+		var window = battle_data.get("window")
+		if window == null or not is_instance_valid(window):
+			continue
+		var enemies: Array = window.get_alive_enemies()
+		for enemy in enemies:
+			if enemy != null and is_instance_valid(enemy):
+				turn_queue.append({
+					"type": "enemy",
+					"unit": enemy,
+					"window": window,
+					"dex": enemy.get_dex()
+				})
 
-		# ATB 충전
-		if data["atb"] < ATB_MAX:
-			var speed: int = data["speed"]
-			var fill_amount: float = ATB_FILL_RATE * (speed / 10.0) * delta
-			data["atb"] = minf(data["atb"] + fill_amount, ATB_MAX)
-
-		# 가장 높은 ATB를 가진 준비된 영웅 찾기
-		if data["atb"] >= ATB_MAX and data["atb"] > highest_atb:
-			highest_atb = data["atb"]
-			ready_hero = hero
-
-	# ATB 업데이트 시그널 발송 (UI 갱신용)
-	atb_updated.emit()
-
-	# 준비된 영웅이 있으면 자동 공격
-	if ready_hero != null:
-		_execute_auto_attack(ready_hero)
+	# DEX 기준 내림차순 정렬 (동률이면 랜덤)
+	turn_queue.sort_custom(_compare_turn_priority)
 
 
-func _execute_auto_attack(hero: Hero) -> void:
-	## 영웅 자동 공격 실행
-	is_processing_action = true
+func _compare_turn_priority(a: Dictionary, b: Dictionary) -> bool:
+	## DEX 높은 순으로 정렬
+	if a["dex"] != b["dex"]:
+		return a["dex"] > b["dex"]
+	return randf() > 0.5
 
-	# 모든 전투창 일시정지
-	_pause_all_battle_windows(true)
 
-	# 사용 가능한 스킬 선택
+func _process_next_turn() -> void:
+	## 다음 턴 처리
+	if turn_queue.is_empty() or current_turn_index >= turn_queue.size():
+		_start_new_round()
+		return
+
+	is_processing_turn = true
+	var turn_data: Dictionary = turn_queue[current_turn_index]
+	current_turn_index += 1
+
+	if turn_data["type"] == "hero":
+		var hero: Hero = turn_data["unit"]
+		if hero == null or hero.is_dead:
+			is_processing_turn = false
+			return
+		await _execute_hero_turn(hero)
+	else:
+		var enemy: BattleEnemy = turn_data["unit"]
+		var window: BattleWindow = turn_data["window"]
+		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
+			is_processing_turn = false
+			return
+		if window == null or not is_instance_valid(window):
+			is_processing_turn = false
+			return
+		await _execute_enemy_turn(enemy, window)
+
+	# 전투가 끝났는지 확인
+	if BattleManager.get_active_battle_count() == 0:
+		is_processing_turn = false
+		return
+
+	# 턴 사이 딜레이
+	await get_tree().create_timer(TURN_DELAY).timeout
+	is_processing_turn = false
+	action_executed.emit()
+
+
+func _execute_hero_turn(hero: Hero) -> void:
+	## 영웅 턴 실행
+	BattleManager.turn_changed.emit(hero.hero_name, true)
+
 	var skill_id: String = _select_best_skill(hero)
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	var target_type: String = skill_data.get("target", "single_enemy")
 
-	# 타겟 타입에 따른 처리
 	match target_type:
 		"single_ally":
 			_execute_ally_heal(hero, skill_id)
@@ -155,11 +165,13 @@ func _execute_auto_attack(hero: Hero) -> void:
 	# 쿨타임 시작
 	CooldownManager.start_cooldown(hero.id, skill_id)
 
-	# ATB 리셋
-	if hero_atb.has(hero.id):
-		hero_atb[hero.id]["atb"] = 0.0
 
-	_finish_action()
+func _execute_enemy_turn(enemy: BattleEnemy, window: BattleWindow) -> void:
+	## 적 턴 실행 (해당 전투창에서 처리)
+	if window.current_state != BattleWindow.BattleState.RUNNING:
+		return
+	BattleManager.turn_changed.emit(enemy.enemy_name, false)
+	await window.execute_enemy_turn(enemy)
 
 
 func _select_best_skill(hero: Hero) -> String:
@@ -213,7 +225,6 @@ func _find_low_hp_ally() -> Hero:
 
 func _execute_single_attack(hero: Hero, skill_id: String) -> void:
 	## 단일 대상 공격 실행
-	# 랜덤 타겟 선택
 	var target_data: Dictionary = _find_random_enemy()
 	if target_data.is_empty():
 		return
@@ -221,12 +232,11 @@ func _execute_single_attack(hero: Hero, skill_id: String) -> void:
 	var window: BattleWindow = target_data["window"]
 	var enemy: BattleEnemy = target_data["enemy"]
 
-	# 해당 전투창에서 공격 실행
 	await window.execute_hero_attack(hero, skill_id, enemy)
 
 
 func _find_random_enemy() -> Dictionary:
-	## 모든 전투창에서 랜덤 적 찾기 (호버 일시정지 중인 전투창 제외)
+	## 모든 전투창에서 랜덤 적 찾기
 	var all_enemies: Array = []
 
 	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
@@ -237,10 +247,6 @@ func _find_random_enemy() -> Dictionary:
 		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
 		var window = battle_data.get("window")
 		if window == null or not is_instance_valid(window):
-			continue
-
-		# 마우스 호버 일시정지 중인 전투창은 스킵
-		if window._is_hover_paused:
 			continue
 
 		var enemies: Array = window.get_alive_enemies()
@@ -313,10 +319,8 @@ func _execute_aoe_attack(hero: Hero, skill_id: String) -> void:
 	var total_damage: int = 0
 	var enemies_hit: int = 0
 
-	# 배틀 ID 목록을 먼저 복사 (반복 중 수정 방지)
 	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
 
-	# 모든 전투창의 적 공격
 	for battle_id in battle_ids:
 		if not BattleManager.active_battles.has(battle_id):
 			continue
@@ -324,10 +328,6 @@ func _execute_aoe_attack(hero: Hero, skill_id: String) -> void:
 		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
 		var window = battle_data.get("window")
 		if window == null or not is_instance_valid(window):
-			continue
-
-		# 마우스 호버 일시정지 중인 전투창은 스킵
-		if window._is_hover_paused:
 			continue
 
 		var enemies: Array = window.get_alive_enemies()
@@ -340,11 +340,9 @@ func _execute_aoe_attack(hero: Hero, skill_id: String) -> void:
 			total_damage += damage
 			enemies_hit += 1
 
-			# 적 사망 처리
 			if not enemy.is_alive():
 				window.on_enemy_defeated(enemy)
 
-	# 로그 전송
 	if enemies_hit > 0:
 		BattleManager.battle_log_received.emit(
 			"%s %s! %d x %d" % [
@@ -383,38 +381,11 @@ func _calculate_damage(attacker: Hero, target: BattleEnemy, skill_data: Dictiona
 	return final_damage
 
 
-func _finish_action() -> void:
-	## 행동 완료 처리
-	is_processing_action = false
-	is_paused = false
-
-	# 모든 전투창 재개
-	_pause_all_battle_windows(false)
-
-	action_executed.emit()
+func on_hero_died(_hero: Hero) -> void:
+	## 영웅 사망 시 처리 (턴 큐에서 자동 스킵됨)
+	pass
 
 
-func _pause_all_battle_windows(paused: bool) -> void:
-	## 모든 전투창 일시정지/재개
-	var battle_ids: Array = BattleManager.active_battles.keys().duplicate()
-	for battle_id in battle_ids:
-		if not BattleManager.active_battles.has(battle_id):
-			continue
-
-		var battle_data: Dictionary = BattleManager.active_battles[battle_id]
-		var window = battle_data.get("window")
-		if window and is_instance_valid(window):
-			window.set_atb_paused(paused)
-
-
-func on_hero_died(hero: Hero) -> void:
-	## 영웅 사망 시 ATB에서 제거
-	if hero_atb.has(hero.id):
-		hero_atb[hero.id]["atb"] = 0.0
-
-
-func on_hero_revived(hero: Hero) -> void:
-	## 영웅 부활 시 ATB 재초기화
-	if hero_atb.has(hero.id):
-		hero_atb[hero.id]["atb"] = 0.0
-		hero_atb[hero.id]["speed"] = hero.get_dex()
+func on_hero_revived(_hero: Hero) -> void:
+	## 영웅 부활 시 처리 (다음 라운드에 자동 포함)
+	pass

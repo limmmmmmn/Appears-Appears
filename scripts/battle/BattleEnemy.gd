@@ -153,20 +153,11 @@ func get_luk() -> int:
 func get_eva() -> float:
 	return base_dex * 0.3 + base_luk * 0.1
 
-func get_atb_speed() -> int:
-	## ATB 속도: 물리형은 DEX, 마법형은 INT
-	if damage_type == "magic":
-		return base_int
-	return base_dex
-
 func get_crit() -> float:
 	return base_luk * 0.3
 #endregion
 
 
-#region 비트 시스템 (ATB 제거됨)
-# ATB 바 제거됨 - 비트 시스템으로 대체
-#endregion
 
 
 #region 전투 상태

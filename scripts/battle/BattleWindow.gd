@@ -1,8 +1,7 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: ATB 전투창
-## - 물리: DEX 기반, 마법: INT 기반 ATB 게이지 충전
-## - 게이지가 가득 차면 행동 (실시간 전투)
+## BattleWindow: 턴제 전투창
+## - ATBManager에서 턴 순서를 관리 (DEX 기반)
 ## - 전투 중 적 동적 추가 지원
 
 signal battle_ended(battle_id: int, victory: bool)
@@ -25,16 +24,6 @@ var current_state: BattleState = BattleState.STARTING
 var enemies: Array = []
 var enemy_data_list: Array = []
 
-# === ATB 시스템 ===
-# ATB (Active Time Battle) - 적만 로컬 관리 (영웅은 ATBManager에서 중앙 관리)
-var enemy_atb_units: Array = []  # [{ref: BattleEnemy, atb: float, speed: int}]
-var is_processing_action: bool = false
-var action_delay_timer: float = 0.0
-var atb_paused: bool = false  # ATBManager에서 일시정지 제어
-var _is_hover_paused: bool = false  # 마우스 호버 시 일시정지
-const ATB_FILL_RATE: float = 30.0  # 기본 ATB 충전 속도
-const ATB_MAX: float = 100.0  # ATB 최대값
-const ACTION_DELAY: float = 0.3  # 액션 후 딜레이
 
 
 # === 보상 ===
@@ -136,17 +125,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# 일시정지 메뉴 등으로 게임이 멈춰있으면 전투도 멈춤
 	if get_tree().paused:
 		return
 
 	if current_state != BattleState.RUNNING:
 		return
 
-	# 마우스 호버 일시정지 체크 (전투창 영역 전체)
-	_is_hover_paused = get_global_rect().has_point(get_global_mouse_position())
-
-	_update_atb_system(delta)
 	_update_background_effect(delta)
 
 
@@ -209,9 +193,6 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 	else:
 		_send_log("%s 합류!" % enemy_name, Color.YELLOW)
 
-	# ATB에 새 적 추가
-	_add_enemy_to_atb(enemies.back())
-
 	# 대기 모드에서 적이 추가되면 활성화
 	if is_waiting_for_enemies:
 		_exit_waiting_mode()
@@ -232,7 +213,6 @@ func add_enemy(enemy_id: String, is_elite: bool = false) -> void:
 func _cancel_claim_waiting() -> void:
 	## 보상 대기 상태 취소 (적이 추가되었을 때)
 	is_waiting_for_claim = false
-	is_processing_action = false  # 액션 처리 상태 초기화
 	_hide_claim_ui()
 
 
@@ -295,119 +275,12 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 	return false
 
 
-func _init_atb_system() -> void:
-	## ATB 시스템 초기화 (적만 로컬 관리)
-	enemy_atb_units.clear()
-	is_processing_action = false
-	action_delay_timer = 0.0
-	atb_paused = false
-
-	# 적들만 ATB에 추가 (영웅은 ATBManager에서 중앙 관리)
-	for enemy in enemies:
-		if enemy != null and enemy.is_alive():
-			var enemy_spd: int = enemy.get_atb_speed()
-			var initial_atb: float = randf_range(0, 20) + enemy_spd * 0.3
-			enemy_atb_units.append({
-				"ref": enemy,
-				"atb": minf(initial_atb, ATB_MAX - 1),
-				"speed": enemy_spd
-			})
-
-	_send_log("전투 시작!", Color.LIGHT_GRAY)
-
-
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
-	_init_atb_system()
 	_update_buttons_for_enemies()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
 #endregion
-
-
-#region ATB 시스템
-func _update_atb_system(delta: float) -> void:
-	## ATB 게이지 충전 및 액션 처리 (적만 처리, 영웅은 ATBManager에서 중앙 관리)
-	if is_processing_action or atb_paused or _is_hover_paused:
-		return
-
-	# 액션 딜레이 처리
-	if action_delay_timer > 0:
-		action_delay_timer -= delta
-		return
-
-	# 적 ATB 게이지 충전
-	var ready_enemies: Array = []
-	for unit in enemy_atb_units:
-		var enemy: BattleEnemy = unit["ref"]
-		if enemy == null or not enemy.is_alive():
-			continue
-
-		# 아직 행동 준비 안 된 적은 게이지 충전
-		if unit["atb"] < ATB_MAX:
-			var unit_speed: float = float(unit["speed"])
-			var fill_amount: float = ATB_FILL_RATE * (unit_speed / 10.0) * delta
-			unit["atb"] = minf(unit["atb"] + fill_amount, ATB_MAX)
-
-		# 게이지가 가득 찬 적은 준비 목록에 추가
-		if unit["atb"] >= ATB_MAX:
-			ready_enemies.append(unit)
-
-	# 준비된 적 중 가장 빠른 적이 행동
-	if not ready_enemies.is_empty():
-		ready_enemies.sort_custom(_compare_enemy_atb_priority)
-		_execute_enemy_atb_action(ready_enemies[0])
-
-
-func _compare_enemy_atb_priority(a: Dictionary, b: Dictionary) -> bool:
-	## 적 ATB 우선순위 비교 (속도 높은 순)
-	return a["speed"] > b["speed"]
-
-
-func _execute_enemy_atb_action(unit: Dictionary) -> void:
-	## 적 ATB 액션 실행
-	is_processing_action = true
-	var enemy: BattleEnemy = unit["ref"]
-	var unit_name: String = enemy.enemy_name
-
-	turn_started.emit(unit_name, false)
-	_play_turn_effect()
-	await _process_enemy_turn(enemy)
-
-	# ATB 게이지 리셋
-	unit["atb"] = 0.0
-
-	# 전투 종료 체크
-	if _check_battle_end():
-		return
-
-	# 다음 액션 준비
-	is_processing_action = false
-	action_delay_timer = ACTION_DELAY
-
-
-func _add_enemy_to_atb(enemy: BattleEnemy) -> void:
-	## 새로운 적을 ATB 시스템에 추가
-	if enemy == null or not enemy.is_alive():
-		return
-
-	# 이미 추가되어 있는지 확인
-	for unit in enemy_atb_units:
-		if unit["ref"] == enemy:
-			return
-
-	var enemy_spd: int = enemy.get_atb_speed()
-	var initial_atb: float = randf_range(0, 20) + enemy_spd * 0.3
-	enemy_atb_units.append({
-		"ref": enemy,
-		"atb": minf(initial_atb, ATB_MAX - 1),
-		"speed": enemy_spd
-	})
-
-
-func set_atb_paused(paused: bool) -> void:
-	## ATBManager에서 호출하여 ATB 일시정지/재개
-	atb_paused = paused
 
 
 func get_alive_enemies() -> Array:
@@ -417,6 +290,20 @@ func get_alive_enemies() -> Array:
 		if enemy != null and enemy.is_alive():
 			alive.append(enemy)
 	return alive
+
+
+func execute_enemy_turn(enemy: BattleEnemy) -> void:
+	## ATBManager에서 호출하여 적의 턴 실행
+	if current_state != BattleState.RUNNING:
+		return
+	if enemy == null or not enemy.is_alive():
+		return
+
+	turn_started.emit(enemy.enemy_name, false)
+	_play_turn_effect()
+	await _process_enemy_turn(enemy)
+
+	_check_battle_end()
 
 
 func execute_hero_attack(hero: Hero, skill_id: String, target: BattleEnemy) -> void:
@@ -971,7 +858,6 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
 	## 엘리트 처치 특수 연출: 느려짐 → 나머지 해산 → 자동 보상
-	is_processing_action = true  # ATB 멈춤
 
 	# 1) 엘리트 느려지며 떨림 + "으어어…"
 	_send_log("⭐ %s: 으어어…!" % elite.enemy_name, Color.MAGENTA)
@@ -1013,7 +899,6 @@ func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
 	await get_tree().create_timer(0.4).timeout
 
 	# 5) 자동 보상 → 자동 닫기 (팡!)
-	is_processing_action = false
 	is_waiting_for_claim = false
 	_hide_claim_ui()
 	_end_battle_victory()

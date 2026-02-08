@@ -1,7 +1,7 @@
 extends PanelContainer
 class_name RightPartyPanel
 ## 우측 파티 패널 - 정보 + 장비 목록
-## 레이아웃: 이름+HP바, ATB바들, 장비목록(6줄)
+## 레이아웃: 이름+HP바, 스킬 쿨다운바, 장비목록(6줄)
 
 const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "👒", "body": "👕", "acc1": "💍", "acc2": "💍"}
 const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
@@ -22,10 +22,7 @@ class HeroSlotUI:
 	var name_label: Label
 	var hp_bar: ProgressBar
 	var hp_label: Label  # HP 텍스트 (바 위에)
-	var atb_rows: VBoxContainer  # ATB/스킬 바들
-	var basic_atb_row: HBoxContainer  # 공격 ATB
-	var basic_atb_label: Label
-	var basic_atb_bar: ProgressBar
+	var cooldown_rows: VBoxContainer  # 스킬 쿨다운 바들
 	var skill_rows: Dictionary = {}  # skill_id -> {row: HBoxContainer, bar: ProgressBar, label: Label}
 	var equip_section: VBoxContainer  # 장비 섹션
 	var equip_rows: Dictionary = {}  # slot_name -> HBoxContainer
@@ -145,17 +142,11 @@ func _create_hero_slot(index: int) -> HeroSlotUI:
 	slot.hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hp_container.add_child(slot.hp_label)
 
-	# === ATB 바들 ===
-	slot.atb_rows = VBoxContainer.new()
-	slot.atb_rows.add_theme_constant_override("separation", 1)
-	slot.atb_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slot.info_section.add_child(slot.atb_rows)
-
-	# 기본 공격 ATB 행
-	slot.basic_atb_row = _create_atb_row("공격")
-	slot.basic_atb_label = slot.basic_atb_row.get_node("Label")
-	slot.basic_atb_bar = slot.basic_atb_row.get_node("Bar")
-	slot.atb_rows.add_child(slot.basic_atb_row)
+	# === 스킬 쿨다운 바들 ===
+	slot.cooldown_rows = VBoxContainer.new()
+	slot.cooldown_rows.add_theme_constant_override("separation", 1)
+	slot.cooldown_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.info_section.add_child(slot.cooldown_rows)
 
 	# 스킬 쿨다운 행들은 update_display에서 동적으로 추가
 
@@ -179,35 +170,6 @@ func _create_hero_slot(index: int) -> HeroSlotUI:
 
 	return slot
 
-
-func _create_atb_row(label_text: String) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	# 라벨
-	var label := Label.new()
-	label.name = "Label"
-	label.text = label_text
-	label.add_theme_font_size_override("font_size", 8)
-	label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	label.custom_minimum_size.x = 30
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(label)
-
-	# ATB 바
-	var bar := ProgressBar.new()
-	bar.name = "Bar"
-	bar.custom_minimum_size = Vector2(80, 6)
-	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.max_value = 100.0
-	bar.value = 0.0
-	bar.show_percentage = false
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_atb_bar(bar, false)
-	row.add_child(bar)
-
-	return row
 
 
 func _create_equip_row(slot_name: String) -> HBoxContainer:
@@ -257,23 +219,6 @@ func _style_hp_bar(bar: ProgressBar) -> void:
 	bar.add_theme_stylebox_override("fill", fill)
 
 
-func _style_atb_bar(bar: ProgressBar, is_ready: bool) -> void:
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.15, 0.15, 0.2)
-	bg.corner_radius_top_left = 2
-	bg.corner_radius_top_right = 2
-	bg.corner_radius_bottom_left = 2
-	bg.corner_radius_bottom_right = 2
-	bar.add_theme_stylebox_override("background", bg)
-
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color(1.0, 0.8, 0.2) if is_ready else Color(0.3, 0.7, 1.0)
-	fill.corner_radius_top_left = 2
-	fill.corner_radius_top_right = 2
-	fill.corner_radius_bottom_left = 2
-	fill.corner_radius_bottom_right = 2
-	bar.add_theme_stylebox_override("fill", fill)
-
 
 func _connect_signals() -> void:
 	if PartyManager and PartyManager.has_signal("party_changed"):
@@ -285,9 +230,9 @@ func _connect_signals() -> void:
 			if not BattleManager.party_hp_changed.is_connected(update_display):
 				BattleManager.party_hp_changed.connect(update_display)
 
-	if ATBManager and ATBManager.has_signal("atb_updated"):
-		if not ATBManager.atb_updated.is_connected(_on_atb_updated):
-			ATBManager.atb_updated.connect(_on_atb_updated)
+	if ATBManager and ATBManager.has_signal("action_executed"):
+		if not ATBManager.action_executed.is_connected(_on_action_executed):
+			ATBManager.action_executed.connect(_on_action_executed)
 
 
 func update_display() -> void:
@@ -314,8 +259,8 @@ func update_display() -> void:
 			# 장비 목록 업데이트
 			_update_equip_list(slot, hero)
 
-			# 스킬 ATB 바들 업데이트
-			_update_skill_atb_bars(slot, hero)
+			# 스킬 쿨다운 바 업데이트
+			_update_skill_cooldown_bars(slot, hero)
 		else:
 			slot.container.visible = false
 
@@ -363,7 +308,7 @@ func _update_equip_list(slot: HeroSlotUI, hero: Hero) -> void:
 			name_lbl.add_theme_color_override("font_color", rarity_color)
 
 
-func _update_skill_atb_bars(slot: HeroSlotUI, hero: Hero) -> void:
+func _update_skill_cooldown_bars(slot: HeroSlotUI, hero: Hero) -> void:
 	## 스킬 쿨다운 바 생성/업데이트
 	var skills: Array = hero.get_available_skills()
 
@@ -377,7 +322,7 @@ func _update_skill_atb_bars(slot: HeroSlotUI, hero: Hero) -> void:
 			var skill_name: String = skill_data.get("name", skill_id)
 
 			var row := _create_cooldown_row(skill_name)
-			slot.atb_rows.add_child(row)
+			slot.cooldown_rows.add_child(row)
 			slot.skill_rows[skill_id] = {
 				"row": row,
 				"bar": row.get_node("Bar"),
@@ -445,7 +390,13 @@ func _style_cooldown_bar(bar: ProgressBar, is_ready: bool) -> void:
 	bar.add_theme_stylebox_override("fill", fill)
 
 
-func _on_atb_updated() -> void:
+func _on_action_executed() -> void:
+	## 턴 완료 시 쿨다운 바 업데이트
+	_update_cooldown_displays()
+
+
+func _update_cooldown_displays() -> void:
+	## 스킬 쿨다운 바 업데이트
 	var party: Array = PartyManager.get_party() if PartyManager else []
 
 	for i in range(hero_slots.size()):
@@ -455,21 +406,13 @@ func _on_atb_updated() -> void:
 		var slot := hero_slots[i]
 		var hero: Hero = party[i]
 
-		# 기본 공격 ATB 업데이트
-		var atb_percent: float = ATBManager.get_hero_atb_percent(hero.id) if ATBManager else 0.0
-		slot.basic_atb_bar.value = atb_percent * 100.0
-		_style_atb_bar(slot.basic_atb_bar, atb_percent >= 1.0)
-
-		# 스킬 쿨다운 업데이트
 		for skill_id in slot.skill_rows.keys():
 			var row_data: Dictionary = slot.skill_rows[skill_id]
 			var bar: ProgressBar = row_data["bar"]
 
-			# 쿨다운 퍼센트 가져오기 (0 = 준비완료, 1 = 막 사용)
 			var cooldown_percent: float = CooldownManager.get_cooldown_percent(hero.id, skill_id) if CooldownManager else 0.0
 			var is_ready: bool = cooldown_percent <= 0.0
 
-			# 바 업데이트 (준비 완료면 100%, 쿨다운 중이면 남은 비율)
 			bar.value = 100.0 if is_ready else (1.0 - cooldown_percent) * 100.0
 			_style_cooldown_bar(bar, is_ready)
 

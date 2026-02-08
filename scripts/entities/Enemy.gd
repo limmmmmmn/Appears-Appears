@@ -78,12 +78,6 @@ func get_dex() -> int:
 func get_int() -> int:
 	return int_stat
 
-func get_atb_speed() -> int:
-	## ATB 속도: 물리형은 DEX, 마법형은 INT
-	if damage_type == "magic":
-		return int_stat
-	return dex_stat
-
 # 하위 호환용 (기존 코드에서 사용 중일 수 있음)
 func get_p_def() -> int:
 	return def_stat

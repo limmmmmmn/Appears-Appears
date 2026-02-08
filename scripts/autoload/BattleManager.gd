@@ -39,9 +39,6 @@ var _battle_id_counter: int = 0
 var last_battle_pos: Vector2 = Vector2.ZERO
 var last_window_rect: Rect2 = Rect2()
 
-# === 턴제 전투 설정 ===
-const TURN_DELAY: float = 0.5  # 턴 사이 딜레이 (초)
-
 # === Charm 효과 ===
 var extra_enemy_slots: int = 0  # 추가 적 슬롯 (charm1 효과)
 
@@ -608,7 +605,4 @@ func close_all_battles() -> void:
 		active_battles.erase(battle_id)
 
 
-func get_turn_delay() -> float:
-	## 턴 사이 딜레이 반환
-	return TURN_DELAY
 #endregion
