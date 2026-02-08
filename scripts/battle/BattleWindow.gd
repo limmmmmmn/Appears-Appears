@@ -55,6 +55,13 @@ var claim_item_list_label: Label = null
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 
+# === 턴 관리 (독립적) ===
+const TURN_DELAY: float = 0.4  # 턴 사이 딜레이 (초)
+var turn_queue: Array = []  # [{type, unit, dex}]
+var current_turn_index: int = 0
+var current_round: int = 0
+var is_processing_turn: bool = false
+
 
 # === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
@@ -126,6 +133,10 @@ func _process(delta: float) -> void:
 		return
 
 	_update_background_effect(delta)
+
+	# 독립 턴 처리
+	if not is_processing_turn:
+		_process_next_turn()
 
 
 #region 전투 초기화 (새 시스템)
@@ -236,6 +247,10 @@ func _start_battle() -> void:
 	_update_buttons_for_enemies()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
+	# 독립 턴 시스템 시작
+	current_round = 0
+	is_processing_turn = false
+	_start_new_round()
 #endregion
 
 
@@ -248,104 +263,91 @@ func get_alive_enemies() -> Array:
 	return alive
 
 
-func execute_enemy_turn(enemy: BattleEnemy) -> void:
-	## ATBManager에서 호출하여 적의 턴 실행
+#region 독립 턴 관리 시스템
+func _start_new_round() -> void:
+	## 새 라운드 시작: 턴 순서 재계산
+	current_round += 1
+	_build_turn_order()
+	current_turn_index = 0
+
+
+func _build_turn_order() -> void:
+	## 이 전투창의 유닛 턴 순서를 DEX 기반으로 정렬
+	turn_queue.clear()
+
+	# 살아있는 영웅 추가
+	var heroes: Array = PartyManager.get_alive_heroes()
+	for hero in heroes:
+		turn_queue.append({
+			"type": "hero",
+			"unit": hero,
+			"dex": hero.get_dex()
+		})
+
+	# 이 전투창의 살아있는 적 추가
+	for enemy in enemies:
+		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
+			turn_queue.append({
+				"type": "enemy",
+				"unit": enemy,
+				"dex": enemy.get_dex()
+			})
+
+	# DEX 기준 내림차순 정렬 (동률이면 랜덤)
+	turn_queue.sort_custom(_compare_turn_priority)
+
+
+func _compare_turn_priority(a: Dictionary, b: Dictionary) -> bool:
+	if a["dex"] != b["dex"]:
+		return a["dex"] > b["dex"]
+	return randf() > 0.5
+
+
+func _process_next_turn() -> void:
+	## 다음 턴 처리
 	if current_state != BattleState.RUNNING:
 		return
-	if enemy == null or not enemy.is_alive():
+
+	if turn_queue.is_empty() or current_turn_index >= turn_queue.size():
+		_start_new_round()
 		return
 
-	turn_started.emit(enemy.enemy_name, false)
-	_play_turn_effect()
-	await _process_enemy_turn(enemy)
+	is_processing_turn = true
+	var turn_data: Dictionary = turn_queue[current_turn_index]
+	current_turn_index += 1
 
-	_check_battle_end()
-
-
-func execute_hero_attack(hero: Hero, skill_id: String, target: BattleEnemy) -> void:
-	## ATBManager에서 호출하여 특정 적에게 영웅 공격 실행
-	if hero == null or hero.is_dead:
-		return
-
-	if target == null or not target.is_alive():
-		return
-
-	_bring_to_front()
-	BattleManager.hero_attacked.emit(hero.id)
-
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	if skill_data.is_empty():
-		skill_id = "basic_attack"
-		skill_data = DataManager.get_skill("basic_attack")
-
-	var skill_name: String = skill_data.get("name", "공격")
-	var skill_type: String = skill_data.get("type", "physical")
-
-	# 로그에 누구의 턴인지 표시
-	_send_log("▶ %s의 턴" % hero.hero_name, Color.CYAN)
-
-	# 짧은 대기 (연출)
-	await get_tree().create_timer(0.15).timeout
-
-	# 회피 판정
-	var eva_ignore: float = _get_skill_effect_value(skill_data, "ignore_eva", 0.0)
-	var effective_eva: float = target.get_eva() * (1.0 - eva_ignore)
-	var is_evaded: bool = randf() * 100 < effective_eva
-
-	if is_evaded:
-		target.show_miss_text()
-		target.play_evade_effect()
-		_send_log("%s의 %s을(를) %s이(가) 회피!" % [hero.hero_name, skill_name, target.enemy_name], Color.GRAY)
-		return
-
-	# 크리티컬 판정
-	var crit_bonus: float = _get_skill_effect_value(skill_data, "crit_bonus", 0.0)
-	var crit_chance: float = hero.get_crit() + crit_bonus
-	var is_crit: bool = randf() * 100 < crit_chance
-
-	# 데미지 계산
-	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
-
-	# 클래스별 공격 사운드
-	if SoundManager:
-		SoundManager.play_attack(hero.class_id, is_crit)
-
-	target.take_damage(damage)
-	target.play_hit_effect(is_crit)
-	target.show_damage_number(damage, is_crit)
-
-	# 강타 등 강력한 스킬 사용 시 진동 효과
-	if skill_id == "power_strike" or skill_id == "shield_bash":
-		play_skill_shake()
-	elif is_crit:
-		play_critical_shake()
-
-	# 로그 색상: 스킬별 구분
-	var log_color: Color
-	if is_crit:
-		log_color = Color.ORANGE
-	elif skill_id == "power_strike":
-		log_color = Color.TOMATO  # 강타는 붉은색
-	elif skill_id == "shield_bash":
-		log_color = Color.STEEL_BLUE  # 방패 강타는 파란색
-	elif skill_type == "magic":
-		log_color = Color.CYAN
+	if turn_data["type"] == "hero":
+		var hero: Hero = turn_data["unit"]
+		if hero == null or hero.is_dead:
+			is_processing_turn = false
+			return
+		BattleManager.turn_changed.emit(hero.hero_name, true)
+		turn_started.emit(hero.hero_name, true)
+		_play_turn_effect()
+		await _process_hero_turn(hero)
 	else:
-		log_color = Color.WHITE
+		var enemy: BattleEnemy = turn_data["unit"]
+		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
+			is_processing_turn = false
+			return
+		BattleManager.turn_changed.emit(enemy.enemy_name, false)
+		turn_started.emit(enemy.enemy_name, false)
+		_play_turn_effect()
+		await _process_enemy_turn(enemy)
 
-	var crit_text: String = " ⭐" if is_crit else ""
+	# 전투 종료 체크
+	if _check_battle_end():
+		is_processing_turn = false
+		return
 
-	if skill_id == "basic_attack":
-		_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
-	else:
-		_send_log("%s ★%s★ → %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
-
-	if not target.is_alive():
-		on_enemy_defeated(target)
+	# 턴 사이 딜레이
+	await get_tree().create_timer(TURN_DELAY).timeout
+	is_processing_turn = false
+	ATBManager.action_executed.emit()
+#endregion
 
 
 func on_enemy_defeated(enemy: BattleEnemy) -> void:
-	## 적 처치 처리 (ATBManager에서도 호출 가능)
 	_on_enemy_defeated(enemy)
 
 
