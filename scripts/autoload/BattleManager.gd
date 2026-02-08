@@ -19,19 +19,12 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
-signal global_kill_count_changed(count: int, danger_level: int)
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal danger_level_up(new_level: int)  # 원념 레벨업 시 (선택창 표시용)
-signal field_drops_requested(gold: int, items: Array, danger_level: int, world_pos: Vector2, window_rect: Rect2)
+signal field_drops_requested(gold: int, items: Array, grudge_level: int, world_pos: Vector2, window_rect: Rect2)
 
 # === 전투창 증식 시스템 설정 ===
 const MAX_ENEMIES_PER_WINDOW: int = 3  # 전투창 하나당 최대 적 수
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
-
-# === 글로벌 킬카운트 (원념) 시스템 ===
-var global_kill_count: int = 0  # 전체 적 처치 횟수
-const DANGER_LEVEL_INTERVAL: int = 5  # 위험도 1레벨당 킬 수 (5킬마다 레벨업)
-const STAT_SCALE_PER_LEVEL: float = 0.05  # 위험도 1레벨당 스탯 증가율 (5%)
 
 # === 누적 보상 시스템 ===
 var accumulated_gold: int = 0
@@ -45,7 +38,7 @@ var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite, 
 var _battle_id_counter: int = 0
 var last_battle_pos: Vector2 = Vector2.ZERO
 var last_window_rect: Rect2 = Rect2()
-var last_window_danger: int = 0
+var last_window_grudge: int = 0
 
 # === 턴제 전투 설정 ===
 const TURN_DELAY: float = 0.5  # 턴 사이 딜레이 (초)
@@ -358,13 +351,13 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 				window_items = window.drop_items.duplicate()
 				window_screen_rect = Rect2(window.position, window.size)
 				last_window_rect = window_screen_rect
-				last_window_danger = get_danger_level()
+				last_window_grudge = window.grudge_level
 
 	end_battle(battle_id, victory)
 
-	# 필드 드롭 스폰 요청 (전투창별 로컬 위험도 사용)
+	# 필드 드롭 스폰 요청 (전투창별 원념 레벨 사용)
 	if victory and (window_gold > 0 or not window_items.is_empty()):
-		field_drops_requested.emit(window_gold, window_items, last_window_danger, battle_pos, window_screen_rect)
+		field_drops_requested.emit(window_gold, window_items, last_window_grudge, battle_pos, window_screen_rect)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -418,19 +411,6 @@ func add_accumulated_reward(_exp: int, gold: int, items: Array = []) -> void:
 	accumulated_rewards_changed.emit(accumulated_gold, accumulated_items)
 
 
-func increment_global_kill_count() -> void:
-	## 글로벌 킬카운트 증가 및 원념 레벨 체크
-	var old_level: int = global_kill_count / DANGER_LEVEL_INTERVAL
-	global_kill_count += 1
-	var new_level: int = global_kill_count / DANGER_LEVEL_INTERVAL
-
-	global_kill_count_changed.emit(global_kill_count, new_level)
-
-	# 원념 레벨업 시 선택창 표시
-	if new_level > old_level and new_level > 0:
-		danger_level_up.emit(new_level)
-
-
 func claim_accumulated_rewards() -> void:
 	## 누적 보상 수령 → 필드 드롭으로 스폰
 	var items_arr: Array = []
@@ -438,7 +418,7 @@ func claim_accumulated_rewards() -> void:
 		items_arr.append(item.id)
 
 	if accumulated_gold > 0 or not items_arr.is_empty():
-		field_drops_requested.emit(accumulated_gold, items_arr, last_window_danger, last_battle_pos, last_window_rect)
+		field_drops_requested.emit(accumulated_gold, items_arr, last_window_grudge, last_battle_pos, last_window_rect)
 
 	# 초기화
 	reset_accumulated_rewards()
@@ -448,7 +428,7 @@ func reset_accumulated_rewards() -> void:
 	## 보상 초기화
 	accumulated_gold = 0
 	accumulated_items.clear()
-	last_window_danger = 0
+	last_window_grudge = 0
 	accumulated_rewards_changed.emit(0, [])
 
 
@@ -457,7 +437,7 @@ func get_accumulated_rewards() -> Dictionary:
 		"exp": 0,  # 레벨 시스템 제거됨
 		"gold": accumulated_gold,
 		"items": accumulated_items,
-		"danger_level": get_danger_level()
+		"grudge_level": last_window_grudge
 	}
 #endregion
 
@@ -583,33 +563,6 @@ func get_max_enemies_per_window() -> int:
 #endregion
 
 
-#region 글로벌 킬카운트 (원념) 시스템
-func add_global_kill_count(amount: int = 1) -> void:
-	## 글로벌 킬카운트 증가
-	global_kill_count += amount
-	global_kill_count_changed.emit(global_kill_count, get_danger_level())
-
-
-func get_global_kill_count() -> int:
-	return global_kill_count
-
-
-func get_danger_level() -> int:
-	## 위험도 레벨 반환 (킬카운트 / 10)
-	return global_kill_count / DANGER_LEVEL_INTERVAL
-
-
-func get_enemy_stat_multiplier() -> float:
-	## 위험도에 따른 적 스탯 배율 반환
-	var danger_level := get_danger_level()
-	return 1.0 + (danger_level * STAT_SCALE_PER_LEVEL)
-
-
-func reset_global_kill_count() -> void:
-	## 킬카운트 초기화 (새 게임 시작 시)
-	global_kill_count = 0
-	global_kill_count_changed.emit(0, 0)
-#endregion
 
 
 #region 유틸리티

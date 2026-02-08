@@ -985,9 +985,6 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
 
-	# 글로벌 킬 카운트 (HUD 표시용)
-	BattleManager.add_global_kill_count(1)
-
 	# 보상 계산 (특성 적용)
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
 

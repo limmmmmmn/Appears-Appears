@@ -43,8 +43,6 @@ const STYLE := {
 @onready var gold_label: Label = %GoldLabel
 @onready var speed_button: Button = %SpeedButton
 @onready var menu_button: Button = %MenuButton
-var kill_label: Label = null
-
 # BottomPartyCards
 var bottom_party_cards: BottomPartyCards = null
 
@@ -62,10 +60,6 @@ var is_pause_menu_active: bool = false
 var grudge_popup: CanvasLayer = null
 var is_grudge_popup_active: bool = false
 
-# 킬 카운트 영웅 추가
-const KILLS_PER_HERO := 5
-const AVAILABLE_HEROES := ["roland", "luna", "elena", "shadow", "aria", "gareth"]
-var last_hero_kill_threshold: int = 0
 #endregion
 
 
@@ -103,18 +97,6 @@ func _init_topbar() -> void:
 		hover.bg_color = Color(0.18, 0.18, 0.22, 0.95)
 		speed_button.add_theme_stylebox_override("hover", hover)
 
-	if gold_label:
-		var parent := gold_label.get_parent()
-		if parent:
-			kill_label = Label.new()
-			kill_label.name = "KillLabel"
-			kill_label.add_theme_font_size_override("font_size", STYLE.font_normal)
-			kill_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.6))
-			var gold_idx := gold_label.get_index()
-			parent.add_child(kill_label)
-			parent.move_child(kill_label, gold_idx + 1)
-			var current_kills: int = BattleManager.get_global_kill_count() if BattleManager else 0
-			kill_label.text = "💀 %d" % current_kills
 
 
 func _init_party_cards() -> void:
@@ -327,9 +309,6 @@ func _connect_signals() -> void:
 			BattleManager.party_hp_changed.connect(update_party_display)
 		if not BattleManager.loot_animation_requested.is_connected(_on_loot_anim):
 			BattleManager.loot_animation_requested.connect(_on_loot_anim)
-		if BattleManager.has_signal("global_kill_count_changed"):
-			if not BattleManager.global_kill_count_changed.is_connected(_on_kill_count_changed):
-				BattleManager.global_kill_count_changed.connect(_on_kill_count_changed)
 
 	if bottom_party_cards:
 		if not bottom_party_cards.equipment_dropped.is_connected(_on_equip_dropped):
@@ -361,41 +340,6 @@ static func _make_flat_style(
 #region 이벤트 핸들러
 func _on_speed_pressed() -> void:
 	pass
-
-
-func _on_kill_count_changed(count: int, _danger_level: int) -> void:
-	if kill_label:
-		kill_label.text = "💀 %d" % count
-	var threshold := (count / KILLS_PER_HERO) * KILLS_PER_HERO
-	if threshold > last_hero_kill_threshold and threshold > 0:
-		last_hero_kill_threshold = threshold
-		_add_random_hero()
-
-
-func _add_random_hero() -> void:
-	if not PartyManager:
-		return
-	var party: Array = PartyManager.get_party()
-	if party.size() >= 4:
-		return
-
-	var party_ids: Array = []
-	for hero in party:
-		if hero:
-			party_ids.append(hero.id)
-
-	var available: Array = []
-	for hero_id in AVAILABLE_HEROES:
-		if hero_id not in party_ids:
-			available.append(hero_id)
-
-	if available.is_empty():
-		return
-
-	var random_id: String = available[randi() % available.size()]
-	if PartyManager.add_hero_by_id(random_id):
-		if bottom_party_cards:
-			bottom_party_cards.update_display()
 
 
 func _on_loot_anim(item_id: String, start_pos: Vector2) -> void:
