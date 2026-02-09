@@ -181,8 +181,31 @@ func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array
 	if pool.is_empty():
 		return enemies
 
+	# 가중치 내림차순 정렬하여 서열 결정
+	var sorted_enemies: Array = pool.keys()
+	sorted_enemies.sort_custom(func(a, b): return float(pool[a]) > float(pool[b]))
+
+	# 필드 적의 서열 인덱스
+	var field_rank: int = sorted_enemies.find(field_enemy_id)
+	if field_rank == -1:
+		battle_generated.emit(field_enemy_id, enemies)
+		return enemies
+
+	# 인접 서열 적만 추가 풀에 포함
+	var add_pool: Dictionary = {}
+	if field_rank > 0:
+		var prev_id: String = sorted_enemies[field_rank - 1]
+		add_pool[prev_id] = pool[prev_id]
+	if field_rank < sorted_enemies.size() - 1:
+		var next_id: String = sorted_enemies[field_rank + 1]
+		add_pool[next_id] = pool[next_id]
+
+	if add_pool.is_empty():
+		battle_generated.emit(field_enemy_id, enemies)
+		return enemies
+
 	while enemies.size() < battle_size:
-		var new_enemy: String = _weighted_random_select(pool)
+		var new_enemy: String = _weighted_random_select(add_pool)
 		enemies.append(new_enemy)
 
 	battle_generated.emit(field_enemy_id, enemies)
