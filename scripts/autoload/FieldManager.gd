@@ -205,12 +205,11 @@ func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array
 		return enemies
 
 	var field_enemy_count: int = 1
-	var add_enemy_count: int = 0
 	while enemies.size() < battle_size:
-		if add_enemy_count < field_enemy_count:
-			var new_enemy: String = _weighted_random_select(add_pool)
+		var new_enemy: String = _weighted_random_select(add_pool)
+		var new_count: int = enemies.count(new_enemy)
+		if new_count + 1 <= field_enemy_count:
 			enemies.append(new_enemy)
-			add_enemy_count += 1
 		else:
 			enemies.append(field_enemy_id)
 			field_enemy_count += 1
