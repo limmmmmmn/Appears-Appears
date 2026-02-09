@@ -22,30 +22,29 @@
 	"sprite": "slime",
 	"tags": ["monster", "slime"]
   },
-  "goblin": {
-	"id": "goblin",
-	"name": "고블린",
+  "dragon": {
+	"id": "dragon",
+	"name": "드래곤",
 	"type": "normal",
 	"stats": {
-	  "hp": 35,
-	  "atk": 12,
-	  "def": 5,
-	  "dex": 10
+	  "hp": 55,
+	  "atk": 20,
+	  "def": 8,
+	  "dex": 9
 	},
 	"rewards": {
-	  "exp": 12,
-	  "gold_min": 10,
-	  "gold_max": 18
+	  "exp": 30,
+	  "gold_min": 25,
+	  "gold_max": 40
 	},
 	"drop_table": [
-	  {"item_id": "dagger_common", "chance": 0.06},
-	  {"item_id": "leather_armor", "chance": 0.04},
-	  {"item_id": "sword_common", "chance": 0.03},
-	  {"item_id": "dagger_magic", "chance": 0.008}
+	  {"item_id": "sword_magic", "chance": 0.03},
+	  {"item_id": "shield_magic", "chance": 0.02},
+	  {"item_id": "ring_hp", "chance": 0.04}
 	],
-	"skills": ["basic_attack"],
-	"sprite": "goblin",
-	"tags": ["monster", "goblin", "humanoid"]
+	"skills": ["basic_attack", "fireball"],
+	"sprite": "dragon",
+	"tags": ["monster", "dragon", "flying"]
   },
   "bat": {
 	"id": "bat",
@@ -94,53 +93,6 @@
 	"skills": ["basic_attack"],
 	"sprite": "skeleton",
 	"tags": ["undead", "skeleton"]
-  },
-  "wolf": {
-	"id": "wolf",
-	"name": "늑대",
-	"type": "normal",
-	"stats": {
-	  "hp": 20,
-	  "atk": 9,
-	  "def": 3,
-	  "dex": 13
-	},
-	"rewards": {
-	  "exp": 12,
-	  "gold_min": 5,
-	  "gold_max": 12
-	},
-	"drop_table": [
-	  {"item_id": "leather_armor", "chance": 0.04},
-	  {"item_id": "boots_speed", "chance": 0.03},
-	  {"item_id": "amulet_crit", "chance": 0.01}
-	],
-	"skills": ["basic_attack"],
-	"sprite": "wolf",
-	"tags": ["beast", "wolf"]
-  },
-  "spider": {
-	"id": "spider",
-	"name": "거미",
-	"type": "normal",
-	"stats": {
-	  "hp": 18,
-	  "atk": 7,
-	  "def": 2,
-	  "dex": 11
-	},
-	"rewards": {
-	  "exp": 8,
-	  "gold_min": 4,
-	  "gold_max": 10
-	},
-	"drop_table": [
-	  {"item_id": "robe_common", "chance": 0.03},
-	  {"item_id": "ring_hp", "chance": 0.03}
-	],
-	"skills": ["basic_attack"],
-	"sprite": "spider",
-	"tags": ["monster", "insect"]
   },
   "golem": {
 	"id": "golem",

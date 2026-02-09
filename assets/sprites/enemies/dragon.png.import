@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ns4mpn2ydn37"
-path="res://.godot/imported/goblin.png-1763365f4ef0fc48448ac1a932daf396.ctex"
+path="res://.godot/imported/dragon.png-1763365f4ef0fc48448ac1a932daf396.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/goblin.png"
-dest_files=["res://.godot/imported/goblin.png-1763365f4ef0fc48448ac1a932daf396.ctex"]
+source_file="res://assets/sprites/enemies/dragon.png"
+dest_files=["res://.godot/imported/dragon.png-1763365f4ef0fc48448ac1a932daf396.ctex"]
 
 [params]
 
