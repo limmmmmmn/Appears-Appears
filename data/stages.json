@@ -13,7 +13,7 @@
   "battle_config": {
 	"min_enemies": 1,
 	"max_enemies": 3,
-	"weight_exponent": 1.5
+	"weight_exponent": 2.0
   },
   
   "stages": [
@@ -22,10 +22,10 @@
 	  "name": "초원의 길",
 	  "description": "평화로워 보이지만 마물이 도사리는 초원",
 	  "terrain_enemies": {
-		"grass": { "slime": 50, "bat": 45, "golem": 15, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 5 },
-		"forest": { "slime": 50, "bat": 45, "golem": 15, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 5 },
-		"cave": { "slime": 50, "bat": 45, "golem": 15, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 5 },
-		"stone": { "slime": 50, "bat": 45, "golem": 15, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 5 }
+		"grass": { "slime": 50, "bat": 45, "golem": 12, "dark_sorcerer": 8, "dark_mage": 5, "dragon": 2 },
+		"forest": { "slime": 50, "bat": 45, "golem": 12, "dark_sorcerer": 8, "dark_mage": 5, "dragon": 2 },
+		"cave": { "slime": 50, "bat": 45, "golem": 12, "dark_sorcerer": 8, "dark_mage": 5, "dragon": 2 },
+		"stone": { "slime": 50, "bat": 45, "golem": 12, "dark_sorcerer": 8, "dark_mage": 5, "dragon": 2 }
 	  },
 	  "elite_pool": ["orc_warrior"],
 	  "boss_id": "boss_goblin_king",
@@ -67,10 +67,10 @@
 	  "name": "황폐한 폐광",
 	  "description": "버려진 광산에 언데드가 출몰한다",
 	  "terrain_enemies": {
-		"grass": { "slime": 40, "bat": 40, "golem": 20, "dark_sorcerer": 18, "dark_mage": 14, "dragon": 10 },
-		"forest": { "slime": 40, "bat": 40, "golem": 20, "dark_sorcerer": 18, "dark_mage": 14, "dragon": 10 },
-		"cave": { "slime": 40, "bat": 40, "golem": 20, "dark_sorcerer": 18, "dark_mage": 14, "dragon": 10 },
-		"stone": { "slime": 40, "bat": 40, "golem": 20, "dark_sorcerer": 18, "dark_mage": 14, "dragon": 10 }
+		"grass": { "slime": 45, "bat": 42, "golem": 16, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 4 },
+		"forest": { "slime": 45, "bat": 42, "golem": 16, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 4 },
+		"cave": { "slime": 45, "bat": 42, "golem": 16, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 4 },
+		"stone": { "slime": 45, "bat": 42, "golem": 16, "dark_sorcerer": 12, "dark_mage": 8, "dragon": 4 }
 	  },
 	  "elite_pool": ["orc_warrior", "dark_mage"],
 	  "boss_id": "boss_goblin_king",
@@ -112,10 +112,10 @@
 	  "name": "마왕성",
 	  "description": "최후의 결전이 기다리는 어둠의 성",
 	  "terrain_enemies": {
-		"grass": { "slime": 30, "bat": 30, "golem": 25, "dark_sorcerer": 22, "dark_mage": 18, "dragon": 15 },
-		"forest": { "slime": 30, "bat": 30, "golem": 25, "dark_sorcerer": 22, "dark_mage": 18, "dragon": 15 },
-		"cave": { "slime": 30, "bat": 30, "golem": 25, "dark_sorcerer": 22, "dark_mage": 18, "dragon": 15 },
-		"stone": { "slime": 30, "bat": 30, "golem": 25, "dark_sorcerer": 22, "dark_mage": 18, "dragon": 15 }
+		"grass": { "slime": 38, "bat": 35, "golem": 20, "dark_sorcerer": 16, "dark_mage": 12, "dragon": 7 },
+		"forest": { "slime": 38, "bat": 35, "golem": 20, "dark_sorcerer": 16, "dark_mage": 12, "dragon": 7 },
+		"cave": { "slime": 38, "bat": 35, "golem": 20, "dark_sorcerer": 16, "dark_mage": 12, "dragon": 7 },
+		"stone": { "slime": 38, "bat": 35, "golem": 20, "dark_sorcerer": 16, "dark_mage": 12, "dragon": 7 }
 	  },
 	  "elite_pool": ["orc_warrior", "dark_mage"],
 	  "boss_id": "boss_goblin_king",
