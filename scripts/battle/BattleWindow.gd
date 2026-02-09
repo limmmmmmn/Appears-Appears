@@ -250,6 +250,7 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_update_buttons_for_enemies()
+	_update_reward_label()
 	set_process(true)
 	_send_log("전투 시작!", Color.WHITE)
 	# 독립 턴 시스템 시작
@@ -811,8 +812,10 @@ func _setup_reward_label() -> void:
 
 
 func _get_total_reward_value() -> int:
-	## 골드 + 아이템 가치 합산
+	## 획득 보상 + 살아있는 적 예상 보상 합산
 	var total: int = total_gold
+
+	# 이미 드롭된 아이템 가치
 	for item_id in drop_items:
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
 		if not equip_data.is_empty():
@@ -821,6 +824,24 @@ func _get_total_reward_value() -> int:
 		var item_data: Dictionary = DataManager.get_item(item_id)
 		if not item_data.is_empty():
 			total += int(item_data.get("sell_price", 0))
+
+	# 살아있는 적 예상 골드 (min~max 평균)
+	for e in enemies:
+		if e != null and e.is_alive():
+			total += int((e.gold_min + e.gold_max) / 2.0)
+			# 드롭 테이블 기대값
+			for drop in e.drop_table:
+				var drop_dict: Dictionary = drop as Dictionary
+				var item_id: String = str(drop_dict.get("item_id", ""))
+				var chance: float = float(drop_dict.get("chance", 0.0))
+				var equip_data: Dictionary = DataManager.get_equipment(item_id)
+				if not equip_data.is_empty():
+					total += int(int(equip_data.get("gear_score", 0)) * 5 * chance)
+					continue
+				var item_data: Dictionary = DataManager.get_item(item_id)
+				if not item_data.is_empty():
+					total += int(int(item_data.get("sell_price", 0)) * chance)
+
 	return total
 
 
