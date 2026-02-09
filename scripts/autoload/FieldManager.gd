@@ -166,7 +166,6 @@ func select_field_enemy_for_tile(tile_type: String) -> String:
 #region 전투 에너미 생성
 func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array:
 	## 필드 에너미 접촉 시 전투 에너미 배열 생성
-	## 규칙: 추가 적은 필드 적의 가중치보다 낮은 적만 가능
 
 	var min_enemies: int = int(battle_config.get("min_enemies", 1))
 	var max_enemies: int = int(battle_config.get("max_enemies", 3))
@@ -182,23 +181,8 @@ func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array
 	if pool.is_empty():
 		return enemies
 
-	# 필드 적의 가중치
-	var field_enemy_weight: float = float(pool.get(field_enemy_id, 0))
-
-	# 필드 적보다 가중치가 높은 적만 추가 풀에 포함 (더 흔한 적만 추가)
-	var add_pool: Dictionary = {}
-	for enemy_id in pool:
-		var weight: float = float(pool[enemy_id])
-		if weight > field_enemy_weight:
-			add_pool[enemy_id] = weight
-
-	# 추가 가능한 적이 없으면 필드 적만 반환
-	if add_pool.is_empty():
-		battle_generated.emit(field_enemy_id, enemies)
-		return enemies
-
 	while enemies.size() < battle_size:
-		var new_enemy: String = _weighted_random_select(add_pool)
+		var new_enemy: String = _weighted_random_select(pool)
 		enemies.append(new_enemy)
 
 	battle_generated.emit(field_enemy_id, enemies)
