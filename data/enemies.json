@@ -69,31 +69,6 @@
 	"sprite": "bat",
 	"tags": ["monster", "beast", "flying"]
   },
-  "skeleton": {
-	"id": "skeleton",
-	"name": "스켈레톤",
-	"type": "normal",
-	"stats": {
-	  "hp": 30,
-	  "atk": 10,
-	  "def": 6,
-	  "dex": 8
-	},
-	"rewards": {
-	  "exp": 15,
-	  "gold_min": 10,
-	  "gold_max": 20
-	},
-	"drop_table": [
-	  {"item_id": "sword_common", "chance": 0.05},
-	  {"item_id": "iron_helmet", "chance": 0.04},
-	  {"item_id": "shield_common", "chance": 0.03},
-	  {"item_id": "sword_magic", "chance": 0.01}
-	],
-	"skills": ["basic_attack"],
-	"sprite": "skeleton",
-	"tags": ["undead", "skeleton"]
-  },
   "golem": {
 	"id": "golem",
 	"name": "골렘",
