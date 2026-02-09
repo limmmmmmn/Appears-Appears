@@ -185,11 +185,11 @@ func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array
 	# 필드 적의 가중치
 	var field_enemy_weight: float = float(pool.get(field_enemy_id, 0))
 
-	# 필드 적보다 가중치가 낮은 적만 추가 풀에 포함
+	# 필드 적보다 가중치가 높은 적만 추가 풀에 포함 (더 흔한 적만 추가)
 	var add_pool: Dictionary = {}
 	for enemy_id in pool:
 		var weight: float = float(pool[enemy_id])
-		if weight < field_enemy_weight:
+		if weight > field_enemy_weight:
 			add_pool[enemy_id] = weight
 
 	# 추가 가능한 적이 없으면 필드 적만 반환
