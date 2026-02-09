@@ -599,34 +599,34 @@ func set_hover_highlight(show: bool) -> void:
 
 
 func _start_hover_effect() -> void:
-	## 호버 시 스프라이트 뒤에 펄스 글로우 표시
+	## 호버 시 스프라이트 위에 선택 테두리 + 밝기 표시
 	if not sprite or not sprite.texture:
 		return
 
-	# 글로우 패널 생성 (최초 1회)
+	# 선택 테두리 패널 생성 (최초 1회)
 	if _hover_glow == null:
 		_hover_glow = Panel.new()
 		_hover_glow.name = "HoverGlow"
 		_hover_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_hover_glow.z_index = -1
+		_hover_glow.z_index = 5
 
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.7, 0.85, 1.0, 0.12)
-		style.border_width_left = 1
-		style.border_width_top = 1
-		style.border_width_right = 1
-		style.border_width_bottom = 1
-		style.border_color = Color(0.8, 0.9, 1.0, 0.45)
-		style.corner_radius_top_left = 3
-		style.corner_radius_top_right = 3
-		style.corner_radius_bottom_left = 3
-		style.corner_radius_bottom_right = 3
+		style.bg_color = Color(1.0, 1.0, 1.0, 0.1)
+		style.border_width_left = 2
+		style.border_width_top = 2
+		style.border_width_right = 2
+		style.border_width_bottom = 2
+		style.border_color = Color(1.0, 0.95, 0.5, 0.9)
+		style.corner_radius_top_left = 2
+		style.corner_radius_top_right = 2
+		style.corner_radius_bottom_left = 2
+		style.corner_radius_bottom_right = 2
 		_hover_glow.add_theme_stylebox_override("panel", style)
 		add_child(_hover_glow)
 
 	# 스프라이트 크기에 맞춰 위치/크기 설정
 	var tex_size := sprite.texture.get_size() * sprite.scale
-	var padding := Vector2(6, 6)
+	var padding := Vector2(4, 4)
 	_hover_glow.size = tex_size + padding * 2
 	_hover_glow.position = sprite.position - tex_size / 2 - padding
 	_hover_glow.visible = true
@@ -636,8 +636,8 @@ func _start_hover_effect() -> void:
 	if _hover_tween and _hover_tween.is_valid():
 		_hover_tween.kill()
 	_hover_tween = create_tween().set_loops()
-	_hover_tween.tween_property(_hover_glow, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	_hover_tween.tween_property(_hover_glow, "modulate:a", 0.35, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_hover_tween.tween_property(_hover_glow, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_hover_tween.tween_property(_hover_glow, "modulate:a", 0.4, 0.5).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 
 func _stop_hover_effect() -> void:
