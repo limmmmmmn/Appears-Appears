@@ -43,6 +43,7 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
 
 # === 동적 생성 UI ===
+var reward_label: Label = null  # 보상 표시 라벨
 
 
 # === 활성 특성 ===
@@ -109,6 +110,9 @@ func _ready() -> void:
 	if run_button:
 		run_button.visible = true
 		run_button.pressed.connect(_on_run_button_pressed)
+
+	# 보상 표시 라벨 (도주 버튼 왼쪽)
+	_setup_reward_label()
 
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
@@ -792,6 +796,41 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 #endregion
 
 
+#region 보상 표시
+func _setup_reward_label() -> void:
+	## 도주 버튼 왼쪽에 보상 합산 라벨 생성
+	reward_label = Label.new()
+	reward_label.text = "0G"
+	reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	reward_label.add_theme_font_size_override("font_size", 10)
+	reward_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	reward_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var bottom_bar: HBoxContainer = %RunButton.get_parent()
+	bottom_bar.add_child(reward_label)
+	bottom_bar.move_child(reward_label, 0)
+
+
+func _get_total_reward_value() -> int:
+	## 골드 + 아이템 가치 합산
+	var total: int = total_gold
+	for item_id in drop_items:
+		var equip_data: Dictionary = DataManager.get_equipment(item_id)
+		if not equip_data.is_empty():
+			total += int(equip_data.get("gear_score", 0)) * 5
+			continue
+		var item_data: Dictionary = DataManager.get_item(item_id)
+		if not item_data.is_empty():
+			total += int(item_data.get("sell_price", 0))
+	return total
+
+
+func _update_reward_label() -> void:
+	if reward_label:
+		var value: int = _get_total_reward_value()
+		reward_label.text = "%dG" % value
+#endregion
+
+
 #region 적 처치/전투 종료
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
@@ -804,6 +843,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	total_gold += gold_reward
 	drop_items.append_array(items)
+	_update_reward_label()
 
 	# 엘리트 보상은 별도 저장 (도주 페널티 면제)
 	if enemy.is_elite_version:
@@ -1765,6 +1805,7 @@ func _execute_merge(target: BattleWindow) -> void:
 	# 보상 이전
 	target.total_gold += total_gold
 	target.drop_items.append_array(drop_items)
+	target._update_reward_label()
 
 	# 타겟 턴 큐 재구성
 	if target.current_state == BattleState.RUNNING:
