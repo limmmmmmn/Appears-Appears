@@ -7,7 +7,7 @@ class_name EnemySpawner
 #=============================================================================
 # 스폰 설정
 #=============================================================================
-const MAX_ENEMIES: int = 5                            # 최대 동시 적 수
+const MAX_ENEMIES: int = 3                            # 최대 동시 적 수
 const MIN_SPAWN_DISTANCE_BETWEEN: float = 24.0        # 적들 사이 최소 거리
 const MIN_DISTANCE_FROM_PLAYER: float = 40.0          # 플레이어로부터 최소 거리
 const MAX_DISTANCE_FROM_PLAYER: float = 150.0         # 플레이어로부터 최대 거리
@@ -54,7 +54,7 @@ func setup(p_field: Node2D, p_tilemap: TileMapLayer) -> void:
 
 
 func spawn_initial_enemies(field_enemies: Array) -> void:
-	## 초기 적 스폰 - 플레이어 주변에 분포
+	## 초기 적 스폰 - 카메라 가장자리에 분포
 	if FieldManager.is_boss_field():
 		_spawn_boss(field_enemies)
 		return
@@ -64,11 +64,12 @@ func spawn_initial_enemies(field_enemies: Array) -> void:
 		_calculate_map_data()
 
 	var player_pos: Vector2 = _get_player_position()
+	var camera_rect: Rect2 = _get_camera_rect()
 	var spawned_positions: Array[Vector2] = []
 
-	# 플레이어 주변에 적 스폰
+	# 카메라 가장자리에 적 스폰 (리스폰과 동일 방식)
 	for i in range(MAX_ENEMIES):
-		var pos: Vector2 = _find_spawn_position_around_player(player_pos, spawned_positions)
+		var pos: Vector2 = _find_spawn_position_near_camera(camera_rect, player_pos, spawned_positions)
 		if pos != Vector2.ZERO:
 			var tile_type: String = _get_tile_type_at(pos)
 			_spawn_enemy_at({"position": pos, "tile_type": tile_type}, field_enemies)
