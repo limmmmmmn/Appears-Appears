@@ -142,6 +142,56 @@
 	"sprite": "spider",
 	"tags": ["monster", "insect"]
   },
+  "golem": {
+	"id": "golem",
+	"name": "골렘",
+	"type": "normal",
+	"stats": {
+	  "hp": 45,
+	  "atk": 14,
+	  "def": 10,
+	  "dex": 4
+	},
+	"rewards": {
+	  "exp": 20,
+	  "gold_min": 15,
+	  "gold_max": 25
+	},
+	"drop_table": [
+	  {"item_id": "shield_common", "chance": 0.05},
+	  {"item_id": "iron_helmet", "chance": 0.04},
+	  {"item_id": "heavy_armor_magic", "chance": 0.008}
+	],
+	"skills": ["basic_attack"],
+	"sprite": "golem",
+	"tags": ["monster", "golem"]
+  },
+  "dark_sorcerer": {
+	"id": "dark_sorcerer",
+	"name": "다크 소서러",
+	"type": "normal",
+	"stats": {
+	  "hp": 28,
+	  "atk": 16,
+	  "def": 3,
+	  "dex": 7,
+	  "int": 10
+	},
+	"rewards": {
+	  "exp": 22,
+	  "gold_min": 18,
+	  "gold_max": 30
+	},
+	"drop_table": [
+	  {"item_id": "robe_common", "chance": 0.05},
+	  {"item_id": "staff_magic", "chance": 0.02},
+	  {"item_id": "ring_int", "chance": 0.015}
+	],
+	"skills": ["basic_attack", "fireball"],
+	"sprite": "dark_sorcerer",
+	"tags": ["humanoid", "mage"],
+	"damage_type": "magic"
+  },
   "orc_warrior": {
 	"id": "orc_warrior",
 	"name": "오크 전사",
