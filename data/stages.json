@@ -12,8 +12,7 @@
   
   "battle_config": {
 	"min_enemies": 1,
-	"max_enemies": 3,
-	"weight_exponent": 2.0
+	"max_enemies": 3
   },
   
   "stages": [

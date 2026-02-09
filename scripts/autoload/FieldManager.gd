@@ -166,15 +166,14 @@ func select_field_enemy_for_tile(tile_type: String) -> String:
 #region 전투 에너미 생성
 func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array:
 	## 필드 에너미 접촉 시 전투 에너미 배열 생성
-	## 규칙: 필드 에너미가 최다 또는 동률
-	
+	## 규칙: 추가 적은 필드 적의 가중치보다 낮은 적만 가능
+
 	var min_enemies: int = int(battle_config.get("min_enemies", 1))
 	var max_enemies: int = int(battle_config.get("max_enemies", 3))
 	var battle_size: int = randi_range(min_enemies, max_enemies)
-	
+
 	var enemies: Array = [field_enemy_id]
-	var field_enemy_count: int = 1
-	
+
 	var pool: Dictionary = get_enemy_pool_for_tile(tile_type)
 	if pool.is_empty():
 		var terrain_enemies: Dictionary = current_stage_data.get("terrain_enemies", {}) as Dictionary
@@ -182,21 +181,26 @@ func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array
 			pool = terrain_enemies["grass"] as Dictionary
 	if pool.is_empty():
 		return enemies
-	
+
+	# 필드 적의 가중치
+	var field_enemy_weight: float = float(pool.get(field_enemy_id, 0))
+
+	# 필드 적보다 가중치가 낮은 적만 추가 풀에 포함
+	var add_pool: Dictionary = {}
+	for enemy_id in pool:
+		var weight: float = float(pool[enemy_id])
+		if weight < field_enemy_weight:
+			add_pool[enemy_id] = weight
+
+	# 추가 가능한 적이 없으면 필드 적만 반환
+	if add_pool.is_empty():
+		battle_generated.emit(field_enemy_id, enemies)
+		return enemies
+
 	while enemies.size() < battle_size:
-		var new_enemy: String = _weighted_random_select_battle(pool)
-		
-		if new_enemy == field_enemy_id:
-			enemies.append(new_enemy)
-			field_enemy_count += 1
-		else:
-			var other_count: int = enemies.count(new_enemy)
-			if other_count + 1 < field_enemy_count:
-				enemies.append(new_enemy)
-			else:
-				enemies.append(field_enemy_id)
-				field_enemy_count += 1
-	
+		var new_enemy: String = _weighted_random_select(add_pool)
+		enemies.append(new_enemy)
+
 	battle_generated.emit(field_enemy_id, enemies)
 	return enemies
 
@@ -217,34 +221,6 @@ func _weighted_random_select(pool: Dictionary) -> String:
 	
 	for enemy_id in pool:
 		cumulative += float(pool[enemy_id])
-		if roll <= cumulative:
-			return str(enemy_id)
-	
-	var keys: Array = pool.keys()
-	return str(keys[0]) if not keys.is_empty() else "slime"
-
-
-func _weighted_random_select_battle(pool: Dictionary) -> String:
-	var exponent: float = float(battle_config.get("weight_exponent", 1.5))
-	var total_weight: float = 0.0
-	var adjusted_weights: Dictionary = {}
-	
-	for enemy_id in pool:
-		var adjusted: float = pow(float(pool[enemy_id]), exponent)
-		adjusted_weights[enemy_id] = adjusted
-		total_weight += adjusted
-	
-	if total_weight <= 0:
-		var keys: Array = pool.keys()
-		if keys.is_empty():
-			return "slime"
-		return str(keys[0])
-	
-	var roll: float = randf() * total_weight
-	var cumulative: float = 0.0
-	
-	for enemy_id in adjusted_weights:
-		cumulative += float(adjusted_weights[enemy_id])
 		if roll <= cumulative:
 			return str(enemy_id)
 	
