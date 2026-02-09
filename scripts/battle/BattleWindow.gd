@@ -103,6 +103,9 @@ var _is_window_hovered: bool = false
 var _normal_panel_style: StyleBoxFlat = null
 var _hover_panel_style: StyleBoxFlat = null
 
+# === 전투창 드래그 머지 ===
+var _merge_target: BattleWindow = null
+
 
 func _ready() -> void:
 	visible = false
@@ -1624,7 +1627,7 @@ func _hide_claim_ui() -> void:
 
 #region 마우스 인터랙션
 func _on_gui_input(event: InputEvent) -> void:
-	## 마우스 드래그로 전투창 이동
+	## 마우스 드래그로 전투창 이동 + 머지
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -1632,13 +1635,20 @@ func _on_gui_input(event: InputEvent) -> void:
 				_drag_offset = event.global_position - global_position
 				_bring_to_front()
 			else:
+				if _is_dragging and _merge_target != null:
+					_execute_merge(_merge_target)
+					return
 				_is_dragging = false
+				_clear_merge_highlight()
 	elif event is InputEventMouseMotion and _is_dragging:
 		global_position = event.global_position - _drag_offset
 		# 화면 밖으로 나가지 않도록 제한
 		var vp_size := get_viewport().get_visible_rect().size
 		global_position.x = clampf(global_position.x, -size.x + 40, vp_size.x - 40)
 		global_position.y = clampf(global_position.y, 0, vp_size.y - 30)
+		# 정지 중이면 머지 타겟 감지
+		if is_battle_paused:
+			_update_merge_target()
 
 
 func _setup_enemy_tooltip() -> void:
@@ -1762,10 +1772,10 @@ func _setup_hover_highlight() -> void:
 	## 전투창 호버 시 노란 테두리 스타일 준비
 	_normal_panel_style = StyleBoxFlat.new()
 	_normal_panel_style.bg_color = Color(0, 0, 0, 1)
-	_normal_panel_style.border_width_left = 1
-	_normal_panel_style.border_width_top = 1
-	_normal_panel_style.border_width_right = 1
-	_normal_panel_style.border_width_bottom = 1
+	_normal_panel_style.border_width_left = 2
+	_normal_panel_style.border_width_top = 2
+	_normal_panel_style.border_width_right = 2
+	_normal_panel_style.border_width_bottom = 2
 	_normal_panel_style.border_color = Color(1, 1, 1, 1)
 
 	_hover_panel_style = StyleBoxFlat.new()
@@ -1793,10 +1803,123 @@ func _on_window_mouse_exited() -> void:
 func _update_hover_highlight() -> void:
 	if _normal_panel_style == null:
 		return
+	# 머지 하이라이트가 활성이면 무시 (머지가 우선)
+	if _merge_target != null:
+		return
 	if is_battle_paused and _is_window_hovered:
 		add_theme_stylebox_override("panel", _hover_panel_style)
 	else:
 		add_theme_stylebox_override("panel", _normal_panel_style)
+
+
+func set_merge_highlight(show: bool) -> void:
+	## 외부에서 호출: 머지 대상으로 노란 테두리 표시/해제
+	if _hover_panel_style == null:
+		return
+	if show:
+		add_theme_stylebox_override("panel", _hover_panel_style)
+	else:
+		add_theme_stylebox_override("panel", _normal_panel_style)
+
+
+func _update_merge_target() -> void:
+	## 드래그 중: 겹치는 다른 전투창 찾아서 하이라이트
+	var new_target: BattleWindow = _find_merge_candidate()
+
+	if new_target == _merge_target:
+		return
+
+	# 이전 타겟 하이라이트 해제
+	if _merge_target != null and is_instance_valid(_merge_target):
+		_merge_target.set_merge_highlight(false)
+
+	_merge_target = new_target
+
+	# 새 타겟 하이라이트
+	if _merge_target != null:
+		_merge_target.set_merge_highlight(true)
+		add_theme_stylebox_override("panel", _hover_panel_style)
+	else:
+		add_theme_stylebox_override("panel", _normal_panel_style)
+
+
+func _find_merge_candidate() -> BattleWindow:
+	## 현재 드래그 위치에서 겹치는 다른 전투창 찾기
+	var my_rect := Rect2(global_position, size)
+	var parent_node := get_parent()
+	if parent_node == null:
+		return null
+
+	for child in parent_node.get_children():
+		if child == self:
+			continue
+		if child is BattleWindow and is_instance_valid(child):
+			var other: BattleWindow = child as BattleWindow
+			# 보스전이나 보상 대기 중인 창은 머지 불가
+			if other.is_boss_battle or other.is_waiting_for_claim:
+				continue
+			if other.current_state != BattleState.RUNNING and other.current_state != BattleState.STARTING:
+				continue
+			var other_rect := Rect2(other.global_position, other.size)
+			if my_rect.intersects(other_rect):
+				var overlap := my_rect.intersection(other_rect)
+				# 15% 이상 겹쳐야 머지 후보
+				if overlap.get_area() > my_rect.get_area() * 0.15:
+					return other
+	return null
+
+
+func _clear_merge_highlight() -> void:
+	## 머지 하이라이트 전부 해제
+	if _merge_target != null and is_instance_valid(_merge_target):
+		_merge_target.set_merge_highlight(false)
+	_merge_target = null
+	_update_hover_highlight()
+
+
+func _execute_merge(target: BattleWindow) -> void:
+	## 드래그한 전투창의 적들을 타겟 전투창으로 이전
+	if target == null or not is_instance_valid(target):
+		_is_dragging = false
+		_clear_merge_highlight()
+		return
+
+	# 보스전은 머지 불가
+	if is_boss_battle or target.is_boss_battle:
+		_is_dragging = false
+		_clear_merge_highlight()
+		return
+
+	# 살아있는 적 이전
+	for enemy in enemies:
+		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
+			enemy.get_parent().remove_child(enemy)
+			target.enemy_container.add_child(enemy)
+			target.enemies.append(enemy)
+			target._connect_enemy_hover(enemy)
+
+	# 보상 이전
+	target.total_gold += total_gold
+	target.drop_items.append_array(drop_items)
+
+	# 타겟 턴 큐 재구성
+	if target.current_state == BattleState.RUNNING:
+		target._build_turn_order()
+
+	# BattleManager에서 제거
+	BattleManager.active_battles.erase(battle_id)
+
+	# 하이라이트 정리
+	target.set_merge_highlight(false)
+	_merge_target = null
+	_is_dragging = false
+
+	# 머지 효과음
+	if SoundManager:
+		SoundManager.play_encounter()
+
+	# 닫기 효과
+	_play_close_effect()
 #endregion
 
 
