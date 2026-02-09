@@ -98,6 +98,11 @@ var _drag_offset: Vector2 = Vector2.ZERO
 var _enemy_tooltip: PanelContainer = null
 var _hovered_enemy: BattleEnemy = null
 
+# === 전투창 호버 하이라이트 ===
+var _is_window_hovered: bool = false
+var _normal_panel_style: StyleBoxFlat = null
+var _hover_panel_style: StyleBoxFlat = null
+
 
 func _ready() -> void:
 	visible = false
@@ -115,6 +120,8 @@ func _ready() -> void:
 	# 마우스 GUI 입력 연결
 	gui_input.connect(_on_gui_input)
 
+	# 전투창 호버 하이라이트 설정
+	_setup_hover_highlight()
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
@@ -268,6 +275,7 @@ func get_alive_enemies() -> Array:
 func set_battle_paused(paused: bool) -> void:
 	## 전투 정지/재개
 	is_battle_paused = paused
+	_update_hover_highlight()
 
 
 func _start_new_round() -> void:
@@ -1748,6 +1756,47 @@ func _show_enemy_tooltip(enemy: BattleEnemy) -> void:
 func _hide_enemy_tooltip() -> void:
 	if _enemy_tooltip:
 		_enemy_tooltip.visible = false
+
+
+func _setup_hover_highlight() -> void:
+	## 전투창 호버 시 노란 테두리 스타일 준비
+	_normal_panel_style = StyleBoxFlat.new()
+	_normal_panel_style.bg_color = Color(0, 0, 0, 1)
+	_normal_panel_style.border_width_left = 1
+	_normal_panel_style.border_width_top = 1
+	_normal_panel_style.border_width_right = 1
+	_normal_panel_style.border_width_bottom = 1
+	_normal_panel_style.border_color = Color(1, 1, 1, 1)
+
+	_hover_panel_style = StyleBoxFlat.new()
+	_hover_panel_style.bg_color = Color(0, 0, 0, 1)
+	_hover_panel_style.border_width_left = 2
+	_hover_panel_style.border_width_top = 2
+	_hover_panel_style.border_width_right = 2
+	_hover_panel_style.border_width_bottom = 2
+	_hover_panel_style.border_color = Color(1.0, 0.9, 0.2, 1.0)
+
+	mouse_entered.connect(_on_window_mouse_entered)
+	mouse_exited.connect(_on_window_mouse_exited)
+
+
+func _on_window_mouse_entered() -> void:
+	_is_window_hovered = true
+	_update_hover_highlight()
+
+
+func _on_window_mouse_exited() -> void:
+	_is_window_hovered = false
+	_update_hover_highlight()
+
+
+func _update_hover_highlight() -> void:
+	if _normal_panel_style == null:
+		return
+	if is_battle_paused and _is_window_hovered:
+		add_theme_stylebox_override("panel", _hover_panel_style)
+	else:
+		add_theme_stylebox_override("panel", _normal_panel_style)
 #endregion
 
 
