@@ -38,6 +38,11 @@ var drop_table: Array = []
 # 이펙트
 var original_modulate: Color = Color.WHITE
 
+# 호버 선택 이펙트
+var _hover_tween: Tween = null
+var _hover_glow: Panel = null
+var _is_hovered: bool = false
+
 
 var is_elite_version: bool = false  # 엘리트 버전 여부
 
@@ -561,22 +566,86 @@ func show_miss_text() -> void:
 	## MISS 표시
 	if not sprite:
 		return
-	
+
 	var label := Label.new()
 	label.text = "MISS"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	
+
 	sprite.add_child(label)
 	label.position = Vector2(0, -10)
 	label.z_index = 100
 	label.modulate.a = 0.0
-	
+
 	var tween := create_tween()
 	tween.tween_property(label, "modulate:a", 1.0, 0.1)
 	tween.tween_property(label, "position:x", label.position.x + 15, 0.3)
 	tween.tween_property(label, "modulate:a", 0.0, 0.2)
-	
+
 	tween.finished.connect(func(): label.queue_free())
+
+
+func set_hover_highlight(show: bool) -> void:
+	## 마우스 호버 선택 이펙트 표시/숨기기
+	if _is_hovered == show:
+		return
+	_is_hovered = show
+
+	if show:
+		_start_hover_effect()
+	else:
+		_stop_hover_effect()
+
+
+func _start_hover_effect() -> void:
+	## 호버 시 스프라이트 뒤에 펄스 글로우 표시
+	if not sprite or not sprite.texture:
+		return
+
+	# 글로우 패널 생성 (최초 1회)
+	if _hover_glow == null:
+		_hover_glow = Panel.new()
+		_hover_glow.name = "HoverGlow"
+		_hover_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_hover_glow.z_index = -1
+
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.7, 0.85, 1.0, 0.12)
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.border_color = Color(0.8, 0.9, 1.0, 0.45)
+		style.corner_radius_top_left = 3
+		style.corner_radius_top_right = 3
+		style.corner_radius_bottom_left = 3
+		style.corner_radius_bottom_right = 3
+		_hover_glow.add_theme_stylebox_override("panel", style)
+		add_child(_hover_glow)
+
+	# 스프라이트 크기에 맞춰 위치/크기 설정
+	var tex_size := sprite.texture.get_size() * sprite.scale
+	var padding := Vector2(6, 6)
+	_hover_glow.size = tex_size + padding * 2
+	_hover_glow.position = sprite.position - tex_size / 2 - padding
+	_hover_glow.visible = true
+	_hover_glow.modulate.a = 0.0
+
+	# 펄스 애니메이션 (무한 반복)
+	if _hover_tween and _hover_tween.is_valid():
+		_hover_tween.kill()
+	_hover_tween = create_tween().set_loops()
+	_hover_tween.tween_property(_hover_glow, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_hover_tween.tween_property(_hover_glow, "modulate:a", 0.35, 0.4).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+
+func _stop_hover_effect() -> void:
+	## 호버 해제 시 글로우 숨기기
+	if _hover_tween and _hover_tween.is_valid():
+		_hover_tween.kill()
+	_hover_tween = null
+
+	if _hover_glow:
+		_hover_glow.visible = false
 #endregion

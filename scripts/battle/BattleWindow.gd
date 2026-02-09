@@ -1619,12 +1619,14 @@ func _on_enemy_mouse_entered(enemy: BattleEnemy) -> void:
 	if enemy == null or not enemy.is_alive():
 		return
 	_hovered_enemy = enemy
+	enemy.set_hover_highlight(true)
 	_show_enemy_tooltip(enemy)
 
 
 func _on_enemy_mouse_exited(enemy: BattleEnemy) -> void:
 	if _hovered_enemy == enemy:
 		_hovered_enemy = null
+		enemy.set_hover_highlight(false)
 		_hide_enemy_tooltip()
 
 
