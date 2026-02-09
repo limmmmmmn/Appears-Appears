@@ -49,6 +49,9 @@ var bottom_party_cards: BottomPartyCards = null
 # 철수 버튼
 var retreat_button: Button = null
 
+# 전투 정지 버튼
+var battle_pause_button: Button = null
+
 # 일시정지 메뉴
 var pause_menu: CanvasLayer = null
 var is_pause_menu_active: bool = false
@@ -67,6 +70,7 @@ func _ready() -> void:
 	_init_retreat_button()
 	_init_pause_menu()
 	_init_recruit_button()
+	_init_battle_pause_button()
 	_connect_signals()
 	update_all()
 
@@ -78,6 +82,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		toggle_pause_menu()
 		get_viewport().set_input_as_handled()
+
+	# 스페이스바: 전투 정지/재개 토글
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SPACE:
+			if not is_pause_menu_active:
+				_toggle_battle_pause()
+				get_viewport().set_input_as_handled()
 
 
 #region 초기화
@@ -198,6 +209,72 @@ func _on_recruit_pressed() -> void:
 		if bottom_party_cards:
 			bottom_party_cards.update_display()
 		hero_recruited.emit(random_id)
+
+
+func _init_battle_pause_button() -> void:
+	## 영입 버튼 옆에 전투 정지 토글 버튼 생성
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	battle_pause_button = Button.new()
+	battle_pause_button.text = "⏸ 정지"
+	battle_pause_button.toggle_mode = true
+	battle_pause_button.custom_minimum_size = Vector2(70, 36)
+	battle_pause_button.add_theme_font_size_override("font_size", STYLE.font_normal)
+	battle_pause_button.tooltip_text = "전투 정지/재개 (Space)"
+
+	var style := _make_flat_style(Color(0.15, 0.12, 0.2, 0.9), Color(0.4, 0.3, 0.6, 0.8), STYLE.corner_radius, 1)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	battle_pause_button.add_theme_stylebox_override("normal", style)
+
+	var hover := style.duplicate()
+	hover.bg_color = Color(0.22, 0.18, 0.3, 0.95)
+	hover.border_color = Color(0.6, 0.5, 0.9)
+	battle_pause_button.add_theme_stylebox_override("hover", hover)
+
+	var pressed_style := style.duplicate()
+	pressed_style.bg_color = Color(0.3, 0.15, 0.1, 0.95)
+	pressed_style.border_color = Color(0.9, 0.4, 0.3, 0.9)
+	battle_pause_button.add_theme_stylebox_override("pressed", pressed_style)
+
+	battle_pause_button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	battle_pause_button.offset_left = 96
+	battle_pause_button.offset_top = -46
+	battle_pause_button.offset_right = 176
+	battle_pause_button.offset_bottom = -8
+	battle_pause_button.toggled.connect(_on_battle_pause_toggled)
+	ctrl.add_child(battle_pause_button)
+
+
+func _toggle_battle_pause() -> void:
+	## 전투 정지 토글 (스페이스바 또는 버튼)
+	if not BattleManager:
+		return
+	BattleManager.toggle_battle_pause()
+	# 버튼 상태 동기화
+	if battle_pause_button:
+		battle_pause_button.set_pressed_no_signal(BattleManager.is_battle_paused)
+		_update_battle_pause_button_text(BattleManager.is_battle_paused)
+
+
+func _on_battle_pause_toggled(toggled_on: bool) -> void:
+	## 전투 정지 버튼 토글
+	if not BattleManager:
+		return
+	BattleManager.set_battle_paused(toggled_on)
+	_update_battle_pause_button_text(toggled_on)
+
+
+func _update_battle_pause_button_text(paused: bool) -> void:
+	if battle_pause_button:
+		if paused:
+			battle_pause_button.text = "▶ 재개"
+		else:
+			battle_pause_button.text = "⏸ 정지"
 
 
 func _init_pause_menu() -> void:

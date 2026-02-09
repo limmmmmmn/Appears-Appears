@@ -61,6 +61,7 @@ var turn_queue: Array = []  # [{type, unit, dex}]
 var current_turn_index: int = 0
 var current_round: int = 0
 var is_processing_turn: bool = false
+var is_battle_paused: bool = false  # 전투 정지 상태
 
 
 # === 도주 설정 ===
@@ -134,8 +135,8 @@ func _process(delta: float) -> void:
 
 	_update_background_effect(delta)
 
-	# 독립 턴 처리
-	if not is_processing_turn:
+	# 독립 턴 처리 (정지 상태면 스킵)
+	if not is_processing_turn and not is_battle_paused:
 		_process_next_turn()
 
 
@@ -264,6 +265,11 @@ func get_alive_enemies() -> Array:
 
 
 #region 독립 턴 관리 시스템
+func set_battle_paused(paused: bool) -> void:
+	## 전투 정지/재개
+	is_battle_paused = paused
+
+
 func _start_new_round() -> void:
 	## 새 라운드 시작: 턴 순서 재계산
 	current_round += 1

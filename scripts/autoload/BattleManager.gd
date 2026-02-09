@@ -37,6 +37,10 @@ var _battle_id_counter: int = 0
 var last_battle_pos: Vector2 = Vector2.ZERO
 var last_window_rect: Rect2 = Rect2()
 
+# === 전투 정지 ===
+var is_battle_paused: bool = false
+signal battle_pause_changed(paused: bool)
+
 # 전투창 배치 설정
 const WINDOW_SIZE := Vector2(280, 200)
 const BOSS_WINDOW_SIZE := Vector2(420, 300)  # 보스전 전투창 (약 2배 크기)
@@ -122,6 +126,10 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 
 	# 전투 초기화 (새 시스템용)
 	window.setup_new(battle_id, enemy_ids, is_elite, is_boss)
+
+	# 전투 정지 상태면 새 전투창도 정지
+	if is_battle_paused:
+		window.set_battle_paused(true)
 	window.battle_ended.connect(_on_battle_window_ended)
 	window.battle_log.connect(_on_battle_log)
 	window.party_updated.connect(_on_party_updated)
@@ -499,6 +507,20 @@ func close_all_battles() -> void:
 		if window_ref != null and is_instance_valid(window_ref):
 			window_ref.queue_free()
 		active_battles.erase(battle_id)
+#endregion
 
 
+#region 전투 정지
+func toggle_battle_pause() -> void:
+	set_battle_paused(not is_battle_paused)
+
+
+func set_battle_paused(paused: bool) -> void:
+	is_battle_paused = paused
+	for battle_id in active_battles:
+		var battle_data: Dictionary = active_battles[battle_id]
+		var window = battle_data.get("window")
+		if window != null and is_instance_valid(window):
+			window.set_battle_paused(paused)
+	battle_pause_changed.emit(paused)
 #endregion
