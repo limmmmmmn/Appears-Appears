@@ -803,7 +803,7 @@ func _setup_reward_label() -> void:
 	reward_label = Label.new()
 	reward_label.text = "0G"
 	reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	reward_label.add_theme_font_size_override("font_size", 9)
+	reward_label.add_theme_font_size_override("font_size", 10)
 	reward_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	reward_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var bottom_bar: HBoxContainer = %RunButton.get_parent()
