@@ -43,13 +43,6 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
 
 # === 동적 생성 UI ===
-var is_waiting_for_claim: bool = false  # 보상 대기 상태 (적 전멸 후)
-
-# === 보상 UI (전투창 중앙) ===
-var claim_reward_panel: CenterContainer = null
-var claim_button: Button = null
-var claim_gold_label: Label = null
-var claim_item_list_label: Label = null
 
 
 # === 활성 특성 ===
@@ -128,9 +121,6 @@ func _ready() -> void:
 
 	# 배경 셰이더 설정
 	_setup_background_shader()
-
-	# 보상 받기 UI 생성
-	_setup_claim_reward_ui()
 
 	# 적 호버 툴팁 생성
 	_setup_enemy_tooltip()
@@ -874,8 +864,6 @@ func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
 	await get_tree().create_timer(0.4).timeout
 
 	# 5) 자동 보상 → 자동 닫기 (팡!)
-	is_waiting_for_claim = false
-	_hide_claim_ui()
 	_end_battle_victory()
 
 
@@ -962,11 +950,11 @@ func _animate_popup(canvas_layer: CanvasLayer, bg: PanelContainer) -> void:
 
 
 func _check_all_enemies_dead() -> void:
-	## 모든 적이 처치되었는지 확인하고 보상 UI 표시
+	## 모든 적이 처치되었는지 확인
 	_update_buttons_for_enemies()
 
-	if is_waiting_for_claim:
-		return  # 이미 보상 대기 중
+	if current_state == BattleState.VICTORY:
+		return
 
 	var alive_enemies: Array = []
 	for e in enemies:
@@ -1018,19 +1006,7 @@ func _update_buttons_for_no_enemies() -> void:
 
 
 func _show_claim_reward_button() -> void:
-	## 적이 모두 처치됨 - 보상 대기 상태로 전환
-	is_waiting_for_claim = true
-
-	# 보상 UI 표시
-	_show_claim_ui()
-
-
-func _claim_rewards_now() -> void:
-	## 즉시 보상 획득 후 종료
-	if not is_waiting_for_claim:
-		return
-	is_waiting_for_claim = false
-	_hide_claim_ui()
+	## 적이 모두 처치됨 - 바로 승리 처리
 	_end_battle_victory()
 
 
@@ -1512,118 +1488,6 @@ func play_aoe_flash() -> void:
 #endregion
 
 
-#region 보상 받기 UI
-func _setup_claim_reward_ui() -> void:
-	## 전투창 중앙에 보상받기 UI 생성 (숨겨진 상태로)
-	claim_reward_panel = CenterContainer.new()
-	claim_reward_panel.visible = false
-	claim_reward_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	claim_reward_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	var panel := PanelContainer.new()
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.95)
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 2
-	panel_style.border_color = Color(0.3, 0.8, 0.4)
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
-	panel_style.content_margin_left = 15
-	panel_style.content_margin_right = 15
-	panel_style.content_margin_top = 12
-	panel_style.content_margin_bottom = 12
-	panel.add_theme_stylebox_override("panel", panel_style)
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	claim_reward_panel.add_child(panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	panel.add_child(vbox)
-
-	# --- 상단: 아이템 목록 ---
-	# 골드 라벨
-	claim_gold_label = Label.new()
-	claim_gold_label.text = "💰 0 Gold"
-	claim_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	claim_gold_label.add_theme_font_size_override("font_size", 11)
-	claim_gold_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	vbox.add_child(claim_gold_label)
-
-	# 아이템 목록 라벨 (멀티라인)
-	claim_item_list_label = Label.new()
-	claim_item_list_label.text = ""
-	claim_item_list_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	claim_item_list_label.add_theme_font_size_override("font_size", 10)
-	claim_item_list_label.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
-	vbox.add_child(claim_item_list_label)
-
-	# 보상받기 버튼
-	claim_button = Button.new()
-	claim_button.text = "보상받기"
-	claim_button.custom_minimum_size = Vector2(80, 32)
-	claim_button.add_theme_font_size_override("font_size", 14)
-	claim_button.pressed.connect(_on_claim_button_pressed)
-	vbox.add_child(claim_button)
-
-	battle_area.add_child(claim_reward_panel)
-
-
-func _on_claim_button_pressed() -> void:
-	## 보상 받기 버튼 클릭
-	if is_waiting_for_claim:
-		_claim_rewards_now()
-
-
-func _show_claim_ui() -> void:
-	## 보상 UI 표시 및 업데이트
-	if not claim_reward_panel:
-		return
-
-	claim_gold_label.text = "💰 %d Gold" % total_gold
-
-	if drop_items.is_empty():
-		claim_item_list_label.text = ""
-		claim_item_list_label.visible = false
-	else:
-		var item_lines: Array = []
-		for item_id in drop_items:
-			var item_name: String = _get_item_display_name(item_id)
-			item_lines.append(item_name)
-		claim_item_list_label.text = "\n".join(item_lines)
-		claim_item_list_label.visible = true
-
-	claim_reward_panel.visible = true
-
-
-func _get_item_display_name(item_id: String) -> String:
-	## 아이템 ID로 표시용 이름 반환
-	var equip_data: Dictionary = DataManager.get_equipment(item_id)
-	if not equip_data.is_empty():
-		var rarity: String = str(equip_data.get("rarity", "common"))
-		var item_name: String = str(equip_data.get("name", item_id))
-		match rarity:
-			"magic":
-				return "🔷 %s" % item_name
-			"legendary":
-				return "🌟 %s" % item_name
-			_:
-				return "⚔️ %s" % item_name
-	var item_data: Dictionary = DataManager.get_item(item_id)
-	if not item_data.is_empty():
-		return "📜 %s" % str(item_data.get("name", item_id))
-	return item_id
-
-
-func _hide_claim_ui() -> void:
-	## 보상 UI 숨기기
-	if claim_reward_panel:
-		claim_reward_panel.visible = false
-#endregion
 
 #region 마우스 인터랙션
 func _on_gui_input(event: InputEvent) -> void:
@@ -1855,8 +1719,8 @@ func _find_merge_candidate() -> BattleWindow:
 			continue
 		if child is BattleWindow and is_instance_valid(child):
 			var other: BattleWindow = child as BattleWindow
-			# 보스전이나 보상 대기 중인 창은 머지 불가
-			if other.is_boss_battle or other.is_waiting_for_claim:
+			# 보스전은 머지 불가
+			if other.is_boss_battle:
 				continue
 			if other.current_state != BattleState.RUNNING and other.current_state != BattleState.STARTING:
 				continue
