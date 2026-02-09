@@ -79,11 +79,11 @@ void fragment() {
 "
 
 [node name="BattleWindow" type="PanelContainer" unique_id=1167346498]
-custom_minimum_size = Vector2(280, 190)
+custom_minimum_size = Vector2(196, 133)
 offset_left = 3.0
 offset_top = 1.0
-offset_right = 283.0
-offset_bottom = 181.0
+offset_right = 199.0
+offset_bottom = 134.0
 mouse_filter = 0
 script = ExtResource("1_battle")
 
@@ -129,7 +129,7 @@ alignment = 2
 
 [node name="RunButton" type="Button" parent="MainVBox/BottomBar" unique_id=219318160]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 26)
+custom_minimum_size = Vector2(35, 18)
 layout_mode = 2
 mouse_filter = 0
 tooltip_text = "즉시 도주 (보상 50%)"
