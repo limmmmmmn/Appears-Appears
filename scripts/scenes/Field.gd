@@ -613,30 +613,20 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(gold: int, items: Array, world_pos: Vector2, window_rect: Rect2) -> void:
-	## 전투 종료 시 필드에 보상 드롭 스폰 (전투창 영역에 흩뿌림)
+func _on_field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, window_rect: Rect2) -> void:
+	## 전투 종료 시 필드에 HP/MP 오브 드롭 스폰
 	var drops: Array[Dictionary] = []
 	var delay: float = 0.0
 	var delay_step: float = 0.08
 
-	# 골드 꾸러미
-	if gold > 0:
-		drops.append({"type": FieldDrop.DropType.GOLD, "gold": gold, "delay": delay})
+	# HP 오브
+	for i in range(hp_orbs):
+		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
 		delay += delay_step
 
-	# 아이템 꾸러미 (장비 타입/등급 정보 포함)
-	for item_id in items:
-		var equip_data: Dictionary = DataManager.get_equipment(item_id) if DataManager else {}
-		var i_type: String = str(equip_data.get("type", ""))
-		var i_slot: String = str(equip_data.get("slot", ""))
-		var i_rarity: String = str(equip_data.get("rarity", "common"))
-		drops.append({
-			"type": FieldDrop.DropType.ITEM,
-			"item_id": item_id,
-			"item_type": i_type if not i_type.is_empty() else i_slot,
-			"item_rarity": i_rarity,
-			"delay": delay
-		})
+	# MP 오브
+	for i in range(mp_orbs):
+		drops.append({"type": FieldDrop.DropType.MP_ORB, "delay": delay})
 		delay += delay_step
 
 	# 전투창 스크린 영역 → 월드 좌표 변환
@@ -661,14 +651,10 @@ func _on_field_drops_requested(gold: int, items: Array, world_pos: Vector2, wind
 		drop.spawn_delay = data.delay
 
 		match data.type:
-			FieldDrop.DropType.GOLD:
-				drop.gold_amount = data.gold
-			FieldDrop.DropType.ITEM:
-				drop.item_id = data.item_id
-				drop.item_type = data.get("item_type", "")
-				drop.item_rarity = data.get("item_rarity", "")
 			FieldDrop.DropType.HP_ORB:
 				drop.heal_amount = FieldDrop.HP_PER_ORB
+			FieldDrop.DropType.MP_ORB:
+				drop.mp_amount = FieldDrop.MP_PER_ORB
 
 		# 전투창 영역 내 랜덤 위치
 		var rand_x: float = randf_range(scatter_rect.position.x, scatter_rect.end.x)

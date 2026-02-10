@@ -19,7 +19,7 @@ signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(gold: int, items: Array, world_pos: Vector2, window_rect: Rect2)
+signal field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, window_rect: Rect2)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
@@ -263,9 +263,20 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 
 	end_battle(battle_id, victory)
 
-	# 필드 드롭 스폰 요청
+	# 승리 보상: 골드/아이템 즉시 지급 + HP/MP 오브 드롭
 	if victory and (window_gold > 0 or not window_items.is_empty()):
-		field_drops_requested.emit(window_gold, window_items, battle_pos, window_screen_rect)
+		# 골드 즉시 지급
+		if window_gold > 0 and GameManager:
+			GameManager.add_gold(window_gold)
+		# 아이템 즉시 지급 (자동장착 또는 인벤토리)
+		for item_id in window_items:
+			if InventoryManager:
+				if not InventoryManager.try_auto_equip(item_id):
+					InventoryManager.add_item(item_id)
+		# 보상 규모에 따라 오브 개수 결정
+		var hp_orbs: int = _calc_orb_count(window_gold, window_items.size())
+		var mp_orbs: int = _calc_orb_count(window_gold, window_items.size())
+		field_drops_requested.emit(hp_orbs, mp_orbs, battle_pos, window_screen_rect)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -320,16 +331,30 @@ func add_accumulated_reward(_exp: int, gold: int, items: Array = []) -> void:
 
 
 func claim_accumulated_rewards() -> void:
-	## 누적 보상 수령 → 필드 드롭으로 스폰
+	## 누적 보상 수령 → 즉시 지급 + 오브 드롭
 	var items_arr: Array = []
 	for item in accumulated_items:
 		items_arr.append(item.id)
 
 	if accumulated_gold > 0 or not items_arr.is_empty():
-		field_drops_requested.emit(accumulated_gold, items_arr, last_battle_pos, last_window_rect)
+		if accumulated_gold > 0 and GameManager:
+			GameManager.add_gold(accumulated_gold)
+		for item_id in items_arr:
+			if InventoryManager:
+				if not InventoryManager.try_auto_equip(item_id):
+					InventoryManager.add_item(item_id)
+		var hp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
+		var mp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
+		field_drops_requested.emit(hp_orbs, mp_orbs, last_battle_pos, last_window_rect)
 
 	# 초기화
 	reset_accumulated_rewards()
+
+
+func _calc_orb_count(gold: int, item_count: int) -> int:
+	## 보상 규모에 따라 오브 개수 결정 (최소 1, 최대 5)
+	var score: float = gold * 0.05 + item_count * 2.0
+	return clampi(int(score), 1, 5)
 
 
 func reset_accumulated_rewards() -> void:
