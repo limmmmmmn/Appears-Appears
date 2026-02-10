@@ -124,14 +124,9 @@ alignment = 1
 [node name="RunButton" type="Button" parent="." unique_id=219318160]
 unique_name_in_owner = true
 layout_mode = 0
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -50.0
-offset_top = -28.0
-offset_right = -4.0
-offset_bottom = -4.0
+custom_minimum_size = Vector2(40, 20)
+offset_right = 40.0
+offset_bottom = 20.0
 mouse_filter = 0
 tooltip_text = "즉시 도주 (보상 50%)"
 theme_override_font_sizes/font_size = 9

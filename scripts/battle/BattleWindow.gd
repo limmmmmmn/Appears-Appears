@@ -103,10 +103,11 @@ func _ready() -> void:
 	set_process(false)
 	process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 입력 받기
 
-	# 도망 버튼 연결
+	# 도망 버튼: top_level로 PanelContainer 레이아웃에서 분리
 	if run_button:
 		run_button.visible = true
 		run_button.pressed.connect(_on_run_button_pressed)
+		run_button.set_as_top_level(true)
 
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
@@ -125,6 +126,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# 도주 버튼 위치 갱신 (top_level이므로 수동 배치)
+	_update_run_button_position()
+
 	if get_tree().paused:
 		return
 
@@ -136,6 +140,12 @@ func _process(delta: float) -> void:
 	# 독립 턴 처리 (정지 상태면 스킵)
 	if not is_processing_turn and not is_battle_paused:
 		_process_next_turn()
+
+
+func _update_run_button_position() -> void:
+	## 도주 버튼을 전투창 우측 하단에 배치 (top_level)
+	if run_button and run_button.visible:
+		run_button.global_position = global_position + size - run_button.size - Vector2(4, 4)
 
 
 #region 전투 초기화 (새 시스템)
@@ -244,13 +254,15 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_update_buttons_for_enemies()
-	set_process(true)
 
-	# 전투 시작 메시지 (적 이름 표시)
+	# 전투 시작 메시지를 먼저 표시 (턴 처리 전)
+	set_process(true)  # 배경 효과 + 버튼 위치 갱신용
+	is_processing_turn = true  # 메시지 표시 중 턴 진행 차단
+
 	var encounter_msg: String = _build_encounter_message()
 	await _show_msg_box(encounter_msg, Color.WHITE, 1.0)
 
-	# 독립 턴 시스템 시작
+	# 메시지 끝난 후 턴 시스템 시작
 	current_round = 0
 	is_processing_turn = false
 	_start_new_round()
@@ -1137,6 +1149,9 @@ func _end_battle_victory() -> void:
 	if SoundManager != null:
 		SoundManager.play_victory()
 
+	# 처치 팝업이 사라질 때까지 대기
+	await get_tree().create_timer(1.0).timeout
+
 	# 1) 승리 메시지 (순차)
 	await _show_msg_box("승리!", Color.GOLD, 1.0)
 
@@ -1282,6 +1297,9 @@ func _create_fly_reward_node(text: String, color: Color) -> Control:
 
 func _play_close_effect() -> void:
 	## 전투창 닫힘 이펙트
+	# top_level 버튼 숨기기
+	if run_button:
+		run_button.visible = false
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(self, "modulate:a", 0.0, 0.3).set_ease(Tween.EASE_IN)
