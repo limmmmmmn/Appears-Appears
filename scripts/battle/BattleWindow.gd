@@ -41,15 +41,6 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var run_button: Button = %RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
-@onready var log_line_1: Label = %LogLine1
-@onready var log_line_2: Label = %LogLine2
-@onready var log_line_3: Label = %LogLine3
-
-# === 동적 생성 UI ===
-var reward_label: Label = null  # 보상 표시 라벨
-
-# === 전투 로그 ===
-var _log_data: Array = []  # [{text: String, color: Color}]
 
 
 # === 활성 특성 ===
@@ -116,9 +107,6 @@ func _ready() -> void:
 	if run_button:
 		run_button.visible = true
 		run_button.pressed.connect(_on_run_button_pressed)
-
-	# 보상 표시 라벨 (도주 버튼 왼쪽)
-	_setup_reward_label()
 
 	if close_button:
 		close_button.pressed.connect(_on_close_pressed)
@@ -256,9 +244,12 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_update_buttons_for_enemies()
-	_update_reward_label()
 	set_process(true)
-	_send_log("전투 시작!", Color.WHITE)
+
+	# 전투 시작 메시지 (적 이름 표시)
+	var encounter_msg: String = _build_encounter_message()
+	await _show_msg_box(encounter_msg, Color.WHITE, 1.0)
+
 	# 독립 턴 시스템 시작
 	current_round = 0
 	is_processing_turn = false
@@ -393,9 +384,6 @@ func _process_hero_turn(hero: Hero) -> void:
 
 	var target_type: String = skill_data.get("target", "single_enemy")
 
-	# 로그에 누구의 턴인지 표시
-	_send_log("▶ %s의 턴" % hero.hero_name, Color.CYAN)
-
 	# 짧은 대기 (연출)
 	await get_tree().create_timer(0.2).timeout
 
@@ -425,9 +413,6 @@ func _process_enemy_turn(enemy: BattleEnemy) -> void:
 		return
 
 	_bring_to_front()
-
-	# 로그에 누구의 턴인지 표시
-	_send_log("▶ %s의 턴" % enemy.enemy_name, Color.ORANGE_RED)
 
 	# 짧은 대기 (연출)
 	await get_tree().create_timer(0.2).timeout
@@ -540,7 +525,6 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	if is_evaded:
 		target.show_miss_text()
 		target.play_evade_effect()
-		_send_log("%s의 %s을(를) %s이(가) 회피!" % [hero.hero_name, skill_name, target.enemy_name], Color.GRAY)
 		return
 
 	# 크리티컬 판정
@@ -563,19 +547,10 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	if is_crit:
 		play_critical_shake()
 
-	var log_color: Color = Color.ORANGE if is_crit else (Color.CYAN if skill_type == "magic" else Color.WHITE)
-	var crit_text: String = " ⭐" if is_crit else ""
-
-	if skill_id == "basic_attack":
-		_send_log("%s → %s에게 %d%s" % [hero.hero_name, target.enemy_name, damage, crit_text], log_color)
-	else:
-		_send_log("%s [%s] → %s에게 %d%s" % [hero.hero_name, skill_name, target.enemy_name, damage, crit_text], log_color)
-
 	# 도발 효과 적용 (방패 강타 등)
 	var taunt_count: int = _get_skill_effect_int(skill_data, "taunt", 0)
 	if taunt_count > 0:
 		hero.apply_taunt(taunt_count)
-		_send_log("%s 도발! (다음 %d회 공격 흡수)" % [hero.hero_name, taunt_count], Color.STEEL_BLUE)
 
 	if not target.is_alive():
 		_on_enemy_defeated(target)
@@ -598,8 +573,6 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 	# 클래스별 공격 사운드
 	if SoundManager:
 		SoundManager.play_attack(hero.class_id, false)
-
-	_send_log("%s [%s] 발동!" % [hero.hero_name, skill_name], Color.YELLOW)
 
 	var any_crit: bool = false
 	for target in alive_enemies:
@@ -696,12 +669,10 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 		for target in targets:
 			var heal_amount: int = _calc_heal_amount(hero, skill_data)
 			var actual_heal: int = target.heal(heal_amount)
-			_send_log("%s [%s] → %s HP +%d" % [hero.hero_name, skill_name, target.hero_name, actual_heal], Color.GREEN)
 
 		call_deferred("_emit_party_updated")
 	else:
-		# 유틸리티 스킬 (도발 등) - 추후 구현
-		_send_log("%s [%s] 발동!" % [hero.hero_name, skill_name], Color.PURPLE)
+		pass
 
 
 func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, is_crit: bool) -> int:
@@ -822,7 +793,6 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 
 	var is_evaded := randf() * 100 < target.get_eva()
 	if is_evaded:
-		_send_log("%s → %s 회피!" % [enemy.enemy_name, target.hero_name], Color.GRAY)
 		return
 
 	var is_crit := randf() * 100 < enemy.get_crit()
@@ -835,13 +805,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
 
-	var log_color: Color = Color.RED if is_crit else Color.YELLOW
-	var crit_text: String = " (강타!)" if is_crit else ""
-	var taunt_text: String = " [도발]" if was_taunting else ""
-	_send_log("%s → %s에게 %d%s%s" % [enemy.enemy_name, target.hero_name, damage, crit_text, taunt_text], log_color)
-	
 	if target.is_dead:
-		_send_log("%s 쓰러짐!" % target.hero_name, Color.DARK_RED)
 		call_deferred("_emit_party_updated")
 
 
@@ -862,65 +826,81 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 #endregion
 
 
-#region 보상 표시
-func _setup_reward_label() -> void:
-	## 도주 버튼 왼쪽에 보상 합산 라벨 생성
-	reward_label = Label.new()
-	reward_label.text = "0G"
-	reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	reward_label.add_theme_font_size_override("font_size", 10)
-	reward_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	reward_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var bottom_bar: HBoxContainer = %RunButton.get_parent()
-	bottom_bar.add_child(reward_label)
-	bottom_bar.move_child(reward_label, 0)
+#region 메시지 박스 팝업
+func _show_msg_box(text: String, color: Color = Color.WHITE, duration: float = 1.0) -> void:
+	## 전투창 중앙에 메시지 박스 팝업 (순차 표시용, await 가능)
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.02, 0.02, 0.06, 0.92)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.4, 0.4, 0.5, 0.6)
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	panel.add_theme_stylebox_override("panel", style)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.z_index = 50
+
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 2)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(label)
+
+	add_child(panel)
+
+	# 위치: 전투 영역 중앙
+	await get_tree().process_frame
+	if not is_instance_valid(panel):
+		return
+	var area_center: Vector2 = battle_area.global_position + battle_area.size / 2
+	panel.global_position = area_center - panel.size / 2
+
+	# 표시 대기
+	await get_tree().create_timer(duration).timeout
+	if not is_instance_valid(panel):
+		return
+
+	# 페이드 아웃
+	var tween := create_tween()
+	tween.tween_property(panel, "modulate:a", 0.0, 0.25)
+	tween.tween_callback(panel.queue_free)
+	await tween.finished
 
 
-func _get_total_reward_value() -> int:
-	## 획득 보상 + 살아있는 적 예상 보상 합산
-	var total: int = total_gold
-
-	# 이미 드롭된 아이템 가치
-	for item_id in drop_items:
-		var equip_data: Dictionary = DataManager.get_equipment(item_id)
-		if not equip_data.is_empty():
-			total += int(equip_data.get("gear_score", 0)) * 5
-			continue
-		var item_data: Dictionary = DataManager.get_item(item_id)
-		if not item_data.is_empty():
-			total += int(item_data.get("sell_price", 0))
-
-	# 살아있는 적 예상 골드 (min~max 평균)
+func _build_encounter_message() -> String:
+	## 전투 시작 메시지 생성 (적 이름 조합)
+	var name_counts: Dictionary = {}
 	for e in enemies:
-		if e != null and e.is_alive():
-			total += int((e.gold_min + e.gold_max) / 2.0)
-			# 드롭 테이블 기대값
-			for drop in e.drop_table:
-				var drop_dict: Dictionary = drop as Dictionary
-				var item_id: String = str(drop_dict.get("item_id", ""))
-				var chance: float = float(drop_dict.get("chance", 0.0))
-				var equip_data: Dictionary = DataManager.get_equipment(item_id)
-				if not equip_data.is_empty():
-					total += int(int(equip_data.get("gear_score", 0)) * 5 * chance)
-					continue
-				var item_data: Dictionary = DataManager.get_item(item_id)
-				if not item_data.is_empty():
-					total += int(int(item_data.get("sell_price", 0)) * chance)
+		if e != null:
+			var ename: String = e.enemy_name
+			name_counts[ename] = name_counts.get(ename, 0) + 1
 
-	return total
+	var parts: Array = []
+	for ename in name_counts:
+		var count: int = name_counts[ename]
+		if count > 1:
+			parts.append("%s x%d" % [ename, count])
+		else:
+			parts.append(ename)
 
-
-func _update_reward_label() -> void:
-	if reward_label:
-		var value: int = _get_total_reward_value()
-		reward_label.text = "%dG" % value
+	return "%s이(가) 나타났다!" % ", ".join(parts)
 #endregion
 
 
 #region 적 처치/전투 종료
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
-	_send_log("%s 처치!" % enemy.enemy_name, Color.LIME)
-
 	# 보상 계산 (특성 적용)
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
 
@@ -929,12 +909,14 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	total_gold += gold_reward
 	drop_items.append_array(items)
-	_update_reward_label()
 
 	# 엘리트 보상은 별도 저장 (도주 페널티 면제)
 	if enemy.is_elite_version:
 		elite_gold += gold_reward
 		elite_items.append_array(items)
+
+	# 적 처치 팝업 (비동기로 표시, 전투 흐름 차단 X)
+	_show_msg_box("%s 처치! +%dG" % [enemy.enemy_name, gold_reward], Color.LIME, 0.8)
 
 	# 엘리트 처치 시 특수 연출
 	if enemy.is_elite_version:
@@ -950,8 +932,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
 	## 엘리트 처치 특수 연출: 느려짐 → 나머지 해산 → 자동 보상
 
-	# 1) 엘리트 느려지며 떨림 + "으어어…"
-	_send_log("⭐ %s: 으어어…!" % elite.enemy_name, Color.MAGENTA)
+	# 1) 엘리트 느려지며 떨림
 
 	if elite.sprite:
 		var slow_tween := create_tween()
@@ -972,11 +953,8 @@ func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
 		await burst_tween.finished
 	elite.visible = false
 
-	# 3) 메시지: 엘리트 처치 + 전의 상실
-	_send_log("⭐ 엘리트 적을 처치했다!", Color.GOLD)
-	await get_tree().create_timer(0.3).timeout
-	_send_log("적들은 전의를 상실했다.", Color.LIGHT_CORAL)
-	await get_tree().create_timer(0.2).timeout
+	# 3) 메시지: 엘리트 처치
+	await _show_msg_box("엘리트 적을 처치했다!", Color.GOLD, 0.8)
 
 	# 4) 남은 적 즉시 해산 (보상 없이 소멸)
 	for enemy in enemies:
@@ -1118,8 +1096,6 @@ func _report_rewards_and_close() -> void:
 	## 보상을 BattleManager에 누적하고 전투창 닫기
 	BattleManager.add_accumulated_reward(0, total_gold, drop_items)
 
-	_send_log("전투 종료! (Gold +%d)" % total_gold, Color.LIME)
-
 	# 전투창 종료 (승리)
 	current_state = BattleState.VICTORY
 	set_process(false)
@@ -1152,14 +1128,12 @@ func _end_battle_victory() -> void:
 	if SoundManager != null:
 		SoundManager.play_victory()
 
-	# 1) 승리 메시지
-	_send_log("승리!", Color.GOLD)
-	await get_tree().create_timer(0.8).timeout
+	# 1) 승리 메시지 (순차)
+	await _show_msg_box("승리!", Color.GOLD, 1.0)
 
-	# 2) 보상 표시
+	# 2) 보상 표시 (순차)
 	if total_gold > 0:
-		_send_log("Gold +%d 획득!" % total_gold, Color.YELLOW)
-		await get_tree().create_timer(0.5).timeout
+		await _show_msg_box("Gold +%d 획득!" % total_gold, Color.YELLOW, 0.8)
 
 	if not drop_items.is_empty():
 		var item_names: Array = []
@@ -1170,10 +1144,7 @@ func _end_battle_victory() -> void:
 			else:
 				var idata: Dictionary = DataManager.get_item(item_id)
 				item_names.append(str(idata.get("name", item_id)))
-		_send_log("획득: %s" % ", ".join(item_names), Color.LIGHT_BLUE)
-		await get_tree().create_timer(0.5).timeout
-
-	await get_tree().create_timer(0.7).timeout
+		await _show_msg_box("획득: %s" % ", ".join(item_names), Color.LIGHT_BLUE, 1.0)
 
 	# 3) 보상 처리 및 전투창 닫기
 	call_deferred("_emit_party_updated")
@@ -1361,9 +1332,7 @@ func _end_battle_defeat() -> void:
 	if SoundManager != null:
 		SoundManager.play_defeat()
 
-	_send_log("전멸...", Color.DARK_RED)
-
-	await get_tree().create_timer(1.0).timeout
+	await _show_msg_box("전멸...", Color.DARK_RED, 1.2)
 
 	battle_ended.emit(battle_id, false)
 	_play_close_effect()
@@ -1525,25 +1494,8 @@ func _emit_party_updated() -> void:
 	party_updated.emit()
 
 
-func _send_log(msg: String, color: Color = Color.WHITE) -> void:
-	# 로컬 전투 로그만 표시 (다른 전투창과 공유 X)
-	_log_data.append({"text": msg, "color": color})
-	if _log_data.size() > 3:
-		_log_data = _log_data.slice(-3)
-	_refresh_log_display()
-
-
-func _refresh_log_display() -> void:
-	var labels: Array = [log_line_1, log_line_2, log_line_3]
-	for i in range(3):
-		if labels[i] == null:
-			continue
-		var data_idx: int = _log_data.size() - 3 + i
-		if data_idx >= 0 and data_idx < _log_data.size():
-			labels[i].text = _log_data[data_idx]["text"]
-			labels[i].add_theme_color_override("font_color", _log_data[data_idx]["color"])
-		else:
-			labels[i].text = ""
+func _send_log(_msg: String, _color: Color = Color.WHITE) -> void:
+	pass
 
 
 func _on_close_pressed() -> void:
@@ -1942,7 +1894,6 @@ func _execute_merge(target: BattleWindow) -> void:
 	# 보상 이전
 	target.total_gold += total_gold
 	target.drop_items.append_array(drop_items)
-	target._update_reward_label()
 
 	# 타겟 턴 큐 재구성
 	if target.current_state == BattleState.RUNNING:
