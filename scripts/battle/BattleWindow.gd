@@ -937,7 +937,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		elite_items.append_array(items)
 
 	# 적 처치 팝업 (비동기로 표시, 전투 흐름 차단 X)
-	_show_msg_box("%s 처치! +%dG" % [enemy.enemy_name, gold_reward], Color.LIME, 0.8)
+	_show_msg_box("%s 처치!" % enemy.enemy_name, Color.LIME, 0.8)
 
 	# 엘리트 처치 시 특수 연출
 	if enemy.is_elite_version:
