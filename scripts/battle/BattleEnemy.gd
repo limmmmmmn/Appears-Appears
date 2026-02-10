@@ -586,6 +586,36 @@ func show_miss_text() -> void:
 	tween.finished.connect(func(): label.queue_free())
 
 
+func show_attack_particle(emoji: String, burst_count: int = 1) -> void:
+	## 이모지 파티클 표시 (스킬 타입별 임시 연출)
+	if not sprite or emoji.is_empty():
+		return
+
+	var count: int = maxi(1, burst_count)
+	for i in range(count):
+		var particle := Label.new()
+		particle.text = emoji
+		particle.add_theme_font_size_override("font_size", 18)
+		particle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		particle.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		particle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		sprite.add_child(particle)
+		particle.z_index = 90
+		particle.position = Vector2(randf_range(-12, 12), randf_range(-18, 2))
+		particle.scale = Vector2(0.6, 0.6)
+		particle.modulate.a = 0.0
+
+		var move_offset := Vector2(randf_range(-18, 18), randf_range(-36, -16))
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(particle, "modulate:a", 1.0, 0.06)
+		tween.tween_property(particle, "scale", Vector2(1.0, 1.0), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(particle, "position", particle.position + move_offset, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.chain().tween_property(particle, "modulate:a", 0.0, 0.2)
+		tween.finished.connect(func(): particle.queue_free())
+
+
 func set_hover_highlight(show: bool) -> void:
 	## 마우스 호버 선택 이펙트 표시/숨기기
 	if _is_hovered == show:

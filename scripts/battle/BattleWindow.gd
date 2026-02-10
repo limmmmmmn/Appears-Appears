@@ -510,6 +510,7 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var target: BattleEnemy = _select_smart_target(hero)
 	if target == null:
 		return
+	_show_skill_particle(target, skill_id, skill_data)
 
 	var skill_name: String = skill_data.get("name", "공격")
 	var skill_type: String = skill_data.get("type", "physical")
@@ -585,6 +586,7 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 
 	var any_crit: bool = false
 	for target in alive_enemies:
+		_show_skill_particle(target, skill_id, skill_data)
 		var is_crit: bool = randf() * 100 < hero.get_crit()
 		if is_crit:
 			any_crit = true
@@ -600,6 +602,35 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 	# 크리티컬이 하나라도 있으면 진동
 	if any_crit:
 		play_critical_shake()
+
+
+func _show_skill_particle(target: BattleEnemy, skill_id: String, skill_data: Dictionary) -> void:
+	## 스킬별 임시 이모지 파티클
+	if target == null:
+		return
+
+	var skill_type: String = str(skill_data.get("type", "physical"))
+	var emoji: String = "👊"
+	var burst_count: int = 1
+
+	match skill_id:
+		"fireball":
+			emoji = "🔥"
+			burst_count = 3
+		"power_strike", "shield_bash":
+			emoji = "👊"
+			burst_count = 2
+		"aimed_shot":
+			emoji = "🏹"
+		"backstab":
+			emoji = "🗡️"
+
+	if skill_id == "basic_attack":
+		emoji = "👊"
+	elif skill_type == "magic":
+		emoji = "✨"
+
+	target.show_attack_particle(emoji, burst_count)
 
 
 func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, target_type: String) -> void:
@@ -1849,7 +1880,6 @@ func _execute_merge(target: BattleWindow) -> void:
 	# 닫기 효과
 	_play_close_effect()
 #endregion
-
 
 
 
