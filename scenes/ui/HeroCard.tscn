@@ -48,7 +48,7 @@ text = "영웅"
 
 [node name="HPBarWrap" type="Control" parent="Panel/VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 6)
+custom_minimum_size = Vector2(0, 18)
 
 [node name="HPBarGhost" type="ProgressBar" parent="Panel/VBox/HPBarWrap"]
 unique_name_in_owner = true
