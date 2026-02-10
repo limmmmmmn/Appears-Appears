@@ -29,10 +29,36 @@ func _ready() -> void:
 	_panel_normal_style = panel.get_theme_stylebox("panel").duplicate()
 	_panel_highlight_style = _panel_normal_style.duplicate()
 	_panel_highlight_style.border_color = Color(1.0, 0.95, 0.3, 1.0)
+	panel.mouse_entered.connect(_on_panel_mouse_entered)
+	panel.mouse_exited.connect(_on_panel_mouse_exited)
 	if InventoryManager:
 		if not InventoryManager.inventory_changed.is_connected(refresh):
 			InventoryManager.inventory_changed.connect(refresh)
 	call_deferred("refresh")
+
+
+#region 패널 호버 → 히어로 장비칸 펼치기/접기
+func _on_panel_mouse_entered() -> void:
+	_set_hero_equips_expanded(true)
+
+
+func _on_panel_mouse_exited() -> void:
+	_set_hero_equips_expanded(false)
+
+
+func _set_hero_equips_expanded(expanded: bool) -> void:
+	var container = hero_cards_container
+	if not container:
+		container = get_parent()
+	if not container:
+		return
+	for child in container.get_children():
+		if child is HeroCard:
+			if expanded:
+				child.expand_equips()
+			else:
+				child.collapse_equips()
+#endregion
 
 
 #region 아이템 리스트 갱신

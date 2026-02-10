@@ -65,6 +65,7 @@ func _ready() -> void:
 	_style_bar(mp_bar, MP_COLOR)
 	_style_bar(mp_bar_ghost, MP_GHOST_COLOR, true)
 	_build_equip_slots()
+	equip_section.visible = false
 	call_deferred("_update_min_size")
 
 
@@ -544,6 +545,20 @@ static func _get_rarity_color(rarity: String) -> Color:
 		"epic": return Color(1.0, 0.5, 0.2)
 		"legendary": return Color(1.0, 0.8, 0.2)
 	return Color.WHITE
+#endregion
+
+
+#region 장비 섹션 접기/펼치기
+func expand_equips() -> void:
+	if equip_section:
+		equip_section.visible = true
+		call_deferred("_update_min_size")
+
+
+func collapse_equips() -> void:
+	if equip_section:
+		equip_section.visible = false
+		call_deferred("_update_min_size")
 #endregion
 
 
