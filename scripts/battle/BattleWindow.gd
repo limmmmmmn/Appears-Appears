@@ -1520,7 +1520,7 @@ func _emit_party_updated() -> void:
 
 
 func _send_log(msg: String, color: Color = Color.WHITE) -> void:
-	battle_log.emit(msg, color)
+	# 로컬 전투 로그만 표시 (다른 전투창과 공유 X)
 	_log_data.append({"text": msg, "color": color})
 	if _log_data.size() > 3:
 		_log_data = _log_data.slice(-3)
