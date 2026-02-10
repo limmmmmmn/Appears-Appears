@@ -41,9 +41,15 @@ var window_mode: WindowMode = WindowMode.NORMAL
 @onready var run_button: Button = %RunButton
 @onready var close_button: Button = $MainVBox/TopBar/CloseButton
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
+@onready var log_line_1: Label = %LogLine1
+@onready var log_line_2: Label = %LogLine2
+@onready var log_line_3: Label = %LogLine3
 
 # === 동적 생성 UI ===
 var reward_label: Label = null  # 보상 표시 라벨
+
+# === 전투 로그 ===
+var _log_data: Array = []  # [{text: String, color: Color}]
 
 
 # === 활성 특성 ===
@@ -1134,17 +1140,40 @@ func _end_battle_victory() -> void:
 	current_state = BattleState.VICTORY
 	set_process(false)
 
+	# 도주 버튼 숨기기
+	if run_button:
+		run_button.visible = false
+
 	# 승리 사운드 재생
 	if SoundManager != null:
 		SoundManager.play_victory()
 
-	_send_log("승리! Gold +%d" % total_gold, Color.CYAN)
+	# 1) 승리 메시지
+	_send_log("승리!", Color.GOLD)
+	await get_tree().create_timer(0.8).timeout
 
-	# 보상은 BattleManager에서 필드 드롭으로 처리
+	# 2) 보상 표시
+	if total_gold > 0:
+		_send_log("Gold +%d 획득!" % total_gold, Color.YELLOW)
+		await get_tree().create_timer(0.5).timeout
+
+	if not drop_items.is_empty():
+		var item_names: Array = []
+		for item_id in drop_items:
+			var edata: Dictionary = DataManager.get_equipment(item_id)
+			if not edata.is_empty():
+				item_names.append(str(edata.get("name", item_id)))
+			else:
+				var idata: Dictionary = DataManager.get_item(item_id)
+				item_names.append(str(idata.get("name", item_id)))
+		_send_log("획득: %s" % ", ".join(item_names), Color.LIGHT_BLUE)
+		await get_tree().create_timer(0.5).timeout
+
+	await get_tree().create_timer(0.7).timeout
+
+	# 3) 보상 처리 및 전투창 닫기
 	call_deferred("_emit_party_updated")
-
 	battle_ended.emit(battle_id, true)
-
 	_play_close_effect()
 
 
@@ -1319,15 +1348,18 @@ func _end_battle_defeat() -> void:
 	current_state = BattleState.DEFEAT
 	set_process(false)
 
+	if run_button:
+		run_button.visible = false
+
 	# 패배 사운드 재생
 	if SoundManager != null:
 		SoundManager.play_defeat()
 
 	_send_log("전멸...", Color.DARK_RED)
 
-	battle_ended.emit(battle_id, false)
+	await get_tree().create_timer(1.0).timeout
 
-	# 패배 시에도 닫힘 이펙트
+	battle_ended.emit(battle_id, false)
 	_play_close_effect()
 #endregion
 
@@ -1489,6 +1521,23 @@ func _emit_party_updated() -> void:
 
 func _send_log(msg: String, color: Color = Color.WHITE) -> void:
 	battle_log.emit(msg, color)
+	_log_data.append({"text": msg, "color": color})
+	if _log_data.size() > 3:
+		_log_data = _log_data.slice(-3)
+	_refresh_log_display()
+
+
+func _refresh_log_display() -> void:
+	var labels: Array = [log_line_1, log_line_2, log_line_3]
+	for i in range(3):
+		if labels[i] == null:
+			continue
+		var data_idx: int = _log_data.size() - 3 + i
+		if data_idx >= 0 and data_idx < _log_data.size():
+			labels[i].text = _log_data[data_idx]["text"]
+			labels[i].add_theme_color_override("font_color", _log_data[data_idx]["color"])
+		else:
+			labels[i].text = ""
 
 
 func _on_close_pressed() -> void:

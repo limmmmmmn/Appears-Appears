@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://bckrh0oeviq4m"]
+[gd_scene load_steps=5 format=3 uid="uid://bckrh0oeviq4m"]
 
 [ext_resource type="Script" uid="uid://bm5a1dk1qc713" path="res://scripts/battle/BattleWindow.gd" id="1_battle"]
 
@@ -8,6 +8,17 @@ border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_logpanel"]
+bg_color = Color(0.02, 0.02, 0.06, 0.95)
+border_width_top = 1
+border_color = Color(0.25, 0.25, 0.35, 0.7)
+content_margin_left = 6.0
+content_margin_top = 3.0
+content_margin_right = 6.0
+content_margin_bottom = 3.0
+corner_radius_bottom_left = 4
+corner_radius_bottom_right = 4
 
 [sub_resource type="Shader" id="Shader_mother2"]
 code = "shader_type canvas_item;
@@ -20,7 +31,7 @@ uniform vec3 color2 : source_color = vec3(0.4, 0.2, 0.5);
 void fragment() {
     vec2 uv = UV;
     vec3 col = vec3(0.0);
-    
+
     if (effect_type == 0) {
         // 체크무늬 스크롤
         vec2 checker = floor((uv + vec2(time * 0.1, time * 0.05)) * 8.0);
@@ -73,7 +84,7 @@ void fragment() {
         plasma = plasma / 3.0 * 0.5 + 0.5;
         col = mix(color1, color2, plasma);
     }
-    
+
     COLOR = vec4(col, 1.0);
 }
 "
@@ -90,7 +101,7 @@ script = ExtResource("1_battle")
 [node name="MainVBox" type="VBoxContainer" parent="." unique_id=482878077]
 layout_mode = 2
 mouse_filter = 1
-theme_override_constants/separation = 4
+theme_override_constants/separation = 0
 
 [node name="TopBar" type="HBoxContainer" parent="MainVBox" unique_id=1913141494]
 visible = false
@@ -120,6 +131,37 @@ mouse_filter = 2
 size_flags_vertical = 4
 theme_override_constants/separation = 5
 alignment = 1
+
+[node name="BattleLog" type="PanelContainer" parent="MainVBox" unique_id=2098765432]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_logpanel")
+
+[node name="LogVBox" type="VBoxContainer" parent="MainVBox/BattleLog"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="LogLine1" type="Label" parent="MainVBox/BattleLog/LogVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+theme_override_colors/font_color = Color(0.85, 0.85, 0.9, 1)
+text = ""
+
+[node name="LogLine2" type="Label" parent="MainVBox/BattleLog/LogVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+theme_override_colors/font_color = Color(0.85, 0.85, 0.9, 1)
+text = ""
+
+[node name="LogLine3" type="Label" parent="MainVBox/BattleLog/LogVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+theme_override_colors/font_color = Color(0.85, 0.85, 0.9, 1)
+text = ""
 
 [node name="BottomBar" type="HBoxContainer" parent="MainVBox" unique_id=676078642]
 layout_mode = 2
