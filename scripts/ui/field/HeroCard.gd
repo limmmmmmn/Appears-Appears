@@ -17,7 +17,7 @@ const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)
 const HP_GHOST_COLOR := Color(1.0, 0.2, 0.2)  # 잔상: 밝은 빨강
 const MP_COLOR := Color(0.3, 0.5, 1.0)
 const MP_COLOR_LOW := Color(0.6, 0.4, 0.9)
-const MP_GHOST_COLOR := Color(0.65, 0.4, 0.95)  # 잔상: 밝은 보라
+const MP_GHOST_COLOR := Color(1.0, 0.4, 0.8)  # 잔상: 밝은 핑크
 const BAR_BG_COLOR := Color(0.05, 0.05, 0.07, 0.9)
 
 # 잔상 타이밍

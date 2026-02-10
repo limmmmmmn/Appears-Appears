@@ -76,7 +76,7 @@ show_percentage = false
 
 [node name="MPBarWrap" type="Control" parent="Panel/VBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 5)
+custom_minimum_size = Vector2(0, 7)
 
 [node name="MPBarGhost" type="ProgressBar" parent="Panel/VBox/MPBarWrap"]
 unique_name_in_owner = true
