@@ -609,11 +609,14 @@ func _show_skill_particle(target: BattleEnemy, skill_id: String, skill_data: Dic
 	if target == null:
 		return
 
+	var resolved_skill_id: String = skill_id.strip_edges()
+	var skill_name: String = str(skill_data.get("name", "")).to_lower()
 	var skill_type: String = str(skill_data.get("type", "physical"))
 	var emoji: String = "👊"
 	var burst_count: int = 1
 
-	match skill_id:
+	# ID 매핑 우선
+	match resolved_skill_id:
 		"fireball":
 			emoji = "🔥"
 			burst_count = 3
@@ -624,10 +627,24 @@ func _show_skill_particle(target: BattleEnemy, skill_id: String, skill_data: Dic
 			emoji = "🏹"
 		"backstab":
 			emoji = "🗡️"
+		"basic_attack":
+			emoji = "👊"
 
-	if skill_id == "basic_attack":
-		emoji = "👊"
-	elif skill_type == "magic":
+	# ID가 기대와 다를 때 이름 기반 보조 매핑
+	if emoji == "👊":
+		if skill_name.find("파이어볼") >= 0 or skill_name.find("fireball") >= 0:
+			emoji = "🔥"
+			burst_count = maxi(burst_count, 3)
+		elif skill_name.find("강타") >= 0 or skill_name.find("타격") >= 0 or skill_name.find("strike") >= 0 or skill_name.find("bash") >= 0:
+			emoji = "👊"
+			burst_count = maxi(burst_count, 2)
+		elif skill_name.find("조준") >= 0 or skill_name.find("shot") >= 0:
+			emoji = "🏹"
+		elif skill_name.find("백스탭") >= 0 or skill_name.find("backstab") >= 0 or skill_name.find("stab") >= 0:
+			emoji = "🗡️"
+
+	# 기본 fallback: magic 타입은 ✨
+	if emoji == "👊" and skill_type == "magic":
 		emoji = "✨"
 
 	target.show_attack_particle(emoji, burst_count)
