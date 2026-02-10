@@ -403,6 +403,9 @@ func _process_hero_turn(hero: Hero) -> void:
 	if mp_cost > 0:
 		hero.consume_mp(mp_cost)
 
+	# 히어로 카드 공격 애니메이션
+	BattleManager.hero_attacked.emit(hero.id)
+
 	# 타겟 타입에 따른 처리
 	match target_type:
 		"single_ally", "all_allies":
