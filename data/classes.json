@@ -5,6 +5,7 @@
 	"description": "균형 잡힌 근접 전투원",
 	"base_stats": {
 	  "hp": 50,
+	  "mp": 20,
 	  "str": 12,
 	  "def": 10,
 	  "int": 4,
@@ -32,6 +33,7 @@
 	"description": "강력한 마법 공격 전문가",
 	"base_stats": {
 	  "hp": 30,
+	  "mp": 50,
 	  "str": 4,
 	  "def": 4,
 	  "int": 14,
@@ -59,6 +61,7 @@
 	"description": "치유와 지원 전문가",
 	"base_stats": {
 	  "hp": 40,
+	  "mp": 40,
 	  "str": 6,
 	  "def": 8,
 	  "int": 12,
@@ -86,6 +89,7 @@
 	"description": "빠른 속도와 이도류 전문가",
 	"base_stats": {
 	  "hp": 35,
+	  "mp": 25,
 	  "str": 8,
 	  "def": 6,
 	  "int": 6,
@@ -113,6 +117,7 @@
 	"description": "원거리 물리 공격 전문가",
 	"base_stats": {
 	  "hp": 35,
+	  "mp": 25,
 	  "str": 10,
 	  "def": 6,
 	  "int": 6,
@@ -140,6 +145,7 @@
 	"description": "중장갑 탱커",
 	"base_stats": {
 	  "hp": 60,
+	  "mp": 20,
 	  "str": 10,
 	  "def": 14,
 	  "int": 4,

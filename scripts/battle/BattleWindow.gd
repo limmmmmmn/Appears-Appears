@@ -378,6 +378,13 @@ func _process_hero_turn(hero: Hero) -> void:
 		skill_id = "basic_attack"
 		skill_data = DataManager.get_skill("basic_attack")
 
+	# MP 부족 시 기본 공격으로 폴백
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	if mp_cost > 0 and hero.current_mp < mp_cost:
+		skill_id = "basic_attack"
+		skill_data = DataManager.get_skill("basic_attack")
+		mp_cost = 0
+
 	var target_type: String = skill_data.get("target", "single_enemy")
 
 	# 로그에 누구의 턴인지 표시
@@ -385,6 +392,10 @@ func _process_hero_turn(hero: Hero) -> void:
 
 	# 짧은 대기 (연출)
 	await get_tree().create_timer(0.2).timeout
+
+	# MP 소모
+	if mp_cost > 0:
+		hero.consume_mp(mp_cost)
 
 	# 타겟 타입에 따른 처리
 	match target_type:
@@ -431,7 +442,7 @@ func _select_hero_skill(hero: Hero) -> String:
 		if not wounded.is_empty():
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
-				if data.get("type", "") == "heal":
+				if data.get("type", "") == "heal" and hero.has_enough_mp(s):
 					return s
 
 	# 마법사는 적이 2마리 이상이면 전체 공격 우선
@@ -439,14 +450,14 @@ func _select_hero_skill(hero: Hero) -> String:
 		if get_enemy_count() >= 2:
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
-				if data.get("target", "") == "all_enemies":
+				if data.get("target", "") == "all_enemies" and hero.has_enough_mp(s):
 					return s
 
 	# 도적은 확률적으로 특수 스킬 사용
 	if hero.class_id == "thief":
 		if randf() < 0.3:  # 30% 확률로 특수 스킬
 			for s in skills:
-				if s != "basic_attack":
+				if s != "basic_attack" and hero.has_enough_mp(s):
 					return s
 
 	# 기본: 기본 공격

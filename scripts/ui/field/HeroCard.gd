@@ -14,12 +14,17 @@ const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
 const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)
+const MP_COLOR := Color(0.3, 0.5, 1.0)
+const MP_COLOR_LOW := Color(0.6, 0.4, 0.9)
+const BAR_BG_COLOR := Color(0.12, 0.12, 0.15, 0.9)
 
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
 
 @onready var panel: PanelContainer = %Panel
 @onready var name_label: Label = %NameLabel
+@onready var hp_bar: ProgressBar = %HPBar
+@onready var mp_bar: ProgressBar = %MPBar
 @onready var skill_label: Label = %SkillLabel
 @onready var equip_section: VBoxContainer = %EquipSection
 
@@ -36,6 +41,8 @@ func _ready() -> void:
 	panel.mouse_entered.connect(_on_mouse_entered)
 	panel.mouse_exited.connect(_on_mouse_exited)
 	panel.gui_input.connect(_on_gui_input)
+	_style_bar(hp_bar, HP_COLOR_HIGH)
+	_style_bar(mp_bar, MP_COLOR)
 	_build_equip_slots()
 	call_deferred("_update_min_size")
 
@@ -101,16 +108,16 @@ func update_from_hero(hero: Hero) -> void:
 		return
 	hero_id = hero.id
 	_update_name_hp(hero)
+	_update_bars(hero)
 	_update_skill_info(hero)
 	_update_equips(hero)
 
 
 func _update_name_hp(hero: Hero) -> void:
-	var hp: int = hero.current_hp
-	name_label.text = "%s HP %d" % [hero.hero_name, hp]
+	name_label.text = "%s HP:%d MP:%d" % [hero.hero_name, hero.current_hp, hero.current_mp]
 
 	var max_hp := hero.get_max_hp()
-	var pct: float = float(hp) / float(max_hp) if max_hp > 0 else 1.0
+	var pct: float = float(hero.current_hp) / float(max_hp) if max_hp > 0 else 1.0
 	var color: Color
 	if pct <= 0.25:
 		color = HP_COLOR_LOW
@@ -119,6 +126,56 @@ func _update_name_hp(hero: Hero) -> void:
 	else:
 		color = HP_COLOR_HIGH
 	name_label.add_theme_color_override("font_color", color)
+
+
+func _update_bars(hero: Hero) -> void:
+	# HP bar
+	var max_hp := hero.get_max_hp()
+	hp_bar.max_value = max_hp
+	hp_bar.value = hero.current_hp
+	var hp_pct: float = float(hero.current_hp) / float(max_hp) if max_hp > 0 else 1.0
+	var hp_color: Color
+	if hp_pct <= 0.25:
+		hp_color = HP_COLOR_LOW
+	elif hp_pct <= 0.5:
+		hp_color = HP_COLOR_MID
+	else:
+		hp_color = HP_COLOR_HIGH
+	_update_bar_color(hp_bar, hp_color)
+
+	# MP bar
+	var max_mp := hero.get_max_mp()
+	mp_bar.max_value = max_mp if max_mp > 0 else 1
+	mp_bar.value = hero.current_mp
+	var mp_pct: float = float(hero.current_mp) / float(max_mp) if max_mp > 0 else 1.0
+	var mp_color: Color = MP_COLOR_LOW if mp_pct <= 0.25 else MP_COLOR
+	_update_bar_color(mp_bar, mp_color)
+
+
+func _style_bar(bar: ProgressBar, fill_color: Color) -> void:
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = BAR_BG_COLOR
+	bg.corner_radius_top_left = 2
+	bg.corner_radius_top_right = 2
+	bg.corner_radius_bottom_left = 2
+	bg.corner_radius_bottom_right = 2
+	bar.add_theme_stylebox_override("background", bg)
+
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_color
+	fill.corner_radius_top_left = 2
+	fill.corner_radius_top_right = 2
+	fill.corner_radius_bottom_left = 2
+	fill.corner_radius_bottom_right = 2
+	bar.add_theme_stylebox_override("fill", fill)
+
+
+func _update_bar_color(bar: ProgressBar, color: Color) -> void:
+	var fill: StyleBoxFlat = bar.get_theme_stylebox("fill")
+	if fill:
+		var new_fill := fill.duplicate()
+		new_fill.bg_color = color
+		bar.add_theme_stylebox_override("fill", new_fill)
 
 
 func _update_skill_info(hero: Hero) -> void:

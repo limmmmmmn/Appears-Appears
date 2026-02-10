@@ -6,6 +6,7 @@
 	"type": "physical",
 	"target": "single_enemy",
 	"cooldown": 2.0,
+	"mp_cost": 0,
 	"damage_base": 0,
 	"damage_scaling": {
 	  "stat": "str",
@@ -21,6 +22,7 @@
 	"type": "physical",
 	"target": "single_enemy",
 	"cooldown": 5.0,
+	"mp_cost": 8,
 	"damage_base": 0,
 	"damage_scaling": {
 	  "stat": "str",
@@ -36,6 +38,7 @@
 	"type": "magic",
 	"target": "all_enemies",
 	"cooldown": 8.0,
+	"mp_cost": 15,
 	"damage_base": 10,
 	"damage_scaling": {
 	  "stat": "int",
@@ -51,6 +54,7 @@
 	"type": "heal",
 	"target": "single_ally",
 	"cooldown": 10.0,
+	"mp_cost": 12,
 	"base_damage": 25,
 	"scaling": 1.2,
 	"effects": [],
@@ -64,6 +68,7 @@
 	"type": "physical",
 	"target": "single_enemy",
 	"cooldown": 4.0,
+	"mp_cost": 6,
 	"damage_base": 3,
 	"damage_scaling": {
 	  "stat": "str",
@@ -81,6 +86,7 @@
 	"type": "physical",
 	"target": "single_enemy",
 	"cooldown": 5.0,
+	"mp_cost": 8,
 	"damage_base": 8,
 	"damage_scaling": {
 	  "stat": "str",
@@ -98,6 +104,7 @@
 	"type": "physical",
 	"target": "single_enemy",
 	"cooldown": 8.0,
+	"mp_cost": 10,
 	"damage_base": 0,
 	"damage_scaling": {
 	  "stat": "str",

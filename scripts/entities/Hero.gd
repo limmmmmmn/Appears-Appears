@@ -9,6 +9,7 @@ var hero_class_name: String = ""  # class_name은 Godot 예약어
 
 # 기본 스탯
 var base_hp: int = 0
+var base_mp: int = 0
 var base_str: int = 0
 var base_def: int = 0
 var base_int: int = 0
@@ -16,10 +17,11 @@ var base_dex: int = 0
 var base_luk: int = 0
 
 # 씨앗 보너스
-var seed_bonus: Dictionary = {"hp": 0, "str": 0, "def": 0, "int": 0, "dex": 0, "luk": 0}
+var seed_bonus: Dictionary = {"hp": 0, "mp": 0, "str": 0, "def": 0, "int": 0, "dex": 0, "luk": 0}
 
 # 현재 상태
 var current_hp: int = 0
+var current_mp: int = 0
 var is_dead: bool = false
 
 # 도발 상태 (기사 방패 강타)
@@ -64,6 +66,7 @@ func _initialize(hero_id: String) -> void:
 	
 	var base_stats: Dictionary = DataManager.get_class_base_stats(class_id)
 	base_hp = int(base_stats.get("hp", 30))
+	base_mp = int(base_stats.get("mp", 20))
 	base_str = int(base_stats.get("str", 5))
 	base_def = int(base_stats.get("def", 5))
 	base_int = int(base_stats.get("int", 5))
@@ -71,6 +74,7 @@ func _initialize(hero_id: String) -> void:
 	base_luk = int(base_stats.get("luk", 5))
 
 	current_hp = get_max_hp()
+	current_mp = get_max_mp()
 	_init_skill_toggles()
 
 
@@ -87,6 +91,9 @@ const HP_MULTIPLIER: float = 1.0  # HP 배율 (1/4로 축소)
 
 func get_max_hp() -> int:
 	return int((base_hp + seed_bonus["hp"] + _get_equipment_stat("hp")) * HP_MULTIPLIER)
+
+func get_max_mp() -> int:
+	return base_mp + seed_bonus["mp"] + _get_equipment_stat("mp")
 
 func get_str() -> int:
 	return base_str + seed_bonus["str"] + _get_equipment_stat("str")
@@ -156,6 +163,31 @@ func revive(hp_percent: float = 0.3) -> void:
 		return
 	is_dead = false
 	current_hp = int(get_max_hp() * hp_percent)
+	current_mp = int(get_max_mp() * hp_percent)
+
+
+func consume_mp(amount: int) -> bool:
+	## MP 소모. 충분하면 소모 후 true, 부족하면 false
+	if amount <= 0:
+		return true
+	if current_mp < amount:
+		return false
+	current_mp -= amount
+	return true
+
+
+func restore_mp(amount: int) -> int:
+	## MP 회복
+	var actual := mini(amount, get_max_mp() - current_mp)
+	current_mp += actual
+	return actual
+
+
+func has_enough_mp(skill_id: String) -> bool:
+	## 스킬 사용에 필요한 MP가 있는지 확인
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	var cost: int = int(skill_data.get("mp_cost", 0))
+	return current_mp >= cost
 
 
 func apply_seed_bonus(stat: String, value: int) -> void:
@@ -166,10 +198,13 @@ func apply_seed_bonus(stat: String, value: int) -> void:
 	# HP 증가 시 현재 값도 증가
 	if stat == "hp":
 		current_hp = mini(current_hp + value, get_max_hp())
+	if stat == "mp":
+		current_mp = mini(current_mp + value, get_max_mp())
 
 
 func full_restore() -> void:
 	current_hp = get_max_hp()
+	current_mp = get_max_mp()
 	is_dead = false
 
 
@@ -287,6 +322,13 @@ func get_hp_percent() -> float:
 	return float(current_hp) / float(get_max_hp())
 
 
+func get_mp_percent() -> float:
+	var max_mp := get_max_mp()
+	if max_mp <= 0:
+		return 1.0
+	return float(current_mp) / float(max_mp)
+
+
 #region 룬/특성
 func get_equipped_rune() -> Dictionary:
 	## 장착된 룬 데이터 반환
@@ -328,8 +370,9 @@ func unequip_rune() -> String:
 
 
 func get_stat_summary() -> String:
-	return "[%s] %s | HP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
+	return "[%s] %s | HP:%d/%d MP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
 		hero_name, hero_class_name,
 		current_hp, get_max_hp(),
+		current_mp, get_max_mp(),
 		get_str(), get_def(), get_int(), get_dex(), get_luk()
 	]

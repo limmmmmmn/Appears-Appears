@@ -163,6 +163,10 @@ func _find_available_healer() -> Hero:
 
 func _execute_field_heal(healer: Hero, target: Hero) -> void:
 	var skill_data: Dictionary = DataManager.get_skill("heal")
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	if mp_cost > 0 and not healer.consume_mp(mp_cost):
+		return
+
 	var base_value: int = int(skill_data.get("base_damage", 25))
 	var scaling: float = skill_data.get("scaling", 1.2)
 	var int_stat: int = healer.get_int()

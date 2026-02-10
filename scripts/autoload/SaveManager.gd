@@ -98,6 +98,7 @@ func _serialize_party() -> Array:
 		party_data.append({
 			"id": hero.id,
 			"current_hp": hero.current_hp,
+			"current_mp": hero.current_mp,
 			"is_dead": hero.is_dead,
 			"seed_bonus": hero.seed_bonus.duplicate(),
 			"equipment": hero.equipment.duplicate(),
@@ -182,6 +183,7 @@ func _deserialize_party(data: Array) -> void:
 			continue
 		
 		hero.current_hp = int(hero_data.get("current_hp", hero.get_max_hp()))
+		hero.current_mp = int(hero_data.get("current_mp", hero.get_max_mp()))
 		hero.is_dead = bool(hero_data.get("is_dead", false))
 		
 		var saved_seed: Dictionary = hero_data.get("seed_bonus", {})
