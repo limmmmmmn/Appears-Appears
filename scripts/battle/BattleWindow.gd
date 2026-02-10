@@ -828,23 +828,23 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 
 #region 메시지 박스 팝업
 func _show_msg_box(text: String, color: Color = Color.WHITE, duration: float = 1.0) -> void:
-	## 전투창 중앙에 메시지 박스 팝업 (순차 표시용, await 가능)
+	## 전투창 중앙에 메시지 박스 팝업 (검은 배경 + 흰 테두리, 컴팩트)
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.02, 0.02, 0.06, 0.92)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(0.4, 0.4, 0.5, 0.6)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.95)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(1.0, 1.0, 1.0, 0.85)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
 	panel.add_theme_stylebox_override("panel", style)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.z_index = 50
@@ -853,19 +853,28 @@ func _show_msg_box(text: String, color: Color = Color.WHITE, duration: float = 1
 	label.text = text
 	label.add_theme_font_size_override("font_size", 10)
 	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_outline_color", Color.BLACK)
-	label.add_theme_constant_override("outline_size", 2)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	panel.add_child(label)
 
+	# top_level로 컨테이너 레이아웃에서 분리
 	add_child(panel)
+	panel.set_as_top_level(true)
 
-	# 위치: 전투 영역 중앙
+	# 1프레임 후 실제 크기 계산 → 중앙 배치
 	await get_tree().process_frame
 	if not is_instance_valid(panel):
 		return
 	var area_center: Vector2 = battle_area.global_position + battle_area.size / 2
 	panel.global_position = area_center - panel.size / 2
+	panel.pivot_offset = panel.size / 2
+
+	# 팝업 등장 애니메이션
+	panel.scale = Vector2(0.7, 0.7)
+	panel.modulate.a = 0.0
+	var pop := create_tween()
+	pop.set_parallel(true)
+	pop.tween_property(panel, "scale", Vector2(1.0, 1.0), 0.12).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	pop.tween_property(panel, "modulate:a", 1.0, 0.08)
 
 	# 표시 대기
 	await get_tree().create_timer(duration).timeout
