@@ -274,7 +274,7 @@ func _stop_blink() -> void:
 #region 바 스타일
 func _style_bar(bar: ProgressBar, fill_color: Color, is_ghost: bool = false) -> void:
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color.TRANSPARENT if is_ghost else BAR_BG_COLOR
+	bg.bg_color = BAR_BG_COLOR if is_ghost else Color.TRANSPARENT
 	bg.corner_radius_top_left = 2
 	bg.corner_radius_top_right = 2
 	bg.corner_radius_bottom_left = 2
