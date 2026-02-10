@@ -1092,6 +1092,8 @@ func _check_all_enemies_dead() -> void:
 
 
 func _check_battle_end() -> bool:
+	if current_state != BattleState.RUNNING:
+		return true
 	var alive_enemies: Array = []
 	for e in enemies:
 		if e != null and e.is_alive():
@@ -1137,6 +1139,8 @@ func _show_claim_reward_button() -> void:
 
 
 func _end_battle_victory() -> void:
+	if current_state == BattleState.VICTORY:
+		return
 	current_state = BattleState.VICTORY
 	set_process(false)
 
@@ -1345,6 +1349,8 @@ func _delayed_loot_visual(item_id: String, start_pos: Vector2, delay: float) -> 
 
 
 func _end_battle_defeat() -> void:
+	if current_state == BattleState.DEFEAT:
+		return
 	current_state = BattleState.DEFEAT
 	set_process(false)
 
