@@ -3,7 +3,7 @@ class_name HeroCard
 ## 개별 영웅 카드 (씬 인스턴스 방식)
 ## HeroCard.tscn과 1:1 대응
 ## 루트=Control(레이아웃용), Panel=PanelContainer(애니메이션 대상)
-## [이름 HP 값] + 장비 슬롯 8개 (1열)
+## [이름 HP 값] + HP/MP 잔상 바 + 장비 슬롯 6개 (1열)
 
 const SLOT_ICONS := {
 	"main_hand": "⚔", "off_hand": "🛡", "head": "👒",
@@ -14,9 +14,18 @@ const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
 const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)
+const HP_GHOST_COLOR := Color(0.95, 0.45, 0.15)  # 잔상: 주황
 const MP_COLOR := Color(0.3, 0.5, 1.0)
 const MP_COLOR_LOW := Color(0.6, 0.4, 0.9)
+const MP_GHOST_COLOR := Color(0.5, 0.3, 0.8)  # 잔상: 보라
 const BAR_BG_COLOR := Color(0.12, 0.12, 0.15, 0.9)
+
+# 잔상 타이밍
+const GHOST_DELAY := 0.3   # 잔상 시작 대기 시간
+const GHOST_DURATION := 0.5 # 잔상 스르륵 지속 시간
+const BLINK_INTERVAL := 0.3 # 깜빡임 간격
+const BLINK_ALPHA_LOW := 0.3
+const BLINK_HP_THRESHOLD := 0.25  # 25% 이하에서 깜빡임
 
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
@@ -24,7 +33,9 @@ signal field_heal_requested(hero_index: int)
 @onready var panel: PanelContainer = %Panel
 @onready var name_label: Label = %NameLabel
 @onready var hp_bar: ProgressBar = %HPBar
+@onready var hp_bar_ghost: ProgressBar = %HPBarGhost
 @onready var mp_bar: ProgressBar = %MPBar
+@onready var mp_bar_ghost: ProgressBar = %MPBarGhost
 @onready var skill_label: Label = %SkillLabel
 @onready var equip_section: VBoxContainer = %EquipSection
 
@@ -36,13 +47,23 @@ var equip_rows: Dictionary = {}  # slot_name -> { row: _EquipSlotRow, icon: Labe
 var _anim_tween: Tween = null
 var _stat_popup: PanelContainer = null
 
+# 잔상 관련 상태
+var _prev_hp: int = -1
+var _prev_mp: int = -1
+var _hp_ghost_tween: Tween = null
+var _mp_ghost_tween: Tween = null
+var _blink_tween: Tween = null
+var _is_blinking: bool = false
+
 
 func _ready() -> void:
 	panel.mouse_entered.connect(_on_mouse_entered)
 	panel.mouse_exited.connect(_on_mouse_exited)
 	panel.gui_input.connect(_on_gui_input)
 	_style_bar(hp_bar, HP_COLOR_HIGH)
+	_style_bar(hp_bar_ghost, HP_GHOST_COLOR, true)
 	_style_bar(mp_bar, MP_COLOR)
+	_style_bar(mp_bar_ghost, MP_GHOST_COLOR, true)
 	_build_equip_slots()
 	call_deferred("_update_min_size")
 
@@ -129,11 +150,35 @@ func _update_name_hp(hero: Hero) -> void:
 
 
 func _update_bars(hero: Hero) -> void:
-	# HP bar
 	var max_hp := hero.get_max_hp()
+	var cur_hp := hero.current_hp
+
+	# HP 바 max_value 동기화
 	hp_bar.max_value = max_hp
-	hp_bar.value = hero.current_hp
-	var hp_pct: float = float(hero.current_hp) / float(max_hp) if max_hp > 0 else 1.0
+	hp_bar_ghost.max_value = max_hp
+
+	# HP 변화 감지
+	if _prev_hp < 0:
+		# 최초 세팅: 잔상 없이 즉시
+		hp_bar.value = cur_hp
+		hp_bar_ghost.value = cur_hp
+	elif cur_hp < _prev_hp:
+		# 데미지: 실제 바 즉시 줄이고, 잔상은 딜레이 후 스르륵
+		hp_bar.value = cur_hp
+		_animate_ghost(hp_bar_ghost, cur_hp, true)
+	elif cur_hp > _prev_hp:
+		# 힐: 둘 다 즉시 (잔상 트윈 취소)
+		_kill_ghost_tween(true)
+		hp_bar.value = cur_hp
+		hp_bar_ghost.value = cur_hp
+	# 변화 없으면 값만 보정
+	else:
+		hp_bar.value = cur_hp
+
+	_prev_hp = cur_hp
+
+	# HP 색상
+	var hp_pct: float = float(cur_hp) / float(max_hp) if max_hp > 0 else 1.0
 	var hp_color: Color
 	if hp_pct <= 0.25:
 		hp_color = HP_COLOR_LOW
@@ -143,18 +188,93 @@ func _update_bars(hero: Hero) -> void:
 		hp_color = HP_COLOR_HIGH
 	_update_bar_color(hp_bar, hp_color)
 
-	# MP bar
+	# 25% 이하 깜빡임
+	if hp_pct <= BLINK_HP_THRESHOLD and not hero.is_dead:
+		_start_blink()
+	else:
+		_stop_blink()
+
+	# MP 바
 	var max_mp := hero.get_max_mp()
+	var cur_mp := hero.current_mp
 	mp_bar.max_value = max_mp if max_mp > 0 else 1
-	mp_bar.value = hero.current_mp
-	var mp_pct: float = float(hero.current_mp) / float(max_mp) if max_mp > 0 else 1.0
+	mp_bar_ghost.max_value = max_mp if max_mp > 0 else 1
+
+	if _prev_mp < 0:
+		mp_bar.value = cur_mp
+		mp_bar_ghost.value = cur_mp
+	elif cur_mp < _prev_mp:
+		mp_bar.value = cur_mp
+		_animate_ghost(mp_bar_ghost, cur_mp, false)
+	elif cur_mp > _prev_mp:
+		_kill_ghost_tween(false)
+		mp_bar.value = cur_mp
+		mp_bar_ghost.value = cur_mp
+	else:
+		mp_bar.value = cur_mp
+
+	_prev_mp = cur_mp
+
+	var mp_pct: float = float(cur_mp) / float(max_mp) if max_mp > 0 else 1.0
 	var mp_color: Color = MP_COLOR_LOW if mp_pct <= 0.25 else MP_COLOR
 	_update_bar_color(mp_bar, mp_color)
+#endregion
 
 
-func _style_bar(bar: ProgressBar, fill_color: Color) -> void:
+#region 잔상 애니메이션
+func _animate_ghost(ghost_bar: ProgressBar, target_value: int, is_hp: bool) -> void:
+	## 잔상 바를 딜레이 후 스르륵 줄임
+	_kill_ghost_tween(is_hp)
+
+	var tween := create_tween()
+	tween.tween_interval(GHOST_DELAY)
+	tween.tween_property(ghost_bar, "value", float(target_value), GHOST_DURATION) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	if is_hp:
+		_hp_ghost_tween = tween
+	else:
+		_mp_ghost_tween = tween
+
+
+func _kill_ghost_tween(is_hp: bool) -> void:
+	if is_hp:
+		if _hp_ghost_tween and _hp_ghost_tween.is_valid():
+			_hp_ghost_tween.kill()
+			_hp_ghost_tween = null
+	else:
+		if _mp_ghost_tween and _mp_ghost_tween.is_valid():
+			_mp_ghost_tween.kill()
+			_mp_ghost_tween = null
+#endregion
+
+
+#region 깜빡임 (HP 25% 이하)
+func _start_blink() -> void:
+	if _is_blinking:
+		return
+	_is_blinking = true
+	_blink_tween = create_tween().set_loops()
+	_blink_tween.tween_property(hp_bar, "modulate:a", BLINK_ALPHA_LOW, BLINK_INTERVAL)
+	_blink_tween.tween_property(hp_bar, "modulate:a", 1.0, BLINK_INTERVAL)
+
+
+func _stop_blink() -> void:
+	if not _is_blinking:
+		return
+	_is_blinking = false
+	if _blink_tween and _blink_tween.is_valid():
+		_blink_tween.kill()
+		_blink_tween = null
+	if hp_bar:
+		hp_bar.modulate.a = 1.0
+#endregion
+
+
+#region 바 스타일
+func _style_bar(bar: ProgressBar, fill_color: Color, is_ghost: bool = false) -> void:
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = BAR_BG_COLOR
+	bg.bg_color = Color.TRANSPARENT if is_ghost else BAR_BG_COLOR
 	bg.corner_radius_top_left = 2
 	bg.corner_radius_top_right = 2
 	bg.corner_radius_bottom_left = 2
@@ -176,8 +296,10 @@ func _update_bar_color(bar: ProgressBar, color: Color) -> void:
 		var new_fill := fill.duplicate()
 		new_fill.bg_color = color
 		bar.add_theme_stylebox_override("fill", new_fill)
+#endregion
 
 
+#region 스킬/장비 갱신
 func _update_skill_info(hero: Hero) -> void:
 	var class_name_str: String = hero.hero_class_name
 	var skills: Array = hero.get_available_skills()
@@ -219,8 +341,6 @@ func _update_equips(hero: Hero) -> void:
 			icon_lbl.add_theme_color_override("font_color", rcolor)
 			name_lbl.text = edata.get("name", equip_id)
 			name_lbl.add_theme_color_override("font_color", rcolor)
-
-
 #endregion
 
 

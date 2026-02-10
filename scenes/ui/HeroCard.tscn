@@ -46,18 +46,58 @@ theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
 horizontal_alignment = 1
 text = "영웅"
 
-[node name="HPBar" type="ProgressBar" parent="Panel/VBox"]
-unique_name_in_owner = true
+[node name="HPBarWrap" type="Control" parent="Panel/VBox"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 6)
+
+[node name="HPBarGhost" type="ProgressBar" parent="Panel/VBox/HPBarWrap"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 max_value = 100.0
 value = 100.0
 show_percentage = false
 
-[node name="MPBar" type="ProgressBar" parent="Panel/VBox"]
+[node name="HPBar" type="ProgressBar" parent="Panel/VBox/HPBarWrap"]
 unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="MPBarWrap" type="Control" parent="Panel/VBox"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 5)
+
+[node name="MPBarGhost" type="ProgressBar" parent="Panel/VBox/MPBarWrap"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="MPBar" type="ProgressBar" parent="Panel/VBox/MPBarWrap"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 max_value = 100.0
 value = 100.0
 show_percentage = false
