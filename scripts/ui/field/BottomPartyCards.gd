@@ -2,18 +2,14 @@ extends Control
 class_name BottomPartyCards
 ## 좌측 파티 카드 컨테이너 (세로 배치)
 ## HeroCard.tscn을 인스턴스하여 파티원별 카드를 표시
-## InventoryCard.tscn을 우측 하단에 독립 배치
 
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
-const InventoryCardScene := preload("res://scenes/ui/InventoryCard.tscn")
 
 signal equipment_dropped(hero_index: int, item_id: String)
 
 @onready var cards_container: VBoxContainer = %CardsContainer
-@onready var inv_container: HBoxContainer = %InvContainer
 
 var cards: Array[HeroCard] = []
-var inventory_card: InventoryCard = null
 
 
 func _ready() -> void:
@@ -23,7 +19,6 @@ func _ready() -> void:
 
 func _initial_setup() -> void:
 	if cards_container:
-		_create_inventory_card()
 		update_display()
 
 
@@ -49,16 +44,6 @@ func _connect_signals() -> void:
 func _on_party_changed() -> void:
 	_rebuild_cards()
 	update_display()
-
-
-#region 인벤토리 카드
-func _create_inventory_card() -> void:
-	if inventory_card and is_instance_valid(inventory_card):
-		return
-	inventory_card = InventoryCardScene.instantiate()
-	inventory_card.hero_cards_container = cards_container
-	inv_container.add_child(inventory_card)
-#endregion
 
 
 #region 카드 관리

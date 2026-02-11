@@ -346,16 +346,8 @@ func _get_hero_card_screen_pos(hero_idx: int) -> Vector2:
 
 
 func _get_inventory_card_screen_pos() -> Vector2:
-	var hud_nodes: Array = get_tree().get_nodes_in_group("field_hud")
-	if hud_nodes.is_empty():
-		return Vector2.ZERO
-	var hud: FieldHUD = hud_nodes[0] as FieldHUD
-	if hud == null or hud.bottom_party_cards == null:
-		return Vector2.ZERO
-	var inv_card = hud.bottom_party_cards.inventory_card
-	if inv_card and is_instance_valid(inv_card):
-		return inv_card.get_global_rect().get_center()
-	return Vector2.ZERO
+	# 인벤토리 카드 삭제됨 → 첫 번째 히어로 카드 위치로 대체
+	return _get_hero_card_screen_pos(0)
 
 
 func _find_equipped_hero_index(p_item_id: String) -> int:

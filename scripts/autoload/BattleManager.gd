@@ -672,12 +672,8 @@ func _get_hero_card_pos(hud: FieldHUD, hero_idx: int) -> Vector2:
 
 
 func _get_inventory_card_pos(hud: FieldHUD) -> Vector2:
-	if hud.bottom_party_cards == null:
-		return Vector2.ZERO
-	var inv_card = hud.bottom_party_cards.inventory_card
-	if inv_card and is_instance_valid(inv_card):
-		return inv_card.get_global_rect().get_center()
-	return Vector2.ZERO
+	# 인벤토리 카드 삭제됨 → 첫 번째 히어로 카드 위치로 대체
+	return _get_hero_card_pos(hud, 0)
 
 
 func _find_equipped_hero_index(p_item_id: String) -> int:
