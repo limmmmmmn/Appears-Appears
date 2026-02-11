@@ -78,7 +78,8 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		# 이미 다른 이유(게임오버, 보스 팝업 등)로 일시정지 중이면 무시
-		if get_tree().paused and not is_pause_menu_active:
+		# 단, 전투정지 또는 일시정지 메뉴에서는 허용
+		if get_tree().paused and not is_pause_menu_active and not BattleManager.is_battle_paused:
 			return
 		toggle_pause_menu()
 		get_viewport().set_input_as_handled()
@@ -251,10 +252,12 @@ func _init_battle_pause_button() -> void:
 
 
 func _toggle_battle_pause() -> void:
-	## 전투 정지 토글 (스페이스바 또는 버튼)
+	## 전투+필드 정지 토글 (스페이스바 또는 버튼)
 	if not BattleManager:
 		return
 	BattleManager.toggle_battle_pause()
+	# 필드+전투 모두 정지/재개
+	get_tree().paused = BattleManager.is_battle_paused
 	# 버튼 상태 동기화
 	if battle_pause_button:
 		battle_pause_button.set_pressed_no_signal(BattleManager.is_battle_paused)
@@ -262,10 +265,11 @@ func _toggle_battle_pause() -> void:
 
 
 func _on_battle_pause_toggled(toggled_on: bool) -> void:
-	## 전투 정지 버튼 토글
+	## 전투+필드 정지 버튼 토글
 	if not BattleManager:
 		return
 	BattleManager.set_battle_paused(toggled_on)
+	get_tree().paused = toggled_on
 	_update_battle_pause_button_text(toggled_on)
 
 
@@ -376,7 +380,9 @@ func hide_pause_menu() -> void:
 		return
 	is_pause_menu_active = false
 	pause_menu.visible = false
-	get_tree().paused = false
+	# 전투 정지 중이면 트리는 paused 유지
+	if not BattleManager or not BattleManager.is_battle_paused:
+		get_tree().paused = false
 	for child in pause_menu.get_children():
 		child.queue_free()
 
