@@ -1,13 +1,13 @@
 extends Control
 class_name BottomPartyCards
-## 좌측 파티 카드 컨테이너 (세로 배치)
-## HeroCard.tscn을 인스턴스하여 파티원별 카드를 표시
+## 발더스게이트 스타일 초상화 패널 (하단 중앙, 가로 배치)
+## HeroCard.tscn을 인스턴스하여 파티원별 초상화를 표시
 
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
 
 signal equipment_dropped(hero_index: int, item_id: String)
 
-@onready var cards_container: VBoxContainer = %CardsContainer
+@onready var cards_container: HBoxContainer = %CardsContainer
 
 var cards: Array[HeroCard] = []
 
@@ -66,7 +66,6 @@ func _rebuild_cards() -> void:
 		cards.append(card)
 
 
-
 func update_display() -> void:
 	var party: Array = PartyManager.get_party() if PartyManager else []
 
@@ -77,6 +76,33 @@ func update_display() -> void:
 		if i >= party.size() or party[i] == null:
 			continue
 		cards[i].update_from_hero(party[i])
+#endregion
+
+
+#region 패널 레벨 API
+func update_hp(index: int, current: int, max_hp: int) -> void:
+	if index >= 0 and index < cards.size():
+		cards[index].update_hp(current, max_hp)
+
+
+func update_mp(index: int, current: int, max_mp: int) -> void:
+	if index >= 0 and index < cards.size():
+		cards[index].update_mp(current, max_mp)
+
+
+func set_dead(index: int, is_dead: bool) -> void:
+	if index >= 0 and index < cards.size():
+		cards[index].set_dead(is_dead)
+
+
+func set_portrait(index: int, texture: Texture2D) -> void:
+	if index >= 0 and index < cards.size():
+		cards[index].set_portrait(texture)
+
+
+func shake(index: int) -> void:
+	if index >= 0 and index < cards.size():
+		cards[index].shake()
 #endregion
 
 

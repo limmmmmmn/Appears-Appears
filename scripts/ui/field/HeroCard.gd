@@ -1,66 +1,127 @@
 extends Control
 class_name HeroCard
-## 개별 영웅 카드 (페이스칩 + 가로 HP/MP 바)
-## 레이아웃: [페이스칩][HP바/MP바] - 페이스칩 좌측, 바 우측 상단 정렬
-
-const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
-const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
-const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)
-const HP_GHOST_COLOR := Color(1.0, 0.2, 0.2)
-const MP_COLOR := Color(0.3, 0.5, 1.0)
-const MP_COLOR_LOW := Color(0.6, 0.4, 0.9)
-const MP_GHOST_COLOR := Color(1.0, 0.4, 0.8)
-const BAR_BG_COLOR := Color(0.05, 0.05, 0.07, 0.9)
-
-# 잔상 타이밍
-const GHOST_DELAY := 0.3
-const GHOST_DURATION := 0.5
-const BLINK_INTERVAL := 0.3
-const BLINK_ALPHA_LOW := 0.3
-const BLINK_HP_THRESHOLD := 0.25
+## 발더스게이트 스타일 초상화 유닛
+## 페이스칩(48x48) + HP 오버레이(빨간 반투명) + MP 바(우측 세로 3px) + 사망 오버레이
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
+const FACE_SIZE := 48
+const MP_BAR_WIDTH := 3
+
+const HP_OVERLAY_COLOR := Color(0.8, 0, 0, 0.5)
+const MP_BAR_COLOR := Color(0.25, 0.45, 0.95)
+const MP_BAR_BG_COLOR := Color(0.05, 0.05, 0.1, 0.8)
+const DEATH_OVERLAY_COLOR := Color(0.1, 0.1, 0.1, 0.7)
+const PLACEHOLDER_COLOR := Color(0.15, 0.12, 0.2)
+const BORDER_COLOR := Color(0.3, 0.3, 0.35, 0.6)
+
+const HP_TWEEN_DURATION := 0.35
+const SHAKE_DURATION := 0.2
+const SHAKE_STRENGTH := 3.0
 
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
 
-@onready var panel: PanelContainer = %Panel
-@onready var hp_bar: ProgressBar = %HPBar
-@onready var hp_bar_ghost: ProgressBar = %HPBarGhost
-@onready var mp_bar: ProgressBar = %MPBar
-@onready var mp_bar_ghost: ProgressBar = %MPBarGhost
-@onready var face_chip: TextureRect = %FaceChip
-
 var hero_index: int = -1
 var hero_id: String = ""
-var is_hovered: bool = false
 
-var _anim_tween: Tween = null
-var _stat_popup: PanelContainer = null
+# 노드 참조 (코드에서 생성)
+var face_container: Control
+var placeholder: ColorRect
+var face_chip: TextureRect
+var hp_overlay: ColorRect
+var death_overlay: ColorRect
+var skull_label: Label
+var mp_bar_bg: ColorRect
+var mp_bar_fill: ColorRect
+var border_rect: ColorRect
 
-# 잔상 관련 상태
-var _prev_hp: int = -1
-var _prev_mp: int = -1
-var _hp_ghost_tween: Tween = null
-var _mp_ghost_tween: Tween = null
-var _blink_tween: Tween = null
-var _is_blinking: bool = false
+var _hp_tween: Tween
+var _shake_tween: Tween
+var _prev_hp_ratio: float = 1.0
 
 
 func _ready() -> void:
-	panel.mouse_entered.connect(_on_mouse_entered)
-	panel.mouse_exited.connect(_on_mouse_exited)
-	panel.gui_input.connect(_on_gui_input)
-	_style_bar(hp_bar, HP_COLOR_HIGH)
-	_style_bar(hp_bar_ghost, HP_GHOST_COLOR, true)
-	_style_bar(mp_bar, MP_COLOR)
-	_style_bar(mp_bar_ghost, MP_GHOST_COLOR, true)
-	call_deferred("_update_min_size")
+	custom_minimum_size = Vector2(FACE_SIZE + MP_BAR_WIDTH + 1, FACE_SIZE)
+	_build_ui()
 
 
-func _update_min_size() -> void:
-	if panel:
-		custom_minimum_size.y = panel.get_combined_minimum_size().y
+func _build_ui() -> void:
+	# --- 페이스칩 컨테이너 (클리핑 영역) ---
+	face_container = Control.new()
+	face_container.position = Vector2.ZERO
+	face_container.size = Vector2(FACE_SIZE, FACE_SIZE)
+	face_container.clip_children = Control.CLIP_CHILDREN_AND_DRAW
+	face_container.mouse_filter = MOUSE_FILTER_STOP
+	face_container.gui_input.connect(_on_gui_input)
+	add_child(face_container)
+
+	# 플레이스홀더 배경
+	placeholder = ColorRect.new()
+	placeholder.position = Vector2.ZERO
+	placeholder.size = Vector2(FACE_SIZE, FACE_SIZE)
+	placeholder.color = PLACEHOLDER_COLOR
+	placeholder.mouse_filter = MOUSE_FILTER_IGNORE
+	face_container.add_child(placeholder)
+
+	# 페이스칩 텍스처
+	face_chip = TextureRect.new()
+	face_chip.position = Vector2.ZERO
+	face_chip.size = Vector2(FACE_SIZE, FACE_SIZE)
+	face_chip.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	face_chip.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	face_chip.mouse_filter = MOUSE_FILTER_IGNORE
+	face_container.add_child(face_chip)
+
+	# HP 오버레이 (아래에서 위로 차오름)
+	hp_overlay = ColorRect.new()
+	hp_overlay.color = HP_OVERLAY_COLOR
+	hp_overlay.mouse_filter = MOUSE_FILTER_IGNORE
+	hp_overlay.position = Vector2(0, FACE_SIZE)
+	hp_overlay.size = Vector2(FACE_SIZE, 0)
+	face_container.add_child(hp_overlay)
+
+	# 사망 오버레이
+	death_overlay = ColorRect.new()
+	death_overlay.position = Vector2.ZERO
+	death_overlay.size = Vector2(FACE_SIZE, FACE_SIZE)
+	death_overlay.color = DEATH_OVERLAY_COLOR
+	death_overlay.mouse_filter = MOUSE_FILTER_IGNORE
+	death_overlay.visible = false
+	face_container.add_child(death_overlay)
+
+	skull_label = Label.new()
+	skull_label.text = "☠"
+	skull_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	skull_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	skull_label.position = Vector2.ZERO
+	skull_label.size = Vector2(FACE_SIZE, FACE_SIZE)
+	skull_label.add_theme_font_size_override("font_size", 22)
+	skull_label.add_theme_color_override("font_color", Color(0.8, 0.2, 0.2))
+	skull_label.mouse_filter = MOUSE_FILTER_IGNORE
+	death_overlay.add_child(skull_label)
+
+	# 테두리
+	border_rect = ColorRect.new()
+	border_rect.position = Vector2.ZERO
+	border_rect.size = Vector2(FACE_SIZE, FACE_SIZE)
+	border_rect.color = Color.TRANSPARENT
+	border_rect.mouse_filter = MOUSE_FILTER_IGNORE
+	face_container.add_child(border_rect)
+
+	# --- MP 바 (페이스칩 우측, 위에서 아래로 줄어듦) ---
+	mp_bar_bg = ColorRect.new()
+	mp_bar_bg.position = Vector2(FACE_SIZE + 1, 0)
+	mp_bar_bg.size = Vector2(MP_BAR_WIDTH, FACE_SIZE)
+	mp_bar_bg.color = MP_BAR_BG_COLOR
+	mp_bar_bg.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(mp_bar_bg)
+
+	mp_bar_fill = ColorRect.new()
+	mp_bar_fill.position = Vector2(FACE_SIZE + 1, 0)
+	mp_bar_fill.size = Vector2(MP_BAR_WIDTH, FACE_SIZE)
+	mp_bar_fill.color = MP_BAR_COLOR
+	mp_bar_fill.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(mp_bar_fill)
 
 
 #region 초기화
@@ -69,215 +130,102 @@ func init(p_hero_index: int) -> void:
 #endregion
 
 
-#region 호버
-func _on_mouse_entered() -> void:
-	is_hovered = true
-	_kill_anim()
-
-func _on_mouse_exited() -> void:
-	is_hovered = false
-#endregion
-
-
-#region 데이터 갱신
+#region 데이터 갱신 (BottomPartyCards에서 호출)
 func update_from_hero(hero: Hero) -> void:
 	if hero == null:
 		return
 	hero_id = hero.id
-	_update_bars(hero)
-	_update_face_chip(hero)
+	_load_face_chip(hero)
+	update_hp(hero.current_hp, hero.get_max_hp())
+	update_mp(hero.current_mp, hero.get_max_mp())
+	set_dead(hero.is_dead)
+#endregion
 
 
-func _update_face_chip(hero: Hero) -> void:
-	if face_chip == null:
-		return
-	# 페이스칩 로드: sprite_face → field_sprite → 빈 상태
-	var face_path: String = ""
+#region 페이스칩
+func _load_face_chip(hero: Hero) -> void:
+	var face_path := ""
 	if not hero.portrait.is_empty():
 		face_path = FACE_CHIP_PATH % hero.portrait
 	elif not hero.field_sprite.is_empty():
 		face_path = FACE_CHIP_PATH % hero.field_sprite
-
 	if not face_path.is_empty() and ResourceLoader.exists(face_path):
-		face_chip.texture = load(face_path)
+		set_portrait(load(face_path))
 	else:
-		face_chip.texture = null
+		set_portrait(null)
 
 
-func _update_bars(hero: Hero) -> void:
-	var max_hp := hero.get_max_hp()
-	var cur_hp := hero.current_hp
-
-	# HP 바 max_value 동기화
-	hp_bar.max_value = max_hp
-	hp_bar_ghost.max_value = max_hp
-
-	# HP 변화 감지
-	if _prev_hp < 0:
-		hp_bar.value = cur_hp
-		hp_bar_ghost.value = cur_hp
-	elif cur_hp < _prev_hp:
-		hp_bar.value = cur_hp
-		_animate_ghost(hp_bar_ghost, cur_hp, true)
-	elif cur_hp > _prev_hp:
-		_kill_ghost_tween(true)
-		hp_bar.value = cur_hp
-		hp_bar_ghost.value = cur_hp
-	else:
-		hp_bar.value = cur_hp
-
-	_prev_hp = cur_hp
-
-	# HP 색상
-	var hp_pct: float = float(cur_hp) / float(max_hp) if max_hp > 0 else 1.0
-	var hp_color: Color
-	if hp_pct <= 0.25:
-		hp_color = HP_COLOR_LOW
-	elif hp_pct <= 0.5:
-		hp_color = HP_COLOR_MID
-	else:
-		hp_color = HP_COLOR_HIGH
-	_update_bar_color(hp_bar, hp_color)
-
-	# 25% 이하 깜빡임
-	if hp_pct <= BLINK_HP_THRESHOLD and not hero.is_dead:
-		_start_blink()
-	else:
-		_stop_blink()
-
-	# MP 바
-	var max_mp := hero.get_max_mp()
-	var cur_mp := hero.current_mp
-	mp_bar.max_value = max_mp if max_mp > 0 else 1
-	mp_bar_ghost.max_value = max_mp if max_mp > 0 else 1
-
-	if _prev_mp < 0:
-		mp_bar.value = cur_mp
-		mp_bar_ghost.value = cur_mp
-	elif cur_mp < _prev_mp:
-		mp_bar.value = cur_mp
-		_animate_ghost(mp_bar_ghost, cur_mp, false)
-	elif cur_mp > _prev_mp:
-		_kill_ghost_tween(false)
-		mp_bar.value = cur_mp
-		mp_bar_ghost.value = cur_mp
-	else:
-		mp_bar.value = cur_mp
-
-	_prev_mp = cur_mp
-
-	var mp_pct: float = float(cur_mp) / float(max_mp) if max_mp > 0 else 1.0
-	var mp_color: Color = MP_COLOR_LOW if mp_pct <= 0.25 else MP_COLOR
-	_update_bar_color(mp_bar, mp_color)
+func set_portrait(tex: Texture2D) -> void:
+	if face_chip:
+		face_chip.texture = tex
+	if placeholder:
+		placeholder.visible = (tex == null)
 #endregion
 
 
-#region 잔상 애니메이션
-func _animate_ghost(ghost_bar: ProgressBar, target_value: int, is_hp: bool) -> void:
-	_kill_ghost_tween(is_hp)
-
-	var tween := create_tween()
-	tween.tween_interval(GHOST_DELAY)
-	tween.tween_property(ghost_bar, "value", float(target_value), GHOST_DURATION) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-
-	if is_hp:
-		_hp_ghost_tween = tween
-	else:
-		_mp_ghost_tween = tween
-
-
-func _kill_ghost_tween(is_hp: bool) -> void:
-	if is_hp:
-		if _hp_ghost_tween and _hp_ghost_tween.is_valid():
-			_hp_ghost_tween.kill()
-			_hp_ghost_tween = null
-	else:
-		if _mp_ghost_tween and _mp_ghost_tween.is_valid():
-			_mp_ghost_tween.kill()
-			_mp_ghost_tween = null
-#endregion
-
-
-#region 깜빡임 (HP 25% 이하)
-func _start_blink() -> void:
-	if _is_blinking:
+#region HP 오버레이 (Tween 보간)
+func update_hp(current: int, max_hp: int) -> void:
+	if hp_overlay == null:
 		return
-	_is_blinking = true
-	_blink_tween = create_tween().set_loops()
-	_blink_tween.tween_property(hp_bar, "modulate:a", BLINK_ALPHA_LOW, BLINK_INTERVAL)
-	_blink_tween.tween_property(hp_bar, "modulate:a", 1.0, BLINK_INTERVAL)
+	var ratio: float = clampf(float(current) / float(max_hp), 0.0, 1.0) if max_hp > 0 else 1.0
+	var overlay_h: float = FACE_SIZE * (1.0 - ratio)
+	var overlay_y: float = FACE_SIZE - overlay_h
 
-
-func _stop_blink() -> void:
-	if not _is_blinking:
-		return
-	_is_blinking = false
-	if _blink_tween and _blink_tween.is_valid():
-		_blink_tween.kill()
-		_blink_tween = null
-	if hp_bar:
-		hp_bar.modulate.a = 1.0
+	if _hp_tween and _hp_tween.is_valid():
+		_hp_tween.kill()
+	_hp_tween = create_tween().set_parallel(true)
+	_hp_tween.tween_property(hp_overlay, "position:y", overlay_y, HP_TWEEN_DURATION) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_hp_tween.tween_property(hp_overlay, "size:y", overlay_h, HP_TWEEN_DURATION) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_prev_hp_ratio = ratio
 #endregion
 
 
-#region 바 스타일
-func _style_bar(bar: ProgressBar, fill_color: Color, is_ghost: bool = false) -> void:
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = BAR_BG_COLOR if is_ghost else Color.TRANSPARENT
-	bg.corner_radius_top_left = 1
-	bg.corner_radius_top_right = 1
-	bg.corner_radius_bottom_left = 1
-	bg.corner_radius_bottom_right = 1
-	bar.add_theme_stylebox_override("background", bg)
-
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = fill_color
-	fill.corner_radius_top_left = 1
-	fill.corner_radius_top_right = 1
-	fill.corner_radius_bottom_left = 1
-	fill.corner_radius_bottom_right = 1
-	bar.add_theme_stylebox_override("fill", fill)
-
-
-func _update_bar_color(bar: ProgressBar, color: Color) -> void:
-	var fill: StyleBoxFlat = bar.get_theme_stylebox("fill")
-	if fill:
-		var new_fill := fill.duplicate()
-		new_fill.bg_color = color
-		bar.add_theme_stylebox_override("fill", new_fill)
+#region MP 바
+func update_mp(current: int, max_mp: int) -> void:
+	if mp_bar_fill == null:
+		return
+	var ratio: float = clampf(float(current) / float(max_mp), 0.0, 1.0) if max_mp > 0 else 1.0
+	mp_bar_fill.size.y = FACE_SIZE * ratio
 #endregion
 
 
-#region 애니메이션
-func _kill_anim() -> void:
-	if _anim_tween and _anim_tween.is_valid():
-		_anim_tween.kill()
-		_anim_tween = null
-	if panel:
-		panel.position = Vector2.ZERO
+#region 사망 오버레이
+func set_dead(is_dead: bool) -> void:
+	if death_overlay:
+		death_overlay.visible = is_dead
+#endregion
 
 
-func play_attack_anim() -> void:
-	if is_hovered or not panel:
+#region 피격 셰이크
+func shake() -> void:
+	if face_container == null:
 		return
-	_kill_anim()
-	_anim_tween = create_tween()
-	_anim_tween.tween_property(panel, "position:x", 8.0, 0.1).set_ease(Tween.EASE_OUT)
-	_anim_tween.tween_property(panel, "position:x", 0.0, 0.15).set_ease(Tween.EASE_IN)
+	if _shake_tween and _shake_tween.is_valid():
+		_shake_tween.kill()
+	_shake_tween = create_tween()
+	_shake_tween.tween_property(face_container, "position:x", -SHAKE_STRENGTH, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(face_container, "position:x", SHAKE_STRENGTH, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(face_container, "position:x", -SHAKE_STRENGTH * 0.6, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(face_container, "position:x", SHAKE_STRENGTH * 0.6, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(face_container, "position:x", 0.0, SHAKE_DURATION * 0.1)
 
 
 func play_damage_anim() -> void:
-	if is_hovered or not panel:
+	shake()
+
+
+func play_attack_anim() -> void:
+	if face_container == null:
 		return
-	_kill_anim()
-	_anim_tween = create_tween()
-	_anim_tween.tween_property(panel, "position:x", -4.0, 0.03)
-	_anim_tween.tween_property(panel, "position:x", 4.0, 0.03)
-	_anim_tween.tween_property(panel, "position:x", -3.0, 0.03)
-	_anim_tween.tween_property(panel, "position:x", 3.0, 0.03)
-	_anim_tween.tween_property(panel, "position:x", -2.0, 0.03)
-	_anim_tween.tween_property(panel, "position:x", 0.0, 0.03)
+	if _shake_tween and _shake_tween.is_valid():
+		_shake_tween.kill()
+	_shake_tween = create_tween()
+	_shake_tween.tween_property(face_container, "position:y", -5.0, 0.08) \
+		.set_ease(Tween.EASE_OUT)
+	_shake_tween.tween_property(face_container, "position:y", 0.0, 0.12) \
+		.set_ease(Tween.EASE_IN)
 #endregion
 
 
@@ -289,32 +237,14 @@ func _on_gui_input(event: InputEvent) -> void:
 #endregion
 
 
-#region 능력치 팝업
-func show_item_info(_item_id: String) -> void:
-	pass
-
-func show_stat_compare(_item_id: String) -> void:
-	pass
-
-func hide_stat_compare() -> void:
-	if _stat_popup and is_instance_valid(_stat_popup):
-		_stat_popup.queue_free()
-		_stat_popup = null
-#endregion
-
-
-#region 슬롯 하이라이트 (호환용 stub)
-func highlight_slot(_slot_name: String, _equip_id: String = "") -> void:
-	pass
-
-func clear_slot_highlights() -> void:
-	pass
-
-func expand_equips() -> void:
-	pass
-
-func collapse_equips() -> void:
-	pass
+#region 호환 스텁
+func expand_equips() -> void: pass
+func collapse_equips() -> void: pass
+func highlight_slot(_slot: String, _id: String = "") -> void: pass
+func clear_slot_highlights() -> void: pass
+func show_item_info(_item_id: String) -> void: pass
+func show_stat_compare(_item_id: String) -> void: pass
+func hide_stat_compare() -> void: pass
 
 static func get_target_slots(item_slot: String) -> Array:
 	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
