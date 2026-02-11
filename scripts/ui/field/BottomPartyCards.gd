@@ -80,6 +80,25 @@ func update_display() -> void:
 
 
 #region 패널 레벨 API
+func init_party(heroes: Array) -> void:
+	## 파티 데이터로 초기화. 각 영웅의 max_hp/max_mp에 따라 바 길이 자동 계산
+	cards.clear()
+	if cards_container:
+		for child in cards_container.get_children():
+			cards_container.remove_child(child)
+			child.queue_free()
+	for i in range(heroes.size()):
+		if heroes[i] == null:
+			continue
+		var card: HeroCard = HeroCardScene.instantiate()
+		card.init(i)
+		card.equipment_dropped.connect(_on_card_equip_dropped)
+		card.field_heal_requested.connect(_on_field_heal_requested)
+		cards_container.add_child(card)
+		cards.append(card)
+		card.update_from_hero(heroes[i])
+
+
 func update_hp(index: int, current: int, max_hp: int) -> void:
 	if index >= 0 and index < cards.size():
 		cards[index].update_hp(current, max_hp)
