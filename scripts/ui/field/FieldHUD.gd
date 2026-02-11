@@ -46,9 +46,6 @@ const STYLE := {
 # BottomPartyCards
 var bottom_party_cards: BottomPartyCards = null
 
-# 미니맵
-var minimap: MiniMap = null
-
 # 철수 버튼
 var retreat_button: Button = null
 
@@ -70,7 +67,6 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_init_topbar()
 	_init_party_cards()
-	_init_minimap()
 	_init_retreat_button()
 	_init_pause_menu()
 	_init_recruit_button()
@@ -114,18 +110,6 @@ func _init_party_cards() -> void:
 	var ctrl := get_node_or_null("Control")
 	if ctrl:
 		ctrl.add_child(bottom_party_cards)
-
-
-func _init_minimap() -> void:
-	## 좌측 하단 미니맵 생성
-	var scene := preload("res://scenes/ui/MiniMap.tscn")
-	minimap = scene.instantiate() as MiniMap
-	var ctrl := get_node_or_null("Control")
-	if ctrl:
-		ctrl.add_child(minimap)
-		minimap.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-		minimap.position = Vector2(6, -96)
-		minimap.size = Vector2(120, 90)
 
 
 func _init_retreat_button() -> void:
