@@ -15,8 +15,8 @@ const MAX_BAR_WIDTH := 120  # 바 최대 픽셀 너비
 const MIN_BAR_RATIO := 0.3  # 바 최소 비율 (= 36px)
 
 # 바 길이 기준값 (가변 시스템) — 외부에서 변경 가능
-var hp_reference: int = 500
-var mp_reference: int = 200
+var hp_reference: int = 100
+var mp_reference: int = 60
 
 # HP 색상 (잔량 기반 자동 전환)
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)   # 60% 이상
