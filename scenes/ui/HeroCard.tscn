@@ -3,25 +3,24 @@
 [ext_resource type="Script" path="res://scripts/ui/field/HeroCard.gd" id="1_script"]
 
 [sub_resource type="StyleBoxFlat" id="card_panel_style"]
-content_margin_left = 5.0
-content_margin_top = 4.0
-content_margin_right = 5.0
-content_margin_bottom = 4.0
-bg_color = Color(0.12, 0.12, 0.18, 0.95)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.3, 0.35, 0.5, 0.9)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_left = 6
-corner_radius_bottom_right = 6
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+bg_color = Color(0.08, 0.08, 0.12, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.35, 0.5, 0.7)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
 
 [node name="HeroCard" type="Control"]
-custom_minimum_size = Vector2(108, 0)
+custom_minimum_size = Vector2(0, 36)
 mouse_filter = 2
-size_flags_vertical = 8
 script = ExtResource("1_script")
 
 [node name="Panel" type="PanelContainer" parent="."]
@@ -34,23 +33,15 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("card_panel_style")
 
-[node name="VBox" type="VBoxContainer" parent="Panel"]
+[node name="HBox" type="HBoxContainer" parent="Panel"]
 layout_mode = 2
-theme_override_constants/separation = 1
+theme_override_constants/separation = 2
 
-[node name="NameLabel" type="Label" parent="Panel/VBox"]
-unique_name_in_owner = true
+[node name="HPBarWrap" type="Control" parent="Panel/HBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 9
-theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
-horizontal_alignment = 1
-text = "영웅"
+custom_minimum_size = Vector2(5, 32)
 
-[node name="HPBarWrap" type="Control" parent="Panel/VBox"]
-layout_mode = 2
-custom_minimum_size = Vector2(0, 10)
-
-[node name="HPBarGhost" type="ProgressBar" parent="Panel/VBox/HPBarWrap"]
+[node name="HPBarGhost" type="ProgressBar" parent="Panel/HBox/HPBarWrap"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -60,9 +51,10 @@ grow_horizontal = 2
 grow_vertical = 2
 max_value = 100.0
 value = 100.0
+fill_mode = 3
 show_percentage = false
 
-[node name="HPBar" type="ProgressBar" parent="Panel/VBox/HPBarWrap"]
+[node name="HPBar" type="ProgressBar" parent="Panel/HBox/HPBarWrap"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -72,13 +64,14 @@ grow_horizontal = 2
 grow_vertical = 2
 max_value = 100.0
 value = 100.0
+fill_mode = 3
 show_percentage = false
 
-[node name="MPBarWrap" type="Control" parent="Panel/VBox"]
+[node name="MPBarWrap" type="Control" parent="Panel/HBox"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 7)
+custom_minimum_size = Vector2(4, 32)
 
-[node name="MPBarGhost" type="ProgressBar" parent="Panel/VBox/MPBarWrap"]
+[node name="MPBarGhost" type="ProgressBar" parent="Panel/HBox/MPBarWrap"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -88,9 +81,10 @@ grow_horizontal = 2
 grow_vertical = 2
 max_value = 100.0
 value = 100.0
+fill_mode = 3
 show_percentage = false
 
-[node name="MPBar" type="ProgressBar" parent="Panel/VBox/MPBarWrap"]
+[node name="MPBar" type="ProgressBar" parent="Panel/HBox/MPBarWrap"]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -100,18 +94,12 @@ grow_horizontal = 2
 grow_vertical = 2
 max_value = 100.0
 value = 100.0
+fill_mode = 3
 show_percentage = false
 
-[node name="SkillLabel" type="Label" parent="Panel/VBox"]
+[node name="FaceChip" type="TextureRect" parent="Panel/HBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 8
-theme_override_colors/font_color = Color(0.55, 0.65, 0.8, 1)
-horizontal_alignment = 1
-text = ""
-
-[node name="EquipSection" type="VBoxContainer" parent="Panel/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 0
+custom_minimum_size = Vector2(32, 32)
+expand_mode = 1
+stretch_mode = 5

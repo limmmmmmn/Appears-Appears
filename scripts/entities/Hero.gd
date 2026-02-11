@@ -57,8 +57,8 @@ func _initialize(hero_id: String) -> void:
 	id = hero_id
 	hero_name = hero_data.get("name", "Unknown")
 	class_id = hero_data.get("class_id", "")
-	portrait = hero_data.get("portrait", "")
-	field_sprite = hero_data.get("field_sprite", "")
+	portrait = hero_data.get("sprite_face", hero_data.get("portrait", ""))
+	field_sprite = hero_data.get("sprite_field", hero_data.get("field_sprite", ""))
 	
 	var class_data: Dictionary = DataManager.get_class_data(class_id)
 	hero_class_name = class_data.get("name", "Unknown")

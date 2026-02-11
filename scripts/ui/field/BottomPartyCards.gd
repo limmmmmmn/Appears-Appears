@@ -1,15 +1,15 @@
 extends Control
 class_name BottomPartyCards
-## 하단 파티 카드 컨테이너
+## 좌측 파티 카드 컨테이너 (세로 배치)
 ## HeroCard.tscn을 인스턴스하여 파티원별 카드를 표시
-## InventoryCard.tscn을 우측 끝에 독립 배치
+## InventoryCard.tscn을 우측 하단에 독립 배치
 
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
 const InventoryCardScene := preload("res://scenes/ui/InventoryCard.tscn")
 
 signal equipment_dropped(hero_index: int, item_id: String)
 
-@onready var cards_container: HBoxContainer = %CardsContainer
+@onready var cards_container: VBoxContainer = %CardsContainer
 @onready var inv_container: HBoxContainer = %InvContainer
 
 var cards: Array[HeroCard] = []
