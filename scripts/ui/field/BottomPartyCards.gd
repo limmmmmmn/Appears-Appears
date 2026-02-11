@@ -1,13 +1,13 @@
 extends Control
 class_name BottomPartyCards
-## 발더스게이트 스타일 초상화 패널 (하단 중앙, 가로 배치)
+## 발더스게이트 스타일 초상화 패널 (좌측 중앙, 세로 배치)
 ## HeroCard.tscn을 인스턴스하여 파티원별 초상화를 표시
 
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
 
 signal equipment_dropped(hero_index: int, item_id: String)
 
-@onready var cards_container: HBoxContainer = %CardsContainer
+@onready var cards_container: VBoxContainer = %CardsContainer
 
 var cards: Array[HeroCard] = []
 

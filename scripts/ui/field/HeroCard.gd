@@ -5,7 +5,7 @@ class_name HeroCard
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
 const FACE_SIZE := 48
-const MP_BAR_WIDTH := 3
+const MP_BAR_WIDTH := 6
 
 const HP_OVERLAY_COLOR := Color(0.8, 0, 0, 0.5)
 const MP_BAR_COLOR := Color(0.25, 0.45, 0.95)
