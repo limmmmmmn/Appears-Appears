@@ -820,6 +820,9 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
 
+	# 피격 영웅 페이스칩 팝업 연출
+	_play_hero_hit_popup(target, damage, is_crit)
+
 	if target.is_dead:
 		call_deferred("_emit_party_updated")
 
@@ -838,6 +841,142 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 		if hero.has_taunt():
 			return hero
 	return null
+#endregion
+
+
+#region 피격 영웅 팝업 연출
+const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
+
+func _play_hero_hit_popup(hero: Hero, damage: int, is_crit: bool) -> void:
+	## 전투창 하단에서 피격 영웅 페이스칩+HP바가 올라오는 연출
+	var popup := PanelContainer.new()
+	popup.set_as_top_level(true)
+	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.08, 0.9)
+	style.border_color = Color(0.8, 0.2, 0.2, 0.8)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(3)
+	style.content_margin_left = 3
+	style.content_margin_right = 3
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	popup.add_theme_stylebox_override("panel", style)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 3)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	popup.add_child(hbox)
+
+	# 페이스칩
+	var face := TextureRect.new()
+	face.custom_minimum_size = Vector2(32, 32)
+	face.expand_mode = 1
+	face.stretch_mode = 5
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var face_path := ""
+	if not hero.portrait.is_empty():
+		face_path = FACE_CHIP_PATH % hero.portrait
+	elif not hero.field_sprite.is_empty():
+		face_path = FACE_CHIP_PATH % hero.field_sprite
+	if not face_path.is_empty() and ResourceLoader.exists(face_path):
+		face.texture = load(face_path)
+	hbox.add_child(face)
+
+	# 바 + 데미지
+	var right_vbox := VBoxContainer.new()
+	right_vbox.add_theme_constant_override("separation", 2)
+	right_vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	right_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(right_vbox)
+
+	# HP 바
+	var hp_bar := ProgressBar.new()
+	hp_bar.custom_minimum_size = Vector2(40, 7)
+	hp_bar.max_value = hero.get_max_hp()
+	hp_bar.value = hero.current_hp
+	hp_bar.show_percentage = false
+	hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hp_pct: float = float(hero.current_hp) / float(hero.get_max_hp()) if hero.get_max_hp() > 0 else 1.0
+	var hp_color: Color
+	if hp_pct <= 0.25:
+		hp_color = Color(0.92, 0.22, 0.22)
+	elif hp_pct <= 0.5:
+		hp_color = Color(0.92, 0.72, 0.2)
+	else:
+		hp_color = Color(0.25, 0.78, 0.25)
+	_style_hit_bar(hp_bar, hp_color)
+	right_vbox.add_child(hp_bar)
+
+	# MP 바
+	var mp_bar := ProgressBar.new()
+	mp_bar.custom_minimum_size = Vector2(40, 5)
+	var max_mp := hero.get_max_mp()
+	mp_bar.max_value = max_mp if max_mp > 0 else 1
+	mp_bar.value = hero.current_mp
+	mp_bar.show_percentage = false
+	mp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_style_hit_bar(mp_bar, Color(0.3, 0.5, 1.0))
+	right_vbox.add_child(mp_bar)
+
+	# 데미지 표시
+	var dmg_label := Label.new()
+	dmg_label.text = "-%d" % damage
+	dmg_label.add_theme_font_size_override("font_size", 10)
+	if is_crit:
+		dmg_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.1))
+	else:
+		dmg_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+	dmg_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	dmg_label.add_theme_constant_override("outline_size", 2)
+	dmg_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(dmg_label)
+
+	add_child(popup)
+
+	# 위치: 전투창 하단 중앙 아래에서 시작
+	var popup_w: float = 100.0
+	var start_pos := global_position + Vector2((size.x - popup_w) * 0.5, size.y + 5)
+	var end_pos := global_position + Vector2((size.x - popup_w) * 0.5, size.y - 42)
+	popup.global_position = start_pos
+	popup.modulate.a = 0.0
+
+	# 애니메이션: 올라오기 → 흔들림 → 잠시 대기 → 내려가기
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(popup, "global_position:y", end_pos.y, 0.12) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(popup, "modulate:a", 1.0, 0.06)
+
+	# 흔들림
+	tween.chain()
+	tween.tween_property(popup, "global_position:x", end_pos.x - 3, 0.02)
+	tween.tween_property(popup, "global_position:x", end_pos.x + 3, 0.02)
+	tween.tween_property(popup, "global_position:x", end_pos.x - 2, 0.02)
+	tween.tween_property(popup, "global_position:x", end_pos.x, 0.02)
+
+	# 대기
+	tween.tween_interval(0.35)
+
+	# 내려가기
+	tween.set_parallel(true)
+	tween.tween_property(popup, "global_position:y", start_pos.y, 0.15) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.1).set_delay(0.05)
+	tween.chain().tween_callback(popup.queue_free)
+
+
+func _style_hit_bar(bar: ProgressBar, fill_color: Color) -> void:
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.05, 0.05, 0.07, 0.9)
+	bg.set_corner_radius_all(1)
+	bar.add_theme_stylebox_override("background", bg)
+
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_color
+	fill.set_corner_radius_all(1)
+	bar.add_theme_stylebox_override("fill", fill)
 #endregion
 
 
