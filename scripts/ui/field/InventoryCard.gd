@@ -37,27 +37,13 @@ func _ready() -> void:
 	call_deferred("refresh")
 
 
-#region 패널 호버 → 히어로 장비칸 펼치기/접기
+#region 패널 호버
 func _on_panel_mouse_entered() -> void:
-	_set_hero_equips_expanded(true)
+	pass
 
 
 func _on_panel_mouse_exited() -> void:
-	_set_hero_equips_expanded(false)
-
-
-func _set_hero_equips_expanded(expanded: bool) -> void:
-	var container = hero_cards_container
-	if not container:
-		container = get_parent()
-	if not container:
-		return
-	for child in container.get_children():
-		if child is HeroCard:
-			if expanded:
-				child.expand_equips()
-			else:
-				child.collapse_equips()
+	pass
 #endregion
 
 

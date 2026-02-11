@@ -65,7 +65,7 @@ func _ready() -> void:
 	_style_bar(mp_bar, MP_COLOR)
 	_style_bar(mp_bar_ghost, MP_GHOST_COLOR, true)
 	_build_equip_slots()
-	equip_section.visible = false
+	equip_section.visible = true
 	call_deferred("_update_min_size")
 
 
