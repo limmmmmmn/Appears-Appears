@@ -8,8 +8,8 @@ const FACE_SIZE := 48
 const BAR_GAP := 2  # 페이스칩 ↔ 바 사이 간격
 
 # 바 크기
-const HP_BAR_HEIGHT := 7
-const MP_BAR_HEIGHT := 5
+const HP_BAR_HEIGHT := 10
+const MP_BAR_HEIGHT := 7
 const BAR_SPACING := 2  # HP바 ↔ MP바 사이 간격
 const MAX_BAR_WIDTH := 120  # 바 최대 픽셀 너비
 const MIN_BAR_RATIO := 0.3  # 바 최소 비율 (= 36px)
