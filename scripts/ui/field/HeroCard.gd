@@ -1,7 +1,7 @@
 extends Control
 class_name HeroCard
-## 개별 영웅 카드 (페이스칩 + 세로 HP/MP 바)
-## 레이아웃: [HP바][MP바][페이스칩] - 가로 배치, 세로 스택
+## 개별 영웅 카드 (페이스칩 + 가로 HP/MP 바)
+## 레이아웃: [페이스칩][HP바/MP바] - 페이스칩 좌측, 바 우측 상단 정렬
 
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
