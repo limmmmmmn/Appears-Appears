@@ -63,6 +63,53 @@ var equipment_screen: EquipmentScreen = null
 var notice_panel: PanelContainer = null
 var notice_label: Label = null
 var notice_timer: SceneTreeTimer = null
+
+const NOTICE_FONT_SIZE: int = 18
+const NOTICE_MIN_WIDTH: float = 220.0
+const NOTICE_MIN_HEIGHT: float = 50.0
+const NOTICE_MAX_WIDTH_RATIO: float = 0.72
+const NOTICE_TOP_RATIO: float = 0.22
+const NOTICE_PADDING_X: float = 20.0
+const NOTICE_PADDING_Y: float = 12.0
+
+# 우측 장비 장착 카드
+var equip_notice_panel: PanelContainer = null
+var equip_notice_face: TextureRect = null
+var equip_notice_name: Label = null
+var equip_notice_slot_icon: Label = null
+var equip_notice_slot: Label = null
+var equip_notice_item: Label = null
+var equip_notice_row_panel: PanelContainer = null
+var equip_row_style_normal: StyleBoxFlat = null
+var equip_row_style_highlight: StyleBoxFlat = null
+var equip_notice_queue: Array = []
+var equip_notice_playing: bool = false
+
+const EQUIP_CARD_FACE_SIZE: float = 92.0
+const EQUIP_CARD_MARGIN_RIGHT: float = 12.0
+const EQUIP_CARD_STAY_TIME: float = 2.0
+const SLOT_NAMES_KR: Dictionary = {
+	"main_hand": "무기",
+	"off_hand": "방패",
+	"head": "투구",
+	"body": "갑옷",
+	"gloves": "장갑",
+	"boots": "신발",
+	"necklace": "목걸이",
+	"ring1": "반지",
+	"ring2": "반지",
+}
+const SLOT_ICONS: Dictionary = {
+	"main_hand": "⚔️",
+	"off_hand": "🛡️",
+	"head": "⛑️",
+	"body": "🛡️",
+	"gloves": "🧤",
+	"boots": "👢",
+	"necklace": "📿",
+	"ring1": "💍",
+	"ring2": "💎",
+}
 #endregion
 
 
@@ -79,6 +126,7 @@ func _ready() -> void:
 	_init_pause_menu()
 	_init_equipment_screen()
 	_init_notice_box()
+	_init_equip_notice_card()
 	_init_recruit_button()
 	_init_battle_pause_button()
 	_connect_signals()
@@ -305,7 +353,7 @@ func _init_equipment_screen() -> void:
 
 
 func _init_notice_box() -> void:
-	## 중앙 하단 알림 박스 (보상/레벨업/장비 안내)
+	## 상단 중앙 알림 박스 (보상/레벨업/장비 안내)
 	var ctrl := get_node_or_null("Control")
 	if not ctrl:
 		return
@@ -313,27 +361,133 @@ func _init_notice_box() -> void:
 	notice_panel = PanelContainer.new()
 	notice_panel.visible = false
 	notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	notice_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	notice_panel.offset_left = 170
-	notice_panel.offset_right = -170
-	notice_panel.offset_top = -68
-	notice_panel.offset_bottom = -26
+	notice_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	notice_panel.position = Vector2.ZERO
+	notice_panel.size = Vector2(NOTICE_MIN_WIDTH, NOTICE_MIN_HEIGHT)
 
 	var style := _make_flat_style(Color(0.04, 0.04, 0.08, 0.92), STYLE.border_gold, 6, 1)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
+	style.content_margin_left = NOTICE_PADDING_X
+	style.content_margin_right = NOTICE_PADDING_X
+	style.content_margin_top = NOTICE_PADDING_Y
+	style.content_margin_bottom = NOTICE_PADDING_Y
 	notice_panel.add_theme_stylebox_override("panel", style)
 	ctrl.add_child(notice_panel)
 
 	notice_label = Label.new()
 	notice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	notice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	notice_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	notice_label.add_theme_font_size_override("font_size", STYLE.font_normal)
+	notice_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	notice_label.offset_left = NOTICE_PADDING_X
+	notice_label.offset_top = NOTICE_PADDING_Y
+	notice_label.offset_right = -NOTICE_PADDING_X
+	notice_label.offset_bottom = -NOTICE_PADDING_Y
+	notice_label.add_theme_font_size_override("font_size", NOTICE_FONT_SIZE)
 	notice_label.add_theme_color_override("font_color", STYLE.text_normal)
 	notice_panel.add_child(notice_label)
+
+
+func _init_equip_notice_card() -> void:
+	## 우측 중앙 장비 장착 카드 (전투 중 장착 연출)
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	equip_notice_panel = PanelContainer.new()
+	equip_notice_panel.visible = false
+	equip_notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	equip_notice_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	equip_notice_panel.size = Vector2(EQUIP_CARD_FACE_SIZE, 200)
+	var card_style := _make_flat_style(Color(0.03, 0.03, 0.06, 0.94), STYLE.border_gold, 6, 1)
+	card_style.content_margin_left = 4
+	card_style.content_margin_right = 4
+	card_style.content_margin_top = 4
+	card_style.content_margin_bottom = 4
+	equip_notice_panel.add_theme_stylebox_override("panel", card_style)
+	ctrl.add_child(equip_notice_panel)
+
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 4)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equip_notice_panel.add_child(root)
+
+	equip_notice_face = TextureRect.new()
+	equip_notice_face.custom_minimum_size = Vector2(EQUIP_CARD_FACE_SIZE - 8.0, EQUIP_CARD_FACE_SIZE - 8.0)
+	equip_notice_face.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	equip_notice_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	equip_notice_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(equip_notice_face)
+
+	var equip_box := PanelContainer.new()
+	equip_box.custom_minimum_size = Vector2(EQUIP_CARD_FACE_SIZE - 8.0, 92.0)
+	equip_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equip_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var equip_style := _make_flat_style(Color(0.08, 0.08, 0.12, 0.95), STYLE.border_default, 5, 1)
+	equip_style.content_margin_left = 6
+	equip_style.content_margin_right = 6
+	equip_style.content_margin_top = 6
+	equip_style.content_margin_bottom = 6
+	equip_box.add_theme_stylebox_override("panel", equip_style)
+	root.add_child(equip_box)
+
+	var equip_vbox := VBoxContainer.new()
+	equip_vbox.add_theme_constant_override("separation", 3)
+	equip_box.add_child(equip_vbox)
+
+	equip_notice_name = Label.new()
+	equip_notice_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	equip_notice_name.add_theme_font_size_override("font_size", STYLE.font_medium)
+	equip_notice_name.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
+	equip_vbox.add_child(equip_notice_name)
+
+	equip_notice_row_panel = PanelContainer.new()
+	equip_notice_row_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	equip_notice_row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equip_row_style_normal = _make_flat_style(Color(0.05, 0.06, 0.09, 0.95), Color(0.42, 0.36, 0.18, 0.7), 4, 1)
+	equip_row_style_normal.content_margin_left = 4
+	equip_row_style_normal.content_margin_right = 4
+	equip_row_style_normal.content_margin_top = 3
+	equip_row_style_normal.content_margin_bottom = 3
+	equip_row_style_highlight = _make_flat_style(Color(0.09, 0.08, 0.02, 0.98), Color(1.0, 0.9, 0.35, 1.0), 4, 2)
+	equip_row_style_highlight.content_margin_left = 4
+	equip_row_style_highlight.content_margin_right = 4
+	equip_row_style_highlight.content_margin_top = 3
+	equip_row_style_highlight.content_margin_bottom = 3
+	equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+	equip_vbox.add_child(equip_notice_row_panel)
+
+	var row_hbox := HBoxContainer.new()
+	row_hbox.add_theme_constant_override("separation", 4)
+	equip_notice_row_panel.add_child(row_hbox)
+
+	equip_notice_slot_icon = Label.new()
+	equip_notice_slot_icon.custom_minimum_size = Vector2(18, 16)
+	equip_notice_slot_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	equip_notice_slot_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	equip_notice_slot_icon.add_theme_font_size_override("font_size", STYLE.font_small)
+	row_hbox.add_child(equip_notice_slot_icon)
+
+	var split := VSeparator.new()
+	row_hbox.add_child(split)
+
+	var text_box := VBoxContainer.new()
+	text_box.add_theme_constant_override("separation", 1)
+	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row_hbox.add_child(text_box)
+
+	equip_notice_slot = Label.new()
+	equip_notice_slot.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	equip_notice_slot.add_theme_font_size_override("font_size", STYLE.font_small)
+	equip_notice_slot.add_theme_color_override("font_color", Color(0.88, 0.9, 1.0))
+	text_box.add_child(equip_notice_slot)
+
+	equip_notice_item = Label.new()
+	equip_notice_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	equip_notice_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	equip_notice_item.add_theme_font_size_override("font_size", STYLE.font_tiny)
+	equip_notice_item.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7))
+	text_box.add_child(equip_notice_item)
 
 
 func _toggle_equipment_screen() -> void:
@@ -561,10 +715,12 @@ func _on_hud_notice_requested(message: String, duration: float = 2.0, color: Col
 	_show_notice(message, duration, color)
 
 
-func _on_item_equipped(hero_name: String, item_id: String, _slot: String, _replaced_id: String) -> void:
+func _on_item_equipped(hero_name: String, item_id: String, slot: String, _replaced_id: String) -> void:
 	var item_data: Dictionary = DataManager.get_equipment(item_id)
 	var item_name: String = str(item_data.get("name", item_id))
 	_show_notice("%s 장착: %s" % [hero_name, item_name], 2.0, Color(0.8, 1.0, 0.6))
+	if BattleManager and BattleManager.get_active_battle_count() > 0:
+		_queue_equip_notice_card(hero_name, item_id, slot)
 #endregion
 
 
@@ -597,6 +753,7 @@ func _show_notice(message: String, duration: float = 2.0, color: Color = Color.W
 
 	notice_label.text = message
 	notice_label.add_theme_color_override("font_color", color)
+	_layout_notice_box(message)
 	notice_panel.visible = true
 	notice_panel.modulate.a = 1.0
 
@@ -610,6 +767,151 @@ func _show_notice(message: String, duration: float = 2.0, color: Color = Color.W
 func _hide_notice() -> void:
 	if notice_panel:
 		notice_panel.visible = false
+
+
+func _layout_notice_box(message: String) -> void:
+	if notice_panel == null or notice_label == null:
+		return
+
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var max_panel_width: float = viewport_size.x * NOTICE_MAX_WIDTH_RATIO
+	var max_text_width: float = maxf(120.0, max_panel_width - (NOTICE_PADDING_X * 2.0))
+
+	var font_size: int = notice_label.get_theme_font_size("font_size")
+	var font: Font = notice_label.get_theme_font("font")
+	var text_size := Vector2(180.0, 24.0)
+	if font != null:
+		text_size = font.get_multiline_string_size(
+			message,
+			HORIZONTAL_ALIGNMENT_CENTER,
+			max_text_width,
+			font_size
+		)
+
+	var panel_width: float = clampf(text_size.x + NOTICE_PADDING_X * 2.0, NOTICE_MIN_WIDTH, max_panel_width)
+	var panel_height: float = maxf(NOTICE_MIN_HEIGHT, text_size.y + NOTICE_PADDING_Y * 2.0)
+
+	notice_panel.size = Vector2(panel_width, panel_height)
+	notice_panel.position = Vector2(
+		(viewport_size.x - panel_width) * 0.5,
+		viewport_size.y * NOTICE_TOP_RATIO
+	)
+
+
+func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String) -> void:
+	if equip_notice_panel == null:
+		return
+	var hero: Hero = _find_hero_by_name(hero_name)
+	if hero == null:
+		return
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	var item_name: String = str(item_data.get("name", item_id))
+	equip_notice_queue.append({
+		"hero_id": hero.id,
+		"hero_name": hero.hero_name,
+		"slot_key": slot,
+		"slot_kr": SLOT_NAMES_KR.get(slot, slot),
+		"item_name": item_name,
+	})
+	if not equip_notice_playing:
+		_play_next_equip_notice_card()
+
+
+func _find_hero_by_name(hero_name: String) -> Hero:
+	if not PartyManager:
+		return null
+	for h in PartyManager.get_party():
+		var hero: Hero = h
+		if hero != null and hero.hero_name == hero_name:
+			return hero
+	return null
+
+
+func _play_next_equip_notice_card() -> void:
+	if equip_notice_queue.is_empty():
+		equip_notice_playing = false
+		return
+	if equip_notice_panel == null:
+		equip_notice_queue.clear()
+		equip_notice_playing = false
+		return
+
+	equip_notice_playing = true
+	var payload: Dictionary = equip_notice_queue.pop_front()
+	var hero_id: String = str(payload.get("hero_id", ""))
+	var hero_name: String = str(payload.get("hero_name", ""))
+	var slot_key: String = str(payload.get("slot_key", ""))
+	var slot_kr: String = str(payload.get("slot_kr", "장비"))
+	var item_name: String = str(payload.get("item_name", ""))
+
+	if equip_notice_face and SpriteManager:
+		equip_notice_face.texture = SpriteManager.get_hero_face_sprite(hero_id)
+	if equip_notice_name:
+		equip_notice_name.text = hero_name
+	if equip_notice_slot_icon:
+		equip_notice_slot_icon.text = str(SLOT_ICONS.get(slot_key, "📦"))
+	if equip_notice_slot:
+		equip_notice_slot.text = "%s" % slot_kr
+	if equip_notice_item:
+		equip_notice_item.text = "장착: %s" % item_name
+		equip_notice_item.scale = Vector2.ONE
+		equip_notice_item.modulate = Color(1.0, 0.95, 0.7, 0.0)
+	if equip_notice_row_panel and equip_row_style_normal:
+		equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+
+	await get_tree().process_frame
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var panel_size: Vector2 = equip_notice_panel.size
+	var target_x: float = viewport_size.x - panel_size.x - EQUIP_CARD_MARGIN_RIGHT
+	var start_x: float = viewport_size.x + 8.0
+	var center_y: float = (viewport_size.y - panel_size.y) * 0.5
+
+	equip_notice_panel.visible = true
+	equip_notice_panel.scale = Vector2.ONE
+	equip_notice_panel.modulate = Color(1, 1, 1, 1)
+	equip_notice_panel.position = Vector2(start_x, center_y)
+	equip_notice_panel.pivot_offset = Vector2(panel_size.x, panel_size.y * 0.5)
+
+	var in_tween := create_tween()
+	in_tween.tween_property(equip_notice_panel, "position:x", target_x, 0.18).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	await in_tween.finished
+
+	# 장착 순간: 노란 테두리 + 철컹(짧은 흔들림 + 장착음)
+	if equip_notice_row_panel and equip_row_style_highlight:
+		equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_highlight)
+	if SoundManager:
+		SoundManager.play_equip()
+	var clank_tween := create_tween()
+	clank_tween.tween_property(equip_notice_panel, "position:x", target_x - 4.0, 0.03)
+	clank_tween.tween_property(equip_notice_panel, "position:x", target_x + 3.0, 0.03)
+	clank_tween.tween_property(equip_notice_panel, "position:x", target_x - 2.0, 0.03)
+	clank_tween.tween_property(equip_notice_panel, "position:x", target_x, 0.03)
+	await clank_tween.finished
+
+	if equip_notice_item:
+		var text_tween := create_tween()
+		text_tween.tween_property(equip_notice_item, "modulate:a", 1.0, 0.12)
+		text_tween.tween_property(equip_notice_item, "scale", Vector2(1.05, 1.05), 0.08)
+		text_tween.tween_property(equip_notice_item, "scale", Vector2.ONE, 0.08)
+		await text_tween.finished
+
+	if equip_notice_row_panel and equip_row_style_normal:
+		equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+
+	await get_tree().create_timer(EQUIP_CARD_STAY_TIME).timeout
+
+	var out_tween := create_tween()
+	out_tween.set_parallel(true)
+	out_tween.tween_property(equip_notice_panel, "position:x", viewport_size.x + 4.0, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	out_tween.tween_property(equip_notice_panel, "scale:x", 0.03, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	out_tween.tween_property(equip_notice_panel, "modulate:a", 0.0, 0.18)
+	await out_tween.finished
+
+	equip_notice_panel.visible = false
+	equip_notice_panel.scale = Vector2.ONE
+	equip_notice_panel.modulate = Color.WHITE
+
+	call_deferred("_play_next_equip_notice_card")
 
 
 #region 로그 (스텁 - 외부 호출 호환용)
@@ -640,6 +942,3 @@ func add_system_log(_msg: String) -> void:
 func clear_logs() -> void:
 	pass
 #endregion
-
-
-
