@@ -47,6 +47,9 @@ var window_mode: WindowMode = WindowMode.NORMAL
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 
+# === 기사 첫 행동 추적 ===
+var _knight_used_first: Dictionary = {}  # hero_id -> bool (전투창당 첫 공격 스킬 사용 여부)
+
 # === 행동 처리 ===
 const ACTION_DELAY: float = 0.3  # 행동 사이 딜레이 (초)
 var is_processing_action: bool = false
@@ -400,11 +403,10 @@ func _execute_enemy_action(enemy: BattleEnemy) -> void:
 
 
 func _select_hero_skill(hero: Hero) -> String:
-	## 영웅의 스킬 선택 (간단한 AI) - Will 시스템
-	## Will이 가득 찬 상태에서 호출되므로, 스킬 비용만 확인
+	## 영웅의 스킬 선택 (클래스별 전투 AI)
 	var skills: Array = hero.get_available_skills()
 
-	# 클레릭은 체력이 낮은 아군이 있으면 힐 우선
+	# ── 성직자: 아군 HP 60% 이하면 힐 우선 ──
 	if hero.class_id == "cleric":
 		var wounded: Array = _get_wounded_heroes()
 		if not wounded.is_empty():
@@ -414,7 +416,7 @@ func _select_hero_skill(hero: Hero) -> String:
 					if _can_use_skill(hero, s):
 						return s
 
-	# 마법사는 적이 2마리 이상이면 전체 공격 우선
+	# ── 마법사: 적 2마리 이상이면 전체 마법 ──
 	if hero.class_id == "mage":
 		if get_enemy_count() >= 2:
 			for s in skills:
@@ -423,18 +425,35 @@ func _select_hero_skill(hero: Hero) -> String:
 					if _can_use_skill(hero, s):
 						return s
 
-	# 모든 클래스: 사용 가능한 스킬 중 하나를 선택 (기본 공격 제외)
-	var usable: Array = []
+	# ── 기사: 전투창 진입 후 첫 공격은 반드시 스킬 ──
+	if hero.class_id == "knight":
+		if not _knight_used_first.get(hero.id, false):
+			_knight_used_first[hero.id] = true
+			for s in skills:
+				if s == "basic_attack":
+					continue
+				if _can_use_skill(hero, s):
+					return s
+
+	# ── 공통: 스킬로 한 방에 죽일 수 있는 적이 있으면 스킬 우선 ──
+	var usable_attack_skills: Array = []
 	for s in skills:
 		if s == "basic_attack":
 			continue
+		var data: Dictionary = DataManager.get_skill(s)
+		if data.get("type", "") == "heal":
+			continue
 		if _can_use_skill(hero, s):
-			usable.append(s)
+			usable_attack_skills.append(s)
 
-	if not usable.is_empty():
-		return usable[randi() % usable.size()]
+	if not usable_attack_skills.is_empty():
+		var finisher: String = _can_skill_finish_enemy(hero, usable_attack_skills)
+		if not finisher.is_empty():
+			return finisher
+		# 마무리 불가해도 스킬 사용
+		return usable_attack_skills[0]
 
-	# 스킬 사용 불가 시 기본 공격
+	# ── 기본 공격 ──
 	return "basic_attack"
 
 
@@ -447,6 +466,46 @@ func _can_use_skill(hero: Hero, skill_id: String) -> bool:
 	if not hero.has_enough_mp(skill_id):
 		return false
 	return true
+
+
+func _can_skill_finish_enemy(hero: Hero, skill_ids: Array) -> String:
+	## 스킬로 적을 한 방에 처치할 수 있는지 확인, 가능한 스킬 ID 반환
+	var alive: Array = get_alive_enemies()
+	for skill_id in skill_ids:
+		var skill_data: Dictionary = DataManager.get_skill(skill_id)
+		var target_type: String = skill_data.get("target", "single_enemy")
+		if target_type != "single_enemy":
+			continue
+		for enemy in alive:
+			var estimated_dmg: int = _estimate_skill_damage(hero, enemy, skill_data)
+			if estimated_dmg >= enemy.current_hp:
+				return skill_id
+	return ""
+
+
+func _estimate_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary) -> int:
+	## 스킬 예상 데미지 (크리 제외, 방어 반영)
+	var damage_base: int = int(skill_data.get("damage_base", 0))
+	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
+	var stat_name: String = scaling.get("stat", "str")
+	var multiplier: float = scaling.get("multiplier", 1.0)
+
+	var stat_value: int = 0
+	match stat_name:
+		"str": stat_value = hero.get_str()
+		"int": stat_value = hero.get_int()
+		"dex": stat_value = hero.get_dex()
+		"luk": stat_value = hero.get_luk()
+
+	var base_damage: int = damage_base + int(stat_value * multiplier)
+	var skill_type: String = skill_data.get("type", "physical")
+	var defense: int = 0
+	if skill_type == "physical":
+		defense = target.get_p_def()
+	elif skill_type == "magic":
+		defense = target.get_m_def()
+
+	return maxi(1, base_damage - int(defense / 2))
 
 
 func _play_turn_effect() -> void:
@@ -490,10 +549,10 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 
 
 func _get_wounded_heroes() -> Array:
-	## HP가 50% 이하인 아군 반환
+	## HP가 60% 이하인 아군 반환
 	var result: Array = []
 	for hero in PartyManager.get_alive_heroes():
-		if hero.get_hp_percent() < 0.5:
+		if hero.get_hp_percent() < 0.6:
 			result.append(hero)
 	return result
 
