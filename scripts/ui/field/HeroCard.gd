@@ -474,7 +474,7 @@ func show_stat_compare(_item_id: String) -> void: pass
 func hide_stat_compare() -> void: pass
 
 static func get_target_slots(item_slot: String) -> Array:
-	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
-		return ["acc1", "acc2"]
+	if item_slot in ["ring", "acc"]:
+		return ["ring1", "ring2"]
 	return [item_slot]
 #endregion

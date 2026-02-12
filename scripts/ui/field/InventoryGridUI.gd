@@ -23,10 +23,13 @@ const ITEM_FONT_SIZE: int = 14
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️",
 	"off_hand": "🛡️",
-	"head": "👑",
-	"body": "👕",
-	"acc1": "💍",
-	"acc2": "💍"
+	"head": "⛑️",
+	"body": "🛡️",
+	"gloves": "🧤",
+	"boots": "👢",
+	"necklace": "📿",
+	"ring1": "💍",
+	"ring2": "💎"
 }
 
 const TYPE_ICONS: Dictionary = {

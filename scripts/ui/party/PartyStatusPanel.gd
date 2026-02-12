@@ -15,12 +15,15 @@ var inventory_container: VBoxContainer
 var preview_label: RichTextLabel
 
 const SLOT_NAMES := {
-	"main_hand": "주무기",
-	"off_hand": "보조",
-	"head": "머리",
-	"body": "몸통",
-	"acc1": "악세1",
-	"acc2": "악세2"
+	"main_hand": "메인손",
+	"off_hand": "서브손",
+	"head": "투구",
+	"body": "갑옷",
+	"gloves": "장갑",
+	"boots": "신발",
+	"necklace": "목걸이",
+	"ring1": "반지1",
+	"ring2": "반지2"
 }
 
 
@@ -330,8 +333,8 @@ func _update_preview(item_id: String) -> void:
 	var new_stats: Dictionary = equip_data.get("stats", {})
 	var slot: String = equip_data.get("slot", "")
 	var target_slot := slot
-	if slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
-		target_slot = "acc1"
+	if slot in ["ring", "acc"]:
+		target_slot = "ring1"
 
 	var current_equip_id: String = hero.equipment.get(target_slot, "")
 	var current_equip: Dictionary = DataManager.get_equipment(current_equip_id) if current_equip_id else {}
@@ -424,9 +427,9 @@ func _on_inventory_item_pressed(item_id: String) -> void:
 		return
 	
 	var slot: String = equip_data.get("slot", "")
-	if slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
-		slot = "acc1"
-		for s in ["acc1", "acc2"]:
+	if slot in ["ring", "acc"]:
+		slot = "ring1"
+		for s in ["ring1", "ring2"]:
 			if hero.equipment[s].is_empty():
 				slot = s
 				break

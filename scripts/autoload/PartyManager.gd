@@ -11,7 +11,7 @@ var party: Array[Hero] = []
 var reserve_party: Array[Hero] = []
 var inventory: Dictionary = {}  # item_id -> 수량
 
-const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
+const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"]
 
 
 func _ready() -> void:
@@ -191,12 +191,16 @@ func auto_equip_to_party(equip_id: String) -> bool:
 		return false
 	
 	var slot: String = equip_data.get("slot", "")
-	if slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
+	if slot in ["ring", "acc"]:
 		for hero in party:
 			if hero.can_equip(equip_id):
-				for s in ["acc1", "acc2"]:
+				for s in ["ring1", "ring2"]:
 					if hero.equipment[s].is_empty():
 						return equip_to_hero(hero, equip_id, s)
+	elif slot in ["necklace", "boots", "gloves"]:
+		for hero in party:
+			if hero.can_equip(equip_id) and hero.equipment[slot].is_empty():
+				return equip_to_hero(hero, equip_id, slot)
 	else:
 		for hero in party:
 			if hero.can_equip(equip_id) and hero.equipment[slot].is_empty():

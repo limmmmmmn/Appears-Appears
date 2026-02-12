@@ -21,13 +21,16 @@ var selected_item_id: String = ""
 var item_buttons: Array[Button] = []
 
 const SLOT_NAMES: Dictionary = {
-	"main_hand": "주무기",
-	"off_hand": "보조",
-	"head": "머리",
-	"body": "몸통",
-	"acc": "악세서리",
-	"acc1": "악세1",
-	"acc2": "악세2"
+	"main_hand": "메인손",
+	"off_hand": "서브손",
+	"head": "투구",
+	"body": "갑옷",
+	"gloves": "장갑",
+	"boots": "신발",
+	"necklace": "목걸이",
+	"ring": "반지",
+	"ring1": "반지1",
+	"ring2": "반지2"
 }
 
 const RARITY_COLORS: Dictionary = {
@@ -153,8 +156,14 @@ func _get_item_icon(item_type: String) -> String:
 			return "👑"
 		"body", "armor":
 			return "👕"
-		"shoes", "necklace", "ring", "ring1", "ring2", "acc", "acc1", "acc2":
+		"ring", "ring1", "ring2", "acc":
 			return "💍"
+		"necklace":
+			return "📿"
+		"boots", "shoes":
+			return "👢"
+		"gloves":
+			return "🧤"
 		_:
 			return "📦"
 #endregion

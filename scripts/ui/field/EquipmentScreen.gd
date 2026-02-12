@@ -8,12 +8,15 @@ const FIELD_SPRITE_PATH := "res://assets/sprites/heroes/%s.png"
 
 # 슬롯 정의
 const SLOT_DISPLAY := [
-	{"slot": "main_hand", "label": "무기", "icon": "⚔"},
-	{"slot": "off_hand", "label": "방패", "icon": "🛡"},
-	{"slot": "body", "label": "갑옷", "icon": "🛡"},
+	{"slot": "main_hand", "label": "메인손", "icon": "⚔"},
+	{"slot": "off_hand", "label": "서브손", "icon": "🛡"},
 	{"slot": "head", "label": "투구", "icon": "⛑"},
-	{"slot": "acc1", "label": "장신구", "icon": "💍"},
-	{"slot": "acc2", "label": "장신구", "icon": "💎"},
+	{"slot": "body", "label": "갑옷", "icon": "🛡"},
+	{"slot": "gloves", "label": "장갑", "icon": "🧤"},
+	{"slot": "boots", "label": "신발", "icon": "👢"},
+	{"slot": "necklace", "label": "목걸이", "icon": "📿"},
+	{"slot": "ring1", "label": "반지1", "icon": "💍"},
+	{"slot": "ring2", "label": "반지2", "icon": "💎"},
 ]
 
 # 스킬 아이콘
@@ -711,13 +714,13 @@ func _calc_per_stat_diff(hero: Hero, item_id: String) -> Dictionary:
 	var item_slot: String = data.get("slot", "")
 
 	var target_slot: String = item_slot
-	if item_slot in ["acc", "ring", "necklace", "shoes"]:
-		if hero.equipment.get("acc1", "").is_empty():
-			target_slot = "acc1"
-		elif hero.equipment.get("acc2", "").is_empty():
-			target_slot = "acc2"
+	if item_slot in ["ring", "acc"]:
+		if hero.equipment.get("ring1", "").is_empty():
+			target_slot = "ring1"
+		elif hero.equipment.get("ring2", "").is_empty():
+			target_slot = "ring2"
 		else:
-			target_slot = "acc1"
+			target_slot = "ring1"
 
 	var current_id: String = hero.equipment.get(target_slot, "")
 	var current_stats: Dictionary = {}
@@ -1203,13 +1206,13 @@ func _on_inv_item_clicked(item_id: String) -> void:
 	var item_slot: String = data.get("slot", "")
 	var target_slot: String = item_slot
 
-	if item_slot in ["acc", "ring", "necklace", "shoes"]:
-		if hero.equipment.get("acc1", "").is_empty():
-			target_slot = "acc1"
-		elif hero.equipment.get("acc2", "").is_empty():
-			target_slot = "acc2"
+	if item_slot in ["ring", "acc"]:
+		if hero.equipment.get("ring1", "").is_empty():
+			target_slot = "ring1"
+		elif hero.equipment.get("ring2", "").is_empty():
+			target_slot = "ring2"
 		else:
-			target_slot = "acc1"
+			target_slot = "ring1"
 
 	if data.get("two_handed", false) and target_slot == "main_hand":
 		if not hero.equipment.get("off_hand", "").is_empty():

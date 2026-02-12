@@ -22,10 +22,13 @@ var preview_parent: Control = null
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️",
 	"off_hand": "🛡️",
-	"head": "👑",
-	"body": "👕",
-	"acc1": "💍",
-	"acc2": "💍"
+	"head": "⛑️",
+	"body": "🛡️",
+	"gloves": "🧤",
+	"boots": "👢",
+	"necklace": "📿",
+	"ring1": "💍",
+	"ring2": "💎"
 }
 
 const TYPE_ICONS: Dictionary = {
@@ -279,7 +282,7 @@ func _find_drop_target(pos: Vector2) -> Dictionary:
 		
 		if slot_rect.has_point(pos):
 			# 특정 장비 슬롯 위인지 체크
-			for slot_name in ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]:
+			for slot_name in ["main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"]:
 				var equip_btn: Button = slot.get_equipment_button(slot_name)
 				if equip_btn and equip_btn.get_global_rect().has_point(pos):
 					return {"hero_index": i, "slot_name": slot_name}
@@ -398,14 +401,14 @@ func _unequip_item(hero_index: int, slot_name: String) -> bool:
 func _determine_best_slot(hero: Hero, item_slot: String) -> String:
 	## 아이템 슬롯에 맞는 최적의 장착 슬롯 결정
 	var target_slot := item_slot
-	
-	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"]:
-		for s in ["acc1", "acc2"]:
+
+	if item_slot in ["ring", "acc"]:
+		for s in ["ring1", "ring2"]:
 			if hero.equipment.get(s, "").is_empty():
 				target_slot = s
 				break
 		if target_slot == item_slot:
-			target_slot = "acc1"
+			target_slot = "ring1"
 
 	return target_slot
 
@@ -414,7 +417,7 @@ func _is_slot_compatible(item_slot: String, target_slot: String) -> bool:
 	## 아이템 슬롯과 타겟 슬롯이 호환되는지 확인
 	if item_slot == target_slot:
 		return true
-	if item_slot in ["acc", "ring", "necklace", "shoes", "ring1", "ring2"] and target_slot in ["acc1", "acc2"]:
+	if item_slot in ["ring", "acc"] and target_slot in ["ring1", "ring2"]:
 		return true
 	if item_slot == "weapon" and target_slot == "main_hand":
 		return true
