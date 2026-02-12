@@ -957,7 +957,7 @@ func _refresh_tactics() -> void:
 
 
 func _create_tactic_row(hero: Hero, tactic: Dictionary, current_id: String, meta_key: String) -> PanelContainer:
-	var is_selected := (tactic["id"] == current_id)
+	var is_selected: bool = (str(tactic["id"]) == current_id)
 
 	var panel := PanelContainer.new()
 	var bg := Color(0.12, 0.14, 0.08, 0.95) if is_selected else S.bg_slot
