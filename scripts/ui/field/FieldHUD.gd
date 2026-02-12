@@ -43,8 +43,8 @@ const STYLE := {
 @onready var gold_label: Label = %GoldLabel
 @onready var speed_button: Button = %SpeedButton
 @onready var menu_button: Button = %MenuButton
-# BottomPartyCards
-var bottom_party_cards: BottomPartyCards = null
+# PartyPanel
+var party_panel: PartyPanel = null
 
 # 철수 버튼
 var retreat_button: Button = null
@@ -71,15 +71,20 @@ const NOTICE_MAX_WIDTH_RATIO: float = 0.72
 const NOTICE_TOP_RATIO: float = 0.22
 const NOTICE_PADDING_X: float = 20.0
 const NOTICE_PADDING_Y: float = 12.0
+const EQUIP_STAT_LABELS: Dictionary = {
+	"atk": "ATK", "def": "DEF", "mag": "MAG", "int": "INT", "wis": "WIS",
+	"str": "STR", "dex": "DEX", "agi": "AGI", "luk": "LUK", "hp": "HP",
+	"mp": "MP", "spd": "SPD", "hit": "HIT", "eva": "EVA",
+}
+const EQUIP_STAT_ORDER: Array[String] = [
+	"atk", "def", "mag", "int", "wis", "str", "dex", "agi", "luk", "hp", "mp", "spd", "hit", "eva"
+]
 
 # 우측 장비 장착 카드
 var equip_notice_panel: PanelContainer = null
 var equip_notice_face: TextureRect = null
 var equip_notice_name: Label = null
-var equip_notice_slot_icon: Label = null
-var equip_notice_slot: Label = null
-var equip_notice_item: Label = null
-var equip_notice_row_panel: PanelContainer = null
+var equip_notice_slot_rows: Dictionary = {} # slot_key -> {panel, item_label}
 var equip_row_style_normal: StyleBoxFlat = null
 var equip_row_style_highlight: StyleBoxFlat = null
 var equip_notice_queue: Array = []
@@ -110,6 +115,9 @@ const SLOT_ICONS: Dictionary = {
 	"ring1": "💍",
 	"ring2": "💎",
 }
+const SLOT_ORDER: Array[String] = [
+	"main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"
+]
 #endregion
 
 
@@ -166,11 +174,11 @@ func _init_topbar() -> void:
 
 
 func _init_party_cards() -> void:
-	var scene := preload("res://scenes/ui/BottomPartyCards.tscn")
-	bottom_party_cards = scene.instantiate() as BottomPartyCards
+	var scene := preload("res://scenes/ui/PartyPanel.tscn")
+	party_panel = scene.instantiate() as PartyPanel
 	var ctrl := get_node_or_null("Control")
 	if ctrl:
-		ctrl.add_child(bottom_party_cards)
+		ctrl.add_child(party_panel)
 
 
 func _init_retreat_button() -> void:
@@ -268,8 +276,8 @@ func _on_recruit_pressed() -> void:
 
 	var random_id: String = available[randi() % available.size()]
 	if PartyManager.add_hero_by_id(random_id):
-		if bottom_party_cards:
-			bottom_party_cards.update_display()
+		if party_panel:
+			party_panel.update_display()
 		hero_recruited.emit(random_id)
 
 
@@ -398,7 +406,7 @@ func _init_equip_notice_card() -> void:
 	equip_notice_panel.visible = false
 	equip_notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	equip_notice_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	equip_notice_panel.size = Vector2(EQUIP_CARD_FACE_SIZE, 200)
+	equip_notice_panel.size = Vector2(EQUIP_CARD_FACE_SIZE, 258)
 	var card_style := _make_flat_style(Color(0.03, 0.03, 0.06, 0.94), STYLE.border_gold, 6, 1)
 	card_style.content_margin_left = 4
 	card_style.content_margin_right = 4
@@ -420,7 +428,7 @@ func _init_equip_notice_card() -> void:
 	root.add_child(equip_notice_face)
 
 	var equip_box := PanelContainer.new()
-	equip_box.custom_minimum_size = Vector2(EQUIP_CARD_FACE_SIZE - 8.0, 92.0)
+	equip_box.custom_minimum_size = Vector2(EQUIP_CARD_FACE_SIZE - 8.0, 150.0)
 	equip_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	equip_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var equip_style := _make_flat_style(Color(0.08, 0.08, 0.12, 0.95), STYLE.border_default, 5, 1)
@@ -432,62 +440,58 @@ func _init_equip_notice_card() -> void:
 	root.add_child(equip_box)
 
 	var equip_vbox := VBoxContainer.new()
-	equip_vbox.add_theme_constant_override("separation", 3)
+	equip_vbox.add_theme_constant_override("separation", 2)
 	equip_box.add_child(equip_vbox)
 
 	equip_notice_name = Label.new()
 	equip_notice_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	equip_notice_name.add_theme_font_size_override("font_size", STYLE.font_medium)
+	equip_notice_name.add_theme_font_size_override("font_size", STYLE.font_small)
 	equip_notice_name.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
 	equip_vbox.add_child(equip_notice_name)
 
-	equip_notice_row_panel = PanelContainer.new()
-	equip_notice_row_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	equip_notice_row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	equip_row_style_normal = _make_flat_style(Color(0.05, 0.06, 0.09, 0.95), Color(0.42, 0.36, 0.18, 0.7), 4, 1)
 	equip_row_style_normal.content_margin_left = 4
 	equip_row_style_normal.content_margin_right = 4
-	equip_row_style_normal.content_margin_top = 3
-	equip_row_style_normal.content_margin_bottom = 3
+	equip_row_style_normal.content_margin_top = 2
+	equip_row_style_normal.content_margin_bottom = 2
 	equip_row_style_highlight = _make_flat_style(Color(0.09, 0.08, 0.02, 0.98), Color(1.0, 0.9, 0.35, 1.0), 4, 2)
 	equip_row_style_highlight.content_margin_left = 4
 	equip_row_style_highlight.content_margin_right = 4
-	equip_row_style_highlight.content_margin_top = 3
-	equip_row_style_highlight.content_margin_bottom = 3
-	equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
-	equip_vbox.add_child(equip_notice_row_panel)
+	equip_row_style_highlight.content_margin_top = 2
+	equip_row_style_highlight.content_margin_bottom = 2
+	equip_notice_slot_rows.clear()
+	for slot_key in SLOT_ORDER:
+		var row_panel := PanelContainer.new()
+		row_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+		equip_vbox.add_child(row_panel)
 
-	var row_hbox := HBoxContainer.new()
-	row_hbox.add_theme_constant_override("separation", 4)
-	equip_notice_row_panel.add_child(row_hbox)
+		var row_hbox := HBoxContainer.new()
+		row_hbox.add_theme_constant_override("separation", 3)
+		row_panel.add_child(row_hbox)
 
-	equip_notice_slot_icon = Label.new()
-	equip_notice_slot_icon.custom_minimum_size = Vector2(18, 16)
-	equip_notice_slot_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	equip_notice_slot_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	equip_notice_slot_icon.add_theme_font_size_override("font_size", STYLE.font_small)
-	row_hbox.add_child(equip_notice_slot_icon)
+		var slot_icon := Label.new()
+		slot_icon.custom_minimum_size = Vector2(14, 12)
+		slot_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		slot_icon.add_theme_font_size_override("font_size", STYLE.font_tiny)
+		slot_icon.text = str(SLOT_ICONS.get(slot_key, "📦"))
+		row_hbox.add_child(slot_icon)
 
-	var split := VSeparator.new()
-	row_hbox.add_child(split)
+		var item_label := Label.new()
+		item_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		item_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		item_label.clip_text = false
+		item_label.add_theme_font_size_override("font_size", STYLE.font_tiny)
+		item_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+		item_label.text = "— 비어있음 —"
+		row_hbox.add_child(item_label)
 
-	var text_box := VBoxContainer.new()
-	text_box.add_theme_constant_override("separation", 1)
-	text_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row_hbox.add_child(text_box)
-
-	equip_notice_slot = Label.new()
-	equip_notice_slot.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	equip_notice_slot.add_theme_font_size_override("font_size", STYLE.font_small)
-	equip_notice_slot.add_theme_color_override("font_color", Color(0.88, 0.9, 1.0))
-	text_box.add_child(equip_notice_slot)
-
-	equip_notice_item = Label.new()
-	equip_notice_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	equip_notice_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	equip_notice_item.add_theme_font_size_override("font_size", STYLE.font_tiny)
-	equip_notice_item.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7))
-	text_box.add_child(equip_notice_item)
+		equip_notice_slot_rows[slot_key] = {
+			"panel": row_panel,
+			"item_label": item_label
+		}
 
 
 func _toggle_equipment_screen() -> void:
@@ -664,9 +668,9 @@ func _connect_signals() -> void:
 			if not InventoryManager.item_equipped.is_connected(_on_item_equipped):
 				InventoryManager.item_equipped.connect(_on_item_equipped)
 
-	if bottom_party_cards:
-		if not bottom_party_cards.equipment_dropped.is_connected(_on_equip_dropped):
-			bottom_party_cards.equipment_dropped.connect(_on_equip_dropped)
+	if party_panel:
+		if not party_panel.equipment_dropped.is_connected(_on_equip_dropped):
+			party_panel.equipment_dropped.connect(_on_equip_dropped)
 #endregion
 
 
@@ -715,10 +719,11 @@ func _on_hud_notice_requested(message: String, duration: float = 2.0, color: Col
 	_show_notice(message, duration, color)
 
 
-func _on_item_equipped(hero_name: String, item_id: String, slot: String, _replaced_id: String) -> void:
+func _on_item_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String) -> void:
 	var item_data: Dictionary = DataManager.get_equipment(item_id)
 	var item_name: String = str(item_data.get("name", item_id))
-	_show_notice("%s 장착: %s" % [hero_name, item_name], 2.0, Color(0.8, 1.0, 0.6))
+	var delta_text: String = _build_equip_stat_delta_text(item_id, replaced_id)
+	_show_notice("%s 장착: %s\n%s" % [hero_name, item_name, delta_text], 2.2, Color(0.8, 1.0, 0.6))
 	if BattleManager and BattleManager.get_active_battle_count() > 0:
 		_queue_equip_notice_card(hero_name, item_id, slot)
 #endregion
@@ -739,8 +744,8 @@ func update_top_bar() -> void:
 
 
 func update_party_display() -> void:
-	if bottom_party_cards:
-		bottom_party_cards.update_display()
+	if party_panel:
+		party_panel.update_display()
 #endregion
 
 
@@ -798,6 +803,43 @@ func _layout_notice_box(message: String) -> void:
 	)
 
 
+func _build_equip_stat_delta_text(item_id: String, replaced_id: String) -> String:
+	var new_data: Dictionary = DataManager.get_equipment(item_id)
+	if new_data.is_empty():
+		return "(능력치 변화 없음)"
+	var old_data: Dictionary = DataManager.get_equipment(replaced_id) if not replaced_id.is_empty() else {}
+	var new_stats: Dictionary = new_data.get("stats", {})
+	var old_stats: Dictionary = old_data.get("stats", {})
+
+	var delta := {}
+	_accumulate_equip_stat_delta(delta, new_stats, 1)
+	_accumulate_equip_stat_delta(delta, old_stats, -1)
+
+	var parts: Array[String] = []
+	for key in EQUIP_STAT_ORDER:
+		var d: int = int(delta.get(key, 0))
+		if d == 0:
+			continue
+		var label: String = str(EQUIP_STAT_LABELS.get(key, key.to_upper()))
+		var sign: String = "+" if d > 0 else ""
+		parts.append("%s %s%d" % [label, sign, d])
+
+	return ", ".join(parts) if not parts.is_empty() else "(능력치 변화 없음)"
+
+
+func _accumulate_equip_stat_delta(dest: Dictionary, stats: Dictionary, mult: int) -> void:
+	if stats.is_empty():
+		return
+	for key_any in stats.keys():
+		var key: String = str(key_any)
+		var normalized: String = key
+		if key == "p_def":
+			normalized = "def"
+		elif key == "acc":
+			normalized = "hit"
+		dest[normalized] = int(dest.get(normalized, 0)) + int(stats[key_any]) * mult
+
+
 func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String) -> void:
 	if equip_notice_panel == null:
 		return
@@ -841,23 +883,13 @@ func _play_next_equip_notice_card() -> void:
 	var hero_id: String = str(payload.get("hero_id", ""))
 	var hero_name: String = str(payload.get("hero_name", ""))
 	var slot_key: String = str(payload.get("slot_key", ""))
-	var slot_kr: String = str(payload.get("slot_kr", "장비"))
-	var item_name: String = str(payload.get("item_name", ""))
+	var hero: Hero = _find_hero_by_id(hero_id)
 
 	if equip_notice_face and SpriteManager:
 		equip_notice_face.texture = SpriteManager.get_hero_face_sprite(hero_id)
 	if equip_notice_name:
 		equip_notice_name.text = hero_name
-	if equip_notice_slot_icon:
-		equip_notice_slot_icon.text = str(SLOT_ICONS.get(slot_key, "📦"))
-	if equip_notice_slot:
-		equip_notice_slot.text = "%s" % slot_kr
-	if equip_notice_item:
-		equip_notice_item.text = "장착: %s" % item_name
-		equip_notice_item.scale = Vector2.ONE
-		equip_notice_item.modulate = Color(1.0, 0.95, 0.7, 0.0)
-	if equip_notice_row_panel and equip_row_style_normal:
-		equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+	_refresh_equip_notice_slots(hero, slot_key)
 
 	await get_tree().process_frame
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
@@ -877,8 +909,6 @@ func _play_next_equip_notice_card() -> void:
 	await in_tween.finished
 
 	# 장착 순간: 노란 테두리 + 철컹(짧은 흔들림 + 장착음)
-	if equip_notice_row_panel and equip_row_style_highlight:
-		equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_highlight)
 	if SoundManager:
 		SoundManager.play_equip()
 	var clank_tween := create_tween()
@@ -888,15 +918,12 @@ func _play_next_equip_notice_card() -> void:
 	clank_tween.tween_property(equip_notice_panel, "position:x", target_x, 0.03)
 	await clank_tween.finished
 
-	if equip_notice_item:
-		var text_tween := create_tween()
-		text_tween.tween_property(equip_notice_item, "modulate:a", 1.0, 0.12)
-		text_tween.tween_property(equip_notice_item, "scale", Vector2(1.05, 1.05), 0.08)
-		text_tween.tween_property(equip_notice_item, "scale", Vector2.ONE, 0.08)
-		await text_tween.finished
-
-	if equip_notice_row_panel and equip_row_style_normal:
-		equip_notice_row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+	var highlight_row: PanelContainer = _get_equip_notice_row_panel(slot_key)
+	if highlight_row:
+		var flash_tween := create_tween()
+		flash_tween.tween_property(highlight_row, "modulate", Color(1.25, 1.2, 0.85, 1.0), 0.07)
+		flash_tween.tween_property(highlight_row, "modulate", Color.WHITE, 0.11)
+		await flash_tween.finished
 
 	await get_tree().create_timer(EQUIP_CARD_STAY_TIME).timeout
 
@@ -912,6 +939,49 @@ func _play_next_equip_notice_card() -> void:
 	equip_notice_panel.modulate = Color.WHITE
 
 	call_deferred("_play_next_equip_notice_card")
+
+
+func _find_hero_by_id(hero_id: String) -> Hero:
+	if not PartyManager:
+		return null
+	for h in PartyManager.get_party():
+		var hero: Hero = h
+		if hero != null and hero.id == hero_id:
+			return hero
+	return null
+
+
+func _refresh_equip_notice_slots(hero: Hero, highlighted_slot: String) -> void:
+	for slot_key in SLOT_ORDER:
+		var row: Dictionary = equip_notice_slot_rows.get(slot_key, {})
+		if row.is_empty():
+			continue
+		var panel: PanelContainer = row.get("panel")
+		var item_label: Label = row.get("item_label")
+		var item_text: String = "— 비어있음 —"
+		var item_color: Color = Color(0.75, 0.75, 0.8)
+		if hero != null:
+			var equip_id: String = str(hero.equipment.get(slot_key, ""))
+			if not equip_id.is_empty():
+				var equip_data: Dictionary = DataManager.get_equipment(equip_id)
+				item_text = str(equip_data.get("name", equip_id))
+				item_color = Color(0.95, 0.95, 0.8)
+		if item_label:
+			item_label.text = item_text
+			item_label.add_theme_color_override("font_color", item_color)
+		if panel:
+			panel.modulate = Color.WHITE
+			if slot_key == highlighted_slot and equip_row_style_highlight:
+				panel.add_theme_stylebox_override("panel", equip_row_style_highlight)
+			elif equip_row_style_normal:
+				panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+
+
+func _get_equip_notice_row_panel(slot_key: String) -> PanelContainer:
+	var row: Dictionary = equip_notice_slot_rows.get(slot_key, {})
+	if row.is_empty():
+		return null
+	return row.get("panel")
 
 
 #region 로그 (스텁 - 외부 호출 호환용)

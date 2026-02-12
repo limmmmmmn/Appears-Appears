@@ -310,9 +310,9 @@ func _get_hero_card_screen_pos(hero_idx: int) -> Vector2:
 	if hud_nodes.is_empty():
 		return Vector2.ZERO
 	var hud: FieldHUD = hud_nodes[0] as FieldHUD
-	if hud == null or hud.bottom_party_cards == null:
+	if hud == null or hud.party_panel == null:
 		return Vector2.ZERO
-	var bpc: BottomPartyCards = hud.bottom_party_cards
+	var bpc: PartyPanel = hud.party_panel
 	if hero_idx < bpc.cards.size():
 		var card: HeroCard = bpc.cards[hero_idx]
 		if card and is_instance_valid(card):

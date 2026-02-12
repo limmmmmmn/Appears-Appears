@@ -678,9 +678,9 @@ func _get_gold_label_pos(hud: FieldHUD) -> Vector2:
 
 
 func _get_hero_card_pos(hud: FieldHUD, hero_idx: int) -> Vector2:
-	if hud.bottom_party_cards == null:
+	if hud.party_panel == null:
 		return Vector2.ZERO
-	var bpc: BottomPartyCards = hud.bottom_party_cards
+	var bpc: PartyPanel = hud.party_panel
 	if hero_idx < bpc.cards.size():
 		var card: HeroCard = bpc.cards[hero_idx]
 		if card and is_instance_valid(card):
