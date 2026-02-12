@@ -63,9 +63,6 @@ var equipment_screen: EquipmentScreen = null
 var notice_panel: PanelContainer = null
 var notice_label: Label = null
 var notice_timer: SceneTreeTimer = null
-var _notice_arc_start: Vector2 = Vector2.ZERO
-var _notice_arc_control: Vector2 = Vector2.ZERO
-var _notice_arc_end: Vector2 = Vector2.ZERO
 
 const NOTICE_FONT_SIZE: int = 18
 const NOTICE_MIN_WIDTH: float = 220.0
@@ -832,61 +829,6 @@ func _hide_notice() -> void:
 		notice_panel.visible = false
 		notice_panel.scale = Vector2.ONE
 		notice_panel.modulate = Color.WHITE
-
-
-func _show_equip_notice_arc(message: String, color: Color, target_global: Vector2) -> void:
-	if notice_panel == null or notice_label == null:
-		return
-	if message.strip_edges().is_empty():
-		_hide_notice()
-		return
-
-	notice_label.text = message
-	notice_label.add_theme_color_override("font_color", color)
-	_layout_notice_box(message)
-	notice_panel.visible = true
-	notice_panel.scale = Vector2.ONE
-	notice_panel.modulate = Color(1, 1, 1, 1)
-
-	var start_pos: Vector2 = notice_panel.position
-	await get_tree().create_timer(0.34).timeout
-
-	var root_ctrl := get_node_or_null("Control") as Control
-	var target_local: Vector2 = target_global
-	if root_ctrl:
-		target_local = root_ctrl.get_global_transform_with_canvas().affine_inverse() * target_global
-
-	var end_pos: Vector2 = target_local - (notice_panel.size * 0.5)
-	var arc_peak_y: float = minf(start_pos.y, end_pos.y) - 82.0
-	var control_pos: Vector2 = Vector2((start_pos.x + end_pos.x) * 0.5, arc_peak_y)
-
-	_notice_arc_start = start_pos
-	_notice_arc_control = control_pos
-	_notice_arc_end = end_pos
-
-	var fly := create_tween()
-	fly.set_parallel(true)
-	fly.tween_method(_set_notice_arc_t, 0.0, 1.0, 0.44).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	fly.tween_property(notice_panel, "scale", Vector2(0.24, 0.24), 0.44).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await fly.finished
-
-	if SoundManager:
-		SoundManager.play_equip()
-
-	var impact := create_tween()
-	impact.set_parallel(true)
-	impact.tween_property(notice_panel, "scale", Vector2(0.16, 0.16), 0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	impact.tween_property(notice_panel, "modulate:a", 0.0, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await impact.finished
-
-	_hide_notice()
-
-
-func _set_notice_arc_t(t: float) -> void:
-	if notice_panel == null:
-		return
-	var u: float = 1.0 - t
-	notice_panel.position = (_notice_arc_start * u * u) + (_notice_arc_control * 2.0 * u * t) + (_notice_arc_end * t * t)
 
 
 func _layout_notice_box(message: String) -> void:
