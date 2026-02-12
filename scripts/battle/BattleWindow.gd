@@ -1,7 +1,7 @@
 extends PanelContainer
 class_name BattleWindow
-## BattleWindow: 턴제 전투창
-## - Will 시스템: 5칸 게이지가 가득 차면 행동, 행동별 Will 소비
+## BattleWindow: 실시간 전투창
+## - Will 시스템: 5칸 게이지가 가득 차면 즉시 행동, 행동별 Will 소비 (턴 없음)
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
@@ -47,21 +47,18 @@ var window_mode: WindowMode = WindowMode.NORMAL
 # === 활성 특성 ===
 var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 
-# === 턴 관리 (독립적) ===
-const TURN_DELAY: float = 0.4  # 턴 사이 딜레이 (초)
-var turn_queue: Array = []  # [{type, unit, dex}]
-var current_turn_index: int = 0
-var current_round: int = 0
-var is_processing_turn: bool = false
+# === 행동 처리 ===
+const ACTION_DELAY: float = 0.3  # 행동 사이 딜레이 (초)
+var is_processing_action: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
 
 # === Will 설정 ===
 const WILL_MAX: int = 5                # Will 게이지 최대 칸 수
 const WILL_FILL_PER_SEC: float = 1.0   # 초당 Will 충전량 (모든 유닛 동일)
 
-# === 턴 타임아웃 안전장치 ===
-var _turn_process_timer: float = 0.0
-const TURN_TIMEOUT: float = 8.0  # 턴 처리 최대 시간 (초)
+# === 행동 타임아웃 안전장치 ===
+var _action_process_timer: float = 0.0
+const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 
 
 # === 도주 설정 ===
@@ -150,18 +147,18 @@ func _process(delta: float) -> void:
 	_update_hero_will(delta)
 	_update_enemy_will(delta)
 
-	# 턴 타임아웃 안전장치: is_processing_turn이 오래 걸리면 강제 해제
-	if is_processing_turn:
-		_turn_process_timer += delta
-		if _turn_process_timer > TURN_TIMEOUT:
-			push_warning("[BattleWindow] 턴 처리 타임아웃 (%.1fs) - 강제 해제" % TURN_TIMEOUT)
-			is_processing_turn = false
-			_turn_process_timer = 0.0
+	# 행동 타임아웃 안전장치
+	if is_processing_action:
+		_action_process_timer += delta
+		if _action_process_timer > ACTION_TIMEOUT:
+			push_warning("[BattleWindow] 행동 처리 타임아웃 (%.1fs) - 강제 해제" % ACTION_TIMEOUT)
+			is_processing_action = false
+			_action_process_timer = 0.0
 
-	# 독립 턴 처리 (정지 상태면 스킵)
-	if not is_processing_turn and not is_battle_paused:
-		_turn_process_timer = 0.0
-		_process_next_turn()
+	# Will이 가득 찬 유닛 즉시 행동 (정지 상태면 스킵)
+	if not is_processing_action and not is_battle_paused:
+		_action_process_timer = 0.0
+		_process_ready_unit()
 
 
 func _update_run_button_position() -> void:
@@ -278,18 +275,16 @@ func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_update_buttons_for_enemies()
 
-	# 전투 시작 메시지를 먼저 표시 (턴 처리 전)
+	# 전투 시작 메시지를 먼저 표시
 	set_process(true)  # 배경 효과 + 버튼 위치 갱신용
-	is_processing_turn = true  # 메시지 표시 중 턴 진행 차단
+	is_processing_action = true  # 메시지 표시 중 행동 차단
 
 	var encounter_msg: String = _build_encounter_message()
 	await _show_msg_box(encounter_msg, Color.WHITE, 1.0)
 
-	# 메시지 끝난 후 턴 시스템 시작
-	current_round = 0
+	# 메시지 끝난 후 Will 충전 시작
 	_reset_all_will()
-	is_processing_turn = false
-	_start_new_round()
+	is_processing_action = false
 #endregion
 
 
@@ -313,7 +308,7 @@ func _reset_all_will() -> void:
 
 func _update_hero_will(delta: float) -> void:
 	## 영웅 Will 게이지를 동일 속도로 서서히 채움
-	if is_processing_turn or is_battle_paused:
+	if is_processing_action or is_battle_paused:
 		return
 	for hero in PartyManager.get_alive_heroes():
 		if hero.will_value < float(WILL_MAX):
@@ -322,7 +317,7 @@ func _update_hero_will(delta: float) -> void:
 
 func _update_enemy_will(delta: float) -> void:
 	## 적 Will 게이지를 동일 속도로 서서히 채움
-	if is_processing_turn or is_battle_paused:
+	if is_processing_action or is_battle_paused:
 		return
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
@@ -332,132 +327,57 @@ func _update_enemy_will(delta: float) -> void:
 #endregion
 
 
-#region 독립 턴 관리 시스템
+#region Will 기반 실시간 행동 시스템
 func set_battle_paused(paused: bool) -> void:
 	## 전투 정지/재개
 	is_battle_paused = paused
 	_update_hover_highlight()
 
 
-func _start_new_round() -> void:
-	## 새 라운드 시작: 턴 순서 재계산
-	current_round += 1
-	_build_turn_order()
-	current_turn_index = 0
-
-
-func _build_turn_order() -> void:
-	## 이 전투창의 유닛 턴 순서를 DEX 기반으로 정렬
-	turn_queue.clear()
-
-	# 살아있는 영웅 추가
-	var heroes: Array = PartyManager.get_alive_heroes()
-	for hero in heroes:
-		turn_queue.append({
-			"type": "hero",
-			"unit": hero,
-			"dex": hero.get_dex()
-		})
-
-	# 이 전투창의 살아있는 적 추가
-	for enemy in enemies:
-		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
-			turn_queue.append({
-				"type": "enemy",
-				"unit": enemy,
-				"dex": enemy.get_dex()
-			})
-
-	# 죽은 유닛/무효 유닛 정리
-	var cleaned: Array = []
-	for td in turn_queue:
-		if td["type"] == "hero":
-			var h: Hero = td["unit"]
-			if h != null and not h.is_dead:
-				cleaned.append(td)
-		else:
-			var e: BattleEnemy = td["unit"]
-			if e != null and is_instance_valid(e) and e.is_alive():
-				cleaned.append(td)
-	turn_queue = cleaned
-
-	# DEX 기준 내림차순 정렬 (동률이면 랜덤)
-	turn_queue.sort_custom(_compare_turn_priority)
-
-
-func _compare_turn_priority(a: Dictionary, b: Dictionary) -> bool:
-	if a["dex"] != b["dex"]:
-		return a["dex"] > b["dex"]
-	return randf() > 0.5
-
-
-func _process_next_turn() -> void:
-	## 다음 턴 처리 (Will이 가득 찬 유닛만 행동)
+func _process_ready_unit() -> void:
+	## Will이 가득 찬 유닛을 찾아 즉시 행동 (턴 없음)
 	if current_state != BattleState.RUNNING:
 		return
 
-	if turn_queue.is_empty() or current_turn_index >= turn_queue.size():
-		_start_new_round()
-		return
-
-	# 현재 인덱스부터 한 바퀴 돌며 Will 준비 완료 유닛 탐색
-	var ready_index: int = -1
-	for offset in range(turn_queue.size()):
-		var idx: int = (current_turn_index + offset) % turn_queue.size()
-		var td: Dictionary = turn_queue[idx]
-		if td["type"] == "hero":
-			var h: Hero = td["unit"]
-			if h != null and not h.is_dead and h.will_value >= float(WILL_MAX):
-				ready_index = idx
-				break
-		else:
-			var e: BattleEnemy = td["unit"]
-			if e != null and is_instance_valid(e) and e.is_alive() and e.will_value >= float(WILL_MAX):
-				ready_index = idx
-				break
-
-	# 아무도 준비 안 됐으면 이번 프레임은 대기
-	if ready_index < 0:
-		return
-
-	is_processing_turn = true
-	var turn_data: Dictionary = turn_queue[ready_index]
-	current_turn_index = (ready_index + 1) % max(1, turn_queue.size())
-
-	if turn_data["type"] == "hero":
-		var hero: Hero = turn_data["unit"]
-		if hero == null or hero.is_dead:
-			is_processing_turn = false
+	# 영웅 먼저 체크
+	for hero in PartyManager.get_alive_heroes():
+		if hero != null and not hero.is_dead and hero.will_value >= float(WILL_MAX):
+			is_processing_action = true
+			turn_started.emit(hero.hero_name, true)
+			_play_turn_effect()
+			await _process_hero_turn(hero)
+			if _check_battle_end():
+				is_processing_action = false
+				return
+			if not is_inside_tree():
+				is_processing_action = false
+				return
+			await get_tree().create_timer(ACTION_DELAY).timeout
+			is_processing_action = false
+			if is_inside_tree():
+				ATBManager.action_executed.emit()
 			return
-		BattleManager.turn_changed.emit(hero.hero_name, true)
-		turn_started.emit(hero.hero_name, true)
-		_play_turn_effect()
-		await _process_hero_turn(hero)
-		# Will은 스킬 비용만큼만 소비됨 (행동 함수에서 처리)
-	else:
-		var enemy: BattleEnemy = turn_data["unit"]
+
+	# 적 체크
+	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
-			is_processing_turn = false
+			continue
+		if enemy.will_value >= float(WILL_MAX):
+			is_processing_action = true
+			turn_started.emit(enemy.enemy_name, false)
+			_play_turn_effect()
+			await _process_enemy_turn(enemy)
+			if _check_battle_end():
+				is_processing_action = false
+				return
+			if not is_inside_tree():
+				is_processing_action = false
+				return
+			await get_tree().create_timer(ACTION_DELAY).timeout
+			is_processing_action = false
+			if is_inside_tree():
+				ATBManager.action_executed.emit()
 			return
-		BattleManager.turn_changed.emit(enemy.enemy_name, false)
-		turn_started.emit(enemy.enemy_name, false)
-		_play_turn_effect()
-		await _process_enemy_turn(enemy)
-		# 적도 Will 비용만큼 소비 (기본 공격 = 1칸)
-
-	# 전투 종료 체크
-	if _check_battle_end():
-		is_processing_turn = false
-		return
-
-	# 턴 사이 딜레이 (트리 안전 확인)
-	if not is_inside_tree():
-		is_processing_turn = false
-		return
-	await get_tree().create_timer(TURN_DELAY).timeout
-	is_processing_turn = false
-	if is_inside_tree():
-		ATBManager.action_executed.emit()
 #endregion
 
 
