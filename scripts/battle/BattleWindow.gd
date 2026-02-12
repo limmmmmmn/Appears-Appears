@@ -55,6 +55,13 @@ var current_round: int = 0
 var is_processing_turn: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
 
+# === ATB 설정 ===
+const ATB_MAX: float = 100.0
+const ATB_BASE_GAIN_PER_SEC: float = 6.0
+const ATB_AGI_GAIN_PER_SEC: float = 0.35
+const ATB_MIN_RATE: float = 0.03
+const ATB_MAX_RATE: float = 0.60
+
 # === 턴 타임아웃 안전장치 ===
 var _turn_process_timer: float = 0.0
 const TURN_TIMEOUT: float = 8.0  # 턴 처리 최대 시간 (초)
@@ -144,6 +151,7 @@ func _process(delta: float) -> void:
 
 	# ATB 게이지 충전 (전투 중 영웅들의 ATB를 DEX 기반으로 채움)
 	_update_hero_atb(delta)
+	_update_enemy_atb(delta)
 
 	# 턴 타임아웃 안전장치: is_processing_turn이 오래 걸리면 강제 해제
 	if is_processing_turn:
@@ -282,6 +290,7 @@ func _start_battle() -> void:
 
 	# 메시지 끝난 후 턴 시스템 시작
 	current_round = 0
+	_reset_all_atb()
 	is_processing_turn = false
 	_start_new_round()
 #endregion
@@ -297,14 +306,41 @@ func get_alive_enemies() -> Array:
 
 
 #region ATB 게이지
+func _reset_all_atb() -> void:
+	for hero in PartyManager.get_alive_heroes():
+		hero.atb_value = 0.0
+	for enemy in enemies:
+		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
+			enemy.set_atb_value(0.0)
+
+
 func _update_hero_atb(delta: float) -> void:
 	## 영웅 ATB 게이지를 DEX 기반으로 서서히 채움
 	if is_processing_turn or is_battle_paused:
 		return
 	for hero in PartyManager.get_alive_heroes():
 		if hero.atb_value < 1.0:
-			var fill_speed: float = hero.get_dex() * 0.03
+			var fill_speed: float = _calc_atb_fill_rate(hero.get_dex(), hero.base_atb)
 			hero.atb_value = minf(hero.atb_value + fill_speed * delta, 1.0)
+
+
+func _update_enemy_atb(delta: float) -> void:
+	## 적 ATB 게이지를 DEX 기반으로 서서히 채움
+	if is_processing_turn or is_battle_paused:
+		return
+	for enemy in enemies:
+		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
+			continue
+		if enemy.atb_value < 1.0:
+			var fill_speed: float = _calc_atb_fill_rate(enemy.get_dex(), 1.0)
+			enemy.set_atb_value(minf(enemy.atb_value + fill_speed * delta, 1.0))
+
+
+func _calc_atb_fill_rate(dex_value: int, speed_multiplier: float = 1.0) -> float:
+	## 내부 ATB(0.0~1.0) 기준 초당 충전량
+	var gain_points_per_sec: float = (ATB_BASE_GAIN_PER_SEC + float(maxi(0, dex_value)) * ATB_AGI_GAIN_PER_SEC) * maxf(0.5, speed_multiplier)
+	var normalized_rate: float = gain_points_per_sec / ATB_MAX
+	return clampf(normalized_rate, ATB_MIN_RATE, ATB_MAX_RATE)
 #endregion
 
 
@@ -344,6 +380,19 @@ func _build_turn_order() -> void:
 				"dex": enemy.get_dex()
 			})
 
+	# 죽은 유닛/무효 유닛 정리
+	var cleaned: Array = []
+	for td in turn_queue:
+		if td["type"] == "hero":
+			var h: Hero = td["unit"]
+			if h != null and not h.is_dead:
+				cleaned.append(td)
+		else:
+			var e: BattleEnemy = td["unit"]
+			if e != null and is_instance_valid(e) and e.is_alive():
+				cleaned.append(td)
+	turn_queue = cleaned
+
 	# DEX 기준 내림차순 정렬 (동률이면 랜덤)
 	turn_queue.sort_custom(_compare_turn_priority)
 
@@ -355,7 +404,7 @@ func _compare_turn_priority(a: Dictionary, b: Dictionary) -> bool:
 
 
 func _process_next_turn() -> void:
-	## 다음 턴 처리
+	## 다음 턴 처리 (ATB가 1.0 찬 유닛만 행동)
 	if current_state != BattleState.RUNNING:
 		return
 
@@ -363,16 +412,35 @@ func _process_next_turn() -> void:
 		_start_new_round()
 		return
 
+	# 현재 인덱스부터 한 바퀴 돌며 ATB 준비 완료 유닛 탐색
+	var ready_index: int = -1
+	for offset in range(turn_queue.size()):
+		var idx: int = (current_turn_index + offset) % turn_queue.size()
+		var td: Dictionary = turn_queue[idx]
+		if td["type"] == "hero":
+			var h: Hero = td["unit"]
+			if h != null and not h.is_dead and h.atb_value >= 1.0:
+				ready_index = idx
+				break
+		else:
+			var e: BattleEnemy = td["unit"]
+			if e != null and is_instance_valid(e) and e.is_alive() and e.atb_value >= 1.0:
+				ready_index = idx
+				break
+
+	# 아무도 준비 안 됐으면 이번 프레임은 대기
+	if ready_index < 0:
+		return
+
 	is_processing_turn = true
-	var turn_data: Dictionary = turn_queue[current_turn_index]
-	current_turn_index += 1
+	var turn_data: Dictionary = turn_queue[ready_index]
+	current_turn_index = (ready_index + 1) % max(1, turn_queue.size())
 
 	if turn_data["type"] == "hero":
 		var hero: Hero = turn_data["unit"]
 		if hero == null or hero.is_dead:
 			is_processing_turn = false
 			return
-		hero.atb_value = 1.0  # 행동 준비 완료
 		BattleManager.turn_changed.emit(hero.hero_name, true)
 		turn_started.emit(hero.hero_name, true)
 		_play_turn_effect()
@@ -387,6 +455,7 @@ func _process_next_turn() -> void:
 		turn_started.emit(enemy.enemy_name, false)
 		_play_turn_effect()
 		await _process_enemy_turn(enemy)
+		enemy.set_atb_value(0.0)
 
 	# 전투 종료 체크
 	if _check_battle_end():
