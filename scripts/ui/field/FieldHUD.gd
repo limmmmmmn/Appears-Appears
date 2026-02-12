@@ -58,6 +58,11 @@ var is_pause_menu_active: bool = false
 
 # 장비 화면
 var equipment_screen: EquipmentScreen = null
+
+# 중앙 하단 알림 박스
+var notice_panel: PanelContainer = null
+var notice_label: Label = null
+var notice_timer: SceneTreeTimer = null
 #endregion
 
 
@@ -73,6 +78,7 @@ func _ready() -> void:
 	_init_retreat_button()
 	_init_pause_menu()
 	_init_equipment_screen()
+	_init_notice_box()
 	_init_recruit_button()
 	_init_battle_pause_button()
 	_connect_signals()
@@ -298,6 +304,38 @@ func _init_equipment_screen() -> void:
 	add_child(equipment_screen)
 
 
+func _init_notice_box() -> void:
+	## 중앙 하단 알림 박스 (보상/레벨업/장비 안내)
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	notice_panel = PanelContainer.new()
+	notice_panel.visible = false
+	notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	notice_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	notice_panel.offset_left = 170
+	notice_panel.offset_right = -170
+	notice_panel.offset_top = -68
+	notice_panel.offset_bottom = -26
+
+	var style := _make_flat_style(Color(0.04, 0.04, 0.08, 0.92), STYLE.border_gold, 6, 1)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	notice_panel.add_theme_stylebox_override("panel", style)
+	ctrl.add_child(notice_panel)
+
+	notice_label = Label.new()
+	notice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	notice_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	notice_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	notice_label.add_theme_font_size_override("font_size", STYLE.font_normal)
+	notice_label.add_theme_color_override("font_color", STYLE.text_normal)
+	notice_panel.add_child(notice_label)
+
+
 func _toggle_equipment_screen() -> void:
 	if equipment_screen == null:
 		return
@@ -463,6 +501,14 @@ func _connect_signals() -> void:
 			BattleManager.party_hp_changed.connect(update_party_display)
 		if not BattleManager.loot_animation_requested.is_connected(_on_loot_anim):
 			BattleManager.loot_animation_requested.connect(_on_loot_anim)
+		if BattleManager.has_signal("hud_notice_requested"):
+			if not BattleManager.hud_notice_requested.is_connected(_on_hud_notice_requested):
+				BattleManager.hud_notice_requested.connect(_on_hud_notice_requested)
+
+	if InventoryManager:
+		if InventoryManager.has_signal("item_equipped"):
+			if not InventoryManager.item_equipped.is_connected(_on_item_equipped):
+				InventoryManager.item_equipped.connect(_on_item_equipped)
 
 	if bottom_party_cards:
 		if not bottom_party_cards.equipment_dropped.is_connected(_on_equip_dropped):
@@ -509,6 +555,16 @@ func _on_loot_anim(item_id: String, start_pos: Vector2) -> void:
 
 func _on_equip_dropped(_hero_index: int, _item_id: String) -> void:
 	pass
+
+
+func _on_hud_notice_requested(message: String, duration: float = 2.0, color: Color = Color.WHITE) -> void:
+	_show_notice(message, duration, color)
+
+
+func _on_item_equipped(hero_name: String, item_id: String, _slot: String, _replaced_id: String) -> void:
+	var item_data: Dictionary = DataManager.get_equipment(item_id)
+	var item_name: String = str(item_data.get("name", item_id))
+	_show_notice("%s 장착: %s" % [hero_name, item_name], 2.0, Color(0.8, 1.0, 0.6))
 #endregion
 
 
@@ -530,6 +586,30 @@ func update_party_display() -> void:
 	if bottom_party_cards:
 		bottom_party_cards.update_display()
 #endregion
+
+
+func _show_notice(message: String, duration: float = 2.0, color: Color = Color.WHITE) -> void:
+	if notice_panel == null or notice_label == null:
+		return
+	if message.strip_edges().is_empty():
+		_hide_notice()
+		return
+
+	notice_label.text = message
+	notice_label.add_theme_color_override("font_color", color)
+	notice_panel.visible = true
+	notice_panel.modulate.a = 1.0
+
+	# 이전 타이머 무시 (새 메시지로 교체)
+	notice_timer = get_tree().create_timer(maxf(0.3, duration))
+	await notice_timer.timeout
+	if notice_label.text == message:
+		_hide_notice()
+
+
+func _hide_notice() -> void:
+	if notice_panel:
+		notice_panel.visible = false
 
 
 #region 로그 (스텁 - 외부 호출 호환용)
@@ -560,7 +640,6 @@ func add_system_log(_msg: String) -> void:
 func clear_logs() -> void:
 	pass
 #endregion
-
 
 
 

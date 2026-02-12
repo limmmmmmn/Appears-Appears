@@ -9,6 +9,7 @@ signal battle_started(battle_id: int)
 signal battle_ended(battle_id: int, victory: bool)
 signal all_battles_ended
 signal battle_log_received(message: String, color: Color)
+signal hud_notice_requested(message: String, duration: float, color: Color)
 signal party_hp_changed
 signal elite_victory(battle_id: int)
 signal boss_victory(battle_id: int)
@@ -53,6 +54,13 @@ var battle_container: CanvasLayer = null
 
 func _ready() -> void:
 	pass
+
+
+func push_hud_notice(message: String, duration: float = 2.0, color: Color = Color.WHITE) -> void:
+	## 필드 HUD 중앙 하단 알림 요청
+	if message.is_empty():
+		return
+	hud_notice_requested.emit(message, duration, color)
 
 
 #region 전투창 시스템 - 핵심 로직

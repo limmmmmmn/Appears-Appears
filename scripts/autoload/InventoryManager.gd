@@ -4,6 +4,7 @@ extends Node
 signal inventory_changed
 signal item_added(item_id: String, quantity: int)
 signal item_removed(item_id: String, quantity: int)
+signal item_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String)
 signal item_auto_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String)
 
 # 인벤토리: { item_id: quantity }
@@ -122,6 +123,7 @@ func equip_item(hero: RefCounted, item_id: String, slot: String) -> bool:
 	# 인벤에서 빼고 장착
 	remove_item(item_id, 1)
 	hero.equipment[slot] = item_id
+	item_equipped.emit(hero.hero_name, item_id, slot, current_equip)
 	
 	PartyManager.party_changed.emit()
 	
@@ -350,6 +352,7 @@ func _do_auto_equip(hero: Hero, item_id: String, slot: String, replaced_id: Stri
 	hero.equipment[slot] = item_id
 
 	# 시그널 발송 (알림 UI용)
+	item_equipped.emit(hero.hero_name, item_id, slot, replaced_id)
 	item_auto_equipped.emit(hero.hero_name, item_id, slot, replaced_id)
 
 	PartyManager.party_changed.emit()

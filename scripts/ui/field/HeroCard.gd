@@ -1,7 +1,7 @@
 extends Control
 class_name HeroCard
 ## 좌측 파티 초상화 유닛
-## 페이스칩(48x48) + 가변 길이 HP/MP 바 (잔상, Tween, 색상 전환)
+## 페이스칩(48x48) + HP/MP/ATB/EXP 바 (잔상, Tween)
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
 const FACE_SIZE := 48
@@ -24,7 +24,11 @@ const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)    # 30~60%
 const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)   # 30% 미만
 const HP_GHOST_COLOR := Color(1.0, 0.35, 0.35, 0.8)
 const MP_BAR_COLOR := Color(0.25, 0.45, 0.95)
+const ATB_BAR_COLOR := Color(1.0, 0.8, 0.35)
+const EXP_BAR_COLOR := Color(0.45, 0.75, 1.0)
 const BAR_BG_COLOR := Color(0.06, 0.06, 0.09, 0.9)
+const ATB_BAR_HEIGHT := 4
+const EXP_BAR_HEIGHT := 4
 
 const DEATH_OVERLAY_COLOR := Color(0.1, 0.1, 0.1, 0.7)
 const PLACEHOLDER_COLOR := Color(0.15, 0.12, 0.2)
@@ -60,14 +64,24 @@ var hp_ghost: ColorRect
 var hp_bar: ColorRect
 var mp_bar_bg: ColorRect
 var mp_bar: ColorRect
+var atb_bar_bg: ColorRect
+var atb_bar: ColorRect
+var exp_level_label: Label
+var exp_bar_bg: ColorRect
+var exp_bar: ColorRect
 
 # 바 길이 캐시
 var _hp_bar_width: float = MAX_BAR_WIDTH
 var _mp_bar_width: float = MAX_BAR_WIDTH
+var _atb_bar_width: float = MAX_BAR_WIDTH
+var _exp_bar_width: float = MAX_BAR_WIDTH - 24.0
 
 # 상태 추적
 var _prev_hp: int = -1
 var _prev_mp: int = -1
+var _prev_atb_ratio: float = -1.0
+var _prev_exp_ratio: float = -1.0
+var _prev_level: int = -1
 
 # 트윈
 var _hp_tween: Tween
@@ -77,7 +91,7 @@ var _shake_tween: Tween
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(FACE_SIZE + BAR_GAP + MAX_BAR_WIDTH, FACE_SIZE)
+	custom_minimum_size = Vector2(FACE_SIZE + BAR_GAP + MAX_BAR_WIDTH, FACE_SIZE + 2)
 	_build_ui()
 
 
@@ -85,7 +99,7 @@ func _build_ui() -> void:
 	# --- 콘텐츠 래퍼 (셰이크 대상) ---
 	content = Control.new()
 	content.position = Vector2.ZERO
-	content.size = Vector2(FACE_SIZE + BAR_GAP + MAX_BAR_WIDTH, FACE_SIZE)
+	content.size = Vector2(FACE_SIZE + BAR_GAP + MAX_BAR_WIDTH, FACE_SIZE + 2)
 	content.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(content)
 
@@ -151,6 +165,29 @@ func _build_ui() -> void:
 	mp_bar = _make_rect(Vector2(0, mp_y), Vector2(MAX_BAR_WIDTH, MP_BAR_HEIGHT), MP_BAR_COLOR)
 	bars_container.add_child(mp_bar)
 
+	# ATB: bg → fill
+	var atb_y: float = mp_y + MP_BAR_HEIGHT + BAR_SPACING
+	atb_bar_bg = _make_rect(Vector2(0, atb_y), Vector2(MAX_BAR_WIDTH, ATB_BAR_HEIGHT), BAR_BG_COLOR)
+	bars_container.add_child(atb_bar_bg)
+	atb_bar = _make_rect(Vector2(0, atb_y), Vector2(MAX_BAR_WIDTH, ATB_BAR_HEIGHT), ATB_BAR_COLOR)
+	bars_container.add_child(atb_bar)
+
+	# EXP: Lv 라벨 + bg → fill
+	var exp_y: float = atb_y + ATB_BAR_HEIGHT + BAR_SPACING
+	exp_level_label = Label.new()
+	exp_level_label.position = Vector2(0, exp_y - 3)
+	exp_level_label.custom_minimum_size = Vector2(24, 8)
+	exp_level_label.text = "Lv.1"
+	exp_level_label.add_theme_font_size_override("font_size", 8)
+	exp_level_label.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
+	exp_level_label.mouse_filter = MOUSE_FILTER_IGNORE
+	bars_container.add_child(exp_level_label)
+
+	exp_bar_bg = _make_rect(Vector2(24, exp_y), Vector2(MAX_BAR_WIDTH - 24.0, EXP_BAR_HEIGHT), BAR_BG_COLOR)
+	bars_container.add_child(exp_bar_bg)
+	exp_bar = _make_rect(Vector2(24, exp_y), Vector2(MAX_BAR_WIDTH - 24.0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
+	bars_container.add_child(exp_bar)
+
 
 func _make_rect(pos: Vector2, sz: Vector2, color: Color) -> ColorRect:
 	var r := ColorRect.new()
@@ -176,6 +213,8 @@ func update_from_hero(hero: Hero) -> void:
 	_recalc_bar_widths(hero.get_max_hp(), hero.get_max_mp())
 	update_hp(hero.current_hp, hero.get_max_hp())
 	update_mp(hero.current_mp, hero.get_max_mp())
+	update_atb(hero.id)
+	update_exp(hero.level, hero.current_exp, hero.get_exp_to_next_level())
 	set_dead(hero.is_dead)
 #endregion
 
@@ -190,10 +229,17 @@ func _recalc_bar_widths(max_hp: int, max_mp: int) -> void:
 		hp_bar_bg.size.x = _hp_bar_width
 	if mp_bar_bg:
 		mp_bar_bg.size.x = _mp_bar_width
+	_atb_bar_width = maxf(_hp_bar_width, _mp_bar_width)
+	if atb_bar_bg:
+		atb_bar_bg.size.x = _atb_bar_width
+	_exp_bar_width = maxf(24.0, _atb_bar_width - 24.0)
+	if exp_bar_bg:
+		exp_bar_bg.size.x = _exp_bar_width
 
 	# 카드 최소 너비 = 페이스칩 + 갭 + 더 긴 바
 	var wider: float = maxf(_hp_bar_width, _mp_bar_width)
 	custom_minimum_size.x = FACE_SIZE + BAR_GAP + wider
+	custom_minimum_size.y = FACE_SIZE + 2
 
 
 func _calc_bar_length(max_value: int, reference: int) -> float:
@@ -287,6 +333,36 @@ func update_mp(current: int, max_mp: int) -> void:
 #endregion
 
 
+func update_atb(p_hero_id: String) -> void:
+	if atb_bar == null:
+		return
+	var ratio: float = 1.0
+	if CooldownManager and not p_hero_id.is_empty():
+		var cd_percent: float = CooldownManager.get_cooldown_percent(p_hero_id, "basic_attack")
+		ratio = 1.0 - clampf(cd_percent, 0.0, 1.0)
+	var target_w: float = _atb_bar_width * ratio
+	if _prev_atb_ratio < 0.0:
+		atb_bar.size.x = target_w
+	else:
+		atb_bar.size.x = lerpf(atb_bar.size.x, target_w, 0.35)
+	_prev_atb_ratio = ratio
+
+
+func update_exp(p_level: int, current_exp: int, needed_exp: int) -> void:
+	if exp_bar == null:
+		return
+	var ratio: float = 1.0 if needed_exp <= 0 else clampf(float(current_exp) / float(needed_exp), 0.0, 1.0)
+	if exp_level_label:
+		exp_level_label.text = "Lv.%d" % p_level
+	var target_w: float = _exp_bar_width * ratio
+	if _prev_exp_ratio < 0.0 or _prev_level != p_level:
+		exp_bar.size.x = target_w
+	else:
+		exp_bar.size.x = lerpf(exp_bar.size.x, target_w, 0.35)
+	_prev_exp_ratio = ratio
+	_prev_level = p_level
+
+
 #region 사망 처리
 func set_dead(is_dead: bool) -> void:
 	if death_overlay:
@@ -332,6 +408,13 @@ func _kill_tween(tw: Tween) -> void:
 	if tw and tw.is_valid():
 		tw.kill()
 #endregion
+
+
+func _process(_delta: float) -> void:
+	# ATB는 기본공격 쿨다운 기준으로 실시간 갱신
+	if hero_id.is_empty():
+		return
+	update_atb(hero_id)
 
 
 #region 필드 힐 (클릭)

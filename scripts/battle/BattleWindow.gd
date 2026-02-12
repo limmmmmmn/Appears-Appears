@@ -1308,9 +1308,13 @@ func _end_battle_victory() -> void:
 	# 2) 보상 표시 (순차)
 	if total_exp > 0:
 		await _show_msg_box("EXP +%d 획득!" % total_exp, Color.CYAN, 0.8)
+		if BattleManager and BattleManager.has_method("push_hud_notice"):
+			BattleManager.push_hud_notice("EXP +%d" % total_exp, 2.0, Color.CYAN)
 
 	if total_gold > 0:
 		await _show_msg_box("Gold +%d 획득!" % total_gold, Color.YELLOW, 0.8)
+		if BattleManager and BattleManager.has_method("push_hud_notice"):
+			BattleManager.push_hud_notice("Gold +%d" % total_gold, 2.0, Color.YELLOW)
 
 	if not drop_items.is_empty():
 		var item_names: Array = []
@@ -1322,6 +1326,8 @@ func _end_battle_victory() -> void:
 				var idata: Dictionary = DataManager.get_item(item_id)
 				item_names.append(str(idata.get("name", item_id)))
 		await _show_msg_box("획득: %s" % ", ".join(item_names), Color.LIGHT_BLUE, 1.0)
+		if BattleManager and BattleManager.has_method("push_hud_notice"):
+			BattleManager.push_hud_notice("획득: %s" % ", ".join(item_names), 2.8, Color.LIGHT_BLUE)
 
 	# 3) 보상 처리 및 전투창 닫기
 	_grant_exp_rewards()
@@ -1590,6 +1596,8 @@ func _show_rebel_up_popups(hero: Hero, gain_result: Dictionary) -> void:
 		var lv: int = int(lv_data.get("level", hero.level))
 		if SoundManager:
 			SoundManager.play_level_up()
+		if BattleManager and BattleManager.has_method("push_hud_notice"):
+			BattleManager.push_hud_notice("%s Lv.%d Rebel Up!" % [hero.hero_name, lv], 2.0, Color(0.6, 0.95, 1.0))
 		_show_rebel_up_popup("⬆ Rebel Up! %s Lv.%d" % [hero.hero_name, lv])
 
 

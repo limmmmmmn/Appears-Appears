@@ -18,7 +18,7 @@ const SEED_CAP: int = 99
 const AGI_ATB_RATIO: float = 0.02   # 민첩 50 -> ATB +1.0
 const AGI_CRIT_RATIO: float = 0.003 # 민첩 100 -> 크리 30%
 const DEFAULT_BASE_ATB: float = 1.0
-const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [5, 10, 15, 20]
+const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [2, 5, 10, 15]
 
 # 기본(레벨) 스탯: hp/mp/str/agi/wis/luk
 var level: int = 1
