@@ -26,6 +26,7 @@ var enemy_data_list: Array = []
 
 
 # === 보상 ===
+var total_exp: int = 0
 var total_gold: int = 0
 var drop_items: Array = []
 var loot_multiplier: float = 1.0  # 루팅 배율 (아이템 등장 확률 배수)
@@ -156,6 +157,7 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	is_boss_battle = p_is_boss
 
 	# 보상 초기화
+	total_exp = 0
 	total_gold = 0
 	drop_items.clear()
 	elite_gold = 0
@@ -532,10 +534,13 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var skill_name: String = skill_data.get("name", "공격")
 	var skill_type: String = skill_data.get("type", "physical")
 
-	# 회피 판정
+	# 명중/회피 판정
+	var hit_rate: float = hero.get_hit_rate()
 	var eva_ignore: float = _get_skill_effect_value(skill_data, "ignore_eva", 0.0)
 	var effective_eva: float = target.get_eva() * (1.0 - eva_ignore)
-	var is_evaded: bool = randf() * 100 < effective_eva
+	var evade_roll: float = randf() * 100
+	var hit_roll: float = randf() * 100
+	var is_evaded: bool = (evade_roll < effective_eva) or (hit_roll > hit_rate)
 
 	if is_evaded:
 		target.show_miss_text()
@@ -1065,11 +1070,14 @@ func _build_encounter_message() -> String:
 #region 적 처치/전투 종료
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	# 보상 계산 (특성 적용)
+	var exp_trait_mult: float = 1.0 + _get_trait_effect_float("exp_mult")
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
 
+	var exp_reward: int = int(enemy.get_exp_reward() * exp_trait_mult)
 	var gold_reward: int = int(enemy.get_gold_reward() * gold_trait_mult)
 	var items: Array = enemy.roll_drops()
 
+	total_exp += exp_reward
 	total_gold += gold_reward
 	drop_items.append_array(items)
 
@@ -1257,7 +1265,7 @@ func _check_battle_end() -> bool:
 
 func _report_rewards_and_close() -> void:
 	## 보상을 BattleManager에 누적하고 전투창 닫기
-	BattleManager.add_accumulated_reward(0, total_gold, drop_items)
+	BattleManager.add_accumulated_reward(total_exp, total_gold, drop_items)
 
 	# 전투창 종료 (승리)
 	current_state = BattleState.VICTORY
@@ -1298,6 +1306,9 @@ func _end_battle_victory() -> void:
 	await _show_msg_box("승리!", Color.GOLD, 1.0)
 
 	# 2) 보상 표시 (순차)
+	if total_exp > 0:
+		await _show_msg_box("EXP +%d 획득!" % total_exp, Color.CYAN, 0.8)
+
 	if total_gold > 0:
 		await _show_msg_box("Gold +%d 획득!" % total_gold, Color.YELLOW, 0.8)
 
@@ -1313,6 +1324,7 @@ func _end_battle_victory() -> void:
 		await _show_msg_box("획득: %s" % ", ".join(item_names), Color.LIGHT_BLUE, 1.0)
 
 	# 3) 보상 처리 및 전투창 닫기
+	_grant_exp_rewards()
 	call_deferred("_emit_party_updated")
 	battle_ended.emit(battle_id, true)
 	_play_close_effect()
@@ -1539,9 +1551,91 @@ func set_loot_multiplier(multiplier: float) -> void:
 
 func _add_rewards(_exp: int, gold: int, items: Array) -> void:
 	## 보상 추가 (전투창에 쌓임)
+	total_exp += _exp
 	total_gold += gold
 	drop_items.append_array(items)
 #endregion
+
+
+func _grant_exp_rewards() -> void:
+	## 파티원 EXP 지급 (복사 지급), 벤치 영웅은 50%
+	if total_exp <= 0:
+		return
+
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	for hero in party:
+		if hero == null:
+			continue
+		var result: Dictionary = hero.gain_exp(total_exp)
+		_show_rebel_up_popups(hero, result)
+
+	var bench: Array = PartyManager.get_bench_heroes() if PartyManager and PartyManager.has_method("get_bench_heroes") else []
+	var bench_exp: int = int(total_exp * Hero.BENCH_EXP_RATIO)
+	if bench_exp <= 0:
+		return
+
+	for hero in bench:
+		if hero == null:
+			continue
+		var result: Dictionary = hero.gain_exp(bench_exp)
+		_show_rebel_up_popups(hero, result)
+
+
+func _show_rebel_up_popups(hero: Hero, gain_result: Dictionary) -> void:
+	var levels: Array = gain_result.get("levels", [])
+	if levels.is_empty():
+		return
+
+	for lv_data in levels:
+		var lv: int = int(lv_data.get("level", hero.level))
+		if SoundManager:
+			SoundManager.play_level_up()
+		_show_rebel_up_popup("⬆ Rebel Up! %s Lv.%d" % [hero.hero_name, lv])
+
+
+func _show_rebel_up_popup(text: String) -> void:
+	## 0.5초 비차단 레벨업 연출
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.08, 0.12, 0.92)
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.border_color = Color(0.3, 0.85, 1.0, 1.0)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	panel.add_theme_stylebox_override("panel", style)
+
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", Color(0.8, 0.95, 1.0))
+	panel.add_child(label)
+
+	add_child(panel)
+	panel.set_as_top_level(true)
+
+	await get_tree().process_frame
+	if not is_instance_valid(panel):
+		return
+
+	var area_center: Vector2 = battle_area.global_position + battle_area.size / 2
+	panel.global_position = area_center + Vector2(0, -36) - panel.size / 2
+	panel.modulate.a = 0.0
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(panel, "modulate:a", 1.0, 0.12)
+	tween.tween_property(panel, "global_position:y", panel.global_position.y - 10.0, 0.5)
+	tween.chain().tween_property(panel, "modulate:a", 0.0, 0.18)
+	tween.tween_callback(panel.queue_free)
 
 
 #region 특성 시스템
@@ -2083,6 +2177,3 @@ func _execute_merge(target: BattleWindow) -> void:
 	# 닫기 효과
 	_play_close_effect()
 #endregion
-
-
-

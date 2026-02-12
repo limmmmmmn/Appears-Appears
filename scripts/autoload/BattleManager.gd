@@ -25,6 +25,7 @@ signal field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, win
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
 
 # === 누적 보상 시스템 ===
+var accumulated_exp: int = 0
 var accumulated_gold: int = 0
 var accumulated_items: Array = []  # [{id, type, rarity, identified}]
 
@@ -321,6 +322,7 @@ func _on_loot_drop_requested(item_id: String, start_pos: Vector2) -> void:
 #region 누적 보상 시스템
 func add_accumulated_reward(_exp: int, gold: int, items: Array = []) -> void:
 	## 전투창에서 보상 누적
+	accumulated_exp += maxi(0, _exp)
 	accumulated_gold += gold
 
 	# 아이템 추가
@@ -345,6 +347,12 @@ func add_accumulated_reward(_exp: int, gold: int, items: Array = []) -> void:
 
 func claim_accumulated_rewards() -> void:
 	## 누적 보상 수령 → 즉시 지급 + 오브 드롭
+	if accumulated_exp > 0:
+		var party: Array = PartyManager.get_party() if PartyManager else []
+		for hero in party:
+			if hero != null:
+				hero.gain_exp(accumulated_exp)
+
 	var items_arr: Array = []
 	for item in accumulated_items:
 		items_arr.append(item.id)
@@ -372,6 +380,7 @@ func _calc_orb_count(gold: int, item_count: int) -> int:
 
 func reset_accumulated_rewards() -> void:
 	## 보상 초기화
+	accumulated_exp = 0
 	accumulated_gold = 0
 	accumulated_items.clear()
 	accumulated_rewards_changed.emit(0, [])
@@ -379,7 +388,7 @@ func reset_accumulated_rewards() -> void:
 
 func get_accumulated_rewards() -> Dictionary:
 	return {
-		"exp": 0,
+		"exp": accumulated_exp,
 		"gold": accumulated_gold,
 		"items": accumulated_items,
 	}

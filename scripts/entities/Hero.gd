@@ -7,7 +7,42 @@ var hero_name: String = ""
 var class_id: String = ""
 var hero_class_name: String = ""  # class_name은 Godot 예약어
 
-# 기본 스탯
+# 레벨/경험치
+const MAX_LEVEL: int = 50
+const BASE_EXP: int = 100
+const EXP_EXPONENT: float = 1.5
+const BENCH_EXP_RATIO: float = 0.5
+
+# 성장/전투 상수
+const SEED_CAP: int = 99
+const AGI_ATB_RATIO: float = 0.02   # 민첩 50 -> ATB +1.0
+const AGI_CRIT_RATIO: float = 0.003 # 민첩 100 -> 크리 30%
+const DEFAULT_BASE_ATB: float = 1.0
+const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [5, 10, 15, 20]
+
+# 기본(레벨) 스탯: hp/mp/str/agi/wis/luk
+var level: int = 1
+var current_exp: int = 0
+var level_stats: Dictionary = {
+	"hp": 30,
+	"mp": 8,
+	"str": 5,
+	"agi": 3,
+	"wis": 0,
+	"luk": 2,
+}
+
+# 씨앗 보너스 (스탯당 +99 상한)
+var seed_bonus: Dictionary = {
+	"hp": 0,
+	"mp": 0,
+	"str": 0,
+	"agi": 0,
+	"wis": 0,
+	"luk": 0,
+}
+
+# 기존 코드 호환용 base_* 캐시
 var base_hp: int = 0
 var base_mp: int = 0
 var base_str: int = 0
@@ -16,8 +51,19 @@ var base_int: int = 0
 var base_dex: int = 0
 var base_luk: int = 0
 
-# 씨앗 보너스
-var seed_bonus: Dictionary = {"hp": 0, "mp": 0, "str": 0, "def": 0, "int": 0, "dex": 0, "luk": 0}
+# 레벨별 성장 테이블 (index == level)
+var growth_per_level: Dictionary = {
+	"hp": [0],
+	"mp": [0],
+	"str": [0],
+	"agi": [0],
+	"wis": [0],
+	"luk": [0],
+}
+
+# 클래스별 스킬 해금 레벨
+var skill_unlock_levels: Dictionary = {}
+var unlocked_skills: Array = []
 
 # 현재 상태
 var current_hp: int = 0
@@ -42,6 +88,9 @@ var field_sprite: String = ""
 # 룬 (특성 부여)
 var equipped_rune_id: String = ""
 
+# ATB 기반값
+var base_atb: float = DEFAULT_BASE_ATB
+
 
 static func create_from_id(hero_id: String) -> Hero:
 	var hero := Hero.new()
@@ -49,21 +98,26 @@ static func create_from_id(hero_id: String) -> Hero:
 	return hero
 
 
+static func get_required_exp_for_level(level_value: int) -> int:
+	## 현재 레벨 -> 다음 레벨에 필요한 EXP
+	return int(round(BASE_EXP * pow(float(maxi(1, level_value)), EXP_EXPONENT)))
+
+
 func _initialize(hero_id: String) -> void:
 	var hero_data: Dictionary = DataManager.get_hero(hero_id)
 	if hero_data.is_empty():
 		return
-	
+
 	id = hero_id
 	hero_name = hero_data.get("name", "Unknown")
 	class_id = hero_data.get("class_id", "")
 	portrait = hero_data.get("sprite_face", hero_data.get("portrait", ""))
 	field_sprite = hero_data.get("sprite_field", hero_data.get("field_sprite", ""))
-	
+
 	var class_data: Dictionary = DataManager.get_class_data(class_id)
 	hero_class_name = class_data.get("name", "Unknown")
 	tags = class_data.get("tags", []) + hero_data.get("tags", [])
-	
+
 	var base_stats: Dictionary = DataManager.get_class_base_stats(class_id)
 	base_hp = int(base_stats.get("hp", 30))
 	base_mp = int(base_stats.get("mp", 20))
@@ -73,9 +127,100 @@ func _initialize(hero_id: String) -> void:
 	base_dex = int(base_stats.get("dex", 5))
 	base_luk = int(base_stats.get("luk", 5))
 
+	level_stats = {
+		"hp": base_hp,
+		"mp": base_mp,
+		"str": base_str,
+		"agi": base_dex,
+		"wis": base_int,
+		"luk": base_luk,
+	}
+	seed_bonus = {
+		"hp": 0,
+		"mp": 0,
+		"str": 0,
+		"agi": 0,
+		"wis": 0,
+		"luk": 0,
+	}
+
+	base_atb = float(class_data.get("base_atb", DEFAULT_BASE_ATB))
+	growth_per_level = _build_growth_table(class_data)
+	_setup_skill_unlocks(class_data)
+
 	current_hp = get_max_hp()
 	current_mp = get_max_mp()
 	_init_skill_toggles()
+
+
+func _build_growth_table(class_data: Dictionary) -> Dictionary:
+	var table: Dictionary = {
+		"hp": [0],
+		"mp": [0],
+		"str": [0],
+		"agi": [0],
+		"wis": [0],
+		"luk": [0],
+	}
+
+	var custom_table: Dictionary = class_data.get("growth_per_level", {})
+	if not custom_table.is_empty():
+		for key in ["hp", "mp", "str", "agi", "wis", "luk"]:
+			var arr: Array = custom_table.get(key, [])
+			if arr.is_empty():
+				arr = [0]
+			elif int(arr[0]) != 0:
+				arr.insert(0, 0)
+			table[key] = arr
+		return table
+
+	# fallback: 클래스 성장 고정치 기반
+	var growth: Dictionary = DataManager.get_class_growth(class_id)
+	var hp_g: int = int(growth.get("hp", 5))
+	var mp_g: int = int(growth.get("mp", maxi(1, int(round(float(growth.get("int", 1)) * 0.5)))))
+	var str_g: int = int(growth.get("str", 1))
+	var agi_g: int = int(growth.get("agi", growth.get("dex", 1)))
+	var wis_g: int = int(growth.get("wis", growth.get("int", 1)))
+	var luk_g: int = int(growth.get("luk", 1))
+
+	for _lv in range(1, MAX_LEVEL + 1):
+		table["hp"].append(hp_g)
+		table["mp"].append(mp_g)
+		table["str"].append(str_g)
+		table["agi"].append(agi_g)
+		table["wis"].append(wis_g)
+		table["luk"].append(luk_g)
+
+	return table
+
+
+func _setup_skill_unlocks(class_data: Dictionary) -> void:
+	skill_unlock_levels.clear()
+	unlocked_skills.clear()
+
+	var class_skills: Array = DataManager.get_class_skills(class_id)
+	var custom_unlocks: Dictionary = class_data.get("skill_unlocks", {})
+	var idx: int = 0
+
+	for skill_id in class_skills:
+		var sid: String = str(skill_id)
+		if sid == "basic_attack":
+			skill_unlock_levels[sid] = 1
+			continue
+
+		if custom_unlocks.has(sid):
+			skill_unlock_levels[sid] = int(custom_unlocks[sid])
+		else:
+			var unlock_level: int = DEFAULT_SKILL_UNLOCK_LEVELS[min(idx, DEFAULT_SKILL_UNLOCK_LEVELS.size() - 1)]
+			skill_unlock_levels[sid] = unlock_level
+			idx += 1
+
+	for sid in skill_unlock_levels.keys():
+		if int(skill_unlock_levels[sid]) <= level:
+			unlocked_skills.append(str(sid))
+
+	if not unlocked_skills.has("basic_attack"):
+		unlocked_skills.append("basic_attack")
 
 
 func _init_skill_toggles() -> void:
@@ -83,50 +228,106 @@ func _init_skill_toggles() -> void:
 	skill_toggles.clear()
 	var class_skills: Array = DataManager.get_class_skills(class_id)
 	for skill_id in class_skills:
-		skill_toggles[skill_id] = true  # 기본적으로 모든 스킬 활성화
+		skill_toggles[skill_id] = true
+
+
+func _normalize_stat_key(stat: String) -> String:
+	match stat:
+		"int", "wis":
+			return "wis"
+		"dex", "agi":
+			return "agi"
+		"def":
+			return "def"
+		_:
+			return stat
 
 
 #region 스탯 계산
-const HP_MULTIPLIER: float = 1.0  # HP 배율 (1/4로 축소)
+func get_base_stat(stat: String) -> int:
+	var key: String = _normalize_stat_key(stat)
+	if key == "def":
+		return 0
+	return int(level_stats.get(key, 0)) + int(seed_bonus.get(key, 0))
+
 
 func get_max_hp() -> int:
-	return int((base_hp + seed_bonus["hp"] + _get_equipment_stat("hp")) * HP_MULTIPLIER)
+	return get_base_stat("hp") + _get_equipment_stat("hp")
+
 
 func get_max_mp() -> int:
-	return base_mp + seed_bonus["mp"] + _get_equipment_stat("mp")
+	return get_base_stat("mp") + _get_equipment_stat("mp")
+
 
 func get_str() -> int:
-	return base_str + seed_bonus["str"] + _get_equipment_stat("str")
+	return get_base_stat("str")
+
 
 func get_def() -> int:
-	return base_def + seed_bonus["def"] + _get_equipment_stat("def")
+	return get_defense()
+
 
 func get_int() -> int:
-	return base_int + seed_bonus["int"] + _get_equipment_stat("int")
+	# 기존 코드 호환: INT 참조는 마법공격력으로 매핑
+	return get_magic_attack()
+
 
 func get_dex() -> int:
-	return base_dex + seed_bonus["dex"] + _get_equipment_stat("dex")
+	return get_base_stat("agi")
+
 
 func get_luk() -> int:
-	return base_luk + seed_bonus["luk"] + _get_equipment_stat("luk")
+	return get_base_stat("luk")
+
+
+func get_attack() -> int:
+	return get_base_stat("str") + _get_equipment_stat("atk")
+
 
 func get_atk() -> int:
-	return get_str() + _get_equipment_stat("atk")
+	return get_attack()
+
+
+func get_defense() -> int:
+	# 수비력은 장비 전용
+	return _get_equipment_stat("def")
+
 
 func get_p_def() -> int:
-	return get_def()
+	return get_defense()
+
 
 func get_m_def() -> int:
-	return get_int()
+	return get_defense()
+
+
+func get_magic_attack() -> int:
+	# 신규 MAG + 구형 INT 장비 보정 동시 지원
+	return get_base_stat("wis") + _get_equipment_stat("mag") + _get_equipment_stat("int")
+
+
+func get_atb_speed() -> float:
+	return base_atb + get_base_stat("agi") * AGI_ATB_RATIO + _get_equipment_stat("spd")
+
 
 func get_spd() -> int:
-	return _get_equipment_stat("spd")
+	# 기존 UI 표기용: 민첩 + 장비 SPD
+	return get_base_stat("agi") + _get_equipment_stat("spd")
 
-func get_eva() -> float:
-	return get_dex() * 0.5 + get_luk() * 0.2
 
 func get_crit() -> float:
-	return get_luk() * 0.5 + 5.0
+	# 전투 코드가 0~100 기준 확률을 사용함
+	return clampf(get_base_stat("agi") * AGI_CRIT_RATIO * 100.0, 0.0, 95.0)
+
+
+func get_hit_rate() -> float:
+	# 명중은 무기/장비 성능 기반
+	return clampf(90.0 + _get_equipment_stat("hit") + _get_equipment_stat("acc"), 40.0, 100.0)
+
+
+func get_eva() -> float:
+	# 회피는 장비 + 운 보정
+	return clampf(_get_equipment_stat("eva") + get_base_stat("luk") * 0.1, 0.0, 60.0)
 
 
 func _get_equipment_stat(stat: String) -> int:
@@ -136,8 +337,148 @@ func _get_equipment_stat(stat: String) -> int:
 		if equip_id.is_empty():
 			continue
 		var data: Dictionary = DataManager.get_equipment(equip_id)
-		total += int(data.get("stats", {}).get(stat, 0))
+		if data.is_empty():
+			continue
+		var stats: Dictionary = data.get("stats", {})
+		total += int(stats.get(stat, 0))
 	return total
+#endregion
+
+
+#region 레벨/경험치
+func get_exp_to_next_level() -> int:
+	if level >= MAX_LEVEL:
+		return 0
+	return get_required_exp_for_level(level)
+
+
+func get_exp_ratio() -> float:
+	var need: int = get_exp_to_next_level()
+	if need <= 0:
+		return 1.0
+	return clampf(float(current_exp) / float(need), 0.0, 1.0)
+
+
+func gain_exp(amount: int) -> Dictionary:
+	## EXP 획득 및 레벨업 처리
+	var result := {
+		"gained_exp": maxi(0, amount),
+		"leveled_up": false,
+		"levels": [],
+	}
+
+	if amount <= 0 or level >= MAX_LEVEL:
+		return result
+
+	var remaining: int = amount
+	while remaining > 0 and level < MAX_LEVEL:
+		var need: int = get_exp_to_next_level() - current_exp
+		var gain: int = mini(need, remaining)
+		current_exp += gain
+		remaining -= gain
+
+		if current_exp >= get_exp_to_next_level():
+			level += 1
+			current_exp = 0
+			var grown: Dictionary = _apply_level_growth(level)
+			var unlocked: Array = _unlock_skills_for_level(level)
+			full_restore() # 레벨업 시 HP/MP 전회복
+
+			var lv_result := {
+				"level": level,
+				"growth": grown,
+				"unlocked_skills": unlocked,
+			}
+			result["levels"].append(lv_result)
+
+	if level >= MAX_LEVEL:
+		current_exp = 0
+
+	result["leveled_up"] = not (result["levels"] as Array).is_empty()
+	return result
+
+
+func _apply_level_growth(new_level: int) -> Dictionary:
+	var delta: Dictionary = {
+		"hp": 0,
+		"mp": 0,
+		"str": 0,
+		"agi": 0,
+		"wis": 0,
+		"luk": 0,
+	}
+
+	for key in delta.keys():
+		var growth_val: int = _get_growth_value_for_level(key, new_level)
+		delta[key] = growth_val
+		level_stats[key] = int(level_stats.get(key, 0)) + growth_val
+
+	return delta
+
+
+func _get_growth_value_for_level(stat: String, lv: int) -> int:
+	var arr: Array = growth_per_level.get(stat, [0])
+	if lv >= 0 and lv < arr.size():
+		return int(arr[lv])
+	if arr.is_empty():
+		return 0
+	return int(arr[arr.size() - 1])
+
+
+func _unlock_skills_for_level(new_level: int) -> Array:
+	var newly_unlocked: Array = []
+	for sid in skill_unlock_levels.keys():
+		var skill_id: String = str(sid)
+		if int(skill_unlock_levels[skill_id]) == new_level and not unlocked_skills.has(skill_id):
+			unlocked_skills.append(skill_id)
+			newly_unlocked.append(skill_id)
+	return newly_unlocked
+
+
+func set_progress(saved_level: int, saved_exp: int, saved_level_stats: Dictionary = {}, saved_unlocked_skills: Array = []) -> void:
+	level = clampi(saved_level, 1, MAX_LEVEL)
+	current_exp = maxi(0, saved_exp)
+
+	if saved_level_stats.is_empty():
+		level_stats = {
+			"hp": base_hp,
+			"mp": base_mp,
+			"str": base_str,
+			"agi": base_dex,
+			"wis": base_int,
+			"luk": base_luk,
+		}
+		for lv in range(2, level + 1):
+			_apply_level_growth(lv)
+	else:
+		for key in saved_level_stats.keys():
+			var normalized: String = _normalize_stat_key(str(key))
+			if normalized == "def":
+				continue
+			if level_stats.has(normalized):
+				level_stats[normalized] = int(saved_level_stats[key])
+
+	if not saved_unlocked_skills.is_empty():
+		unlocked_skills.clear()
+		for sid in saved_unlocked_skills:
+			unlocked_skills.append(str(sid))
+	else:
+		# 기존 세이브 호환
+		_setup_skill_unlocks(DataManager.get_class_data(class_id))
+
+	# 현재 레벨에 맞게 재해금 보정
+	for sid in skill_unlock_levels.keys():
+		var skill_id: String = str(sid)
+		if int(skill_unlock_levels[skill_id]) <= level and not unlocked_skills.has(skill_id):
+			unlocked_skills.append(skill_id)
+
+	if not unlocked_skills.has("basic_attack"):
+		unlocked_skills.append("basic_attack")
+
+	if level >= MAX_LEVEL:
+		current_exp = 0
+	else:
+		current_exp = mini(current_exp, get_exp_to_next_level())
 #endregion
 
 
@@ -191,15 +532,28 @@ func has_enough_mp(skill_id: String) -> bool:
 
 
 func apply_seed_bonus(stat: String, value: int) -> void:
-	## 씨앗으로 영구 스탯 증가
-	if seed_bonus.has(stat):
-		seed_bonus[stat] += value
+	## 씨앗으로 영구 스탯 증가 (스탯당 +99 제한)
+	if value <= 0:
+		return
 
-	# HP 증가 시 현재 값도 증가
-	if stat == "hp":
-		current_hp = mini(current_hp + value, get_max_hp())
-	if stat == "mp":
-		current_mp = mini(current_mp + value, get_max_mp())
+	var key: String = _normalize_stat_key(stat)
+	if key == "def":
+		# 수비력은 장비 전용 설계
+		return
+	if not seed_bonus.has(key):
+		return
+
+	var old_val: int = int(seed_bonus[key])
+	var new_val: int = mini(SEED_CAP, old_val + value)
+	var applied: int = new_val - old_val
+	if applied <= 0:
+		return
+	seed_bonus[key] = new_val
+
+	if key == "hp":
+		current_hp = mini(current_hp + applied, get_max_hp())
+	elif key == "mp":
+		current_mp = mini(current_mp + applied, get_max_mp())
 
 
 func full_restore() -> void:
@@ -287,8 +641,8 @@ func get_enabled_skills() -> Array:
 
 
 func get_available_skills() -> Array:
-	## 클래스가 보유한 스킬 목록 반환
-	return DataManager.get_class_skills(class_id)
+	## 현재 레벨에서 해금된 스킬 목록 반환
+	return unlocked_skills.duplicate()
 
 
 func get_usable_skills() -> Array:
@@ -314,12 +668,14 @@ func can_use_skill(skill_id: String) -> bool:
 
 
 func use_seed(stat: String, value: int) -> void:
-	if seed_bonus.has(stat):
-		seed_bonus[stat] += value
+	apply_seed_bonus(stat, value)
 
 
 func get_hp_percent() -> float:
-	return float(current_hp) / float(get_max_hp())
+	var max_hp: int = get_max_hp()
+	if max_hp <= 0:
+		return 1.0
+	return float(current_hp) / float(max_hp)
 
 
 func get_mp_percent() -> float:
@@ -370,9 +726,11 @@ func unequip_rune() -> String:
 
 
 func get_stat_summary() -> String:
-	return "[%s] %s | HP:%d/%d MP:%d/%d | STR:%d DEF:%d INT:%d DEX:%d LUK:%d" % [
+	return "[%s] %s | Lv.%d EXP:%d/%d | HP:%d/%d MP:%d/%d | STR:%d AGI:%d WIS:%d LUK:%d ATK:%d DEF:%d" % [
 		hero_name, hero_class_name,
+		level, current_exp, get_exp_to_next_level(),
 		current_hp, get_max_hp(),
 		current_mp, get_max_mp(),
-		get_str(), get_def(), get_int(), get_dex(), get_luk()
+		get_str(), get_base_stat("agi"), get_base_stat("wis"), get_luk(),
+		get_attack(), get_defense()
 	]

@@ -8,6 +8,7 @@ signal party_wiped
 
 const MAX_PARTY_SIZE: int = 4
 var party: Array[Hero] = []
+var reserve_party: Array[Hero] = []
 var inventory: Dictionary = {}  # item_id -> 수량
 
 const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
@@ -31,6 +32,11 @@ func add_hero_by_id(hero_id: String) -> bool:
 
 func get_party() -> Array[Hero]:
 	return party
+
+
+func get_bench_heroes() -> Array[Hero]:
+	## 비전투 대기 영웅 목록
+	return reserve_party
 
 
 func get_hero_at(index: int) -> Hero:

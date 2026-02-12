@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ns4mpn2ydn37"
-path="res://.godot/imported/dragon.png-49a0eb96b6f6bc8888f7492480c1b45f.ctex"
+uid="uid://lbr40vd6lrwo"
+path="res://.godot/imported/shadow_face.png-e5556a565e3390009f866c073626b583.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/dragon.png"
-dest_files=["res://.godot/imported/dragon.png-49a0eb96b6f6bc8888f7492480c1b45f.ctex"]
+source_file="res://assets/sprites/heroes/shadow_face.png"
+dest_files=["res://.godot/imported/shadow_face.png-e5556a565e3390009f866c073626b583.ctex"]
 
 [params]
 

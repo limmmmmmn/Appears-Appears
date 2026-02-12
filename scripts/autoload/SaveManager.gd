@@ -97,12 +97,16 @@ func _serialize_party() -> Array:
 	for hero in PartyManager.get_party():
 		party_data.append({
 			"id": hero.id,
+			"level": hero.level,
+			"current_exp": hero.current_exp,
+			"level_stats": hero.level_stats.duplicate(),
 			"current_hp": hero.current_hp,
 			"current_mp": hero.current_mp,
 			"is_dead": hero.is_dead,
 			"seed_bonus": hero.seed_bonus.duplicate(),
 			"equipment": hero.equipment.duplicate(),
-			"skill_toggles": hero.skill_toggles.duplicate()
+			"skill_toggles": hero.skill_toggles.duplicate(),
+			"unlocked_skills": hero.unlocked_skills.duplicate()
 		})
 	return party_data
 
@@ -185,11 +189,28 @@ func _deserialize_party(data: Array) -> void:
 		hero.current_hp = int(hero_data.get("current_hp", hero.get_max_hp()))
 		hero.current_mp = int(hero_data.get("current_mp", hero.get_max_mp()))
 		hero.is_dead = bool(hero_data.get("is_dead", false))
-		
+
 		var saved_seed: Dictionary = hero_data.get("seed_bonus", {})
 		for stat in saved_seed:
-			hero.seed_bonus[stat] = int(saved_seed[stat])
-		
+			var stat_key: String = str(stat)
+			var normalized_stat: String = stat_key
+			if stat_key == "int":
+				normalized_stat = "wis"
+			elif stat_key == "dex":
+				normalized_stat = "agi"
+			elif stat_key == "def":
+				normalized_stat = "def"
+			if normalized_stat == "def":
+				continue
+			if hero.seed_bonus.has(normalized_stat):
+				hero.seed_bonus[normalized_stat] = mini(Hero.SEED_CAP, int(saved_seed[stat]))
+
+		var saved_level: int = int(hero_data.get("level", 1))
+		var saved_exp: int = int(hero_data.get("current_exp", 0))
+		var saved_level_stats: Dictionary = hero_data.get("level_stats", {})
+		var saved_unlocked_skills: Array = hero_data.get("unlocked_skills", [])
+		hero.set_progress(saved_level, saved_exp, saved_level_stats, saved_unlocked_skills)
+
 		var saved_equip: Dictionary = hero_data.get("equipment", {})
 		for slot in saved_equip:
 			hero.equipment[slot] = str(saved_equip[slot])
@@ -197,6 +218,10 @@ func _deserialize_party(data: Array) -> void:
 		var saved_toggles: Dictionary = hero_data.get("skill_toggles", {})
 		for skill_id in saved_toggles:
 			hero.skill_toggles[skill_id] = bool(saved_toggles[skill_id])
+
+		# 세이브 데이터를 모두 적용한 뒤 체력/마력 안전 보정
+		hero.current_hp = mini(hero.current_hp, hero.get_max_hp())
+		hero.current_mp = mini(hero.current_mp, hero.get_max_mp())
 		
 		PartyManager.party.append(hero)
 	

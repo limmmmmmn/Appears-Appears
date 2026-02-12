@@ -458,9 +458,8 @@ func _on_seed_used(item_id: String) -> void:
 	var stat: String = effect.get("stat", "")
 	var value: int = int(effect.get("value", 0))
 	
-	# 영구 스탯 증가 적용 (seed_bonus 사용)
-	if hero.seed_bonus.has(stat):
-		hero.seed_bonus[stat] += value
+	# 영구 스탯 증가 적용
+	hero.apply_seed_bonus(stat, value)
 	
 	# 아이템 소모
 	PartyManager.remove_item(item_id)

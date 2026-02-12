@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ns4mpn2ydn37"
-path="res://.godot/imported/dragon.png-49a0eb96b6f6bc8888f7492480c1b45f.ctex"
+uid="uid://d4lma86f6ct3k"
+path="res://.godot/imported/aria_face.png-922255786ff446fdbfefae3e66235890.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/dragon.png"
-dest_files=["res://.godot/imported/dragon.png-49a0eb96b6f6bc8888f7492480c1b45f.ctex"]
+source_file="res://assets/sprites/heroes/aria_face.png"
+dest_files=["res://.godot/imported/aria_face.png-922255786ff446fdbfefae3e66235890.ctex"]
 
 [params]
 

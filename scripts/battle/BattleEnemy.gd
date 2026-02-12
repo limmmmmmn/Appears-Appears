@@ -26,6 +26,7 @@ var base_luk: int = 0
 var damage_type: String = "physical"  # physical or magic
 
 # 보상
+var exp_reward: int = 0
 var gold_min: int = 0
 var gold_max: int = 0
 var drop_table: Array = []
@@ -85,6 +86,7 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	# 보상 (엘리트는 3배 + 최소 보장)
 	var rewards: Dictionary = data.get("rewards", {})
 	var reward_mult: float = 3.0 if is_elite_version else 1.0
+	exp_reward = int(int(rewards.get("exp", 0)) * reward_mult)
 	gold_min = int(int(rewards.get("gold_min", 1)) * reward_mult)
 	gold_max = int(int(rewards.get("gold_max", 5)) * reward_mult)
 	if is_elite_version:
@@ -198,6 +200,10 @@ func _update_hp_display() -> void:
 #region 보상
 func get_gold_reward() -> int:
 	return randi_range(gold_min, gold_max)
+
+
+func get_exp_reward() -> int:
+	return maxi(0, exp_reward)
 
 
 func roll_drops() -> Array:

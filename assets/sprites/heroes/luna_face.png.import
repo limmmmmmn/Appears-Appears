@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ns4mpn2ydn37"
-path="res://.godot/imported/dragon.png-49a0eb96b6f6bc8888f7492480c1b45f.ctex"
+uid="uid://dkuigkio4xe0j"
+path="res://.godot/imported/luna_face.png-cfbc0133828444c18e024fd9a67b4a34.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/enemies/dragon.png"
-dest_files=["res://.godot/imported/dragon.png-49a0eb96b6f6bc8888f7492480c1b45f.ctex"]
+source_file="res://assets/sprites/heroes/luna_face.png"
+dest_files=["res://.godot/imported/luna_face.png-cfbc0133828444c18e024fd9a67b4a34.ctex"]
 
 [params]
 
