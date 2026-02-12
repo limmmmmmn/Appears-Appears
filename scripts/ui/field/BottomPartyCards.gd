@@ -19,9 +19,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	# 전투 중 Will/EXP 바를 매 프레임 갱신 (부드러운 게이지 충전 연출)
-	if not BattleManager or BattleManager.get_active_battle_count() == 0:
-		return
+	# Will/EXP 바를 매 프레임 갱신 (Will은 전투 밖에서도 항상 충전)
 	_update_realtime_bars()
 
 

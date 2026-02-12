@@ -143,8 +143,7 @@ func _process(delta: float) -> void:
 
 	_update_background_effect(delta)
 
-	# Will 게이지 충전 (전투 중 모든 유닛의 Will을 동일 속도로 채움)
-	_update_hero_will(delta)
+	# 적 Will 게이지 충전 (영웅 Will은 ATBManager에서 중앙 관리)
 	_update_enemy_will(delta)
 
 	# 행동 타임아웃 안전장치
@@ -274,7 +273,7 @@ func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_update_buttons_for_enemies()
 	set_process(true)
-	_reset_all_will()
+	_reset_enemy_will()
 #endregion
 
 
@@ -288,21 +287,11 @@ func get_alive_enemies() -> Array:
 
 
 #region Will 게이지
-func _reset_all_will() -> void:
-	for hero in PartyManager.get_alive_heroes():
-		hero.will_value = 0.0
+func _reset_enemy_will() -> void:
+	## 적 Will만 초기화 (영웅 Will은 전투창과 무관하게 유지)
 	for enemy in enemies:
 		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
 			enemy.set_will_value(0.0)
-
-
-func _update_hero_will(delta: float) -> void:
-	## 영웅 Will 게이지를 동일 속도로 서서히 채움 (행동 중에도 계속 충전)
-	if is_battle_paused:
-		return
-	for hero in PartyManager.get_alive_heroes():
-		if hero.will_value < float(WILL_MAX):
-			hero.will_value = minf(hero.will_value + WILL_FILL_PER_SEC * delta, float(WILL_MAX))
 
 
 func _update_enemy_will(delta: float) -> void:
