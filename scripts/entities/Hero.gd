@@ -362,6 +362,11 @@ func get_exp_ratio() -> float:
 	return clampf(float(current_exp) / float(need), 0.0, 1.0)
 
 
+func get_exp_percent() -> float:
+	## 레거시 호환용 별칭
+	return get_exp_ratio()
+
+
 func gain_exp(amount: int) -> Dictionary:
 	## EXP 획득 및 레벨업 처리
 	var result := {

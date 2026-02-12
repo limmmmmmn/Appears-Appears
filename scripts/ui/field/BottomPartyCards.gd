@@ -142,9 +142,10 @@ func _update_realtime_bars() -> void:
 			continue
 		var hero: Hero = party[i]
 		if hero != null and not hero.is_dead:
-			cards[i].update_atb(hero.atb_value)
-			cards[i].update_exp(hero.get_exp_percent())
-			cards[i].update_level(hero.level)
+			var card: HeroCard = cards[i]
+			card.update_atb(hero.atb_value)
+			card.update_exp(hero.get_exp_ratio())
+			card.update_level(hero.level)
 #endregion
 
 
