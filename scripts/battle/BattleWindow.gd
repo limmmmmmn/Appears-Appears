@@ -208,8 +208,7 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	_collect_party_traits()
 	_apply_trait_bonuses()
 
-	await get_tree().create_timer(0.3).timeout
-	_start_battle()
+	call_deferred("_start_battle")
 
 
 func _update_buttons_for_enemies() -> void:
@@ -274,17 +273,8 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_update_buttons_for_enemies()
-
-	# 전투 시작 메시지를 먼저 표시
-	set_process(true)  # 배경 효과 + 버튼 위치 갱신용
-	is_processing_action = true  # 메시지 표시 중 행동 차단
-
-	var encounter_msg: String = _build_encounter_message()
-	await _show_msg_box(encounter_msg, Color.WHITE, 1.0)
-
-	# 메시지 끝난 후 Will 충전 시작
+	set_process(true)
 	_reset_all_will()
-	is_processing_action = false
 #endregion
 
 
@@ -307,8 +297,8 @@ func _reset_all_will() -> void:
 
 
 func _update_hero_will(delta: float) -> void:
-	## 영웅 Will 게이지를 동일 속도로 서서히 채움
-	if is_processing_action or is_battle_paused:
+	## 영웅 Will 게이지를 동일 속도로 서서히 채움 (행동 중에도 계속 충전)
+	if is_battle_paused:
 		return
 	for hero in PartyManager.get_alive_heroes():
 		if hero.will_value < float(WILL_MAX):
@@ -316,8 +306,8 @@ func _update_hero_will(delta: float) -> void:
 
 
 func _update_enemy_will(delta: float) -> void:
-	## 적 Will 게이지를 동일 속도로 서서히 채움
-	if is_processing_action or is_battle_paused:
+	## 적 Will 게이지를 동일 속도로 서서히 채움 (행동 중에도 계속 충전)
+	if is_battle_paused:
 		return
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
@@ -335,24 +325,16 @@ func set_battle_paused(paused: bool) -> void:
 
 
 func _process_ready_unit() -> void:
-	## Will이 가득 찬 유닛을 찾아 즉시 행동 (턴 없음)
+	## Will이 가득 찬 유닛을 찾아 즉시 행동 (대기 없음, 쿨다운처럼)
 	if current_state != BattleState.RUNNING:
 		return
 
-	# 영웅 먼저 체크
+	# 영웅 체크
 	for hero in PartyManager.get_alive_heroes():
 		if hero != null and not hero.is_dead and hero.will_value >= float(WILL_MAX):
 			is_processing_action = true
-			turn_started.emit(hero.hero_name, true)
-			_play_turn_effect()
-			await _process_hero_turn(hero)
-			if _check_battle_end():
-				is_processing_action = false
-				return
-			if not is_inside_tree():
-				is_processing_action = false
-				return
-			await get_tree().create_timer(ACTION_DELAY).timeout
+			_execute_hero_action(hero)
+			_check_battle_end()
 			is_processing_action = false
 			if is_inside_tree():
 				ATBManager.action_executed.emit()
@@ -364,16 +346,8 @@ func _process_ready_unit() -> void:
 			continue
 		if enemy.will_value >= float(WILL_MAX):
 			is_processing_action = true
-			turn_started.emit(enemy.enemy_name, false)
-			_play_turn_effect()
-			await _process_enemy_turn(enemy)
-			if _check_battle_end():
-				is_processing_action = false
-				return
-			if not is_inside_tree():
-				is_processing_action = false
-				return
-			await get_tree().create_timer(ACTION_DELAY).timeout
+			_execute_enemy_action(enemy)
+			_check_battle_end()
 			is_processing_action = false
 			if is_inside_tree():
 				ATBManager.action_executed.emit()
@@ -385,12 +359,10 @@ func on_enemy_defeated(enemy: BattleEnemy) -> void:
 	_on_enemy_defeated(enemy)
 
 
-func _process_hero_turn(hero: Hero) -> void:
-	## 영웅의 턴 처리
+func _execute_hero_action(hero: Hero) -> void:
+	## 영웅 즉시 행동 (동기, 대기 없음)
 	if hero == null or hero.is_dead:
 		return
-
-	_bring_to_front()
 
 	# 클래스별 스킬 선택 (간단한 AI)
 	var skill_id: String = _select_hero_skill(hero)
@@ -400,25 +372,15 @@ func _process_hero_turn(hero: Hero) -> void:
 		skill_id = "basic_attack"
 		skill_data = DataManager.get_skill("basic_attack")
 
-	# Will 비용 확인 및 소비
-	var will_cost: int = int(skill_data.get("will_cost", 1))
-
-	var target_type: String = skill_data.get("target", "single_enemy")
-
-	# 짧은 대기 (연출)
-	if not is_inside_tree():
-		return
-	await get_tree().create_timer(0.2).timeout
-	if not is_inside_tree():
-		return
-
 	# Will 소모
+	var will_cost: int = int(skill_data.get("will_cost", 1))
 	hero.consume_will(will_cost)
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
 
 	# 타겟 타입에 따른 처리
+	var target_type: String = skill_data.get("target", "single_enemy")
 	match target_type:
 		"single_ally", "all_allies":
 			_execute_ally_skill(hero, skill_id, skill_data, target_type)
@@ -430,35 +392,16 @@ func _process_hero_turn(hero: Hero) -> void:
 	# 스킬 쿨타임 시작
 	CooldownManager.start_cooldown(hero.id, skill_id)
 
-	# 행동 후 잠시 대기
-	if not is_inside_tree():
-		return
-	await get_tree().create_timer(0.3).timeout
 
-
-func _process_enemy_turn(enemy: BattleEnemy) -> void:
-	## 적의 턴 처리
+func _execute_enemy_action(enemy: BattleEnemy) -> void:
+	## 적 즉시 행동 (동기, 대기 없음)
 	if enemy == null or not enemy.is_alive():
-		return
-
-	_bring_to_front()
-
-	# 짧은 대기 (연출)
-	if not is_inside_tree():
-		return
-	await get_tree().create_timer(0.2).timeout
-	if not is_inside_tree():
 		return
 
 	# Will 소모 (적 기본 공격 = 1칸)
 	enemy.consume_will(1)
 
 	_enemy_attack(enemy)
-
-	# 행동 후 잠시 대기
-	if not is_inside_tree():
-		return
-	await get_tree().create_timer(0.3).timeout
 
 
 func _select_hero_skill(hero: Hero) -> String:
@@ -1119,9 +1062,6 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		elite_gold += gold_reward
 		elite_items.append_array(items)
 
-	# 적 처치 팝업 (비동기로 표시, 전투 흐름 차단 X)
-	_show_msg_box("%s 처치!" % enemy.enemy_name, Color.LIME, 0.8)
-
 	# 엘리트 처치 시 특수 연출
 	if enemy.is_elite_version:
 		_play_elite_death_cinematic(enemy)
@@ -1134,45 +1074,39 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 
 func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
-	## 엘리트 처치 특수 연출: 느려짐 → 나머지 해산 → 자동 보상
+	## 엘리트 처치 특수 연출: 떨림 → 폭발 → 해산 → 자동 보상 (비동기, 전투 차단 없음)
+	var tween := create_tween()
 
-	# 1) 엘리트 느려지며 떨림
-
+	# 1) 엘리트 떨림
 	if elite.sprite:
-		var slow_tween := create_tween()
-		# 느리게 떨림
 		for i in range(6):
-			slow_tween.tween_property(elite, "position:x", elite.position.x + 3, 0.08)
-			slow_tween.tween_property(elite, "position:x", elite.position.x - 3, 0.08)
-		slow_tween.tween_property(elite, "position:x", elite.position.x, 0.05)
-		await slow_tween.finished
+			tween.tween_property(elite, "position:x", elite.position.x + 3, 0.08)
+			tween.tween_property(elite, "position:x", elite.position.x - 3, 0.08)
+		tween.tween_property(elite, "position:x", elite.position.x, 0.05)
 
 	# 2) 엘리트 폭발 이펙트
 	if elite.sprite:
-		var burst_tween := create_tween()
-		burst_tween.tween_property(elite, "scale", Vector2(1.3, 1.3), 0.1)
-		burst_tween.tween_property(elite, "modulate", Color(2.0, 1.0, 2.0, 1.0), 0.1)
-		burst_tween.tween_property(elite, "modulate:a", 0.0, 0.15)
-		burst_tween.tween_property(elite, "scale", Vector2(0.0, 0.0), 0.1)
-		await burst_tween.finished
-	elite.visible = false
+		tween.tween_property(elite, "scale", Vector2(1.3, 1.3), 0.1)
+		tween.tween_property(elite, "modulate", Color(2.0, 1.0, 2.0, 1.0), 0.1)
+		tween.tween_property(elite, "modulate:a", 0.0, 0.15)
+		tween.tween_property(elite, "scale", Vector2(0.0, 0.0), 0.1)
 
-	# 3) 메시지: 엘리트 처치
-	await _show_msg_box("엘리트 적을 처치했다!", Color.GOLD, 0.8)
+	tween.tween_callback(func(): elite.visible = false)
 
-	# 4) 남은 적 즉시 해산 (보상 없이 소멸)
-	for enemy in enemies:
-		if enemy != null and enemy.is_alive() and enemy != elite:
-			if enemy.sprite:
-				var fade := create_tween()
-				fade.tween_property(enemy, "modulate:a", 0.0, 0.3)
-				fade.tween_callback(func(): enemy.visible = false)
-			enemy.current_hp = 0
+	# 3) 남은 적 즉시 해산 (보상 없이 소멸)
+	tween.tween_callback(func():
+		for enemy in enemies:
+			if enemy != null and enemy.is_alive() and enemy != elite:
+				if enemy.sprite:
+					var fade := create_tween()
+					fade.tween_property(enemy, "modulate:a", 0.0, 0.3)
+					fade.tween_callback(func(): enemy.visible = false)
+				enemy.current_hp = 0
+	)
 
-	await get_tree().create_timer(0.4).timeout
-
-	# 5) 자동 보상 → 자동 닫기 (팡!)
-	_end_battle_victory()
+	# 4) 짧은 대기 후 자동 보상 → 자동 닫기
+	tween.tween_interval(0.4)
+	tween.tween_callback(_end_battle_victory)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -1332,20 +1266,12 @@ func _end_battle_victory() -> void:
 	if SoundManager != null:
 		SoundManager.play_victory()
 
-	# 처치 팝업이 사라질 때까지 대기
-	await get_tree().create_timer(1.0).timeout
-
-	# 1) 승리 메시지 (순차)
-	await _show_msg_box("승리!", Color.GOLD, 1.0)
-
-	# 2) 보상 표시 (순차)
+	# HUD 보상 알림 (비차단)
 	if total_exp > 0:
-		await _show_msg_box("EXP +%d 획득!" % total_exp, Color.CYAN, 0.8)
 		if BattleManager and BattleManager.has_method("push_hud_notice"):
 			BattleManager.push_hud_notice("EXP +%d" % total_exp, 2.0, Color.CYAN)
 
 	if total_gold > 0:
-		await _show_msg_box("Gold +%d 획득!" % total_gold, Color.YELLOW, 0.8)
 		if BattleManager and BattleManager.has_method("push_hud_notice"):
 			BattleManager.push_hud_notice("Gold +%d" % total_gold, 2.0, Color.YELLOW)
 
@@ -1358,11 +1284,10 @@ func _end_battle_victory() -> void:
 			else:
 				var idata: Dictionary = DataManager.get_item(item_id)
 				item_names.append(str(idata.get("name", item_id)))
-		await _show_msg_box("획득: %s" % ", ".join(item_names), Color.LIGHT_BLUE, 1.0)
 		if BattleManager and BattleManager.has_method("push_hud_notice"):
 			BattleManager.push_hud_notice("획득: %s" % ", ".join(item_names), 2.8, Color.LIGHT_BLUE)
 
-	# 3) 보상 처리 및 전투창 닫기
+	# 보상 처리 및 전투창 닫기 (즉시)
 	_grant_exp_rewards()
 	call_deferred("_emit_party_updated")
 	battle_ended.emit(battle_id, true)
@@ -1551,8 +1476,6 @@ func _end_battle_defeat() -> void:
 	# 패배 사운드 재생
 	if SoundManager != null:
 		SoundManager.play_defeat()
-
-	await _show_msg_box("전멸...", Color.DARK_RED, 1.2)
 
 	battle_ended.emit(battle_id, false)
 	_play_close_effect()
