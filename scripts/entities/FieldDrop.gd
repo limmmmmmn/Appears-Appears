@@ -3,19 +3,17 @@ class_name FieldDrop
 ## 필드 드롭 오브젝트: 전투 종료 후 필드에 떨어지는 보상
 ## 플레이어가 위를 지나가면 수집
 
-enum DropType { GOLD, ITEM, HP_ORB, MP_ORB }
+enum DropType { GOLD, ITEM, HP_ORB }
 
 const DROP_ICONS := {
 	DropType.GOLD: "🪙",
 	DropType.ITEM: "📦",
 	DropType.HP_ORB: "💗",
-	DropType.MP_ORB: "💙",
 }
 const DROP_COLORS := {
 	DropType.GOLD: Color(1.0, 0.9, 0.3),
 	DropType.ITEM: Color(0.9, 0.6, 1.0),
 	DropType.HP_ORB: Color(1.0, 0.4, 0.6),
-	DropType.MP_ORB: Color(0.4, 0.6, 1.0),
 }
 
 const ITEM_TYPE_ICONS: Dictionary = {
@@ -36,7 +34,6 @@ const RARITY_COLORS: Dictionary = {
 
 const PICKUP_RADIUS := 12.0
 const HP_PER_ORB := 10
-const MP_PER_ORB := 5
 
 var drop_type: DropType = DropType.GOLD
 var gold_amount: int = 0
@@ -44,7 +41,6 @@ var item_id: String = ""
 var item_type: String = ""
 var item_rarity: String = ""
 var heal_amount: int = HP_PER_ORB
-var mp_amount: int = MP_PER_ORB
 var spawn_delay: float = 0.0
 
 var _collected: bool = false
@@ -91,8 +87,6 @@ func _ready() -> void:
 				_label.self_modulate = RARITY_COLORS.get(item_rarity, Color.WHITE)
 		DropType.HP_ORB:
 			_label.text = "💗"
-		DropType.MP_ORB:
-			_label.text = "💙"
 		_:
 			_label.text = "?"
 
@@ -135,8 +129,6 @@ func collect() -> void:
 			_collect_item()
 		DropType.HP_ORB:
 			_collect_hp()
-		DropType.MP_ORB:
-			_collect_mp()
 
 	_play_collect_anim()
 
@@ -209,23 +201,6 @@ func _collect_hp() -> void:
 		)
 
 
-func _collect_mp() -> void:
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	var actual_total := 0
-	for hero in party:
-		if hero == null or hero.is_dead:
-			continue
-		if hero.current_mp >= hero.get_max_mp():
-			continue
-		var actual: int = hero.restore_mp(mp_amount)
-		actual_total += actual
-	if PartyManager:
-		PartyManager.party_changed.emit()
-	_spawn_restore_popups("+%d" % mp_amount, Color(0.4, 0.7, 1.0))
-	if actual_total > 0 and BattleManager:
-		BattleManager.battle_log_received.emit(
-			"💙 파티 전체 MP +%d" % actual_total, Color(0.4, 0.7, 1.0)
-		)
 
 
 func _spawn_heal_popups() -> void:

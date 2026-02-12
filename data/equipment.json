@@ -150,7 +150,7 @@
 	"type": "staff",
 	"rarity": "uncommon",
 	"two_handed": false,
-	"stats": { "atk": 4, "int": 8, "mp": 10 },
+	"stats": { "atk": 4, "int": 8 },
 	"gear_score": 15
   },
   "staff_magic": {
@@ -160,7 +160,7 @@
 	"type": "staff",
 	"rarity": "magic",
 	"two_handed": false,
-	"stats": { "atk": 5, "int": 14, "mp": 20 },
+	"stats": { "atk": 5, "int": 14 },
 	"gear_score": 28
   },
   "staff_rare": {
@@ -170,7 +170,7 @@
 	"type": "staff",
 	"rarity": "rare",
 	"two_handed": false,
-	"stats": { "atk": 8, "int": 20, "mp": 35, "spd": 3 },
+	"stats": { "atk": 8, "int": 20, "spd": 3 },
 	"special_effect": { "type": "chain_lightning", "value": 0.2 },
 	"gear_score": 45
   },
@@ -181,7 +181,7 @@
 	"type": "staff",
 	"rarity": "epic",
 	"two_handed": false,
-	"stats": { "atk": 12, "int": 30, "mp": 60, "hp": 20 },
+	"stats": { "atk": 12, "int": 30, "hp": 20 },
 	"special_effect": { "type": "spell_amp", "value": 0.25 },
 	"gear_score": 70
   },
@@ -349,7 +349,7 @@
 	"type": "tome",
 	"rarity": "magic",
 	"two_handed": false,
-	"stats": { "int": 8, "mp": 15 },
+	"stats": { "int": 8 },
 	"gear_score": 18
   },
   "tome_rare": {
@@ -359,7 +359,7 @@
 	"type": "tome",
 	"rarity": "rare",
 	"two_handed": false,
-	"stats": { "int": 14, "mp": 30, "atk": 3 },
+	"stats": { "int": 14, "atk": 3 },
 	"gear_score": 35
   },
   "tome_epic": {
@@ -369,7 +369,7 @@
 	"type": "tome",
 	"rarity": "epic",
 	"two_handed": false,
-	"stats": { "int": 22, "mp": 50, "atk": 8, "hp": -20 },
+	"stats": { "int": 22, "atk": 8, "hp": -20 },
 	"special_effect": { "type": "dark_magic", "value": 0.25 },
 	"gear_score": 58
   },
@@ -380,7 +380,7 @@
 	"type": "orb",
 	"rarity": "uncommon",
 	"two_handed": false,
-	"stats": { "int": 5, "mp": 10 },
+	"stats": { "int": 5 },
 	"gear_score": 12
   },
   "orb_rare": {
@@ -390,7 +390,7 @@
 	"type": "orb",
 	"rarity": "rare",
 	"two_handed": false,
-	"stats": { "int": 12, "mp": 25, "spd": 2 },
+	"stats": { "int": 12, "spd": 2 },
 	"gear_score": 32
   },
 
@@ -461,7 +461,7 @@
 	"type": "hood",
 	"rarity": "uncommon",
 	"two_handed": false,
-	"stats": { "def": 2, "int": 5, "mp": 8 },
+	"stats": { "def": 2, "int": 5 },
 	"gear_score": 12
   },
   "hood_magic": {
@@ -471,7 +471,7 @@
 	"type": "hood",
 	"rarity": "magic",
 	"two_handed": false,
-	"stats": { "def": 3, "int": 10, "mp": 18 },
+	"stats": { "def": 3, "int": 10 },
 	"gear_score": 24
   },
   "hood_rare": {
@@ -481,7 +481,7 @@
 	"type": "hood",
 	"rarity": "rare",
 	"two_handed": false,
-	"stats": { "def": 5, "int": 15, "mp": 30, "spd": 4 },
+	"stats": { "def": 5, "int": 15, "spd": 4 },
 	"gear_score": 42
   },
   "circlet_magic": {
@@ -491,7 +491,7 @@
 	"type": "circlet",
 	"rarity": "magic",
 	"two_handed": false,
-	"stats": { "int": 8, "mp": 15, "luk": 2 },
+	"stats": { "int": 8, "luk": 2 },
 	"gear_score": 20
   },
   "circlet_epic": {
@@ -501,7 +501,7 @@
 	"type": "circlet",
 	"rarity": "epic",
 	"two_handed": false,
-	"stats": { "int": 18, "mp": 40, "luk": 8, "hp": 20 },
+	"stats": { "int": 18, "luk": 8, "hp": 20 },
 	"gear_score": 60
   },
 
@@ -653,7 +653,7 @@
 	"type": "robe",
 	"rarity": "uncommon",
 	"two_handed": false,
-	"stats": { "def": 3, "int": 6, "mp": 10 },
+	"stats": { "def": 3, "int": 6 },
 	"gear_score": 14
   },
   "robe_magic": {
@@ -663,7 +663,7 @@
 	"type": "robe",
 	"rarity": "magic",
 	"two_handed": false,
-	"stats": { "def": 5, "int": 12, "mp": 25 },
+	"stats": { "def": 5, "int": 12 },
 	"gear_score": 30
   },
   "robe_rare": {
@@ -673,7 +673,7 @@
 	"type": "robe",
 	"rarity": "rare",
 	"two_handed": false,
-	"stats": { "def": 8, "int": 18, "mp": 45, "hp": 20 },
+	"stats": { "def": 8, "int": 18, "hp": 20 },
 	"gear_score": 50
   },
   "robe_epic": {
@@ -683,7 +683,7 @@
 	"type": "robe",
 	"rarity": "epic",
 	"two_handed": false,
-	"stats": { "def": 12, "int": 28, "mp": 70, "hp": 35, "luk": 5 },
+	"stats": { "def": 12, "int": 28, "hp": 35, "luk": 5 },
 	"special_effect": { "type": "mana_regen", "value": 0.15 },
 	"gear_score": 78
   },
@@ -755,7 +755,7 @@
 	"type": "ring",
 	"rarity": "magic",
 	"two_handed": false,
-	"stats": { "int": 6, "mp": 12 },
+	"stats": { "int": 6 },
 	"gear_score": 15
   },
   "ring_int_rare": {
@@ -765,7 +765,7 @@
 	"type": "ring",
 	"rarity": "rare",
 	"two_handed": false,
-	"stats": { "int": 12, "mp": 25, "def": 3 },
+	"stats": { "int": 12, "def": 3 },
 	"gear_score": 32
   },
   "ring_epic": {
@@ -775,7 +775,7 @@
 	"type": "ring",
 	"rarity": "epic",
 	"two_handed": false,
-	"stats": { "str": 8, "int": 8, "hp": 30, "mp": 30 },
+	"stats": { "str": 8, "int": 8, "hp": 30 },
 	"special_effect": { "type": "all_resist", "value": 0.1 },
 	"gear_score": 55
   },
@@ -952,7 +952,7 @@
 	"type": "sword",
 	"rarity": "legendary",
 	"two_handed": false,
-	"stats": { "atk": 50, "def": 15, "int": 20, "spd": 8, "luk": 15, "hp": 80, "mp": 40 },
+	"stats": { "atk": 50, "def": 15, "int": 20, "spd": 8, "luk": 15, "hp": 80 },
 	"special_effect": { "type": "holy_damage", "value": 0.5 },
 	"gear_score": 999
   },
@@ -985,7 +985,7 @@
 	"type": "staff",
 	"rarity": "legendary",
 	"two_handed": false,
-	"stats": { "atk": 20, "int": 45, "mp": 100, "hp": 50, "luk": 10 },
+	"stats": { "atk": 20, "int": 45, "hp": 50, "luk": 10 },
 	"special_effect": { "type": "nature_blessing", "value": 0.3 },
 	"gear_score": 180
   },
@@ -1007,7 +1007,7 @@
 	"type": "ring",
 	"rarity": "legendary",
 	"two_handed": false,
-	"stats": { "str": 15, "int": 15, "spd": 10, "luk": 15, "hp": 50, "mp": 50 },
+	"stats": { "str": 15, "int": 15, "spd": 10, "luk": 15, "hp": 50 },
 	"special_effect": { "type": "all_stats", "value": 0.1 },
 	"gear_score": 200
   },

@@ -11,7 +11,6 @@ var anchor_offset: Vector2 = Vector2(-8, 0)
 
 const STAT_NAMES: Dictionary = {
 	"hp": "HP",
-	"mp": "MP",
 	"str": "STR",
 	"def": "DEF",
 	"int": "INT",

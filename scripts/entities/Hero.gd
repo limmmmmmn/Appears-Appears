@@ -18,16 +18,15 @@ const SEED_CAP: int = 99
 const AGI_CRIT_RATIO: float = 0.003 # 민첩 100 -> 크리 30%
 const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [2, 5, 10, 15]
 
-# Will 시스템 상수
-const WILL_MAX: int = 5              # Will 게이지 최대 칸 수
-const WILL_FILL_PER_SEC: float = 1.0 # 초당 Will 충전량 (모든 캐릭터 동일)
+# 행동 타이머 상수 (내부 ATB)
+const ACTION_INTERVAL: float = 5.0     # 행동 간격 기준값
+const ACTION_FILL_RATE: float = 1.0    # 초당 충전 속도
 
-# 기본(레벨) 스탯: hp/mp/str/agi/wis/luk
+# 기본(레벨) 스탯: hp/str/agi/wis/luk
 var level: int = 1
 var current_exp: int = 0
 var level_stats: Dictionary = {
 	"hp": 30,
-	"mp": 8,
 	"str": 5,
 	"agi": 3,
 	"wis": 0,
@@ -37,7 +36,6 @@ var level_stats: Dictionary = {
 # 씨앗 보너스 (스탯당 +99 상한)
 var seed_bonus: Dictionary = {
 	"hp": 0,
-	"mp": 0,
 	"str": 0,
 	"agi": 0,
 	"wis": 0,
@@ -46,7 +44,6 @@ var seed_bonus: Dictionary = {
 
 # 기존 코드 호환용 base_* 캐시
 var base_hp: int = 0
-var base_mp: int = 0
 var base_str: int = 0
 var base_def: int = 0
 var base_int: int = 0
@@ -56,7 +53,6 @@ var base_luk: int = 0
 # 레벨별 성장 테이블 (index == level)
 var growth_per_level: Dictionary = {
 	"hp": [0],
-	"mp": [0],
 	"str": [0],
 	"agi": [0],
 	"wis": [0],
@@ -69,7 +65,6 @@ var unlocked_skills: Array = []
 
 # 현재 상태
 var current_hp: int = 0
-var current_mp: int = 0
 var is_dead: bool = false
 
 # 도발 상태 (기사 방패 강타)
@@ -91,8 +86,8 @@ var field_sprite: String = ""
 # 룬 (특성 부여)
 var equipped_rune_id: String = ""
 
-# Will (전투 시 행동 게이지, 0.0 ~ 5.0)
-var will_value: float = 0.0
+# 행동 타이머 (내부 ATB, UI 비노출)
+var action_timer: float = 0.0
 
 
 static func create_from_id(hero_id: String) -> Hero:
@@ -123,7 +118,6 @@ func _initialize(hero_id: String) -> void:
 
 	var base_stats: Dictionary = DataManager.get_class_base_stats(class_id)
 	base_hp = int(base_stats.get("hp", 30))
-	base_mp = int(base_stats.get("mp", 20))
 	base_str = int(base_stats.get("str", 5))
 	base_def = int(base_stats.get("def", 5))
 	base_int = int(base_stats.get("int", 5))
@@ -132,7 +126,6 @@ func _initialize(hero_id: String) -> void:
 
 	level_stats = {
 		"hp": base_hp,
-		"mp": base_mp,
 		"str": base_str,
 		"agi": base_dex,
 		"wis": base_int,
@@ -140,7 +133,6 @@ func _initialize(hero_id: String) -> void:
 	}
 	seed_bonus = {
 		"hp": 0,
-		"mp": 0,
 		"str": 0,
 		"agi": 0,
 		"wis": 0,
@@ -151,14 +143,12 @@ func _initialize(hero_id: String) -> void:
 	_setup_skill_unlocks(class_data)
 
 	current_hp = get_max_hp()
-	current_mp = get_max_mp()
 	_init_skill_toggles()
 
 
 func _build_growth_table(class_data: Dictionary) -> Dictionary:
 	var table: Dictionary = {
 		"hp": [0],
-		"mp": [0],
 		"str": [0],
 		"agi": [0],
 		"wis": [0],
@@ -167,7 +157,7 @@ func _build_growth_table(class_data: Dictionary) -> Dictionary:
 
 	var custom_table: Dictionary = class_data.get("growth_per_level", {})
 	if not custom_table.is_empty():
-		for key in ["hp", "mp", "str", "agi", "wis", "luk"]:
+		for key in ["hp", "str", "agi", "wis", "luk"]:
 			var arr: Array = custom_table.get(key, [])
 			if arr.is_empty():
 				arr = [0]
@@ -179,7 +169,6 @@ func _build_growth_table(class_data: Dictionary) -> Dictionary:
 	# fallback: 클래스 성장 고정치 기반
 	var growth: Dictionary = DataManager.get_class_growth(class_id)
 	var hp_g: int = int(growth.get("hp", 5))
-	var mp_g: int = int(growth.get("mp", maxi(1, int(round(float(growth.get("int", 1)) * 0.5)))))
 	var str_g: int = int(growth.get("str", 1))
 	var agi_g: int = int(growth.get("agi", growth.get("dex", 1)))
 	var wis_g: int = int(growth.get("wis", growth.get("int", 1)))
@@ -187,7 +176,6 @@ func _build_growth_table(class_data: Dictionary) -> Dictionary:
 
 	for _lv in range(1, MAX_LEVEL + 1):
 		table["hp"].append(hp_g)
-		table["mp"].append(mp_g)
 		table["str"].append(str_g)
 		table["agi"].append(agi_g)
 		table["wis"].append(wis_g)
@@ -257,10 +245,6 @@ func get_max_hp() -> int:
 	return get_base_stat("hp") + _get_equipment_stat("hp")
 
 
-func get_max_mp() -> int:
-	return get_base_stat("mp") + _get_equipment_stat("mp")
-
-
 func get_str() -> int:
 	return get_base_stat("str")
 
@@ -309,7 +293,7 @@ func get_magic_attack() -> int:
 
 
 func get_atb_speed() -> float:
-	## 레거시 호환 (Will 시스템에서는 사용 안 함)
+	## 레거시 호환
 	return 1.0
 
 
@@ -390,7 +374,7 @@ func gain_exp(amount: int) -> Dictionary:
 			current_exp = 0
 			var grown: Dictionary = _apply_level_growth(level)
 			var unlocked: Array = _unlock_skills_for_level(level)
-			full_restore() # 레벨업 시 HP/MP 전회복
+			full_restore() # 레벨업 시 HP 전회복
 
 			var lv_result := {
 				"level": level,
@@ -409,7 +393,6 @@ func gain_exp(amount: int) -> Dictionary:
 func _apply_level_growth(new_level: int) -> Dictionary:
 	var delta: Dictionary = {
 		"hp": 0,
-		"mp": 0,
 		"str": 0,
 		"agi": 0,
 		"wis": 0,
@@ -450,7 +433,6 @@ func set_progress(saved_level: int, saved_exp: int, saved_level_stats: Dictionar
 	if saved_level_stats.is_empty():
 		level_stats = {
 			"hp": base_hp,
-			"mp": base_mp,
 			"str": base_str,
 			"agi": base_dex,
 			"wis": base_int,
@@ -512,63 +494,15 @@ func revive(hp_percent: float = 0.3) -> void:
 		return
 	is_dead = false
 	current_hp = int(get_max_hp() * hp_percent)
-	current_mp = int(get_max_mp() * hp_percent)
 
 
-func consume_mp(amount: int) -> bool:
-	## MP 소모. 충분하면 소모 후 true, 부족하면 false
-	if amount <= 0:
-		return true
-	if current_mp < amount:
-		return false
-	current_mp -= amount
-	return true
+# === 행동 타이머 ===
+func is_action_ready() -> bool:
+	return action_timer >= ACTION_INTERVAL
 
 
-func restore_mp(amount: int) -> int:
-	## MP 회복
-	var actual := mini(amount, get_max_mp() - current_mp)
-	current_mp += actual
-	return actual
-
-
-func has_enough_mp(skill_id: String) -> bool:
-	## 스킬 사용에 필요한 MP가 있는지 확인
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	var cost: int = int(skill_data.get("mp_cost", 0))
-	return current_mp >= cost
-
-
-# === Will 시스템 ===
-func consume_will(amount: int) -> bool:
-	## Will 소모. 충분하면 소모 후 true, 부족하면 false
-	if amount <= 0:
-		return true
-	if will_value < float(amount):
-		return false
-	will_value -= float(amount)
-	return true
-
-
-func is_will_full() -> bool:
-	## Will 게이지가 가득 찼는지 확인
-	return will_value >= float(WILL_MAX)
-
-
-func get_will_ratio() -> float:
-	## Will 비율 (0.0 ~ 1.0) - UI 바 표시용
-	return clampf(will_value / float(WILL_MAX), 0.0, 1.0)
-
-
-func get_skill_will_cost(skill_id: String) -> int:
-	## 스킬의 Will 비용 반환
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	return int(skill_data.get("will_cost", 1))
-
-
-func has_enough_will(skill_id: String) -> bool:
-	## 스킬 사용에 필요한 Will이 있는지 확인 (게이지 풀 + 비용 충족)
-	return is_will_full()
+func reset_action_timer() -> void:
+	action_timer = 0.0
 
 
 func apply_seed_bonus(stat: String, value: int) -> void:
@@ -592,13 +526,10 @@ func apply_seed_bonus(stat: String, value: int) -> void:
 
 	if key == "hp":
 		current_hp = mini(current_hp + applied, get_max_hp())
-	elif key == "mp":
-		current_mp = mini(current_mp + applied, get_max_mp())
 
 
 func full_restore() -> void:
 	current_hp = get_max_hp()
-	current_mp = get_max_mp()
 	is_dead = false
 
 
@@ -718,13 +649,6 @@ func get_hp_percent() -> float:
 	return float(current_hp) / float(max_hp)
 
 
-func get_mp_percent() -> float:
-	var max_mp := get_max_mp()
-	if max_mp <= 0:
-		return 1.0
-	return float(current_mp) / float(max_mp)
-
-
 #region 룬/특성
 func get_equipped_rune() -> Dictionary:
 	## 장착된 룬 데이터 반환
@@ -766,11 +690,10 @@ func unequip_rune() -> String:
 
 
 func get_stat_summary() -> String:
-	return "[%s] %s | Lv.%d EXP:%d/%d | HP:%d/%d Will:%.0f/%d | STR:%d AGI:%d WIS:%d LUK:%d ATK:%d DEF:%d" % [
+	return "[%s] %s | Lv.%d EXP:%d/%d | HP:%d/%d | STR:%d AGI:%d WIS:%d LUK:%d ATK:%d DEF:%d" % [
 		hero_name, hero_class_name,
 		level, current_exp, get_exp_to_next_level(),
 		current_hp, get_max_hp(),
-		will_value, WILL_MAX,
 		get_str(), get_base_stat("agi"), get_base_stat("wis"), get_luk(),
 		get_attack(), get_defense()
 	]

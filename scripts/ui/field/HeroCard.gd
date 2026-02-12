@@ -1,7 +1,7 @@
 extends Control
 class_name HeroCard
 ## 좌측 파티 초상화 유닛
-## 페이스칩(48x48) + HP (롱, 10단위 눈금) + Will (5칸) + EXP (숏) + 레벨
+## 페이스칩(48x48) + HP (롱, 10단위 눈금) + EXP (숏) + 레벨
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
 const FACE_SIZE := 48
@@ -9,17 +9,12 @@ const BAR_GAP := 2  # 페이스칩 ↔ 바 영역 간격
 
 # === 바 높이 ===
 const HP_BAR_HEIGHT := 9
-const WILL_BAR_HEIGHT := 7
 const EXP_BAR_HEIGHT := 4
 const BAR_SPACING := 2  # 바 간 간격
 
 # === 롱 바 (HP) ===
 const LONG_BAR_MAX_WIDTH := 120  # HP 최대 너비
 const MIN_BAR_RATIO := 0.3  # 최소 비율
-
-# === Will 바 ===
-const WILL_BAR_WIDTH := 75  # Will 바 전체 너비
-const WILL_SLOTS := 5       # Will 칸 수
 
 # === 숏 바 (EXP) ===
 const SHORT_BAR_WIDTH := 55  # EXP 고정 너비
@@ -32,19 +27,15 @@ const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
 const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)
 const HP_GHOST_COLOR := Color(1.0, 0.35, 0.35, 0.8)
-const WILL_BAR_COLOR := Color(0.95, 0.75, 0.2)
-const WILL_BAR_FULL_COLOR := Color(1.0, 0.9, 0.3)
 const EXP_BAR_COLOR := Color(0.3, 0.85, 0.75)
 const BAR_BG_COLOR := Color(0.06, 0.06, 0.09, 0.9)
 const TICK_COLOR := Color(0.0, 0.0, 0.0, 0.3)
-const WILL_DIVIDER_COLOR := Color(0.15, 0.15, 0.2, 0.9)
 
 const DEATH_OVERLAY_COLOR := Color(0.1, 0.1, 0.1, 0.7)
 const PLACEHOLDER_COLOR := Color(0.15, 0.12, 0.2)
 
 # === 타이밍 ===
 const HP_TWEEN_DURATION := 0.35
-const MP_TWEEN_DURATION := 0.3
 const GHOST_DELAY := 0.4
 const GHOST_DURATION := 0.5
 const SHAKE_DURATION := 0.2
@@ -73,10 +64,6 @@ var hp_bar_bg: ColorRect
 var hp_ghost: ColorRect
 var hp_bar: ColorRect
 var hp_tick_overlay: Control
-# Will 바
-var will_bar_bg: ColorRect
-var will_bar: ColorRect
-var will_divider_overlay: Control
 # EXP 바
 var exp_bar_bg: ColorRect
 var exp_bar: ColorRect
@@ -156,7 +143,7 @@ func _build_ui() -> void:
 	content.add_child(bars_container)
 
 	# 수직 중앙 정렬 계산
-	var total_bar_height: float = HP_BAR_HEIGHT + BAR_SPACING + WILL_BAR_HEIGHT + BAR_SPACING + EXP_BAR_HEIGHT
+	var total_bar_height: float = HP_BAR_HEIGHT + BAR_SPACING + EXP_BAR_HEIGHT
 	var start_y: float = floorf((FACE_SIZE - total_bar_height) / 2.0)
 
 	# === HP 바 (롱) ===
@@ -170,18 +157,9 @@ func _build_ui() -> void:
 	hp_tick_overlay = _create_tick_overlay(Vector2(0, hp_y), HP_BAR_HEIGHT)
 	bars_container.add_child(hp_tick_overlay)
 
-	# === Will 바 (5칸) + 레벨 ===
-	var will_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
-	will_bar_bg = _make_rect(Vector2(0, will_y), Vector2(WILL_BAR_WIDTH, WILL_BAR_HEIGHT), BAR_BG_COLOR)
-	bars_container.add_child(will_bar_bg)
-	will_bar = _make_rect(Vector2(0, will_y), Vector2(0, WILL_BAR_HEIGHT), WILL_BAR_COLOR)
-	bars_container.add_child(will_bar)
-	will_divider_overlay = _create_will_divider_overlay(Vector2(0, will_y), WILL_BAR_HEIGHT)
-	bars_container.add_child(will_divider_overlay)
-
-	# 레벨 라벨 (Will 바 우측)
+	# 레벨 라벨 (HP 바 우측)
 	level_label = Label.new()
-	level_label.position = Vector2(WILL_BAR_WIDTH + 3, will_y - 2)
+	level_label.position = Vector2(0, hp_y + HP_BAR_HEIGHT + BAR_SPACING)
 	level_label.text = "Lv.1"
 	level_label.add_theme_font_size_override("font_size", 9)
 	level_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7))
@@ -189,7 +167,7 @@ func _build_ui() -> void:
 	bars_container.add_child(level_label)
 
 	# === EXP 바 (숏) ===
-	var exp_y: float = will_y + WILL_BAR_HEIGHT + BAR_SPACING
+	var exp_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
 	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(SHORT_BAR_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(exp_bar_bg)
 	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
@@ -207,7 +185,7 @@ func _make_rect(pos: Vector2, sz: Vector2, color: Color) -> ColorRect:
 
 #region 눈금 오버레이
 class TickOverlay extends Control:
-	## HP/MP 바 위에 10단위 눈금 표시
+	## HP 바 위에 10단위 눈금 표시
 	var max_value: int = 0
 	var bar_height: float = 0.0
 
@@ -235,33 +213,6 @@ func _create_tick_overlay(pos: Vector2, height: float) -> Control:
 	return overlay
 
 
-class WillDividerOverlay extends Control:
-	## Will 바 위에 5칸 구분선 표시
-	var bar_height: float = 0.0
-	var slot_count: int = 5
-
-	func setup(p_width: float, p_height: float, p_slots: int = 5) -> void:
-		bar_height = p_height
-		slot_count = p_slots
-		size = Vector2(p_width, p_height)
-		queue_redraw()
-
-	func _draw() -> void:
-		if slot_count <= 1:
-			return
-		var slot_width: float = size.x / float(slot_count)
-		for i in range(1, slot_count):
-			var x: float = slot_width * float(i)
-			draw_line(Vector2(x, 0), Vector2(x, bar_height), Color(0.15, 0.15, 0.2, 0.9), 1.0)
-
-
-func _create_will_divider_overlay(pos: Vector2, height: float) -> Control:
-	var overlay := WillDividerOverlay.new()
-	overlay.position = pos
-	overlay.size = Vector2(WILL_BAR_WIDTH, height)
-	overlay.mouse_filter = MOUSE_FILTER_IGNORE
-	overlay.setup(WILL_BAR_WIDTH, height, WILL_SLOTS)
-	return overlay
 #endregion
 
 
@@ -279,7 +230,6 @@ func update_from_hero(hero: Hero) -> void:
 	_load_face_chip(hero)
 	_recalc_bar_widths(hero.get_max_hp())
 	update_hp(hero.current_hp, hero.get_max_hp())
-	update_will(hero.get_will_ratio())
 	update_exp(hero.get_exp_ratio())
 	update_level(hero.level)
 	set_dead(hero.is_dead)
@@ -301,7 +251,7 @@ func _recalc_bar_widths(max_hp: int) -> void:
 			(hp_tick_overlay as TickOverlay).setup(max_hp, _hp_bar_width, HP_BAR_HEIGHT)
 
 	# 카드 최소 너비
-	custom_minimum_size.x = FACE_SIZE + BAR_GAP + maxf(_hp_bar_width, WILL_BAR_WIDTH)
+	custom_minimum_size.x = FACE_SIZE + BAR_GAP + _hp_bar_width
 
 
 func _calc_bar_length(max_value: int, reference: int, max_width: float) -> float:
@@ -372,22 +322,6 @@ func update_hp(current: int, max_hp: int) -> void:
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 	_prev_hp = current
-#endregion
-
-
-#region Will 바
-func update_will(ratio: float) -> void:
-	## Will 게이지 갱신 (0.0 ~ 1.0)
-	if will_bar == null:
-		return
-	var clamped: float = clampf(ratio, 0.0, 1.0)
-	var target_w: float = WILL_BAR_WIDTH * clamped
-	will_bar.size.x = target_w
-	# 가득 차면 색상 변경
-	if clamped >= 1.0:
-		will_bar.color = WILL_BAR_FULL_COLOR
-	else:
-		will_bar.color = WILL_BAR_COLOR
 #endregion
 
 

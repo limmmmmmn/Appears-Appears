@@ -1,7 +1,7 @@
 extends PanelContainer
 class_name BattleWindow
 ## BattleWindow: 실시간 전투창
-## - Will 시스템: 5칸 게이지가 가득 차면 즉시 행동, 행동별 Will 소비 (턴 없음)
+## - 행동 타이머: DEX 비례로 충전, 가득 차면 즉시 행동 (턴 없음)
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
@@ -54,10 +54,6 @@ var _knight_used_first: Dictionary = {}  # hero_id -> bool (전투창당 첫 공
 const ACTION_DELAY: float = 0.3  # 행동 사이 딜레이 (초)
 var is_processing_action: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
-
-# === Will 설정 ===
-const WILL_MAX: int = 5                # Will 게이지 최대 칸 수
-const WILL_FILL_PER_SEC: float = 1.0   # 초당 Will 충전량 (모든 유닛 동일)
 
 # === 행동 타임아웃 안전장치 ===
 var _action_process_timer: float = 0.0
@@ -146,8 +142,8 @@ func _process(delta: float) -> void:
 
 	_update_background_effect(delta)
 
-	# 적 Will 게이지 충전 (영웅 Will은 ATBManager에서 중앙 관리)
-	_update_enemy_will(delta)
+	# 적 행동 타이머 충전 (영웅은 ATBManager에서 중앙 관리)
+	_update_enemy_timers(delta)
 
 	# 행동 타임아웃 안전장치
 	if is_processing_action:
@@ -157,7 +153,7 @@ func _process(delta: float) -> void:
 			is_processing_action = false
 			_action_process_timer = 0.0
 
-	# Will이 가득 찬 유닛 즉시 행동 (정지 상태면 스킵)
+	# 행동 준비된 유닛 즉시 행동 (정지 상태면 스킵)
 	if not is_processing_action and not is_battle_paused:
 		_action_process_timer = 0.0
 		_process_ready_unit()
@@ -276,7 +272,7 @@ func _start_battle() -> void:
 	current_state = BattleState.RUNNING
 	_update_buttons_for_enemies()
 	set_process(true)
-	_reset_enemy_will()
+	_reset_enemy_timers()
 #endregion
 
 
@@ -289,28 +285,28 @@ func get_alive_enemies() -> Array:
 	return alive
 
 
-#region Will 게이지
-func _reset_enemy_will() -> void:
-	## 적 Will만 초기화 (영웅 Will은 전투창과 무관하게 유지)
+#region 행동 타이머
+func _reset_enemy_timers() -> void:
+	## 적 행동 타이머 초기화
 	for enemy in enemies:
 		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
-			enemy.set_will_value(0.0)
+			enemy.reset_action_timer()
 
 
-func _update_enemy_will(delta: float) -> void:
-	## 적 Will 게이지를 민첩에 비례하여 채움 (행동 중에도 계속 충전)
+func _update_enemy_timers(delta: float) -> void:
+	## 적 행동 타이머를 민첩에 비례하여 채움
 	if is_battle_paused:
 		return
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
-		if enemy.will_value < float(WILL_MAX):
+		if not enemy.is_action_ready():
 			var dex_mult: float = enemy.get_dex() / 10.0
-			enemy.set_will_value(minf(enemy.will_value + WILL_FILL_PER_SEC * dex_mult * delta, float(WILL_MAX)))
+			enemy.action_timer = minf(enemy.action_timer + Hero.ACTION_FILL_RATE * dex_mult * delta, Hero.ACTION_INTERVAL)
 #endregion
 
 
-#region Will 기반 실시간 행동 시스템
+#region 실시간 행동 시스템
 func set_battle_paused(paused: bool) -> void:
 	## 전투 정지/재개
 	is_battle_paused = paused
@@ -318,13 +314,13 @@ func set_battle_paused(paused: bool) -> void:
 
 
 func _process_ready_unit() -> void:
-	## Will이 가득 찬 유닛을 찾아 즉시 행동 (대기 없음, 쿨다운처럼)
+	## 행동 타이머가 가득 찬 유닛을 찾아 즉시 행동
 	if current_state != BattleState.RUNNING:
 		return
 
 	# 영웅 체크
 	for hero in PartyManager.get_alive_heroes():
-		if hero != null and not hero.is_dead and hero.will_value >= float(WILL_MAX):
+		if hero != null and not hero.is_dead and hero.is_action_ready():
 			is_processing_action = true
 			_execute_hero_action(hero)
 			_check_battle_end()
@@ -337,7 +333,7 @@ func _process_ready_unit() -> void:
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
-		if enemy.will_value >= float(WILL_MAX):
+		if enemy.is_action_ready():
 			is_processing_action = true
 			_execute_enemy_action(enemy)
 			_check_battle_end()
@@ -365,9 +361,8 @@ func _execute_hero_action(hero: Hero) -> void:
 		skill_id = "basic_attack"
 		skill_data = DataManager.get_skill("basic_attack")
 
-	# Will 소모 (Will이 유일한 행동 자원)
-	var will_cost: int = int(skill_data.get("will_cost", 1))
-	hero.consume_will(will_cost)
+	# 행동 타이머 리셋
+	hero.reset_action_timer()
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -391,20 +386,15 @@ func _execute_enemy_action(enemy: BattleEnemy) -> void:
 	if enemy == null or not enemy.is_alive():
 		return
 
-	# Will 소모 (적 기본 공격 = 1칸)
-	enemy.consume_will(1)
+	# 행동 타이머 리셋
+	enemy.reset_action_timer()
 
 	_enemy_attack(enemy)
 
 
 func _select_hero_skill(hero: Hero) -> String:
-	## 영웅의 스킬 선택 (클래스별 전투 AI + 작전 연동)
+	## 영웅의 스킬 선택 (클래스별 전투 AI)
 	var skills: Array = hero.get_available_skills()
-	var tactic: String = hero.get_meta("ai_target", "weak_first") if hero.has_meta("ai_target") else "weak_first"
-
-	# ── 작전: MP 절약 → 기본 공격만 ──
-	if tactic == "mp_save":
-		return "basic_attack"
 
 	# ── 성직자: 아군 HP 60% 이하면 힐 우선 ──
 	if hero.class_id == "cleric":
@@ -459,7 +449,7 @@ func _select_hero_skill(hero: Hero) -> String:
 		if not finisher.is_empty():
 			return finisher
 
-	# ── 스킬 난사 작전이거나 기본 → 스킬 있으면 항상 사용 ──
+	# ── 스킬 있으면 항상 사용 ──
 	if not usable_skills.is_empty():
 		return usable_skills[0]
 
@@ -823,16 +813,9 @@ func _select_smart_target(hero: Hero) -> BattleEnemy:
 		if expected >= enemy.current_hp:
 			return enemy
 
-	# 작전에 따른 타겟 선택
-	var tactic: String = hero.get_meta("ai_target", "weak_first") if hero.has_meta("ai_target") else "weak_first"
-	if tactic == "strong_first":
-		# HP가 가장 높은 적 (위협적인 적 우선)
-		alive.sort_custom(func(a, b): return a.current_hp > b.current_hp)
-		return alive[0]
-	else:
-		# weak_first (기본) — HP가 가장 낮은 적 우선
-		alive.sort_custom(func(a, b): return a.current_hp < b.current_hp)
-		return alive[0]
+	# HP가 가장 낮은 적 우선
+	alive.sort_custom(func(a, b): return a.current_hp < b.current_hp)
+	return alive[0]
 
 
 func has_alive_enemies() -> bool:
@@ -967,16 +950,6 @@ func _play_hero_hit_popup(hero: Hero, damage: int, is_crit: bool) -> void:
 		hp_color = Color(0.25, 0.78, 0.25)
 	_style_hit_bar(hp_bar, hp_color)
 	right_vbox.add_child(hp_bar)
-
-	# Will 바
-	var will_bar := ProgressBar.new()
-	will_bar.custom_minimum_size = Vector2(40, 5)
-	will_bar.max_value = Hero.WILL_MAX
-	will_bar.value = hero.will_value
-	will_bar.show_percentage = false
-	will_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_hit_bar(will_bar, Color(0.95, 0.75, 0.2))
-	right_vbox.add_child(will_bar)
 
 	# 데미지 표시
 	var dmg_label := Label.new()

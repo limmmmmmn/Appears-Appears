@@ -613,8 +613,8 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, window_rect: Rect2) -> void:
-	## 전투 종료 시 필드에 HP/MP 오브 드롭 스폰
+func _on_field_drops_requested(hp_orbs: int, _mp_orbs: int, world_pos: Vector2, window_rect: Rect2) -> void:
+	## 전투 종료 시 필드에 HP 오브 드롭 스폰
 	var drops: Array[Dictionary] = []
 	var delay: float = 0.0
 	var delay_step: float = 0.08
@@ -622,11 +622,6 @@ func _on_field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, w
 	# HP 오브
 	for i in range(hp_orbs):
 		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
-		delay += delay_step
-
-	# MP 오브
-	for i in range(mp_orbs):
-		drops.append({"type": FieldDrop.DropType.MP_ORB, "delay": delay})
 		delay += delay_step
 
 	# 전투창 스크린 영역 → 월드 좌표 변환
@@ -653,8 +648,6 @@ func _on_field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, w
 		match data.type:
 			FieldDrop.DropType.HP_ORB:
 				drop.heal_amount = FieldDrop.HP_PER_ORB
-			FieldDrop.DropType.MP_ORB:
-				drop.mp_amount = FieldDrop.MP_PER_ORB
 
 		# 전투창 영역 내 랜덤 위치
 		var rand_x: float = randf_range(scatter_rect.position.x, scatter_rect.end.x)

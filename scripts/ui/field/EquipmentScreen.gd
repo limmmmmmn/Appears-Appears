@@ -1,7 +1,7 @@
 extends CanvasLayer
 class_name EquipmentScreen
 ## 정비 화면 — ESC / 햄버거 버튼으로 열고 닫기
-## 탭: 정비 | 스킬 | 작전
+## 탭: 정비 | 스킬
 
 const FACE_PATH := "res://assets/sprites/heroes/%s.png"
 const FIELD_SPRITE_PATH := "res://assets/sprites/heroes/%s.png"
@@ -26,18 +26,6 @@ const SKILL_ICONS := {
 	"shield_bash": "🛡️", "ice_bolt": "❄️", "blessing": "✨",
 	"double_shot": "🎯",
 }
-
-# 작전 정의
-const TACTICS_TARGET := [
-	{"id": "weak_first", "name": "약한 적 우선", "desc": "HP 낮은 적부터 처리"},
-	{"id": "strong_first", "name": "강한 적 우선", "desc": "위협만 적부터 처리"},
-	{"id": "skill_spam", "name": "스킬 난사", "desc": "MP 있으면 스킬 우선 사용"},
-	{"id": "mp_save", "name": "MP 절약", "desc": "기본공격만, 리미트용 MP 비축"},
-]
-const TACTICS_DANGER := [
-	{"id": "fight_on", "name": "그대로 싸운다", "desc": "죽을 때까지 공격"},
-	{"id": "defend", "name": "방어 전환", "desc": "HP 25% 이하 시 DEF 우선"},
-]
 
 # 스타일
 const S := {
@@ -72,7 +60,7 @@ signal closed
 
 var is_open: bool = false
 var selected_hero_index: int = 0
-var current_tab: int = 0  # 0=장비, 1=스킬, 2=작전
+var current_tab: int = 0  # 0=장비, 1=스킬
 
 # 주요 노드
 var root: Control
@@ -89,7 +77,6 @@ var _tab_buttons: Array[Button] = []
 # 중앙 패널 (탭별 전환)
 var equip_panel: VBoxContainer
 var skills_panel: VBoxContainer
-var tactics_panel: ScrollContainer
 
 # 장비 탭
 var equip_slots_container: VBoxContainer
@@ -284,7 +271,7 @@ func _build_center_panels(parent: HBoxContainer) -> void:
 	wrapper.add_child(tab_hbox)
 
 	_tab_buttons.clear()
-	var tab_names := ["정비", "스킬", "작전"]
+	var tab_names := ["정비", "스킬"]
 	for i in range(tab_names.size()):
 		var btn := Button.new()
 		btn.text = tab_names[i]
@@ -317,12 +304,6 @@ func _build_center_panels(parent: HBoxContainer) -> void:
 	skills_panel.visible = false
 	wrapper.add_child(skills_panel)
 
-	# 작전 패널
-	tactics_panel = ScrollContainer.new()
-	tactics_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	tactics_panel.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	tactics_panel.visible = false
-	wrapper.add_child(tactics_panel)
 
 
 func _build_equip_slot_row(slot_info: Dictionary) -> Dictionary:
@@ -442,13 +423,11 @@ func _switch_tab(tab_index: int) -> void:
 	_update_tab_styles()
 	equip_panel.visible = (tab_index == 0)
 	skills_panel.visible = (tab_index == 1)
-	tactics_panel.visible = (tab_index == 2)
 	inv_panel.visible = (tab_index == 0)
 
 	match tab_index:
 		0: _refresh_equip_slots(); _refresh_inventory()
 		1: _refresh_skills()
-		2: _refresh_tactics()
 
 
 func _update_tab_styles() -> void:
@@ -629,7 +608,6 @@ func _refresh_stats() -> void:
 		["ATK", str(hero.get_atk()), "atk"],
 		["DEF", str(hero.get_def()), "def"],
 		["MATK", str(hero.get_magic_attack()), "matk"],
-		["WILL", "%d/%d" % [int(hero.will_value), Hero.WILL_MAX], "will"],
 		["CRIT", "%.1f%%" % hero.get_crit(), "crit"],
 		["HIT", "%.1f%%" % hero.get_hit_rate(), "hit"],
 		["EVA", "%.1f%%" % hero.get_eva(), "eva"],
@@ -729,7 +707,7 @@ func _calc_per_stat_diff(hero: Hero, item_id: String) -> Dictionary:
 		current_stats = cd.get("stats", {})
 
 	var result: Dictionary = {}
-	var keys := ["atk", "def", "str", "int", "wis", "dex", "agi", "luk", "hp", "mp", "spd", "mag", "hit", "acc", "eva"]
+	var keys := ["atk", "def", "str", "int", "wis", "dex", "agi", "luk", "hp", "spd", "mag", "hit", "acc", "eva"]
 	for key in keys:
 		var nv: int = int(new_stats.get(key, 0))
 		var cv: int = int(current_stats.get(key, 0))
@@ -784,7 +762,7 @@ func _refresh_equip_slots() -> void:
 func _get_main_stat_text(data: Dictionary) -> String:
 	var stats: Dictionary = data.get("stats", {})
 	var parts: Array = []
-	for key in ["atk", "def", "mag", "str", "wis", "int", "hp", "mp", "agi", "dex", "luk", "spd", "hit", "eva"]:
+	for key in ["atk", "def", "mag", "str", "wis", "int", "hp", "agi", "dex", "luk", "spd", "hit", "eva"]:
 		var val: int = int(stats.get(key, 0))
 		if val != 0:
 			parts.append("%s %d" % [key.to_upper(), val])
@@ -827,7 +805,6 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 	var skill_name: String = skill_data.get("name", skill_id)
 	var skill_type: String = skill_data.get("type", "physical")
 	var target: String = skill_data.get("target", "single_enemy")
-	var will_cost: int = int(skill_data.get("will_cost", 1))
 	var cooldown: float = float(skill_data.get("cooldown", 5.0))
 	var is_enabled: bool = hero.is_skill_enabled(skill_id)
 
@@ -911,8 +888,6 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 		var mult: float = float(scaling.get("multiplier", 1.0))
 		desc_parts.append("ATK x%s" % str(mult))
 
-	desc_parts.append("Will %d" % will_cost)
-
 	# 쿨다운 속도
 	if cooldown < 4.0:
 		desc_parts.append("빠름")
@@ -945,120 +920,6 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			hero.toggle_skill(skill_id)
 			_refresh_skills()
-	)
-
-	return panel
-#endregion
-
-
-#region 작전 탭
-func _refresh_tactics() -> void:
-	for child in tactics_panel.get_children():
-		child.queue_free()
-
-	var hero := _get_hero()
-	if hero == null:
-		return
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tactics_panel.add_child(vbox)
-
-	# 자동전투 행동
-	var target_header := Label.new()
-	target_header.text = "⚔ 자동전투 행동"
-	target_header.add_theme_font_size_override("font_size", 10)
-	target_header.add_theme_color_override("font_color", S.text_gold)
-	vbox.add_child(target_header)
-
-	var current_target: String = hero.get_meta("ai_target", "weak_first") if hero.has_meta("ai_target") else "weak_first"
-	for tactic in TACTICS_TARGET:
-		var row := _create_tactic_row(hero, tactic, current_target, "ai_target")
-		vbox.add_child(row)
-
-	# 구분
-	var sep := HSeparator.new()
-	sep.add_theme_color_override("separator", S.border)
-	vbox.add_child(sep)
-
-	# HP 위험 시
-	var danger_header := Label.new()
-	danger_header.text = "❤ HP 위험 시"
-	danger_header.add_theme_font_size_override("font_size", 10)
-	danger_header.add_theme_color_override("font_color", S.text_gold)
-	vbox.add_child(danger_header)
-
-	var current_danger: String = hero.get_meta("ai_danger", "fight_on") if hero.has_meta("ai_danger") else "fight_on"
-	for tactic in TACTICS_DANGER:
-		var row := _create_tactic_row(hero, tactic, current_danger, "ai_danger")
-		vbox.add_child(row)
-
-
-func _create_tactic_row(hero: Hero, tactic: Dictionary, current_id: String, meta_key: String) -> PanelContainer:
-	var is_selected: bool = (str(tactic["id"]) == current_id)
-
-	var panel := PanelContainer.new()
-	var bg := Color(0.12, 0.14, 0.08, 0.95) if is_selected else S.bg_slot
-	var border_c := S.border_sel if is_selected else Color.TRANSPARENT
-	var normal_style := _make_style(bg, border_c, 4, 1 if is_selected else 0)
-	normal_style.content_margin_left = 8; normal_style.content_margin_right = 8
-	normal_style.content_margin_top = 5; normal_style.content_margin_bottom = 5
-	panel.add_theme_stylebox_override("panel", normal_style)
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 8)
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(hbox)
-
-	# 라디오 표시
-	var radio := Label.new()
-	radio.text = "●" if is_selected else "○"
-	radio.add_theme_font_size_override("font_size", 12)
-	radio.add_theme_color_override("font_color", S.text_gold if is_selected else S.text_dim)
-	radio.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(radio)
-
-	var info := VBoxContainer.new()
-	info.add_theme_constant_override("separation", 0)
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(info)
-
-	var name_lbl := Label.new()
-	name_lbl.text = tactic["name"]
-	name_lbl.add_theme_font_size_override("font_size", 11)
-	name_lbl.add_theme_color_override("font_color", S.text if is_selected else S.text_dim)
-	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	info.add_child(name_lbl)
-
-	var desc_lbl := Label.new()
-	desc_lbl.text = tactic["desc"]
-	desc_lbl.add_theme_font_size_override("font_size", 8)
-	desc_lbl.add_theme_color_override("font_color", S.text_dim)
-	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	info.add_child(desc_lbl)
-
-	# 호버
-	var hover_style := _make_style(Color(0.14, 0.14, 0.2, 0.95), S.border, 4, 1)
-	hover_style.content_margin_left = 8; hover_style.content_margin_right = 8
-	hover_style.content_margin_top = 5; hover_style.content_margin_bottom = 5
-
-	panel.mouse_entered.connect(func():
-		if not is_selected:
-			panel.add_theme_stylebox_override("panel", hover_style)
-	)
-	panel.mouse_exited.connect(func():
-		panel.add_theme_stylebox_override("panel", normal_style)
-	)
-
-	# 클릭 → 선택
-	var tactic_id: String = tactic["id"]
-	panel.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			hero.set_meta(meta_key, tactic_id)
-			_refresh_tactics()
 	)
 
 	return panel

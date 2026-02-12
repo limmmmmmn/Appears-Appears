@@ -87,7 +87,7 @@ func update_display() -> void:
 
 #region 패널 레벨 API
 func init_party(heroes: Array) -> void:
-	## 파티 데이터로 초기화. 각 영웅의 max_hp/max_mp에 따라 바 길이 자동 계산
+	## 파티 데이터로 초기화. 각 영웅의 max_hp에 따라 바 길이 자동 계산
 	cards.clear()
 	if cards_container:
 		for child in cards_container.get_children():
@@ -110,9 +110,6 @@ func update_hp(index: int, current: int, max_hp: int) -> void:
 		cards[index].update_hp(current, max_hp)
 
 
-func update_mp(index: int, current: int, max_mp: int) -> void:
-	if index >= 0 and index < cards.size():
-		cards[index].update_mp(current, max_mp)
 
 
 func set_dead(index: int, is_dead: bool) -> void:
@@ -215,9 +212,6 @@ func _find_available_healer() -> Hero:
 
 func _execute_field_heal(healer: Hero, target: Hero) -> void:
 	var skill_data: Dictionary = DataManager.get_skill("heal")
-	var will_cost: int = int(skill_data.get("will_cost", 2))
-	if not healer.consume_will(will_cost):
-		return
 
 	var base_value: int = int(skill_data.get("base_damage", 25))
 	var scaling: float = skill_data.get("scaling", 1.2)
