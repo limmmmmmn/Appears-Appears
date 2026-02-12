@@ -295,14 +295,15 @@ func _reset_enemy_will() -> void:
 
 
 func _update_enemy_will(delta: float) -> void:
-	## 적 Will 게이지를 동일 속도로 서서히 채움 (행동 중에도 계속 충전)
+	## 적 Will 게이지를 민첩에 비례하여 채움 (행동 중에도 계속 충전)
 	if is_battle_paused:
 		return
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
 		if enemy.will_value < float(WILL_MAX):
-			enemy.set_will_value(minf(enemy.will_value + WILL_FILL_PER_SEC * delta, float(WILL_MAX)))
+			var dex_mult: float = enemy.get_dex() / 10.0
+			enemy.set_will_value(minf(enemy.will_value + WILL_FILL_PER_SEC * dex_mult * delta, float(WILL_MAX)))
 #endregion
 
 

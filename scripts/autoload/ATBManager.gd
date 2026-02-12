@@ -20,12 +20,13 @@ func _process(delta: float) -> void:
 
 
 func _update_hero_will(delta: float) -> void:
-	## 살아있는 영웅의 Will을 동일 속도로 충전
+	## 살아있는 영웅의 Will을 민첩에 비례하여 충전
 	if not PartyManager:
 		return
 	for hero in PartyManager.get_alive_heroes():
 		if hero.will_value < float(Hero.WILL_MAX):
-			hero.will_value = minf(hero.will_value + Hero.WILL_FILL_PER_SEC * delta, float(Hero.WILL_MAX))
+			var dex_mult: float = hero.get_dex() / 10.0
+			hero.will_value = minf(hero.will_value + Hero.WILL_FILL_PER_SEC * dex_mult * delta, float(Hero.WILL_MAX))
 
 
 func initialize_battle() -> void:
