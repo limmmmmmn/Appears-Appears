@@ -1,7 +1,7 @@
 extends PanelContainer
 class_name BattleWindow
 ## BattleWindow: 턴제 전투창
-## - ATBManager에서 턴 순서를 관리 (DEX 기반)
+## - Will 시스템: 5칸 게이지가 가득 차면 행동, 행동별 Will 소비
 
 signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
@@ -55,12 +55,9 @@ var current_round: int = 0
 var is_processing_turn: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
 
-# === ATB 설정 ===
-const ATB_MAX: float = 100.0
-const ATB_BASE_GAIN_PER_SEC: float = 6.0
-const ATB_AGI_GAIN_PER_SEC: float = 0.35
-const ATB_MIN_RATE: float = 0.03
-const ATB_MAX_RATE: float = 0.60
+# === Will 설정 ===
+const WILL_MAX: int = 5                # Will 게이지 최대 칸 수
+const WILL_FILL_PER_SEC: float = 1.0   # 초당 Will 충전량 (모든 유닛 동일)
 
 # === 턴 타임아웃 안전장치 ===
 var _turn_process_timer: float = 0.0
@@ -149,9 +146,9 @@ func _process(delta: float) -> void:
 
 	_update_background_effect(delta)
 
-	# ATB 게이지 충전 (전투 중 영웅들의 ATB를 DEX 기반으로 채움)
-	_update_hero_atb(delta)
-	_update_enemy_atb(delta)
+	# Will 게이지 충전 (전투 중 모든 유닛의 Will을 동일 속도로 채움)
+	_update_hero_will(delta)
+	_update_enemy_will(delta)
 
 	# 턴 타임아웃 안전장치: is_processing_turn이 오래 걸리면 강제 해제
 	if is_processing_turn:
@@ -290,7 +287,7 @@ func _start_battle() -> void:
 
 	# 메시지 끝난 후 턴 시스템 시작
 	current_round = 0
-	_reset_all_atb()
+	_reset_all_will()
 	is_processing_turn = false
 	_start_new_round()
 #endregion
@@ -305,42 +302,33 @@ func get_alive_enemies() -> Array:
 	return alive
 
 
-#region ATB 게이지
-func _reset_all_atb() -> void:
+#region Will 게이지
+func _reset_all_will() -> void:
 	for hero in PartyManager.get_alive_heroes():
-		hero.atb_value = 0.0
+		hero.will_value = 0.0
 	for enemy in enemies:
 		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
-			enemy.set_atb_value(0.0)
+			enemy.set_will_value(0.0)
 
 
-func _update_hero_atb(delta: float) -> void:
-	## 영웅 ATB 게이지를 DEX 기반으로 서서히 채움
+func _update_hero_will(delta: float) -> void:
+	## 영웅 Will 게이지를 동일 속도로 서서히 채움
 	if is_processing_turn or is_battle_paused:
 		return
 	for hero in PartyManager.get_alive_heroes():
-		if hero.atb_value < 1.0:
-			var fill_speed: float = _calc_atb_fill_rate(hero.get_dex(), hero.base_atb)
-			hero.atb_value = minf(hero.atb_value + fill_speed * delta, 1.0)
+		if hero.will_value < float(WILL_MAX):
+			hero.will_value = minf(hero.will_value + WILL_FILL_PER_SEC * delta, float(WILL_MAX))
 
 
-func _update_enemy_atb(delta: float) -> void:
-	## 적 ATB 게이지를 DEX 기반으로 서서히 채움
+func _update_enemy_will(delta: float) -> void:
+	## 적 Will 게이지를 동일 속도로 서서히 채움
 	if is_processing_turn or is_battle_paused:
 		return
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
-		if enemy.atb_value < 1.0:
-			var fill_speed: float = _calc_atb_fill_rate(enemy.get_dex(), 1.0)
-			enemy.set_atb_value(minf(enemy.atb_value + fill_speed * delta, 1.0))
-
-
-func _calc_atb_fill_rate(dex_value: int, speed_multiplier: float = 1.0) -> float:
-	## 내부 ATB(0.0~1.0) 기준 초당 충전량
-	var gain_points_per_sec: float = (ATB_BASE_GAIN_PER_SEC + float(maxi(0, dex_value)) * ATB_AGI_GAIN_PER_SEC) * maxf(0.5, speed_multiplier)
-	var normalized_rate: float = gain_points_per_sec / ATB_MAX
-	return clampf(normalized_rate, ATB_MIN_RATE, ATB_MAX_RATE)
+		if enemy.will_value < float(WILL_MAX):
+			enemy.set_will_value(minf(enemy.will_value + WILL_FILL_PER_SEC * delta, float(WILL_MAX)))
 #endregion
 
 
@@ -404,7 +392,7 @@ func _compare_turn_priority(a: Dictionary, b: Dictionary) -> bool:
 
 
 func _process_next_turn() -> void:
-	## 다음 턴 처리 (ATB가 1.0 찬 유닛만 행동)
+	## 다음 턴 처리 (Will이 가득 찬 유닛만 행동)
 	if current_state != BattleState.RUNNING:
 		return
 
@@ -412,19 +400,19 @@ func _process_next_turn() -> void:
 		_start_new_round()
 		return
 
-	# 현재 인덱스부터 한 바퀴 돌며 ATB 준비 완료 유닛 탐색
+	# 현재 인덱스부터 한 바퀴 돌며 Will 준비 완료 유닛 탐색
 	var ready_index: int = -1
 	for offset in range(turn_queue.size()):
 		var idx: int = (current_turn_index + offset) % turn_queue.size()
 		var td: Dictionary = turn_queue[idx]
 		if td["type"] == "hero":
 			var h: Hero = td["unit"]
-			if h != null and not h.is_dead and h.atb_value >= 1.0:
+			if h != null and not h.is_dead and h.will_value >= float(WILL_MAX):
 				ready_index = idx
 				break
 		else:
 			var e: BattleEnemy = td["unit"]
-			if e != null and is_instance_valid(e) and e.is_alive() and e.atb_value >= 1.0:
+			if e != null and is_instance_valid(e) and e.is_alive() and e.will_value >= float(WILL_MAX):
 				ready_index = idx
 				break
 
@@ -445,7 +433,7 @@ func _process_next_turn() -> void:
 		turn_started.emit(hero.hero_name, true)
 		_play_turn_effect()
 		await _process_hero_turn(hero)
-		hero.atb_value = 0.0  # 행동 완료 → ATB 리셋
+		# Will은 스킬 비용만큼만 소비됨 (행동 함수에서 처리)
 	else:
 		var enemy: BattleEnemy = turn_data["unit"]
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
@@ -455,7 +443,7 @@ func _process_next_turn() -> void:
 		turn_started.emit(enemy.enemy_name, false)
 		_play_turn_effect()
 		await _process_enemy_turn(enemy)
-		enemy.set_atb_value(0.0)
+		# 적도 Will 비용만큼 소비 (기본 공격 = 1칸)
 
 	# 전투 종료 체크
 	if _check_battle_end():
@@ -492,12 +480,8 @@ func _process_hero_turn(hero: Hero) -> void:
 		skill_id = "basic_attack"
 		skill_data = DataManager.get_skill("basic_attack")
 
-	# MP 부족 시 기본 공격으로 폴백
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	if mp_cost > 0 and hero.current_mp < mp_cost:
-		skill_id = "basic_attack"
-		skill_data = DataManager.get_skill("basic_attack")
-		mp_cost = 0
+	# Will 비용 확인 및 소비
+	var will_cost: int = int(skill_data.get("will_cost", 1))
 
 	var target_type: String = skill_data.get("target", "single_enemy")
 
@@ -508,9 +492,8 @@ func _process_hero_turn(hero: Hero) -> void:
 	if not is_inside_tree():
 		return
 
-	# MP 소모
-	if mp_cost > 0:
-		hero.consume_mp(mp_cost)
+	# Will 소모
+	hero.consume_will(will_cost)
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -547,6 +530,9 @@ func _process_enemy_turn(enemy: BattleEnemy) -> void:
 	if not is_inside_tree():
 		return
 
+	# Will 소모 (적 기본 공격 = 1칸)
+	enemy.consume_will(1)
+
 	_enemy_attack(enemy)
 
 	# 행동 후 잠시 대기
@@ -556,7 +542,8 @@ func _process_enemy_turn(enemy: BattleEnemy) -> void:
 
 
 func _select_hero_skill(hero: Hero) -> String:
-	## 영웅의 스킬 선택 (간단한 AI)
+	## 영웅의 스킬 선택 (간단한 AI) - Will 시스템
+	## Will이 가득 찬 상태에서 호출되므로, 스킬 비용만 확인
 	var skills: Array = hero.get_available_skills()
 
 	# 클레릭은 체력이 낮은 아군이 있으면 힐 우선
@@ -565,23 +552,26 @@ func _select_hero_skill(hero: Hero) -> String:
 		if not wounded.is_empty():
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
-				if data.get("type", "") == "heal" and hero.has_enough_mp(s):
-					return s
+				if data.get("type", "") == "heal":
+					if hero.is_skill_enabled(s) and CooldownManager.is_skill_ready(hero.id, s):
+						return s
 
 	# 마법사는 적이 2마리 이상이면 전체 공격 우선
 	if hero.class_id == "mage":
 		if get_enemy_count() >= 2:
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
-				if data.get("target", "") == "all_enemies" and hero.has_enough_mp(s):
-					return s
+				if data.get("target", "") == "all_enemies":
+					if hero.is_skill_enabled(s) and CooldownManager.is_skill_ready(hero.id, s):
+						return s
 
 	# 도적은 확률적으로 특수 스킬 사용
 	if hero.class_id == "thief":
 		if randf() < 0.3:  # 30% 확률로 특수 스킬
 			for s in skills:
-				if s != "basic_attack" and hero.has_enough_mp(s):
-					return s
+				if s != "basic_attack":
+					if hero.is_skill_enabled(s) and CooldownManager.is_skill_ready(hero.id, s):
+						return s
 
 	# 기본: 기본 공격
 	return "basic_attack"
@@ -1029,16 +1019,15 @@ func _play_hero_hit_popup(hero: Hero, damage: int, is_crit: bool) -> void:
 	_style_hit_bar(hp_bar, hp_color)
 	right_vbox.add_child(hp_bar)
 
-	# MP 바
-	var mp_bar := ProgressBar.new()
-	mp_bar.custom_minimum_size = Vector2(40, 5)
-	var max_mp := hero.get_max_mp()
-	mp_bar.max_value = max_mp if max_mp > 0 else 1
-	mp_bar.value = hero.current_mp
-	mp_bar.show_percentage = false
-	mp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_style_hit_bar(mp_bar, Color(0.3, 0.5, 1.0))
-	right_vbox.add_child(mp_bar)
+	# Will 바
+	var will_bar := ProgressBar.new()
+	will_bar.custom_minimum_size = Vector2(40, 5)
+	will_bar.max_value = Hero.WILL_MAX
+	will_bar.value = hero.will_value
+	will_bar.show_percentage = false
+	will_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_style_hit_bar(will_bar, Color(0.95, 0.75, 0.2))
+	right_vbox.add_child(will_bar)
 
 	# 데미지 표시
 	var dmg_label := Label.new()

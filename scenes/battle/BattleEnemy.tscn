@@ -40,7 +40,7 @@ grow_horizontal = 2
 value = 100.0
 show_percentage = false
 
-[node name="ATBBar" type="ProgressBar" parent="."]
+[node name="WillBar" type="ProgressBar" parent="."]
 layout_mode = 0
 anchor_left = 0.5
 anchor_right = 0.5

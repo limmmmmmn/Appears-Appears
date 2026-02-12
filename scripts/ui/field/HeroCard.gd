@@ -1,7 +1,7 @@
 extends Control
 class_name HeroCard
 ## 좌측 파티 초상화 유닛
-## 페이스칩(48x48) + HP/MP (롱, 10단위 눈금) + ATB/EXP (숏) + 레벨
+## 페이스칩(48x48) + HP (롱, 10단위 눈금) + Will (5칸) + EXP (숏) + 레벨
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
 const FACE_SIZE := 48
@@ -9,32 +9,35 @@ const BAR_GAP := 2  # 페이스칩 ↔ 바 영역 간격
 
 # === 바 높이 ===
 const HP_BAR_HEIGHT := 9
-const MP_BAR_HEIGHT := 6
-const ATB_BAR_HEIGHT := 5
+const WILL_BAR_HEIGHT := 7
 const EXP_BAR_HEIGHT := 4
 const BAR_SPACING := 2  # 바 간 간격
 
-# === 롱 바 (HP/MP) ===
-const LONG_BAR_MAX_WIDTH := 120  # HP/MP 최대 너비
+# === 롱 바 (HP) ===
+const LONG_BAR_MAX_WIDTH := 120  # HP 최대 너비
 const MIN_BAR_RATIO := 0.3  # 최소 비율
 
-# === 숏 바 (ATB/EXP) ===
-const SHORT_BAR_WIDTH := 55  # ATB/EXP 고정 너비
+# === Will 바 ===
+const WILL_BAR_WIDTH := 75  # Will 바 전체 너비
+const WILL_SLOTS := 5       # Will 칸 수
+
+# === 숏 바 (EXP) ===
+const SHORT_BAR_WIDTH := 55  # EXP 고정 너비
 
 # === 기준값 (가변 길이) ===
 var hp_reference: int = 100
-var mp_reference: int = 60
 
 # === 색상 ===
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
 const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)
 const HP_GHOST_COLOR := Color(1.0, 0.35, 0.35, 0.8)
-const MP_BAR_COLOR := Color(0.25, 0.45, 0.95)
-const ATB_BAR_COLOR := Color(0.95, 0.75, 0.2)
+const WILL_BAR_COLOR := Color(0.95, 0.75, 0.2)
+const WILL_BAR_FULL_COLOR := Color(1.0, 0.9, 0.3)
 const EXP_BAR_COLOR := Color(0.3, 0.85, 0.75)
 const BAR_BG_COLOR := Color(0.06, 0.06, 0.09, 0.9)
 const TICK_COLOR := Color(0.0, 0.0, 0.0, 0.3)
+const WILL_DIVIDER_COLOR := Color(0.15, 0.15, 0.2, 0.9)
 
 const DEATH_OVERLAY_COLOR := Color(0.1, 0.1, 0.1, 0.7)
 const PLACEHOLDER_COLOR := Color(0.15, 0.12, 0.2)
@@ -70,13 +73,10 @@ var hp_bar_bg: ColorRect
 var hp_ghost: ColorRect
 var hp_bar: ColorRect
 var hp_tick_overlay: Control
-# MP 바
-var mp_bar_bg: ColorRect
-var mp_bar: ColorRect
-var mp_tick_overlay: Control
-# ATB 바
-var atb_bar_bg: ColorRect
-var atb_bar: ColorRect
+# Will 바
+var will_bar_bg: ColorRect
+var will_bar: ColorRect
+var will_divider_overlay: Control
 # EXP 바
 var exp_bar_bg: ColorRect
 var exp_bar: ColorRect
@@ -85,17 +85,13 @@ var level_label: Label
 
 # 바 길이 캐시
 var _hp_bar_width: float = LONG_BAR_MAX_WIDTH
-var _mp_bar_width: float = LONG_BAR_MAX_WIDTH
 var _cached_max_hp: int = 0
-var _cached_max_mp: int = 0
 
 # 상태 추적
 var _prev_hp: int = -1
-var _prev_mp: int = -1
 
 # 트윈
 var _hp_tween: Tween
-var _mp_tween: Tween
 var _ghost_tween: Tween
 var _shake_tween: Tween
 
@@ -160,7 +156,7 @@ func _build_ui() -> void:
 	content.add_child(bars_container)
 
 	# 수직 중앙 정렬 계산
-	var total_bar_height: float = HP_BAR_HEIGHT + BAR_SPACING + MP_BAR_HEIGHT + BAR_SPACING + ATB_BAR_HEIGHT + BAR_SPACING + EXP_BAR_HEIGHT
+	var total_bar_height: float = HP_BAR_HEIGHT + BAR_SPACING + WILL_BAR_HEIGHT + BAR_SPACING + EXP_BAR_HEIGHT
 	var start_y: float = floorf((FACE_SIZE - total_bar_height) / 2.0)
 
 	# === HP 바 (롱) ===
@@ -174,25 +170,18 @@ func _build_ui() -> void:
 	hp_tick_overlay = _create_tick_overlay(Vector2(0, hp_y), HP_BAR_HEIGHT)
 	bars_container.add_child(hp_tick_overlay)
 
-	# === MP 바 (롱) ===
-	var mp_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
-	mp_bar_bg = _make_rect(Vector2(0, mp_y), Vector2(LONG_BAR_MAX_WIDTH, MP_BAR_HEIGHT), BAR_BG_COLOR)
-	bars_container.add_child(mp_bar_bg)
-	mp_bar = _make_rect(Vector2(0, mp_y), Vector2(LONG_BAR_MAX_WIDTH, MP_BAR_HEIGHT), MP_BAR_COLOR)
-	bars_container.add_child(mp_bar)
-	mp_tick_overlay = _create_tick_overlay(Vector2(0, mp_y), MP_BAR_HEIGHT)
-	bars_container.add_child(mp_tick_overlay)
+	# === Will 바 (5칸) + 레벨 ===
+	var will_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
+	will_bar_bg = _make_rect(Vector2(0, will_y), Vector2(WILL_BAR_WIDTH, WILL_BAR_HEIGHT), BAR_BG_COLOR)
+	bars_container.add_child(will_bar_bg)
+	will_bar = _make_rect(Vector2(0, will_y), Vector2(0, WILL_BAR_HEIGHT), WILL_BAR_COLOR)
+	bars_container.add_child(will_bar)
+	will_divider_overlay = _create_will_divider_overlay(Vector2(0, will_y), WILL_BAR_HEIGHT)
+	bars_container.add_child(will_divider_overlay)
 
-	# === ATB 바 (숏) + 레벨 ===
-	var atb_y: float = mp_y + MP_BAR_HEIGHT + BAR_SPACING
-	atb_bar_bg = _make_rect(Vector2(0, atb_y), Vector2(SHORT_BAR_WIDTH, ATB_BAR_HEIGHT), BAR_BG_COLOR)
-	bars_container.add_child(atb_bar_bg)
-	atb_bar = _make_rect(Vector2(0, atb_y), Vector2(0, ATB_BAR_HEIGHT), ATB_BAR_COLOR)
-	bars_container.add_child(atb_bar)
-
-	# 레벨 라벨 (ATB 바 우측)
+	# 레벨 라벨 (Will 바 우측)
 	level_label = Label.new()
-	level_label.position = Vector2(SHORT_BAR_WIDTH + 3, atb_y - 2)
+	level_label.position = Vector2(WILL_BAR_WIDTH + 3, will_y - 2)
 	level_label.text = "Lv.1"
 	level_label.add_theme_font_size_override("font_size", 9)
 	level_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7))
@@ -200,7 +189,7 @@ func _build_ui() -> void:
 	bars_container.add_child(level_label)
 
 	# === EXP 바 (숏) ===
-	var exp_y: float = atb_y + ATB_BAR_HEIGHT + BAR_SPACING
+	var exp_y: float = will_y + WILL_BAR_HEIGHT + BAR_SPACING
 	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(SHORT_BAR_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(exp_bar_bg)
 	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
@@ -244,6 +233,35 @@ func _create_tick_overlay(pos: Vector2, height: float) -> Control:
 	overlay.size = Vector2(LONG_BAR_MAX_WIDTH, height)
 	overlay.mouse_filter = MOUSE_FILTER_IGNORE
 	return overlay
+
+
+class WillDividerOverlay extends Control:
+	## Will 바 위에 5칸 구분선 표시
+	var bar_height: float = 0.0
+	var slot_count: int = 5
+
+	func setup(p_width: float, p_height: float, p_slots: int = 5) -> void:
+		bar_height = p_height
+		slot_count = p_slots
+		size = Vector2(p_width, p_height)
+		queue_redraw()
+
+	func _draw() -> void:
+		if slot_count <= 1:
+			return
+		var slot_width: float = size.x / float(slot_count)
+		for i in range(1, slot_count):
+			var x: float = slot_width * float(i)
+			draw_line(Vector2(x, 0), Vector2(x, bar_height), Color(0.15, 0.15, 0.2, 0.9), 1.0)
+
+
+func _create_will_divider_overlay(pos: Vector2, height: float) -> Control:
+	var overlay := WillDividerOverlay.new()
+	overlay.position = pos
+	overlay.size = Vector2(WILL_BAR_WIDTH, height)
+	overlay.mouse_filter = MOUSE_FILTER_IGNORE
+	overlay.setup(WILL_BAR_WIDTH, height, WILL_SLOTS)
+	return overlay
 #endregion
 
 
@@ -259,10 +277,9 @@ func update_from_hero(hero: Hero) -> void:
 		return
 	hero_id = hero.id
 	_load_face_chip(hero)
-	_recalc_bar_widths(hero.get_max_hp(), hero.get_max_mp())
+	_recalc_bar_widths(hero.get_max_hp())
 	update_hp(hero.current_hp, hero.get_max_hp())
-	update_mp(hero.current_mp, hero.get_max_mp())
-	update_atb(hero.atb_value)
+	update_will(hero.get_will_ratio())
 	update_exp(hero.get_exp_ratio())
 	update_level(hero.level)
 	set_dead(hero.is_dead)
@@ -270,15 +287,12 @@ func update_from_hero(hero: Hero) -> void:
 
 
 #region 바 길이 가변 시스템 (비율 기반 통일)
-func _recalc_bar_widths(max_hp: int, max_mp: int) -> void:
+func _recalc_bar_widths(max_hp: int) -> void:
 	_hp_bar_width = _calc_bar_length(max_hp, hp_reference, LONG_BAR_MAX_WIDTH)
-	_mp_bar_width = _calc_bar_length(max_mp, mp_reference, LONG_BAR_MAX_WIDTH)
 
 	# 배경 바 크기 적용
 	if hp_bar_bg:
 		hp_bar_bg.size.x = _hp_bar_width
-	if mp_bar_bg:
-		mp_bar_bg.size.x = _mp_bar_width
 
 	# 눈금 갱신 (max_value가 변경되었을 때만)
 	if max_hp != _cached_max_hp:
@@ -286,14 +300,8 @@ func _recalc_bar_widths(max_hp: int, max_mp: int) -> void:
 		if hp_tick_overlay and hp_tick_overlay is TickOverlay:
 			(hp_tick_overlay as TickOverlay).setup(max_hp, _hp_bar_width, HP_BAR_HEIGHT)
 
-	if max_mp != _cached_max_mp:
-		_cached_max_mp = max_mp
-		if mp_tick_overlay and mp_tick_overlay is TickOverlay:
-			(mp_tick_overlay as TickOverlay).setup(max_mp, _mp_bar_width, MP_BAR_HEIGHT)
-
 	# 카드 최소 너비
-	var wider: float = maxf(_hp_bar_width, _mp_bar_width)
-	custom_minimum_size.x = FACE_SIZE + BAR_GAP + wider
+	custom_minimum_size.x = FACE_SIZE + BAR_GAP + maxf(_hp_bar_width, WILL_BAR_WIDTH)
 
 
 func _calc_bar_length(max_value: int, reference: int, max_width: float) -> float:
@@ -367,34 +375,19 @@ func update_hp(current: int, max_hp: int) -> void:
 #endregion
 
 
-#region MP 바 (Tween)
-func update_mp(current: int, max_mp: int) -> void:
-	if mp_bar == null:
+#region Will 바
+func update_will(ratio: float) -> void:
+	## Will 게이지 갱신 (0.0 ~ 1.0)
+	if will_bar == null:
 		return
-	var ratio: float = clampf(float(current) / float(max_mp), 0.0, 1.0) if max_mp > 0 else 1.0
-	var target_w: float = _mp_bar_width * ratio
-
-	if _prev_mp < 0:
-		mp_bar.size.x = target_w
-		_prev_mp = current
-		return
-
-	_kill_tween(_mp_tween)
-	_mp_tween = create_tween()
-	_mp_tween.tween_property(mp_bar, "size:x", target_w, MP_TWEEN_DURATION) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	_prev_mp = current
-#endregion
-
-
-
-#region ATB 바
-func update_atb(value: float) -> void:
-	## ATB 게이지 갱신 (0.0 ~ 1.0)
-	if atb_bar == null:
-		return
-	var target_w: float = SHORT_BAR_WIDTH * clampf(value, 0.0, 1.0)
-	atb_bar.size.x = target_w
+	var clamped: float = clampf(ratio, 0.0, 1.0)
+	var target_w: float = WILL_BAR_WIDTH * clamped
+	will_bar.size.x = target_w
+	# 가득 차면 색상 변경
+	if clamped >= 1.0:
+		will_bar.color = WILL_BAR_FULL_COLOR
+	else:
+		will_bar.color = WILL_BAR_COLOR
 #endregion
 
 

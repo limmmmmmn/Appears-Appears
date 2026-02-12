@@ -19,7 +19,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	# 전투 중 ATB/EXP 바를 매 프레임 갱신 (부드러운 게이지 충전 연출)
+	# 전투 중 Will/EXP 바를 매 프레임 갱신 (부드러운 게이지 충전 연출)
 	if not BattleManager or BattleManager.get_active_battle_count() == 0:
 		return
 	_update_realtime_bars()
@@ -133,9 +133,9 @@ func shake(index: int) -> void:
 #endregion
 
 
-#region ATB/EXP 실시간 갱신
+#region Will/EXP 실시간 갱신
 func _update_realtime_bars() -> void:
-	## 전투 중 ATB/EXP 바만 경량 갱신
+	## 전투 중 Will/EXP 바만 경량 갱신
 	var party: Array = PartyManager.get_party() if PartyManager else []
 	for i in range(cards.size()):
 		if i >= party.size():
@@ -143,7 +143,7 @@ func _update_realtime_bars() -> void:
 		var hero: Hero = party[i]
 		if hero != null and not hero.is_dead:
 			var card: HeroCard = cards[i]
-			card.update_atb(hero.atb_value)
+			card.update_will(hero.get_will_ratio())
 			card.update_exp(hero.get_exp_ratio())
 			card.update_level(hero.level)
 #endregion
@@ -217,8 +217,8 @@ func _find_available_healer() -> Hero:
 
 func _execute_field_heal(healer: Hero, target: Hero) -> void:
 	var skill_data: Dictionary = DataManager.get_skill("heal")
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	if mp_cost > 0 and not healer.consume_mp(mp_cost):
+	var will_cost: int = int(skill_data.get("will_cost", 2))
+	if not healer.consume_will(will_cost):
 		return
 
 	var base_value: int = int(skill_data.get("base_damage", 25))

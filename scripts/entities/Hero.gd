@@ -15,10 +15,12 @@ const BENCH_EXP_RATIO: float = 0.5
 
 # 성장/전투 상수
 const SEED_CAP: int = 99
-const AGI_ATB_RATIO: float = 0.02   # 민첩 50 -> ATB +1.0
 const AGI_CRIT_RATIO: float = 0.003 # 민첩 100 -> 크리 30%
-const DEFAULT_BASE_ATB: float = 1.0
 const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [2, 5, 10, 15]
+
+# Will 시스템 상수
+const WILL_MAX: int = 5              # Will 게이지 최대 칸 수
+const WILL_FILL_PER_SEC: float = 1.0 # 초당 Will 충전량 (모든 캐릭터 동일)
 
 # 기본(레벨) 스탯: hp/mp/str/agi/wis/luk
 var level: int = 1
@@ -88,11 +90,8 @@ var field_sprite: String = ""
 # 룬 (특성 부여)
 var equipped_rune_id: String = ""
 
-# ATB 기반값
-var base_atb: float = DEFAULT_BASE_ATB
-
-# ATB (전투 시 행동 게이지)
-var atb_value: float = 0.0  # 0.0 ~ 1.0
+# Will (전투 시 행동 게이지, 0.0 ~ 5.0)
+var will_value: float = 0.0
 
 
 static func create_from_id(hero_id: String) -> Hero:
@@ -147,7 +146,6 @@ func _initialize(hero_id: String) -> void:
 		"luk": 0,
 	}
 
-	base_atb = float(class_data.get("base_atb", DEFAULT_BASE_ATB))
 	growth_per_level = _build_growth_table(class_data)
 	_setup_skill_unlocks(class_data)
 
@@ -310,7 +308,8 @@ func get_magic_attack() -> int:
 
 
 func get_atb_speed() -> float:
-	return base_atb + get_base_stat("agi") * AGI_ATB_RATIO + _get_equipment_stat("spd")
+	## 레거시 호환 (Will 시스템에서는 사용 안 함)
+	return 1.0
 
 
 func get_spd() -> int:
@@ -539,6 +538,38 @@ func has_enough_mp(skill_id: String) -> bool:
 	return current_mp >= cost
 
 
+# === Will 시스템 ===
+func consume_will(amount: int) -> bool:
+	## Will 소모. 충분하면 소모 후 true, 부족하면 false
+	if amount <= 0:
+		return true
+	if will_value < float(amount):
+		return false
+	will_value -= float(amount)
+	return true
+
+
+func is_will_full() -> bool:
+	## Will 게이지가 가득 찼는지 확인
+	return will_value >= float(WILL_MAX)
+
+
+func get_will_ratio() -> float:
+	## Will 비율 (0.0 ~ 1.0) - UI 바 표시용
+	return clampf(will_value / float(WILL_MAX), 0.0, 1.0)
+
+
+func get_skill_will_cost(skill_id: String) -> int:
+	## 스킬의 Will 비용 반환
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	return int(skill_data.get("will_cost", 1))
+
+
+func has_enough_will(skill_id: String) -> bool:
+	## 스킬 사용에 필요한 Will이 있는지 확인 (게이지 풀 + 비용 충족)
+	return is_will_full()
+
+
 func apply_seed_bonus(stat: String, value: int) -> void:
 	## 씨앗으로 영구 스탯 증가 (스탯당 +99 제한)
 	if value <= 0:
@@ -567,6 +598,7 @@ func apply_seed_bonus(stat: String, value: int) -> void:
 func full_restore() -> void:
 	current_hp = get_max_hp()
 	current_mp = get_max_mp()
+	will_value = 0.0
 	is_dead = false
 
 
@@ -734,11 +766,11 @@ func unequip_rune() -> String:
 
 
 func get_stat_summary() -> String:
-	return "[%s] %s | Lv.%d EXP:%d/%d | HP:%d/%d MP:%d/%d | STR:%d AGI:%d WIS:%d LUK:%d ATK:%d DEF:%d" % [
+	return "[%s] %s | Lv.%d EXP:%d/%d | HP:%d/%d Will:%.0f/%d | STR:%d AGI:%d WIS:%d LUK:%d ATK:%d DEF:%d" % [
 		hero_name, hero_class_name,
 		level, current_exp, get_exp_to_next_level(),
 		current_hp, get_max_hp(),
-		current_mp, get_max_mp(),
+		will_value, WILL_MAX,
 		get_str(), get_base_stat("agi"), get_base_stat("wis"), get_luk(),
 		get_attack(), get_defense()
 	]

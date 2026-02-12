@@ -18,7 +18,7 @@ var battle_uid: int = -1
 # 스탯
 var max_hp: int = 1
 var current_hp: int = 1
-var atb_value: float = 0.0  # 0.0 ~ 1.0
+var will_value: float = 0.0  # 0.0 ~ 5.0 (Will 게이지)
 var base_str: int = 0
 var base_def: int = 0
 var base_int: int = 0
@@ -36,7 +36,7 @@ var drop_table: Array = []
 @onready var sprite: Sprite2D = $Sprite
 @onready var name_label: Label = $NameLabel
 @onready var hp_bar: ProgressBar = $HPBar
-@onready var atb_bar: ProgressBar = $ATBBar
+@onready var will_bar: ProgressBar = $WillBar
 
 # 이펙트
 var original_modulate: Color = Color.WHITE
@@ -84,7 +84,7 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 		base_def = int(base_def * 1.5)  # 방어력 1.5배
 
 	current_hp = max_hp
-	atb_value = 0.0
+	will_value = 0.0
 	
 	# 보상 (엘리트는 3배 + 최소 보장)
 	var rewards: Dictionary = data.get("rewards", {})
@@ -199,14 +199,23 @@ func _update_hp_display() -> void:
 		hp_bar.value = (float(current_hp) / float(max_hp)) * 100.0
 
 
-func _update_atb_display() -> void:
-	if atb_bar and atb_bar.visible:
-		atb_bar.value = clampf(atb_value, 0.0, 1.0) * 100.0
+func _update_will_display() -> void:
+	if will_bar and will_bar.visible:
+		will_bar.value = clampf(will_value / float(Hero.WILL_MAX), 0.0, 1.0) * 100.0
 
 
-func set_atb_value(value: float) -> void:
-	atb_value = clampf(value, 0.0, 1.0)
-	_update_atb_display()
+func set_will_value(value: float) -> void:
+	will_value = clampf(value, 0.0, float(Hero.WILL_MAX))
+	_update_will_display()
+
+
+func consume_will(amount: int) -> bool:
+	## Will 소모
+	if will_value < float(amount):
+		return false
+	will_value -= float(amount)
+	_update_will_display()
+	return true
 #endregion
 
 

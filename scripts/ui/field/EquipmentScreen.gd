@@ -623,11 +623,10 @@ func _refresh_stats() -> void:
 		["LV", str(int(hero.level)), "lv"],
 		["EXP", "%d/%d" % [int(hero.current_exp), int(hero.get_exp_to_next_level())], "exp"],
 		["HP", "%d/%d" % [hero.current_hp, hero.get_max_hp()], "hp"],
-		["MP", "%d/%d" % [hero.current_mp, hero.get_max_mp()], "mp"],
 		["ATK", str(hero.get_atk()), "atk"],
 		["DEF", str(hero.get_def()), "def"],
 		["MATK", str(hero.get_magic_attack()), "matk"],
-		["ATB", "%.2f" % hero.get_atb_speed(), "atb"],
+		["WILL", "%d/%d" % [int(hero.will_value), Hero.WILL_MAX], "will"],
 		["CRIT", "%.1f%%" % hero.get_crit(), "crit"],
 		["HIT", "%.1f%%" % hero.get_hit_rate(), "hit"],
 		["EVA", "%.1f%%" % hero.get_eva(), "eva"],
@@ -825,7 +824,7 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 	var skill_name: String = skill_data.get("name", skill_id)
 	var skill_type: String = skill_data.get("type", "physical")
 	var target: String = skill_data.get("target", "single_enemy")
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	var will_cost: int = int(skill_data.get("will_cost", 1))
 	var cooldown: float = float(skill_data.get("cooldown", 5.0))
 	var is_enabled: bool = hero.is_skill_enabled(skill_id)
 
@@ -909,7 +908,7 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 		var mult: float = float(scaling.get("multiplier", 1.0))
 		desc_parts.append("ATK x%s" % str(mult))
 
-	desc_parts.append("MP %d" % mp_cost)
+	desc_parts.append("Will %d" % will_cost)
 
 	# 쿨다운 속도
 	if cooldown < 4.0:
