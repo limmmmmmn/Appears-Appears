@@ -522,9 +522,9 @@ func _init_equip_notice_card() -> void:
 		row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
 		equip_vbox.add_child(row_panel)
 
-		var row_hbox := HBoxContainer.new()
-		row_hbox.add_theme_constant_override("separation", 3)
-		row_panel.add_child(row_hbox)
+		var slot_row_hbox := HBoxContainer.new()
+		slot_row_hbox.add_theme_constant_override("separation", 3)
+		row_panel.add_child(slot_row_hbox)
 
 		var slot_icon := Label.new()
 		slot_icon.custom_minimum_size = Vector2(14, 12)
@@ -532,7 +532,7 @@ func _init_equip_notice_card() -> void:
 		slot_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		slot_icon.add_theme_font_size_override("font_size", STYLE.font_tiny)
 		slot_icon.text = str(SLOT_ICONS.get(slot_key, "📦"))
-		row_hbox.add_child(slot_icon)
+		slot_row_hbox.add_child(slot_icon)
 
 		var item_label := Label.new()
 		item_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -541,7 +541,7 @@ func _init_equip_notice_card() -> void:
 		item_label.add_theme_font_size_override("font_size", STYLE.font_tiny)
 		item_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
 		item_label.text = "— 비어있음 —"
-		row_hbox.add_child(item_label)
+		slot_row_hbox.add_child(item_label)
 
 		equip_notice_slot_rows[slot_key] = {
 			"panel": row_panel,
