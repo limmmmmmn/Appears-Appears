@@ -712,8 +712,6 @@ func _connect_signals() -> void:
 	if BattleManager:
 		if not BattleManager.party_hp_changed.is_connected(update_party_display):
 			BattleManager.party_hp_changed.connect(update_party_display)
-		if not BattleManager.loot_animation_requested.is_connected(_on_loot_anim):
-			BattleManager.loot_animation_requested.connect(_on_loot_anim)
 		if BattleManager.has_signal("hud_notice_requested"):
 			if not BattleManager.hud_notice_requested.is_connected(_on_hud_notice_requested):
 				BattleManager.hud_notice_requested.connect(_on_hud_notice_requested)
@@ -753,17 +751,6 @@ static func _make_flat_style(
 #region 이벤트 핸들러
 func _on_speed_pressed() -> void:
 	pass
-
-
-func _on_loot_anim(item_id: String, start_pos: Vector2) -> void:
-	var target_pos := Vector2(420, 320)
-	var loot_anim := LootAnimationUI.new()
-	var ctrl := get_node_or_null("Control")
-	if ctrl:
-		ctrl.add_child(loot_anim)
-	else:
-		add_child(loot_anim)
-	loot_anim.setup(item_id, start_pos, target_pos)
 
 
 func _on_equip_dropped(_hero_index: int, _item_id: String) -> void:
@@ -941,7 +928,7 @@ func _play_next_equip_notice_card() -> void:
 	var hero_id: String = str(payload.get("hero_id", ""))
 	var hero_name: String = str(payload.get("hero_name", ""))
 	var slot_key: String = str(payload.get("slot_key", ""))
-	var delta: Dictionary = payload.get("delta", {})
+	var delta: Dictionary = payload.get("delta", {}) as Dictionary
 	var hero: Hero = _find_hero_by_id(hero_id)
 
 	if equip_notice_face and SpriteManager:
@@ -1013,11 +1000,11 @@ func _find_hero_by_id(hero_id: String) -> Hero:
 
 func _refresh_equip_notice_slots(hero: Hero, highlighted_slot: String) -> void:
 	for slot_key in SLOT_ORDER:
-		var row: Dictionary = equip_notice_slot_rows.get(slot_key, {})
+		var row: Dictionary = equip_notice_slot_rows.get(slot_key, {}) as Dictionary
 		if row.is_empty():
 			continue
-		var panel: PanelContainer = row.get("panel")
-		var item_label: Label = row.get("item_label")
+		var panel: PanelContainer = row.get("panel") as PanelContainer
+		var item_label: Label = row.get("item_label") as Label
 		var item_text: String = "— 비어있음 —"
 		var item_color: Color = Color(0.75, 0.75, 0.8)
 		if hero != null:
@@ -1050,8 +1037,9 @@ func _build_equip_stat_delta(item_id: String, replaced_id: String) -> Dictionary
 
 func _refresh_equip_notice_stats(delta: Dictionary) -> void:
 	for entry in equip_notice_stat_rows:
-		var key: String = str(entry.get("key", ""))
-		var label: Label = entry.get("label")
+		var e: Dictionary = entry as Dictionary
+		var key: String = str(e.get("key", ""))
+		var label: Label = e.get("label") as Label
 		if label == null:
 			continue
 		var d: int = int(delta.get(key, 0))
@@ -1067,10 +1055,10 @@ func _refresh_equip_notice_stats(delta: Dictionary) -> void:
 
 
 func _get_equip_notice_row_panel(slot_key: String) -> PanelContainer:
-	var row: Dictionary = equip_notice_slot_rows.get(slot_key, {})
+	var row: Dictionary = equip_notice_slot_rows.get(slot_key, {}) as Dictionary
 	if row.is_empty():
 		return null
-	return row.get("panel")
+	return row.get("panel") as PanelContainer
 
 
 #region 로그 (스텁 - 외부 호출 호환용)

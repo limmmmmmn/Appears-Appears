@@ -136,10 +136,6 @@ func collect() -> void:
 func _collect_gold() -> void:
 	if GameManager:
 		GameManager.add_gold(gold_amount)
-	# 골드 → HUD 골드 표시로 날아가는 연출
-	var target: Vector2 = _get_gold_label_screen_pos()
-	if target != Vector2.ZERO:
-		_spawn_fly_icon("🪙", Color(1.0, 0.9, 0.3), target)
 	if BattleManager:
 		BattleManager.battle_log_received.emit(
 			"💰 Gold +%d" % gold_amount, Color(1.0, 0.9, 0.3)
@@ -148,30 +144,11 @@ func _collect_gold() -> void:
 
 func _collect_item() -> void:
 	var auto_equipped: bool = false
-	var equipped_hero_idx: int = -1
 
 	if InventoryManager:
 		auto_equipped = InventoryManager.try_auto_equip(item_id)
-		if auto_equipped:
-			equipped_hero_idx = _find_equipped_hero_index(item_id)
-		else:
+		if not auto_equipped:
 			InventoryManager.add_item(item_id)
-
-	# 아이콘/색상
-	var icon: String = ITEM_TYPE_ICONS.get(item_type, "📦")
-	var color: Color = RARITY_COLORS.get(item_rarity, Color.WHITE)
-
-	# 날아가는 연출
-	if auto_equipped and equipped_hero_idx >= 0:
-		# 자동 장착 → 해당 히어로 카드로 날아감
-		var target: Vector2 = _get_hero_card_screen_pos(equipped_hero_idx)
-		if target != Vector2.ZERO:
-			_spawn_fly_icon(icon, color, target)
-	else:
-		# 인벤토리로 → 인벤토리 카드로 날아감
-		var target: Vector2 = _get_inventory_card_screen_pos()
-		if target != Vector2.ZERO:
-			_spawn_fly_icon(icon, color, target)
 
 	var edata: Dictionary = DataManager.get_equipment(item_id) if DataManager else {}
 	var item_name: String = edata.get("name", item_id)
@@ -245,94 +222,3 @@ func _play_collect_anim() -> void:
 	tween.tween_property(self, "modulate:a", 0.0, 0.25)
 	tween.tween_property(self, "scale", Vector2(1.5, 1.5), 0.25)
 	tween.chain().tween_callback(queue_free)
-
-
-#region 날아가는 아이콘 연출
-func _spawn_fly_icon(icon_text: String, icon_color: Color, target_screen_pos: Vector2) -> void:
-	## 드롭 위치에서 UI 대상으로 날아가는 아이콘 연출
-	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * global_position
-
-	var hud_nodes: Array = get_tree().get_nodes_in_group("field_hud")
-	if hud_nodes.is_empty():
-		return
-	var hud: Node = hud_nodes[0]
-
-	var fly := Label.new()
-	fly.text = icon_text
-	fly.add_theme_font_size_override("font_size", 14)
-	fly.add_theme_color_override("font_color", icon_color)
-	fly.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	fly.add_theme_constant_override("outline_size", 2)
-	fly.z_index = 200
-	fly.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fly.position = screen_pos
-	fly.pivot_offset = Vector2(8, 8)
-	hud.add_child(fly)
-
-	# 위로 팝 → 포물선으로 목표 도달
-	fly.scale = Vector2(1.5, 1.5)
-	var tween := fly.create_tween()
-
-	# Phase 1: 위로 떠오름 (0.15초)
-	tween.set_parallel(true)
-	tween.tween_property(fly, "position:y", screen_pos.y - 30.0, 0.15) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(fly, "scale", Vector2(1.0, 1.0), 0.15) \
-		.set_ease(Tween.EASE_OUT)
-
-	# Phase 2: 포물선으로 목표 (0.35초)
-	tween.chain()
-	tween.set_parallel(true)
-	tween.tween_property(fly, "position:x", target_screen_pos.x, 0.35) \
-		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(fly, "position:y", target_screen_pos.y, 0.35) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(fly, "scale", Vector2(0.5, 0.5), 0.35) \
-		.set_ease(Tween.EASE_IN)
-
-	tween.chain().tween_callback(fly.queue_free)
-
-
-func _get_gold_label_screen_pos() -> Vector2:
-	var hud_nodes: Array = get_tree().get_nodes_in_group("field_hud")
-	if hud_nodes.is_empty():
-		return Vector2.ZERO
-	var hud: FieldHUD = hud_nodes[0] as FieldHUD
-	if hud == null:
-		return Vector2.ZERO
-	if hud.gold_label and is_instance_valid(hud.gold_label):
-		return hud.gold_label.get_global_rect().get_center()
-	return Vector2.ZERO
-
-
-func _get_hero_card_screen_pos(hero_idx: int) -> Vector2:
-	var hud_nodes: Array = get_tree().get_nodes_in_group("field_hud")
-	if hud_nodes.is_empty():
-		return Vector2.ZERO
-	var hud: FieldHUD = hud_nodes[0] as FieldHUD
-	if hud == null or hud.party_panel == null:
-		return Vector2.ZERO
-	var bpc: PartyPanel = hud.party_panel
-	if hero_idx < bpc.cards.size():
-		var card: HeroCard = bpc.cards[hero_idx]
-		if card and is_instance_valid(card):
-			return card.get_global_rect().get_center()
-	return Vector2.ZERO
-
-
-func _get_inventory_card_screen_pos() -> Vector2:
-	# 인벤토리 카드 삭제됨 → 첫 번째 히어로 카드 위치로 대체
-	return _get_hero_card_screen_pos(0)
-
-
-func _find_equipped_hero_index(p_item_id: String) -> int:
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	for i in range(party.size()):
-		var hero = party[i]
-		if hero == null:
-			continue
-		for slot in hero.equipment:
-			if hero.equipment[slot] == p_item_id:
-				return i
-	return -1
-#endregion

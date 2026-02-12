@@ -18,7 +18,6 @@ signal boss_battle_ended(battle_id: int)  # 보스전 종료 시그널
 signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
-signal loot_animation_requested(item_id: String, start_pos: Vector2)
 signal accumulated_rewards_changed(gold: int, items: Array)
 signal field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, window_rect: Rect2)
 
@@ -142,7 +141,6 @@ func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_
 	window.battle_ended.connect(_on_battle_window_ended)
 	window.battle_log.connect(_on_battle_log)
 	window.party_updated.connect(_on_party_updated)
-	window.loot_drop_requested.connect(_on_loot_drop_requested)
 
 	# 등장 애니메이션
 	_animate_window_appear(window, target_pos)
@@ -272,28 +270,18 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 
 	end_battle(battle_id, victory)
 
-	# 승리 보상: 골드/아이템 즉시 지급 + 날아가는 연출 + HP/MP 오브 드롭
+	# 승리 보상: 골드/아이템 즉시 지급 + HP/MP 오브 드롭
 	if victory and (window_gold > 0 or not window_items.is_empty()):
-		var start_pos: Vector2 = window_screen_rect.get_center()
-
 		# 골드 즉시 지급
 		if window_gold > 0 and GameManager:
 			GameManager.add_gold(window_gold)
 
-		# 아이템 즉시 지급 (자동장착 또는 인벤토리) + 타겟 추적
-		var item_targets: Array = []  # [{item_id, auto_equipped, hero_index}]
+		# 아이템 즉시 지급 (자동장착 또는 인벤토리)
 		for item_id in window_items:
 			if InventoryManager:
 				var equipped := InventoryManager.try_auto_equip(item_id)
-				var hero_idx := -1
-				if equipped:
-					hero_idx = _find_equipped_hero_index(item_id)
-				else:
+				if not equipped:
 					InventoryManager.add_item(item_id)
-				item_targets.append({"item_id": item_id, "auto_equipped": equipped, "hero_index": hero_idx})
-
-		# 날아가는 연출
-		_spawn_reward_fly_anim(start_pos, window_gold, item_targets)
 
 		# 보상 규모에 따라 오브 개수 결정
 		var hp_orbs: int = _calc_orb_count(window_gold, window_items.size())
@@ -322,8 +310,6 @@ func _on_party_updated() -> void:
 	party_hp_changed.emit()
 
 
-func _on_loot_drop_requested(item_id: String, start_pos: Vector2) -> void:
-	loot_animation_requested.emit(item_id, start_pos)
 #endregion
 
 
@@ -578,129 +564,4 @@ func set_battle_paused(paused: bool) -> void:
 		if window != null and is_instance_valid(window):
 			window.set_battle_paused(paused)
 	battle_pause_changed.emit(paused)
-#endregion
-
-
-#region 보상 날아가는 연출
-func _spawn_reward_fly_anim(start_pos: Vector2, gold: int, item_targets: Array) -> void:
-	## 전투창 위치에서 골드/아이템이 HUD로 날아가는 연출
-	var hud := _get_field_hud()
-	if hud == null:
-		return
-
-	var fly_layer := CanvasLayer.new()
-	fly_layer.layer = 100
-	fly_layer.process_mode = Node.PROCESS_MODE_ALWAYS
-	get_tree().root.add_child(fly_layer)
-
-	var delay: float = 0.0
-	var delay_step: float = 0.12
-
-	# 골드 날아가기
-	if gold > 0:
-		var gold_target := _get_gold_label_pos(hud)
-		if gold_target != Vector2.ZERO:
-			_create_fly_icon(fly_layer, "🪙", Color(1.0, 0.9, 0.3), start_pos, gold_target, delay)
-			delay += delay_step
-
-	# 아이템 날아가기
-	for data in item_targets:
-		var item_id: String = data.item_id
-		var equip_data: Dictionary = DataManager.get_equipment(item_id) if DataManager else {}
-		var i_type: String = str(equip_data.get("type", equip_data.get("slot", "")))
-		var i_rarity: String = str(equip_data.get("rarity", "common"))
-		var icon: String = FieldDrop.ITEM_TYPE_ICONS.get(i_type, "📦")
-		var color: Color = FieldDrop.RARITY_COLORS.get(i_rarity, Color.WHITE)
-
-		var target_pos: Vector2 = Vector2.ZERO
-		if data.auto_equipped and data.hero_index >= 0:
-			target_pos = _get_hero_card_pos(hud, data.hero_index)
-		else:
-			target_pos = _get_inventory_card_pos(hud)
-
-		if target_pos != Vector2.ZERO:
-			_create_fly_icon(fly_layer, icon, color, start_pos, target_pos, delay)
-			delay += delay_step
-
-	# 모든 애니메이션 완료 후 레이어 정리
-	var cleanup := get_tree().create_tween()
-	cleanup.tween_interval(delay + 0.6)
-	cleanup.tween_callback(fly_layer.queue_free)
-
-
-func _create_fly_icon(parent: Node, icon_text: String, icon_color: Color, from: Vector2, to: Vector2, delay: float) -> void:
-	var fly := Label.new()
-	fly.text = icon_text
-	fly.add_theme_font_size_override("font_size", 14)
-	fly.add_theme_color_override("font_color", icon_color)
-	fly.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	fly.add_theme_constant_override("outline_size", 3)
-	fly.z_index = 200
-	fly.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fly.position = from
-	fly.pivot_offset = Vector2(8, 8)
-	fly.modulate.a = 0.0
-	fly.scale = Vector2(1.5, 1.5)
-	parent.add_child(fly)
-
-	var tween := fly.create_tween()
-	# 대기
-	if delay > 0.0:
-		tween.tween_interval(delay)
-	# Phase 1: 팝업 등장
-	tween.tween_property(fly, "modulate:a", 1.0, 0.08)
-	tween.parallel().tween_property(fly, "scale", Vector2(1.2, 1.2), 0.08).set_ease(Tween.EASE_OUT)
-	tween.tween_property(fly, "scale", Vector2(1.0, 1.0), 0.06)
-	# Phase 2: 포물선으로 목표 이동
-	var mid_y: float = minf(from.y, to.y) - 30.0
-	tween.set_parallel(true)
-	tween.tween_property(fly, "position:x", to.x, 0.35).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(fly, "position:y", mid_y, 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	tween.chain()
-	tween.set_parallel(true)
-	tween.tween_property(fly, "position:y", to.y, 0.20).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(fly, "scale", Vector2(0.4, 0.4), 0.20).set_ease(Tween.EASE_IN)
-	tween.tween_property(fly, "modulate:a", 0.0, 0.10).set_delay(0.10)
-	tween.chain().tween_callback(fly.queue_free)
-
-
-func _get_field_hud() -> FieldHUD:
-	var hud_nodes: Array = get_tree().get_nodes_in_group("field_hud")
-	if hud_nodes.is_empty():
-		return null
-	return hud_nodes[0] as FieldHUD
-
-
-func _get_gold_label_pos(hud: FieldHUD) -> Vector2:
-	if hud.gold_label and is_instance_valid(hud.gold_label):
-		return hud.gold_label.get_global_rect().get_center()
-	return Vector2.ZERO
-
-
-func _get_hero_card_pos(hud: FieldHUD, hero_idx: int) -> Vector2:
-	if hud.party_panel == null:
-		return Vector2.ZERO
-	var bpc: PartyPanel = hud.party_panel
-	if hero_idx < bpc.cards.size():
-		var card: HeroCard = bpc.cards[hero_idx]
-		if card and is_instance_valid(card):
-			return card.get_global_rect().get_center()
-	return Vector2.ZERO
-
-
-func _get_inventory_card_pos(hud: FieldHUD) -> Vector2:
-	# 인벤토리 카드 삭제됨 → 첫 번째 히어로 카드 위치로 대체
-	return _get_hero_card_pos(hud, 0)
-
-
-func _find_equipped_hero_index(p_item_id: String) -> int:
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	for i in range(party.size()):
-		var hero = party[i]
-		if hero == null:
-			continue
-		for slot in hero.equipment:
-			if hero.equipment[slot] == p_item_id:
-				return i
-	return -1
 #endregion

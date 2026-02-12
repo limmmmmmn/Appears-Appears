@@ -7,7 +7,6 @@ signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
 signal turn_started(unit_name: String, is_hero: bool)
-signal loot_drop_requested(item_id: String, start_global_pos: Vector2)
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
 
@@ -1242,125 +1241,6 @@ func _end_battle_victory() -> void:
 	_play_close_effect()
 
 
-func _play_reward_fly_animation() -> void:
-	## 보상이 HUD로 날아가는 연출
-	# 보상이 없으면 바로 닫기
-	if total_gold <= 0 and drop_items.is_empty():
-		_play_close_effect()
-		return
-
-	# 전투창의 화면상 위치 계산 (스크린 좌표)
-	var start_pos: Vector2 = get_global_rect().get_center()
-
-	# 타겟 위치 (화면 상단 중앙)
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var target_pos: Vector2 = Vector2(viewport_size.x / 2, 60)
-
-	# 최상위 레이어에 보상 아이콘들 생성 (일시정지 중에도 실행)
-	var root := get_tree().root
-	var fly_container := CanvasLayer.new()
-	fly_container.layer = 100  # 최상위
-	fly_container.process_mode = Node.PROCESS_MODE_ALWAYS  # 일시정지 중에도 애니메이션 실행
-	root.add_child(fly_container)
-
-	var fly_nodes: Array = []
-	var delay: float = 0.0
-	var delay_interval: float = 0.12
-
-	# Gold 아이콘 생성
-	if total_gold > 0:
-		var gold_node := _create_fly_reward_node("💰 +%d G" % total_gold, Color(1.0, 0.9, 0.3))
-		gold_node.position = start_pos
-		fly_container.add_child(gold_node)
-		fly_nodes.append({"node": gold_node, "delay": delay, "start": start_pos})
-		delay += delay_interval
-
-	# 아이템 아이콘들 생성 (최대 3개)
-	var item_count: int = mini(drop_items.size(), 3)
-	for i in range(item_count):
-		var item_node := _create_fly_reward_node("🎁 아이템!", Color(0.9, 0.6, 1.0))
-		item_node.position = start_pos
-		fly_container.add_child(item_node)
-		fly_nodes.append({"node": item_node, "delay": delay, "start": start_pos})
-		delay += delay_interval
-
-	# 날아가는 애니메이션 (get_tree().create_tween() 사용 - BattleWindow가 닫혀도 계속 실행)
-	var total_duration: float = 0.5
-	for fly_data in fly_nodes:
-		var node: Control = fly_data.node
-		var node_delay: float = fly_data.delay
-		var node_start: Vector2 = fly_data.start
-
-		# 초기 상태 - 보이는 상태로 시작
-		node.modulate.a = 1.0
-		node.scale = Vector2(0.5, 0.5)
-
-		# 애니메이션 시작 (SceneTree에서 생성, 일시정지 중에도 실행)
-		var tween := get_tree().create_tween()
-		tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)  # 일시정지 중에도 실행
-		tween.tween_interval(node_delay)
-
-		# 팝업 효과로 나타나기
-		tween.tween_property(node, "scale", Vector2(1.2, 1.2), 0.1).set_ease(Tween.EASE_OUT)
-		tween.tween_property(node, "scale", Vector2(1.0, 1.0), 0.08)
-
-		# 날아가기 (곡선 경로) - position 사용
-		var mid_pos: Vector2 = node_start.lerp(target_pos, 0.5) + Vector2(0, -40)
-		tween.tween_property(node, "position", mid_pos, total_duration * 0.4).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		tween.tween_property(node, "position", target_pos, total_duration * 0.5).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		tween.parallel().tween_property(node, "scale", Vector2(0.4, 0.4), total_duration * 0.5)
-		tween.parallel().tween_property(node, "modulate:a", 0.0, 0.15)
-
-	# 모든 애니메이션 완료 후 정리 및 닫기
-	var cleanup_delay: float = delay + total_duration + 0.2
-	var cleanup_tween := create_tween()
-	cleanup_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)  # 일시정지 중에도 실행
-	cleanup_tween.tween_interval(cleanup_delay)
-	cleanup_tween.tween_callback(fly_container.queue_free)
-	cleanup_tween.tween_callback(_play_close_effect)
-
-
-func _create_fly_reward_node(text: String, color: Color) -> Control:
-	## 날아가는 보상 노드 생성
-	var container := Control.new()
-	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	container.z_index = 100
-
-	# 배경 패널
-	var bg := PanelContainer.new()
-	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.8)
-	bg_style.border_width_left = 2
-	bg_style.border_width_top = 2
-	bg_style.border_width_right = 2
-	bg_style.border_width_bottom = 2
-	bg_style.border_color = color
-	bg_style.corner_radius_top_left = 6
-	bg_style.corner_radius_top_right = 6
-	bg_style.corner_radius_bottom_left = 6
-	bg_style.corner_radius_bottom_right = 6
-	bg_style.content_margin_left = 8
-	bg_style.content_margin_right = 8
-	bg_style.content_margin_top = 4
-	bg_style.content_margin_bottom = 4
-	bg.add_theme_stylebox_override("panel", bg_style)
-	container.add_child(bg)
-
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_outline_color", Color.BLACK)
-	label.add_theme_constant_override("outline_size", 4)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bg.add_child(label)
-
-	# 컨테이너 위치 오프셋 (중앙 정렬)
-	container.position = Vector2(-60, -15)
-
-	return container
-
-
 func _play_close_effect() -> void:
 	## 전투창 닫힘 이펙트
 	# top_level 버튼 숨기기
@@ -1374,9 +1254,6 @@ func _play_close_effect() -> void:
 
 
 func _start_loot_animations() -> void:
-	var delay: float = 0.0
-	var delay_interval: float = 0.15
-
 	# 먼저 모든 아이템을 즉시 처리 (자동 장착 또는 인벤토리 추가)
 	for item_id in drop_items:
 		if not InventoryManager.try_auto_equip(item_id):
@@ -1384,9 +1261,6 @@ func _start_loot_animations() -> void:
 
 	# 그 후 애니메이션과 로그만 표시
 	for item_id in drop_items:
-		var start_pos: Vector2 = global_position + size / 2
-		_delayed_loot_visual(item_id, start_pos, delay)
-
 		var equip_data: Dictionary = DataManager.get_equipment(item_id)
 		if not equip_data.is_empty():
 			var rarity: String = str(equip_data.get("rarity", "common"))
@@ -1399,17 +1273,6 @@ func _start_loot_animations() -> void:
 		else:
 			var item_data: Dictionary = DataManager.get_item(item_id)
 			_send_log("%s 획득!" % str(item_data.get("name", item_id)), Color.YELLOW)
-
-		delay += delay_interval
-
-
-func _delayed_loot_visual(item_id: String, start_pos: Vector2, delay: float) -> void:
-	## 아이템 드롭 시각 효과만 (아이템은 이미 처리됨)
-	if delay > 0.0:
-		var timer := get_tree().create_timer(delay)
-		if timer:
-			await timer.timeout
-	loot_drop_requested.emit(item_id, start_pos)
 
 
 func _end_battle_defeat() -> void:
