@@ -792,25 +792,32 @@ func _refresh_skills() -> void:
 	if hero == null:
 		return
 
-	var skills: Array = hero.get_available_skills()
-	for skill_id in skills:
-		if skill_id == "basic_attack":
-			continue
-		var card := _create_skill_card(hero, skill_id)
+	var class_skills: Array = DataManager.get_class_skills(hero.class_id)
+	for skill_id in class_skills:
+		var sid: String = str(skill_id)
+		var unlock_level: int = int(hero.skill_unlock_levels.get(sid, 1))
+		var is_unlocked: bool = hero.unlocked_skills.has(sid)
+		var card := _create_skill_card(hero, sid, is_unlocked, unlock_level)
 		skills_panel.add_child(card)
 
 
-func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
+func _create_skill_card(hero: Hero, skill_id: String, is_unlocked: bool, unlock_level: int) -> PanelContainer:
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	var skill_name: String = skill_data.get("name", skill_id)
 	var skill_type: String = skill_data.get("type", "physical")
 	var target: String = skill_data.get("target", "single_enemy")
 	var cooldown: float = float(skill_data.get("cooldown", 5.0))
 	var is_enabled: bool = hero.is_skill_enabled(skill_id)
+	var is_basic_attack: bool = (skill_id == "basic_attack")
+	var is_toggle_allowed: bool = is_unlocked and not is_basic_attack
 
 	var panel := PanelContainer.new()
 	var bg_color := Color(0.1, 0.1, 0.14, 0.9) if is_enabled else Color(0.06, 0.06, 0.09, 0.7)
+	if not is_unlocked:
+		bg_color = Color(0.05, 0.05, 0.08, 0.7)
 	var border_c := S.border_gold if is_enabled else S.border
+	if not is_unlocked:
+		border_c = S.border
 	var normal_style := _make_style(bg_color, border_c, 4, 1)
 	normal_style.content_margin_left = 8; normal_style.content_margin_right = 8
 	normal_style.content_margin_top = 6; normal_style.content_margin_bottom = 6
@@ -846,7 +853,10 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 	var name_lbl := Label.new()
 	name_lbl.text = skill_name
 	name_lbl.add_theme_font_size_override("font_size", 12)
-	name_lbl.add_theme_color_override("font_color", S.text if is_enabled else S.text_dim)
+	var name_color: Color = S.text if is_enabled else S.text_dim
+	if not is_unlocked:
+		name_color = S.text_dim
+	name_lbl.add_theme_color_override("font_color", name_color)
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_row.add_child(name_lbl)
 
@@ -903,6 +913,20 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.add_child(desc_lbl)
 
+	var state_lbl := Label.new()
+	state_lbl.add_theme_font_size_override("font_size", 9)
+	state_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not is_unlocked:
+		state_lbl.text = "Lv.%d 해금" % unlock_level
+		state_lbl.add_theme_color_override("font_color", S.text_dim)
+	elif is_basic_attack:
+		state_lbl.text = "기본 공격 (항상 사용)"
+		state_lbl.add_theme_color_override("font_color", S.text_blue)
+	else:
+		state_lbl.text = "활성" if is_enabled else "비활성"
+		state_lbl.add_theme_color_override("font_color", S.text_green if is_enabled else S.text_red)
+	info.add_child(state_lbl)
+
 	# 호버 효과
 	var hover_style := _make_style(Color(0.15, 0.15, 0.22, 0.95), S.border_gold, 4, 1)
 	hover_style.content_margin_left = 8; hover_style.content_margin_right = 8
@@ -918,8 +942,9 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 	# 클릭 → 토글
 	panel.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			hero.toggle_skill(skill_id)
-			_refresh_skills()
+			if is_toggle_allowed:
+				hero.toggle_skill(skill_id)
+				_refresh_skills()
 	)
 
 	return panel

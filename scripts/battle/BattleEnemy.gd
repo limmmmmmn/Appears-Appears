@@ -11,6 +11,10 @@ var enemy_id: String = ""
 var enemy_name: String = ""
 var enemy_type: String = "normal"  # normal, elite, boss
 
+const DROP_RATE_MULTIPLIER: float = 3.0
+const BONUS_EQUIP_DROP_BASE: float = 0.35
+const ELITE_BONUS_DROP_CHANCE: float = 0.9
+
 # 고유 식별자 (전투창 간 구분용)
 static var _uid_counter: int = 0
 var battle_uid: int = -1
@@ -227,14 +231,14 @@ func roll_drops() -> Array:
 		var drop_dict: Dictionary = drop as Dictionary
 		var item_id: String = str(drop_dict.get("item_id", ""))
 		var base_chance: float = float(drop_dict.get("chance", 0.0))
-		var final_chance: float = base_chance * luk_multiplier
+		var final_chance: float = clampf(base_chance * luk_multiplier * DROP_RATE_MULTIPLIER, 0.0, 0.95)
 		
 		if randf() < final_chance:
 			drops.append(item_id)
 	
 	# 2. 일반몹 추가 장비 드랍 (common 등급만)
 	if enemy_type == "normal" and not is_elite_version:
-		var equip_drop_chance: float = 0.08 * luk_multiplier  # 기본 8% 확률
+		var equip_drop_chance: float = clampf(BONUS_EQUIP_DROP_BASE * luk_multiplier, 0.0, 0.95)
 		if randf() < equip_drop_chance:
 			var common_equip: String = _roll_random_common_equipment()
 			if not common_equip.is_empty():
@@ -245,8 +249,8 @@ func roll_drops() -> Array:
 		var elite_equip: String = _roll_random_elite_equipment()
 		if not elite_equip.is_empty():
 			drops.append(elite_equip)
-		# 50% 확률로 추가 장비 1개 더
-		if randf() < 0.5:
+		# 높은 확률로 추가 장비 1개 더
+		if randf() < ELITE_BONUS_DROP_CHANCE:
 			var bonus_equip: String = _roll_random_elite_equipment()
 			if not bonus_equip.is_empty():
 				drops.append(bonus_equip)

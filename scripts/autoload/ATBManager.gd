@@ -1,6 +1,6 @@
 extends Node
 ## ATBManager: 영웅 행동 타이머 중앙 관리 + 액션 시그널 허브
-## - 영웅의 행동 타이머를 전투 중에만 중앙에서 충전
+## - 영웅의 행동 타이머를 전투 여부와 무관하게 상시 충전
 ## - 적의 행동 타이머는 각 전투창이 독립적으로 관리
 
 signal action_executed  # 액션 실행됨 (RightPartyPanel 쿨다운 업데이트용)
@@ -11,10 +11,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# 전투 중에만 영웅 행동 타이머 충전 (전투창과 무관하게 중앙 관리)
+	# 전투 유무와 무관하게 영웅 행동 타이머 충전
 	if get_tree().paused:
-		return
-	if not BattleManager or BattleManager.get_active_battle_count() == 0:
 		return
 	_update_hero_timers(delta)
 

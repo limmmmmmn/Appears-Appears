@@ -189,7 +189,7 @@ func _on_detection_body_exited(body: Node2D) -> void:
 func _on_contact_body_entered(body: Node2D) -> void:
 	if is_contacted:
 		return
-	if body.is_in_group("party_leader") or body.is_in_group("party"):
+	if body.is_in_group("party_leader"):
 		is_contacted = true
 		player_contacted.emit(self)
 

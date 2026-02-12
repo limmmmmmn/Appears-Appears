@@ -320,7 +320,7 @@ func _process_ready_unit() -> void:
 
 	# 영웅 체크
 	for hero in PartyManager.get_alive_heroes():
-		if hero != null and not hero.is_dead and hero.is_action_ready():
+		if hero != null and not hero.is_dead and hero.is_action_ready() and _has_ready_hero_action(hero):
 			is_processing_action = true
 			_execute_hero_action(hero)
 			_check_battle_end()
@@ -355,11 +355,16 @@ func _execute_hero_action(hero: Hero) -> void:
 
 	# 클래스별 스킬 선택 (간단한 AI)
 	var skill_id: String = _select_hero_skill(hero)
+	if skill_id.is_empty():
+		return
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 
 	if skill_data.is_empty():
-		skill_id = "basic_attack"
-		skill_data = DataManager.get_skill("basic_attack")
+		if _can_use_skill(hero, "basic_attack"):
+			skill_id = "basic_attack"
+			skill_data = DataManager.get_skill("basic_attack")
+		else:
+			return
 
 	# 행동 타이머 리셋
 	hero.reset_action_timer()
@@ -454,7 +459,19 @@ func _select_hero_skill(hero: Hero) -> String:
 		return usable_skills[0]
 
 	# ── 기본 공격 ──
-	return "basic_attack"
+	if _can_use_skill(hero, "basic_attack"):
+		return "basic_attack"
+	return ""
+
+
+func _has_ready_hero_action(hero: Hero) -> bool:
+	## 쿨다운 기준으로 즉시 가능한 행동 존재 여부
+	if hero == null or hero.is_dead:
+		return false
+	for skill_id in hero.get_available_skills():
+		if _can_use_skill(hero, str(skill_id)):
+			return true
+	return false
 
 
 func _can_use_skill(hero: Hero, skill_id: String) -> bool:

@@ -1,6 +1,6 @@
 extends Control
 class_name HeroCard
-## 좌측 파티 카드: 평소 페이스칩+바 표시, 클릭 시 장비칸 아코디언 확장
+## 좌측 파티 카드: 평소 페이스칩+바 표시
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
 const FACE_SIZE := 48
@@ -14,7 +14,9 @@ const LONG_BAR_MAX_WIDTH := 120
 const MIN_BAR_RATIO := 0.3
 const SHORT_BAR_WIDTH := 55
 const CARD_WIDTH := FACE_SIZE + BAR_GAP + LONG_BAR_MAX_WIDTH
-const EXPANDED_EXTRA_HEIGHT := 116.0
+const EXPANDED_EXTRA_HEIGHT := 152.0
+const EXPAND_DURATION := 0.28
+const COLLAPSE_DURATION := 0.22
 
 const SLOT_ORDER: Array[String] = [
 	"main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"
@@ -42,7 +44,6 @@ const SHAKE_STRENGTH := 3.0
 
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
-signal accordion_toggle_requested(hero_index: int)
 
 var hero_index: int = -1
 var hero_id: String = ""
@@ -162,7 +163,7 @@ func _build_ui() -> void:
 	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
 	bars_container.add_child(exp_bar)
 
-	_build_equip_panel()
+	# 아코디언 장비 패널 비활성화
 
 
 func _build_equip_panel() -> void:
@@ -394,63 +395,31 @@ func set_dead(is_dead: bool) -> void:
 
 
 func is_expanded() -> bool:
-	return _is_expanded
+	return false
 
 
 func toggle_equips() -> void:
-	if _is_expanded:
-		collapse_equips()
-	else:
-		expand_equips()
+	pass
 
 
 func expand_equips() -> void:
-	if _is_expanded:
-		return
-	_is_expanded = true
-	equip_panel.visible = true
-	_kill_tween(_expand_tween)
-	_expand_tween = create_tween()
-	_expand_tween.tween_property(self, "custom_minimum_size:y", FACE_SIZE + EXPANDED_EXTRA_HEIGHT, 0.18).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	pass
+
+
+func play_equip_sequence(slot: String, id: String = "") -> void:
+	pass
 
 
 func collapse_equips() -> void:
-	if not _is_expanded:
-		return
-	_is_expanded = false
-	_kill_tween(_expand_tween)
-	_expand_tween = create_tween()
-	_expand_tween.tween_property(self, "custom_minimum_size:y", FACE_SIZE, 0.16).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	await _expand_tween.finished
-	if not _is_expanded:
-		equip_panel.visible = false
+	pass
 
 
 func highlight_slot(slot: String, _id: String = "") -> void:
-	_refresh_equip_rows()
-	var row: Dictionary = equip_rows.get(slot, {})
-	if row.is_empty():
-		return
-	var panel: PanelContainer = row.get("panel")
-	panel.add_theme_stylebox_override("panel", _row_style_highlight)
-	if SoundManager:
-		SoundManager.play_equip()
-	var tw := create_tween()
-	tw.tween_property(panel, "modulate", Color(1.25, 1.2, 0.85, 1.0), 0.06)
-	tw.tween_property(panel, "modulate", Color.WHITE, 0.10)
-
-	# 철컥 느낌: 카드 자체 짧은 흔들림
-	if content:
-		var cx: float = content.position.x
-		var clank := create_tween()
-		clank.tween_property(content, "position:x", cx - 3.0, 0.025)
-		clank.tween_property(content, "position:x", cx + 2.0, 0.025)
-		clank.tween_property(content, "position:x", cx - 1.5, 0.02)
-		clank.tween_property(content, "position:x", cx, 0.02)
+	pass
 
 
 func clear_slot_highlights() -> void:
-	_refresh_equip_rows()
+	pass
 
 
 func show_item_info(_item_id: String) -> void:
@@ -498,11 +467,20 @@ func _kill_tween(tw: Tween) -> void:
 
 
 func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		accordion_toggle_requested.emit(hero_index)
+	pass
 
 
 static func get_target_slots(item_slot: String) -> Array:
 	if item_slot in ["ring", "acc"]:
 		return ["ring1", "ring2"]
 	return [item_slot]
+
+
+func get_slot_global_center(slot: String) -> Vector2:
+	var row: Dictionary = equip_rows.get(slot, {})
+	if row.is_empty():
+		return global_position + size * 0.5
+	var panel: PanelContainer = row.get("panel")
+	if panel == null:
+		return global_position + size * 0.5
+	return panel.global_position + panel.size * 0.5

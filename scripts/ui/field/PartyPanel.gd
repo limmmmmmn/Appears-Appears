@@ -45,14 +45,10 @@ func _connect_signals() -> void:
 			if not BattleManager.hero_damaged.is_connected(_on_hero_damaged):
 				BattleManager.hero_damaged.connect(_on_hero_damaged)
 
-	if InventoryManager and InventoryManager.has_signal("item_equipped"):
-		if not InventoryManager.item_equipped.is_connected(_on_item_equipped):
-			InventoryManager.item_equipped.connect(_on_item_equipped)
 #endregion
 
 
 func _on_party_changed() -> void:
-	_rebuild_cards()
 	update_display()
 
 
@@ -72,7 +68,6 @@ func _rebuild_cards() -> void:
 		card.init(i)
 		card.equipment_dropped.connect(_on_card_equip_dropped)
 		card.field_heal_requested.connect(_on_field_heal_requested)
-		card.accordion_toggle_requested.connect(_on_card_accordion_toggle)
 		cards_container.add_child(card)
 		cards.append(card)
 
@@ -105,7 +100,6 @@ func init_party(heroes: Array) -> void:
 		card.init(i)
 		card.equipment_dropped.connect(_on_card_equip_dropped)
 		card.field_heal_requested.connect(_on_field_heal_requested)
-		card.accordion_toggle_requested.connect(_on_card_accordion_toggle)
 		cards_container.add_child(card)
 		cards.append(card)
 		card.update_from_hero(heroes[i])
@@ -180,48 +174,16 @@ func _on_field_heal_requested(hero_index: int) -> void:
 
 
 func _on_card_accordion_toggle(hero_index: int) -> void:
-	if hero_index < 0 or hero_index >= cards.size():
-		return
-	var target: HeroCard = cards[hero_index]
-	var should_expand: bool = not target.is_expanded()
-	for i in range(cards.size()):
-		if i == hero_index:
-			continue
-		cards[i].collapse_equips()
-	if should_expand:
-		target.expand_equips()
-	else:
-		target.collapse_equips()
+	pass
 
 
 func _on_item_equipped(hero_name: String, item_id: String, slot: String, _replaced_id: String) -> void:
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	for i in range(cards.size()):
-		if i >= party.size():
-			continue
-		var hero: Hero = party[i]
-		if hero == null:
-			continue
-		if hero.hero_name != hero_name:
-			continue
-
-		var card: HeroCard = cards[i]
-		if card == null:
-			return
-
-		for j in range(cards.size()):
-			if j != i:
-				cards[j].collapse_equips()
-		card.expand_equips()
-		card.highlight_slot(slot, item_id)
-		var collapse_token: int = Time.get_ticks_msec()
-		card.set_meta("collapse_token", collapse_token)
-		await get_tree().create_timer(2.0).timeout
-		if is_instance_valid(card) and int(card.get_meta("collapse_token", -1)) == collapse_token:
-			card.clear_slot_highlights()
-			card.collapse_equips()
-		return
+	pass
 #endregion
+
+
+func get_hero_slot_global_center(hero_name: String, slot: String) -> Vector2:
+	return Vector2.ZERO
 
 
 #region 필드 힐

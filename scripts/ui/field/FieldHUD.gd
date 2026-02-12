@@ -63,6 +63,9 @@ var equipment_screen: EquipmentScreen = null
 var notice_panel: PanelContainer = null
 var notice_label: Label = null
 var notice_timer: SceneTreeTimer = null
+var _notice_arc_start: Vector2 = Vector2.ZERO
+var _notice_arc_control: Vector2 = Vector2.ZERO
+var _notice_arc_end: Vector2 = Vector2.ZERO
 
 const NOTICE_FONT_SIZE: int = 18
 const NOTICE_MIN_WIDTH: float = 220.0
@@ -85,12 +88,14 @@ var equip_notice_panel: PanelContainer = null
 var equip_notice_face: TextureRect = null
 var equip_notice_name: Label = null
 var equip_notice_slot_rows: Dictionary = {} # slot_key -> {panel, item_label}
+var equip_notice_stat_rows: Array = [] # [{key, label}]
 var equip_row_style_normal: StyleBoxFlat = null
 var equip_row_style_highlight: StyleBoxFlat = null
 var equip_notice_queue: Array = []
 var equip_notice_playing: bool = false
 
 const EQUIP_CARD_FACE_SIZE: float = 92.0
+const EQUIP_CARD_WIDTH: float = 228.0
 const EQUIP_CARD_MARGIN_RIGHT: float = 12.0
 const EQUIP_CARD_STAY_TIME: float = 2.0
 const SLOT_NAMES_KR: Dictionary = {
@@ -406,7 +411,7 @@ func _init_equip_notice_card() -> void:
 	equip_notice_panel.visible = false
 	equip_notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	equip_notice_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	equip_notice_panel.size = Vector2(EQUIP_CARD_FACE_SIZE, 258)
+	equip_notice_panel.size = Vector2(EQUIP_CARD_WIDTH, 258)
 	var card_style := _make_flat_style(Color(0.03, 0.03, 0.06, 0.94), STYLE.border_gold, 6, 1)
 	card_style.content_margin_left = 4
 	card_style.content_margin_right = 4
@@ -421,14 +426,67 @@ func _init_equip_notice_card() -> void:
 	equip_notice_panel.add_child(root)
 
 	equip_notice_face = TextureRect.new()
-	equip_notice_face.custom_minimum_size = Vector2(EQUIP_CARD_FACE_SIZE - 8.0, EQUIP_CARD_FACE_SIZE - 8.0)
+	equip_notice_face.custom_minimum_size = Vector2(EQUIP_CARD_WIDTH - 8.0, EQUIP_CARD_FACE_SIZE - 8.0)
 	equip_notice_face.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	equip_notice_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	equip_notice_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(equip_notice_face)
 
+	var row_hbox := HBoxContainer.new()
+	row_hbox.add_theme_constant_override("separation", 4)
+	root.add_child(row_hbox)
+
+	var box_w: float = floorf((EQUIP_CARD_WIDTH - 16.0) * 0.5)
+	var box_h: float = 150.0
+
+	var stat_box := PanelContainer.new()
+	stat_box.custom_minimum_size = Vector2(box_w, box_h)
+	stat_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stat_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var stat_style := _make_flat_style(Color(0.08, 0.08, 0.12, 0.95), STYLE.border_default, 5, 1)
+	stat_style.content_margin_left = 6
+	stat_style.content_margin_right = 6
+	stat_style.content_margin_top = 6
+	stat_style.content_margin_bottom = 6
+	stat_box.add_theme_stylebox_override("panel", stat_style)
+	row_hbox.add_child(stat_box)
+
+	var stat_vbox := VBoxContainer.new()
+	stat_vbox.add_theme_constant_override("separation", 2)
+	stat_box.add_child(stat_vbox)
+
+	var stat_title := Label.new()
+	stat_title.text = "능력치"
+	stat_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stat_title.add_theme_font_size_override("font_size", STYLE.font_small)
+	stat_title.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
+	stat_vbox.add_child(stat_title)
+
+	equip_notice_stat_rows.clear()
+	for key in ["atk", "def", "mag", "spd", "hit", "eva", "str", "agi", "wis", "luk", "hp"]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		stat_vbox.add_child(row)
+
+		var name_lbl := Label.new()
+		name_lbl.text = str(EQUIP_STAT_LABELS.get(key, key.to_upper()))
+		name_lbl.custom_minimum_size.x = 28
+		name_lbl.add_theme_font_size_override("font_size", STYLE.font_tiny)
+		name_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+		row.add_child(name_lbl)
+
+		var delta_lbl := Label.new()
+		delta_lbl.text = "—"
+		delta_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		delta_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		delta_lbl.add_theme_font_size_override("font_size", STYLE.font_tiny)
+		delta_lbl.add_theme_color_override("font_color", Color(0.62, 0.62, 0.66))
+		row.add_child(delta_lbl)
+
+		equip_notice_stat_rows.append({"key": key, "label": delta_lbl})
+
 	var equip_box := PanelContainer.new()
-	equip_box.custom_minimum_size = Vector2(EQUIP_CARD_FACE_SIZE - 8.0, 150.0)
+	equip_box.custom_minimum_size = Vector2(box_w, box_h)
 	equip_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	equip_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var equip_style := _make_flat_style(Color(0.08, 0.08, 0.12, 0.95), STYLE.border_default, 5, 1)
@@ -437,7 +495,7 @@ func _init_equip_notice_card() -> void:
 	equip_style.content_margin_top = 6
 	equip_style.content_margin_bottom = 6
 	equip_box.add_theme_stylebox_override("panel", equip_style)
-	root.add_child(equip_box)
+	row_hbox.add_child(equip_box)
 
 	var equip_vbox := VBoxContainer.new()
 	equip_vbox.add_theme_constant_override("separation", 2)
@@ -724,8 +782,7 @@ func _on_item_equipped(hero_name: String, item_id: String, slot: String, replace
 	var item_name: String = str(item_data.get("name", item_id))
 	var delta_text: String = _build_equip_stat_delta_text(item_id, replaced_id)
 	_show_notice("%s 장착: %s\n%s" % [hero_name, item_name, delta_text], 2.2, Color(0.8, 1.0, 0.6))
-	if BattleManager and BattleManager.get_active_battle_count() > 0:
-		_queue_equip_notice_card(hero_name, item_id, slot)
+	_queue_equip_notice_card(hero_name, item_id, slot, replaced_id)
 #endregion
 
 
@@ -760,6 +817,7 @@ func _show_notice(message: String, duration: float = 2.0, color: Color = Color.W
 	notice_label.add_theme_color_override("font_color", color)
 	_layout_notice_box(message)
 	notice_panel.visible = true
+	notice_panel.scale = Vector2.ONE
 	notice_panel.modulate.a = 1.0
 
 	# 이전 타이머 무시 (새 메시지로 교체)
@@ -772,6 +830,63 @@ func _show_notice(message: String, duration: float = 2.0, color: Color = Color.W
 func _hide_notice() -> void:
 	if notice_panel:
 		notice_panel.visible = false
+		notice_panel.scale = Vector2.ONE
+		notice_panel.modulate = Color.WHITE
+
+
+func _show_equip_notice_arc(message: String, color: Color, target_global: Vector2) -> void:
+	if notice_panel == null or notice_label == null:
+		return
+	if message.strip_edges().is_empty():
+		_hide_notice()
+		return
+
+	notice_label.text = message
+	notice_label.add_theme_color_override("font_color", color)
+	_layout_notice_box(message)
+	notice_panel.visible = true
+	notice_panel.scale = Vector2.ONE
+	notice_panel.modulate = Color(1, 1, 1, 1)
+
+	var start_pos: Vector2 = notice_panel.position
+	await get_tree().create_timer(0.34).timeout
+
+	var root_ctrl := get_node_or_null("Control") as Control
+	var target_local: Vector2 = target_global
+	if root_ctrl:
+		target_local = root_ctrl.get_global_transform_with_canvas().affine_inverse() * target_global
+
+	var end_pos: Vector2 = target_local - (notice_panel.size * 0.5)
+	var arc_peak_y: float = minf(start_pos.y, end_pos.y) - 82.0
+	var control_pos: Vector2 = Vector2((start_pos.x + end_pos.x) * 0.5, arc_peak_y)
+
+	_notice_arc_start = start_pos
+	_notice_arc_control = control_pos
+	_notice_arc_end = end_pos
+
+	var fly := create_tween()
+	fly.set_parallel(true)
+	fly.tween_method(_set_notice_arc_t, 0.0, 1.0, 0.44).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	fly.tween_property(notice_panel, "scale", Vector2(0.24, 0.24), 0.44).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await fly.finished
+
+	if SoundManager:
+		SoundManager.play_equip()
+
+	var impact := create_tween()
+	impact.set_parallel(true)
+	impact.tween_property(notice_panel, "scale", Vector2(0.16, 0.16), 0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	impact.tween_property(notice_panel, "modulate:a", 0.0, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await impact.finished
+
+	_hide_notice()
+
+
+func _set_notice_arc_t(t: float) -> void:
+	if notice_panel == null:
+		return
+	var u: float = 1.0 - t
+	notice_panel.position = (_notice_arc_start * u * u) + (_notice_arc_control * 2.0 * u * t) + (_notice_arc_end * t * t)
 
 
 func _layout_notice_box(message: String) -> void:
@@ -840,7 +955,7 @@ func _accumulate_equip_stat_delta(dest: Dictionary, stats: Dictionary, mult: int
 		dest[normalized] = int(dest.get(normalized, 0)) + int(stats[key_any]) * mult
 
 
-func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String) -> void:
+func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String, replaced_id: String = "") -> void:
 	if equip_notice_panel == null:
 		return
 	var hero: Hero = _find_hero_by_name(hero_name)
@@ -854,6 +969,7 @@ func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String) 
 		"slot_key": slot,
 		"slot_kr": SLOT_NAMES_KR.get(slot, slot),
 		"item_name": item_name,
+		"delta": _build_equip_stat_delta(item_id, replaced_id),
 	})
 	if not equip_notice_playing:
 		_play_next_equip_notice_card()
@@ -883,12 +999,14 @@ func _play_next_equip_notice_card() -> void:
 	var hero_id: String = str(payload.get("hero_id", ""))
 	var hero_name: String = str(payload.get("hero_name", ""))
 	var slot_key: String = str(payload.get("slot_key", ""))
+	var delta: Dictionary = payload.get("delta", {})
 	var hero: Hero = _find_hero_by_id(hero_id)
 
 	if equip_notice_face and SpriteManager:
 		equip_notice_face.texture = SpriteManager.get_hero_face_sprite(hero_id)
 	if equip_notice_name:
 		equip_notice_name.text = hero_name
+	_refresh_equip_notice_stats(delta)
 	_refresh_equip_notice_slots(hero, slot_key)
 
 	await get_tree().process_frame
@@ -975,6 +1093,35 @@ func _refresh_equip_notice_slots(hero: Hero, highlighted_slot: String) -> void:
 				panel.add_theme_stylebox_override("panel", equip_row_style_highlight)
 			elif equip_row_style_normal:
 				panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+
+
+func _build_equip_stat_delta(item_id: String, replaced_id: String) -> Dictionary:
+	var new_data: Dictionary = DataManager.get_equipment(item_id)
+	var old_data: Dictionary = DataManager.get_equipment(replaced_id) if not replaced_id.is_empty() else {}
+	var new_stats: Dictionary = new_data.get("stats", {})
+	var old_stats: Dictionary = old_data.get("stats", {})
+	var delta := {}
+	_accumulate_equip_stat_delta(delta, new_stats, 1)
+	_accumulate_equip_stat_delta(delta, old_stats, -1)
+	return delta
+
+
+func _refresh_equip_notice_stats(delta: Dictionary) -> void:
+	for entry in equip_notice_stat_rows:
+		var key: String = str(entry.get("key", ""))
+		var label: Label = entry.get("label")
+		if label == null:
+			continue
+		var d: int = int(delta.get(key, 0))
+		if d > 0:
+			label.text = "▲ +%d" % d
+			label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55))
+		elif d < 0:
+			label.text = "▼ %d" % d
+			label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+		else:
+			label.text = "—"
+			label.add_theme_color_override("font_color", Color(0.62, 0.62, 0.66))
 
 
 func _get_equip_notice_row_panel(slot_key: String) -> PanelContainer:
