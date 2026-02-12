@@ -41,6 +41,10 @@ func _ready() -> void:
 	update_display()
 
 
+func _process(_delta: float) -> void:
+	_update_cooldown_displays()
+
+
 func _setup_style() -> void:
 	# 패널 스타일
 	var style := StyleBoxFlat.new()
@@ -323,11 +327,18 @@ func _update_skill_cooldown_bars(slot: HeroSlotUI, hero: Hero) -> void:
 
 			var row := _create_cooldown_row(skill_name)
 			slot.cooldown_rows.add_child(row)
+			var bar: ProgressBar = row.get_node("Bar")
 			slot.skill_rows[skill_id] = {
 				"row": row,
-				"bar": row.get_node("Bar"),
+				"bar": bar,
 				"label": row.get_node("Label")
 			}
+
+			# 초기 쿨다운 값 설정
+			var cooldown_percent: float = CooldownManager.get_cooldown_percent(hero.id, skill_id) if CooldownManager else 0.0
+			var is_ready: bool = cooldown_percent <= 0.0
+			bar.value = 100.0 if is_ready else (1.0 - cooldown_percent) * 100.0
+			_style_cooldown_bar(bar, is_ready)
 
 	# 더 이상 없는 스킬 행 제거
 	var to_remove: Array = []

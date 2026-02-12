@@ -1238,7 +1238,10 @@ func _get_slot_icon(slot: String) -> String:
 		"off_hand": return "🛡"
 		"body": return "🧥"
 		"head": return "⛑"
-		"acc", "ring", "necklace", "shoes": return "💍"
+		"gloves": return "🧤"
+		"boots", "shoes": return "👢"
+		"necklace": return "📿"
+		"acc", "ring": return "💍"
 		_: return "•"
 #endregion
 

@@ -366,6 +366,11 @@ func _execute_hero_action(hero: Hero) -> void:
 	var will_cost: int = int(skill_data.get("will_cost", 1))
 	hero.consume_will(will_cost)
 
+	# MP 소모
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	if mp_cost > 0:
+		hero.consume_mp(mp_cost)
+
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
 
@@ -406,7 +411,7 @@ func _select_hero_skill(hero: Hero) -> String:
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
 				if data.get("type", "") == "heal":
-					if hero.is_skill_enabled(s) and CooldownManager.is_skill_ready(hero.id, s):
+					if _can_use_skill(hero, s):
 						return s
 
 	# 마법사는 적이 2마리 이상이면 전체 공격 우선
@@ -415,19 +420,33 @@ func _select_hero_skill(hero: Hero) -> String:
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
 				if data.get("target", "") == "all_enemies":
-					if hero.is_skill_enabled(s) and CooldownManager.is_skill_ready(hero.id, s):
+					if _can_use_skill(hero, s):
 						return s
 
-	# 도적은 확률적으로 특수 스킬 사용
-	if hero.class_id == "thief":
-		if randf() < 0.3:  # 30% 확률로 특수 스킬
-			for s in skills:
-				if s != "basic_attack":
-					if hero.is_skill_enabled(s) and CooldownManager.is_skill_ready(hero.id, s):
-						return s
+	# 모든 클래스: 사용 가능한 스킬 중 하나를 선택 (기본 공격 제외)
+	var usable: Array = []
+	for s in skills:
+		if s == "basic_attack":
+			continue
+		if _can_use_skill(hero, s):
+			usable.append(s)
 
-	# 기본: 기본 공격
+	if not usable.is_empty():
+		return usable[randi() % usable.size()]
+
+	# 스킬 사용 불가 시 기본 공격
 	return "basic_attack"
+
+
+func _can_use_skill(hero: Hero, skill_id: String) -> bool:
+	## 스킬 사용 가능 여부 통합 확인 (토글 + 쿨다운 + MP)
+	if not hero.is_skill_enabled(skill_id):
+		return false
+	if not CooldownManager.is_skill_ready(hero.id, skill_id):
+		return false
+	if not hero.has_enough_mp(skill_id):
+		return false
+	return true
 
 
 func _play_turn_effect() -> void:
