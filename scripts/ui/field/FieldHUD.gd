@@ -55,6 +55,9 @@ var battle_pause_button: Button = null
 # 일시정지 메뉴
 var pause_menu: CanvasLayer = null
 var is_pause_menu_active: bool = false
+
+# 장비 화면
+var equipment_screen: EquipmentScreen = null
 #endregion
 
 
@@ -69,6 +72,7 @@ func _ready() -> void:
 	_init_party_cards()
 	_init_retreat_button()
 	_init_pause_menu()
+	_init_equipment_screen()
 	_init_recruit_button()
 	_init_battle_pause_button()
 	_connect_signals()
@@ -77,17 +81,20 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
+		# 장비 화면이 열려있으면 장비 화면 닫기 (EquipmentScreen 자체에서 처리)
+		if equipment_screen and equipment_screen.is_open:
+			return
 		# 이미 다른 이유(게임오버, 보스 팝업 등)로 일시정지 중이면 무시
 		# 단, 전투정지 또는 일시정지 메뉴에서는 허용
 		if get_tree().paused and not is_pause_menu_active and not BattleManager.is_battle_paused:
 			return
-		toggle_pause_menu()
+		_toggle_equipment_screen()
 		get_viewport().set_input_as_handled()
 
 	# 스페이스바: 전투 정지/재개 토글
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
-			if not is_pause_menu_active:
+			if not is_pause_menu_active and not (equipment_screen and equipment_screen.is_open):
 				_toggle_battle_pause()
 				get_viewport().set_input_as_handled()
 
@@ -281,6 +288,25 @@ func _update_battle_pause_button_text(paused: bool) -> void:
 			battle_pause_button.text = "⏸ 정지"
 
 
+func _init_equipment_screen() -> void:
+	equipment_screen = EquipmentScreen.new()
+	equipment_screen.name = "EquipmentScreen"
+	equipment_screen.closed.connect(func():
+		# 장비 화면 닫힌 후 파티 카드 갱신
+		update_party_display()
+	)
+	add_child(equipment_screen)
+
+
+func _toggle_equipment_screen() -> void:
+	if equipment_screen == null:
+		return
+	if equipment_screen.is_open:
+		equipment_screen.close()
+	else:
+		equipment_screen.open()
+
+
 func _init_pause_menu() -> void:
 	pause_menu = CanvasLayer.new()
 	pause_menu.name = "PauseMenu"
@@ -422,7 +448,10 @@ func _create_menu_button(text: String, bg_color: Color) -> Button:
 #region 시그널 연결
 func _connect_signals() -> void:
 	if menu_button:
-		menu_button.pressed.connect(func(): menu_pressed.emit())
+		menu_button.pressed.connect(func():
+			_toggle_equipment_screen()
+			menu_pressed.emit()
+		)
 	if speed_button:
 		speed_button.pressed.connect(_on_speed_pressed)
 
