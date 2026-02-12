@@ -55,6 +55,10 @@ var current_round: int = 0
 var is_processing_turn: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
 
+# === 턴 타임아웃 안전장치 ===
+var _turn_process_timer: float = 0.0
+const TURN_TIMEOUT: float = 8.0  # 턴 처리 최대 시간 (초)
+
 
 # === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
@@ -138,8 +142,20 @@ func _process(delta: float) -> void:
 
 	_update_background_effect(delta)
 
+	# ATB 게이지 충전 (전투 중 영웅들의 ATB를 DEX 기반으로 채움)
+	_update_hero_atb(delta)
+
+	# 턴 타임아웃 안전장치: is_processing_turn이 오래 걸리면 강제 해제
+	if is_processing_turn:
+		_turn_process_timer += delta
+		if _turn_process_timer > TURN_TIMEOUT:
+			push_warning("[BattleWindow] 턴 처리 타임아웃 (%.1fs) - 강제 해제" % TURN_TIMEOUT)
+			is_processing_turn = false
+			_turn_process_timer = 0.0
+
 	# 독립 턴 처리 (정지 상태면 스킵)
 	if not is_processing_turn and not is_battle_paused:
+		_turn_process_timer = 0.0
 		_process_next_turn()
 
 
@@ -280,6 +296,18 @@ func get_alive_enemies() -> Array:
 	return alive
 
 
+#region ATB 게이지
+func _update_hero_atb(delta: float) -> void:
+	## 영웅 ATB 게이지를 DEX 기반으로 서서히 채움
+	if is_processing_turn or is_battle_paused:
+		return
+	for hero in PartyManager.get_alive_heroes():
+		if hero.atb_value < 1.0:
+			var fill_speed: float = hero.get_dex() * 0.03
+			hero.atb_value = minf(hero.atb_value + fill_speed * delta, 1.0)
+#endregion
+
+
 #region 독립 턴 관리 시스템
 func set_battle_paused(paused: bool) -> void:
 	## 전투 정지/재개
@@ -344,10 +372,12 @@ func _process_next_turn() -> void:
 		if hero == null or hero.is_dead:
 			is_processing_turn = false
 			return
+		hero.atb_value = 1.0  # 행동 준비 완료
 		BattleManager.turn_changed.emit(hero.hero_name, true)
 		turn_started.emit(hero.hero_name, true)
 		_play_turn_effect()
 		await _process_hero_turn(hero)
+		hero.atb_value = 0.0  # 행동 완료 → ATB 리셋
 	else:
 		var enemy: BattleEnemy = turn_data["unit"]
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
@@ -363,10 +393,14 @@ func _process_next_turn() -> void:
 		is_processing_turn = false
 		return
 
-	# 턴 사이 딜레이
+	# 턴 사이 딜레이 (트리 안전 확인)
+	if not is_inside_tree():
+		is_processing_turn = false
+		return
 	await get_tree().create_timer(TURN_DELAY).timeout
 	is_processing_turn = false
-	ATBManager.action_executed.emit()
+	if is_inside_tree():
+		ATBManager.action_executed.emit()
 #endregion
 
 
@@ -399,7 +433,11 @@ func _process_hero_turn(hero: Hero) -> void:
 	var target_type: String = skill_data.get("target", "single_enemy")
 
 	# 짧은 대기 (연출)
+	if not is_inside_tree():
+		return
 	await get_tree().create_timer(0.2).timeout
+	if not is_inside_tree():
+		return
 
 	# MP 소모
 	if mp_cost > 0:
@@ -421,6 +459,8 @@ func _process_hero_turn(hero: Hero) -> void:
 	CooldownManager.start_cooldown(hero.id, skill_id)
 
 	# 행동 후 잠시 대기
+	if not is_inside_tree():
+		return
 	await get_tree().create_timer(0.3).timeout
 
 
@@ -432,11 +472,17 @@ func _process_enemy_turn(enemy: BattleEnemy) -> void:
 	_bring_to_front()
 
 	# 짧은 대기 (연출)
+	if not is_inside_tree():
+		return
 	await get_tree().create_timer(0.2).timeout
+	if not is_inside_tree():
+		return
 
 	_enemy_attack(enemy)
 
 	# 행동 후 잠시 대기
+	if not is_inside_tree():
+		return
 	await get_tree().create_timer(0.3).timeout
 
 
@@ -1080,6 +1126,15 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	total_exp += exp_reward
 	total_gold += gold_reward
 	drop_items.append_array(items)
+
+	# 경험치 분배 (골드 기반 간이 계산)
+	var per_kill_exp: int = maxi(5, gold_reward / 2)
+	for hero in PartyManager.get_alive_heroes():
+		var exp_result: Dictionary = hero.gain_exp(per_kill_exp)
+		if exp_result.get("leveled_up", false):
+			if SoundManager:
+				SoundManager.play_level_up()
+	call_deferred("_emit_party_updated")
 
 	# 엘리트 보상은 별도 저장 (도주 페널티 면제)
 	if enemy.is_elite_version:

@@ -1,39 +1,45 @@
 extends Control
 class_name HeroCard
 ## 좌측 파티 초상화 유닛
-## 페이스칩(48x48) + HP/MP/ATB/EXP 바 (잔상, Tween)
+## 페이스칩(48x48) + HP/MP (롱, 10단위 눈금) + ATB/EXP (숏) + 레벨
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
 const FACE_SIZE := 48
-const BAR_GAP := 2  # 페이스칩 ↔ 바 사이 간격
+const BAR_GAP := 2  # 페이스칩 ↔ 바 영역 간격
 
-# 바 크기
-const HP_BAR_HEIGHT := 10
-const MP_BAR_HEIGHT := 7
-const BAR_SPACING := 2  # HP바 ↔ MP바 사이 간격
-const MAX_BAR_WIDTH := 120  # 바 최대 픽셀 너비
-const MIN_BAR_RATIO := 0.3  # 바 최소 비율 (= 36px)
+# === 바 높이 ===
+const HP_BAR_HEIGHT := 9
+const MP_BAR_HEIGHT := 6
+const ATB_BAR_HEIGHT := 5
+const EXP_BAR_HEIGHT := 4
+const BAR_SPACING := 2  # 바 간 간격
 
-# 바 길이 기준값 (가변 시스템) — 외부에서 변경 가능
+# === 롱 바 (HP/MP) ===
+const LONG_BAR_MAX_WIDTH := 120  # HP/MP 최대 너비
+const MIN_BAR_RATIO := 0.3  # 최소 비율
+
+# === 숏 바 (ATB/EXP) ===
+const SHORT_BAR_WIDTH := 55  # ATB/EXP 고정 너비
+
+# === 기준값 (가변 길이) ===
 var hp_reference: int = 100
 var mp_reference: int = 60
 
-# HP 색상 (잔량 기반 자동 전환)
-const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)   # 60% 이상
-const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)    # 30~60%
-const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)   # 30% 미만
+# === 색상 ===
+const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
+const HP_COLOR_MID  := Color(0.92, 0.72, 0.2)
+const HP_COLOR_LOW  := Color(0.92, 0.22, 0.22)
 const HP_GHOST_COLOR := Color(1.0, 0.35, 0.35, 0.8)
 const MP_BAR_COLOR := Color(0.25, 0.45, 0.95)
-const ATB_BAR_COLOR := Color(1.0, 0.8, 0.35)
-const EXP_BAR_COLOR := Color(0.45, 0.75, 1.0)
+const ATB_BAR_COLOR := Color(0.95, 0.75, 0.2)
+const EXP_BAR_COLOR := Color(0.3, 0.85, 0.75)
 const BAR_BG_COLOR := Color(0.06, 0.06, 0.09, 0.9)
-const ATB_BAR_HEIGHT := 4
-const EXP_BAR_HEIGHT := 4
+const TICK_COLOR := Color(0.0, 0.0, 0.0, 0.3)
 
 const DEATH_OVERLAY_COLOR := Color(0.1, 0.1, 0.1, 0.7)
 const PLACEHOLDER_COLOR := Color(0.15, 0.12, 0.2)
 
-# 타이밍
+# === 타이밍 ===
 const HP_TWEEN_DURATION := 0.35
 const MP_TWEEN_DURATION := 0.3
 const GHOST_DELAY := 0.4
@@ -59,29 +65,33 @@ var skull_label: Label
 
 # 바 노드
 var bars_container: Control
+# HP 바
 var hp_bar_bg: ColorRect
 var hp_ghost: ColorRect
 var hp_bar: ColorRect
+var hp_tick_overlay: Control
+# MP 바
 var mp_bar_bg: ColorRect
 var mp_bar: ColorRect
+var mp_tick_overlay: Control
+# ATB 바
 var atb_bar_bg: ColorRect
 var atb_bar: ColorRect
-var exp_level_label: Label
+# EXP 바
 var exp_bar_bg: ColorRect
 var exp_bar: ColorRect
+# 레벨 라벨
+var level_label: Label
 
 # 바 길이 캐시
-var _hp_bar_width: float = MAX_BAR_WIDTH
-var _mp_bar_width: float = MAX_BAR_WIDTH
-var _atb_bar_width: float = MAX_BAR_WIDTH
-var _exp_bar_width: float = MAX_BAR_WIDTH - 24.0
+var _hp_bar_width: float = LONG_BAR_MAX_WIDTH
+var _mp_bar_width: float = LONG_BAR_MAX_WIDTH
+var _cached_max_hp: int = 0
+var _cached_max_mp: int = 0
 
 # 상태 추적
 var _prev_hp: int = -1
 var _prev_mp: int = -1
-var _prev_atb_ratio: float = -1.0
-var _prev_exp_ratio: float = -1.0
-var _prev_level: int = -1
 
 # 트윈
 var _hp_tween: Tween
@@ -91,7 +101,7 @@ var _shake_tween: Tween
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(FACE_SIZE + BAR_GAP + MAX_BAR_WIDTH, FACE_SIZE + 2)
+	custom_minimum_size = Vector2(FACE_SIZE + BAR_GAP + LONG_BAR_MAX_WIDTH, FACE_SIZE)
 	_build_ui()
 
 
@@ -99,7 +109,7 @@ func _build_ui() -> void:
 	# --- 콘텐츠 래퍼 (셰이크 대상) ---
 	content = Control.new()
 	content.position = Vector2.ZERO
-	content.size = Vector2(FACE_SIZE + BAR_GAP + MAX_BAR_WIDTH, FACE_SIZE + 2)
+	content.size = Vector2(FACE_SIZE + BAR_GAP + LONG_BAR_MAX_WIDTH, FACE_SIZE)
 	content.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(content)
 
@@ -145,47 +155,55 @@ func _build_ui() -> void:
 	# --- 바 영역 ---
 	bars_container = Control.new()
 	bars_container.position = Vector2(FACE_SIZE + BAR_GAP, 0)
-	bars_container.size = Vector2(MAX_BAR_WIDTH, FACE_SIZE)
+	bars_container.size = Vector2(LONG_BAR_MAX_WIDTH, FACE_SIZE)
 	bars_container.mouse_filter = MOUSE_FILTER_IGNORE
 	content.add_child(bars_container)
 
-	# HP: bg → ghost → fill
-	var hp_y: float = 0.0
-	hp_bar_bg = _make_rect(Vector2(0, hp_y), Vector2(MAX_BAR_WIDTH, HP_BAR_HEIGHT), BAR_BG_COLOR)
+	# 수직 중앙 정렬 계산
+	var total_bar_height: float = HP_BAR_HEIGHT + BAR_SPACING + MP_BAR_HEIGHT + BAR_SPACING + ATB_BAR_HEIGHT + BAR_SPACING + EXP_BAR_HEIGHT
+	var start_y: float = floorf((FACE_SIZE - total_bar_height) / 2.0)
+
+	# === HP 바 (롱) ===
+	var hp_y: float = start_y
+	hp_bar_bg = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(hp_bar_bg)
-	hp_ghost = _make_rect(Vector2(0, hp_y), Vector2(MAX_BAR_WIDTH, HP_BAR_HEIGHT), HP_GHOST_COLOR)
+	hp_ghost = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), HP_GHOST_COLOR)
 	bars_container.add_child(hp_ghost)
-	hp_bar = _make_rect(Vector2(0, hp_y), Vector2(MAX_BAR_WIDTH, HP_BAR_HEIGHT), HP_COLOR_HIGH)
+	hp_bar = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), HP_COLOR_HIGH)
 	bars_container.add_child(hp_bar)
+	hp_tick_overlay = _create_tick_overlay(Vector2(0, hp_y), HP_BAR_HEIGHT)
+	bars_container.add_child(hp_tick_overlay)
 
-	# MP: bg → fill
-	var mp_y: float = HP_BAR_HEIGHT + BAR_SPACING
-	mp_bar_bg = _make_rect(Vector2(0, mp_y), Vector2(MAX_BAR_WIDTH, MP_BAR_HEIGHT), BAR_BG_COLOR)
+	# === MP 바 (롱) ===
+	var mp_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
+	mp_bar_bg = _make_rect(Vector2(0, mp_y), Vector2(LONG_BAR_MAX_WIDTH, MP_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(mp_bar_bg)
-	mp_bar = _make_rect(Vector2(0, mp_y), Vector2(MAX_BAR_WIDTH, MP_BAR_HEIGHT), MP_BAR_COLOR)
+	mp_bar = _make_rect(Vector2(0, mp_y), Vector2(LONG_BAR_MAX_WIDTH, MP_BAR_HEIGHT), MP_BAR_COLOR)
 	bars_container.add_child(mp_bar)
+	mp_tick_overlay = _create_tick_overlay(Vector2(0, mp_y), MP_BAR_HEIGHT)
+	bars_container.add_child(mp_tick_overlay)
 
-	# ATB: bg → fill
+	# === ATB 바 (숏) + 레벨 ===
 	var atb_y: float = mp_y + MP_BAR_HEIGHT + BAR_SPACING
-	atb_bar_bg = _make_rect(Vector2(0, atb_y), Vector2(MAX_BAR_WIDTH, ATB_BAR_HEIGHT), BAR_BG_COLOR)
+	atb_bar_bg = _make_rect(Vector2(0, atb_y), Vector2(SHORT_BAR_WIDTH, ATB_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(atb_bar_bg)
-	atb_bar = _make_rect(Vector2(0, atb_y), Vector2(MAX_BAR_WIDTH, ATB_BAR_HEIGHT), ATB_BAR_COLOR)
+	atb_bar = _make_rect(Vector2(0, atb_y), Vector2(0, ATB_BAR_HEIGHT), ATB_BAR_COLOR)
 	bars_container.add_child(atb_bar)
 
-	# EXP: Lv 라벨 + bg → fill
-	var exp_y: float = atb_y + ATB_BAR_HEIGHT + BAR_SPACING
-	exp_level_label = Label.new()
-	exp_level_label.position = Vector2(0, exp_y - 3)
-	exp_level_label.custom_minimum_size = Vector2(24, 8)
-	exp_level_label.text = "Lv.1"
-	exp_level_label.add_theme_font_size_override("font_size", 8)
-	exp_level_label.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
-	exp_level_label.mouse_filter = MOUSE_FILTER_IGNORE
-	bars_container.add_child(exp_level_label)
+	# 레벨 라벨 (ATB 바 우측)
+	level_label = Label.new()
+	level_label.position = Vector2(SHORT_BAR_WIDTH + 3, atb_y - 2)
+	level_label.text = "Lv.1"
+	level_label.add_theme_font_size_override("font_size", 9)
+	level_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7))
+	level_label.mouse_filter = MOUSE_FILTER_IGNORE
+	bars_container.add_child(level_label)
 
-	exp_bar_bg = _make_rect(Vector2(24, exp_y), Vector2(MAX_BAR_WIDTH - 24.0, EXP_BAR_HEIGHT), BAR_BG_COLOR)
+	# === EXP 바 (숏) ===
+	var exp_y: float = atb_y + ATB_BAR_HEIGHT + BAR_SPACING
+	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(SHORT_BAR_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(exp_bar_bg)
-	exp_bar = _make_rect(Vector2(24, exp_y), Vector2(MAX_BAR_WIDTH - 24.0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
+	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
 	bars_container.add_child(exp_bar)
 
 
@@ -196,6 +214,37 @@ func _make_rect(pos: Vector2, sz: Vector2, color: Color) -> ColorRect:
 	r.color = color
 	r.mouse_filter = MOUSE_FILTER_IGNORE
 	return r
+
+
+#region 눈금 오버레이
+class TickOverlay extends Control:
+	## HP/MP 바 위에 10단위 눈금 표시
+	var max_value: int = 0
+	var bar_height: float = 0.0
+
+	func setup(p_max: int, bar_width: float, p_height: float) -> void:
+		max_value = p_max
+		bar_height = p_height
+		size = Vector2(bar_width, p_height)
+		queue_redraw()
+
+	func _draw() -> void:
+		if max_value <= 10:
+			return
+		var tick_val: int = 10
+		while tick_val < max_value:
+			var x: float = (float(tick_val) / float(max_value)) * size.x
+			draw_line(Vector2(x, 0), Vector2(x, bar_height), Color(0.0, 0.0, 0.0, 0.3), 1.0)
+			tick_val += 10
+
+
+func _create_tick_overlay(pos: Vector2, height: float) -> Control:
+	var overlay := TickOverlay.new()
+	overlay.position = pos
+	overlay.size = Vector2(LONG_BAR_MAX_WIDTH, height)
+	overlay.mouse_filter = MOUSE_FILTER_IGNORE
+	return overlay
+#endregion
 
 
 #region 초기화
@@ -213,38 +262,43 @@ func update_from_hero(hero: Hero) -> void:
 	_recalc_bar_widths(hero.get_max_hp(), hero.get_max_mp())
 	update_hp(hero.current_hp, hero.get_max_hp())
 	update_mp(hero.current_mp, hero.get_max_mp())
-	update_atb(hero.id)
-	update_exp(hero.level, hero.current_exp, hero.get_exp_to_next_level())
+	update_atb(hero.atb_value)
+	update_exp(hero.get_exp_ratio())
+	update_level(hero.level)
 	set_dead(hero.is_dead)
 #endregion
 
 
-#region 바 길이 가변 시스템
+#region 바 길이 가변 시스템 (비율 기반 통일)
 func _recalc_bar_widths(max_hp: int, max_mp: int) -> void:
-	_hp_bar_width = _calc_bar_length(max_hp, hp_reference)
-	_mp_bar_width = _calc_bar_length(max_mp, mp_reference)
+	_hp_bar_width = _calc_bar_length(max_hp, hp_reference, LONG_BAR_MAX_WIDTH)
+	_mp_bar_width = _calc_bar_length(max_mp, mp_reference, LONG_BAR_MAX_WIDTH)
 
-	# 배경 바 크기
+	# 배경 바 크기 적용
 	if hp_bar_bg:
 		hp_bar_bg.size.x = _hp_bar_width
 	if mp_bar_bg:
 		mp_bar_bg.size.x = _mp_bar_width
-	_atb_bar_width = maxf(_hp_bar_width, _mp_bar_width)
-	if atb_bar_bg:
-		atb_bar_bg.size.x = _atb_bar_width
-	_exp_bar_width = maxf(24.0, _atb_bar_width - 24.0)
-	if exp_bar_bg:
-		exp_bar_bg.size.x = _exp_bar_width
 
-	# 카드 최소 너비 = 페이스칩 + 갭 + 더 긴 바
+	# 눈금 갱신 (max_value가 변경되었을 때만)
+	if max_hp != _cached_max_hp:
+		_cached_max_hp = max_hp
+		if hp_tick_overlay and hp_tick_overlay is TickOverlay:
+			(hp_tick_overlay as TickOverlay).setup(max_hp, _hp_bar_width, HP_BAR_HEIGHT)
+
+	if max_mp != _cached_max_mp:
+		_cached_max_mp = max_mp
+		if mp_tick_overlay and mp_tick_overlay is TickOverlay:
+			(mp_tick_overlay as TickOverlay).setup(max_mp, _mp_bar_width, MP_BAR_HEIGHT)
+
+	# 카드 최소 너비
 	var wider: float = maxf(_hp_bar_width, _mp_bar_width)
 	custom_minimum_size.x = FACE_SIZE + BAR_GAP + wider
-	custom_minimum_size.y = FACE_SIZE + 2
 
 
-func _calc_bar_length(max_value: int, reference: int) -> float:
+func _calc_bar_length(max_value: int, reference: int, max_width: float) -> float:
 	var ratio: float = clampf(float(max_value) / float(reference), MIN_BAR_RATIO, 1.0)
-	return ratio * MAX_BAR_WIDTH
+	return ratio * max_width
 #endregion
 
 
@@ -333,34 +387,32 @@ func update_mp(current: int, max_mp: int) -> void:
 #endregion
 
 
-func update_atb(p_hero_id: String) -> void:
+
+#region ATB 바
+func update_atb(value: float) -> void:
+	## ATB 게이지 갱신 (0.0 ~ 1.0)
 	if atb_bar == null:
 		return
-	var ratio: float = 1.0
-	if CooldownManager and not p_hero_id.is_empty():
-		var cd_percent: float = CooldownManager.get_cooldown_percent(p_hero_id, "basic_attack")
-		ratio = 1.0 - clampf(cd_percent, 0.0, 1.0)
-	var target_w: float = _atb_bar_width * ratio
-	if _prev_atb_ratio < 0.0:
-		atb_bar.size.x = target_w
-	else:
-		atb_bar.size.x = lerpf(atb_bar.size.x, target_w, 0.35)
-	_prev_atb_ratio = ratio
+	var target_w: float = SHORT_BAR_WIDTH * clampf(value, 0.0, 1.0)
+	atb_bar.size.x = target_w
+#endregion
 
 
-func update_exp(p_level: int, current_exp: int, needed_exp: int) -> void:
+#region EXP 바
+func update_exp(percent: float) -> void:
+	## 경험치 바 갱신 (0.0 ~ 1.0)
 	if exp_bar == null:
 		return
-	var ratio: float = 1.0 if needed_exp <= 0 else clampf(float(current_exp) / float(needed_exp), 0.0, 1.0)
-	if exp_level_label:
-		exp_level_label.text = "Lv.%d" % p_level
-	var target_w: float = _exp_bar_width * ratio
-	if _prev_exp_ratio < 0.0 or _prev_level != p_level:
-		exp_bar.size.x = target_w
-	else:
-		exp_bar.size.x = lerpf(exp_bar.size.x, target_w, 0.35)
-	_prev_exp_ratio = ratio
-	_prev_level = p_level
+	var target_w: float = SHORT_BAR_WIDTH * clampf(percent, 0.0, 1.0)
+	exp_bar.size.x = target_w
+#endregion
+
+
+#region 레벨 표시
+func update_level(lv: int) -> void:
+	if level_label:
+		level_label.text = "Lv.%d" % lv
+#endregion
 
 
 #region 사망 처리
@@ -409,12 +461,6 @@ func _kill_tween(tw: Tween) -> void:
 		tw.kill()
 #endregion
 
-
-func _process(_delta: float) -> void:
-	# ATB는 기본공격 쿨다운 기준으로 실시간 갱신
-	if hero_id.is_empty():
-		return
-	update_atb(hero_id)
 
 
 #region 필드 힐 (클릭)

@@ -91,6 +91,9 @@ var equipped_rune_id: String = ""
 # ATB 기반값
 var base_atb: float = DEFAULT_BASE_ATB
 
+# ATB (전투 시 행동 게이지)
+var atb_value: float = 0.0  # 0.0 ~ 1.0
+
 
 static func create_from_id(hero_id: String) -> Hero:
 	var hero := Hero.new()

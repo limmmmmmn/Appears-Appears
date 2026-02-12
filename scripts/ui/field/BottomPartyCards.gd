@@ -15,6 +15,14 @@ var cards: Array[HeroCard] = []
 func _ready() -> void:
 	_connect_signals()
 	call_deferred("_initial_setup")
+	set_process(true)
+
+
+func _process(_delta: float) -> void:
+	# 전투 중 ATB/EXP 바를 매 프레임 갱신 (부드러운 게이지 충전 연출)
+	if not BattleManager or BattleManager.get_active_battle_count() == 0:
+		return
+	_update_realtime_bars()
 
 
 func _initial_setup() -> void:
@@ -122,6 +130,21 @@ func set_portrait(index: int, texture: Texture2D) -> void:
 func shake(index: int) -> void:
 	if index >= 0 and index < cards.size():
 		cards[index].shake()
+#endregion
+
+
+#region ATB/EXP 실시간 갱신
+func _update_realtime_bars() -> void:
+	## 전투 중 ATB/EXP 바만 경량 갱신
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	for i in range(cards.size()):
+		if i >= party.size():
+			continue
+		var hero: Hero = party[i]
+		if hero != null and not hero.is_dead:
+			cards[i].update_atb(hero.atb_value)
+			cards[i].update_exp(hero.get_exp_percent())
+			cards[i].update_level(hero.level)
 #endregion
 
 
