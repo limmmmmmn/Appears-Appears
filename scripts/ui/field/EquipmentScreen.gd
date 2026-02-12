@@ -1,7 +1,7 @@
 extends CanvasLayer
 class_name EquipmentScreen
-## 장비 화면 — ESC / 햄버거 버튼으로 열고 닫기
-## 탭: 장비 | 스킬 | 작전
+## 정비 화면 — ESC / 햄버거 버튼으로 열고 닫기
+## 탭: 정비 | 스킬 | 작전
 
 const FACE_PATH := "res://assets/sprites/heroes/%s.png"
 const FIELD_SPRITE_PATH := "res://assets/sprites/heroes/%s.png"
@@ -199,7 +199,7 @@ func _build_top_bar(parent: VBoxContainer) -> void:
 	parent.add_child(hbox)
 
 	var close_btn := Button.new()
-	close_btn.text = "× 장비"
+	close_btn.text = "× 정비"
 	close_btn.add_theme_font_size_override("font_size", 13)
 	close_btn.add_theme_color_override("font_color", S.text_gold)
 	close_btn.flat = true
@@ -281,11 +281,12 @@ func _build_center_panels(parent: HBoxContainer) -> void:
 	wrapper.add_child(tab_hbox)
 
 	_tab_buttons.clear()
-	var tab_names := ["장비", "스킬", "작전"]
+	var tab_names := ["정비", "스킬", "작전"]
 	for i in range(tab_names.size()):
 		var btn := Button.new()
 		btn.text = tab_names[i]
 		btn.add_theme_font_size_override("font_size", 10)
+		btn.add_theme_color_override("font_color", S.text)
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.custom_minimum_size.y = 22
 		var idx := i
@@ -450,14 +451,34 @@ func _switch_tab(tab_index: int) -> void:
 func _update_tab_styles() -> void:
 	for i in range(_tab_buttons.size()):
 		var btn: Button = _tab_buttons[i]
-		var style: StyleBoxFlat
+		var style_normal: StyleBoxFlat
+		var style_hover: StyleBoxFlat
+		var style_pressed: StyleBoxFlat
 		if i == current_tab:
-			style = _make_style(Color(0.15, 0.15, 0.2), S.border_gold, 3, 1)
+			style_normal = _make_style(Color(0.16, 0.16, 0.22, 0.98), S.border_gold, 3, 1)
+			style_hover = _make_style(Color(0.18, 0.18, 0.24, 0.98), S.border_gold, 3, 1)
+			style_pressed = _make_style(Color(0.14, 0.14, 0.2, 0.98), S.border_gold, 3, 1)
+			btn.add_theme_color_override("font_color", S.text_gold)
+			btn.add_theme_color_override("font_hover_color", S.text_gold)
+			btn.add_theme_color_override("font_pressed_color", S.text_gold)
+			btn.add_theme_color_override("font_focus_color", S.text_gold)
 		else:
-			style = _make_style(Color(0.08, 0.08, 0.12), S.border, 3, 1)
-		style.content_margin_left = 10; style.content_margin_right = 10
-		style.content_margin_top = 2; style.content_margin_bottom = 2
-		btn.add_theme_stylebox_override("normal", style)
+			style_normal = _make_style(Color(0.08, 0.08, 0.12, 0.95), S.border, 3, 1)
+			style_hover = _make_style(Color(0.12, 0.12, 0.18, 0.98), S.border, 3, 1)
+			style_pressed = _make_style(Color(0.1, 0.1, 0.16, 0.98), S.border, 3, 1)
+			btn.add_theme_color_override("font_color", S.text)
+			btn.add_theme_color_override("font_hover_color", S.text)
+			btn.add_theme_color_override("font_pressed_color", S.text)
+			btn.add_theme_color_override("font_focus_color", S.text)
+
+		for style in [style_normal, style_hover, style_pressed]:
+			style.content_margin_left = 10; style.content_margin_right = 10
+			style.content_margin_top = 2; style.content_margin_bottom = 2
+
+		btn.add_theme_stylebox_override("normal", style_normal)
+		btn.add_theme_stylebox_override("hover", style_hover)
+		btn.add_theme_stylebox_override("pressed", style_pressed)
+		btn.add_theme_stylebox_override("focus", style_hover)
 #endregion
 
 
@@ -499,7 +520,7 @@ func _refresh_party_list() -> void:
 
 func _create_party_entry(hero: Hero, index: int) -> Dictionary:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(68, 58)
+	panel.custom_minimum_size = Vector2(68, 50)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var style := _make_style(S.bg_slot, S.border, 4, 1)
@@ -507,32 +528,26 @@ func _create_party_entry(hero: Hero, index: int) -> Dictionary:
 	style.content_margin_top = 3; style.content_margin_bottom = 3
 	panel.add_theme_stylebox_override("panel", style)
 
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 3)
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(hbox)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 1)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(vbox)
 
-	var face := TextureRect.new()
-	face.custom_minimum_size = Vector2(40, 40)
-	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var face_path := ""
-	if not hero.portrait.is_empty():
-		face_path = FACE_PATH % hero.portrait
-	elif not hero.field_sprite.is_empty():
-		face_path = FACE_PATH % hero.field_sprite
-	if not face_path.is_empty() and ResourceLoader.exists(face_path):
-		face.texture = load(face_path)
-	hbox.add_child(face)
+	var name_lbl := Label.new()
+	name_lbl.text = hero.hero_name
+	name_lbl.add_theme_font_size_override("font_size", 10)
+	name_lbl.add_theme_color_override("font_color", S.text)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(name_lbl)
 
-	var bars := VBoxContainer.new()
-	bars.add_theme_constant_override("separation", 2)
-	bars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(bars)
-	bars.add_child(_make_mini_bar(hero.current_hp, hero.get_max_hp(), Color(0.25, 0.78, 0.25), 20, 5))
-	bars.add_child(_make_mini_bar(hero.current_mp, hero.get_max_mp(), Color(0.25, 0.45, 0.95), 20, 4))
+	var level_lbl := Label.new()
+	level_lbl.text = "Lv.%d" % int(hero.level)
+	level_lbl.add_theme_font_size_override("font_size", 9)
+	level_lbl.add_theme_color_override("font_color", S.text_dim)
+	level_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	level_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(level_lbl)
 
 	panel.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
@@ -579,16 +594,18 @@ func _refresh_hero_preview() -> void:
 	if hero == null:
 		return
 
-	var sprite_path := ""
-	if not hero.field_sprite.is_empty():
-		sprite_path = FIELD_SPRITE_PATH % hero.field_sprite
-	if not sprite_path.is_empty() and ResourceLoader.exists(sprite_path):
-		hero_sprite.texture = load(sprite_path)
+	var face_path := ""
+	if not hero.portrait.is_empty():
+		face_path = FACE_PATH % hero.portrait
+	elif not hero.field_sprite.is_empty():
+		face_path = FACE_PATH % hero.field_sprite
+	if not face_path.is_empty() and ResourceLoader.exists(face_path):
+		hero_sprite.texture = load(face_path)
 	else:
 		hero_sprite.texture = null
 
 	hero_name_label.text = hero.hero_name
-	hero_class_label.text = hero.hero_class_name
+	hero_class_label.text = "%s · Lv.%d" % [hero.hero_class_name, int(hero.level)]
 	_refresh_stats()
 
 
@@ -603,13 +620,21 @@ func _refresh_stats() -> void:
 	_base_stat_values.clear()
 
 	var stats := [
+		["LV", str(int(hero.level)), "lv"],
+		["EXP", "%d/%d" % [int(hero.current_exp), int(hero.get_exp_to_next_level())], "exp"],
 		["HP", "%d/%d" % [hero.current_hp, hero.get_max_hp()], "hp"],
+		["MP", "%d/%d" % [hero.current_mp, hero.get_max_mp()], "mp"],
 		["ATK", str(hero.get_atk()), "atk"],
 		["DEF", str(hero.get_def()), "def"],
+		["MATK", str(hero.get_magic_attack()), "matk"],
+		["ATB", "%.2f" % hero.get_atb_speed(), "atb"],
+		["CRIT", "%.1f%%" % hero.get_crit(), "crit"],
+		["HIT", "%.1f%%" % hero.get_hit_rate(), "hit"],
+		["EVA", "%.1f%%" % hero.get_eva(), "eva"],
 		["SPD", str(hero.get_spd()), "spd"],
 		["STR", str(hero.get_str()), "str"],
-		["INT", str(hero.get_int()), "int"],
-		["DEX", str(hero.get_dex()), "dex"],
+		["AGI", str(hero.get_dex()), "agi"],
+		["WIS", str(hero.get_base_stat("wis")), "wis"],
 		["LUK", str(hero.get_luk()), "luk"],
 	]
 
@@ -702,12 +727,24 @@ func _calc_per_stat_diff(hero: Hero, item_id: String) -> Dictionary:
 		current_stats = cd.get("stats", {})
 
 	var result: Dictionary = {}
-	var keys := ["atk", "def", "str", "int", "dex", "luk", "hp", "mp", "spd"]
+	var keys := ["atk", "def", "str", "int", "wis", "dex", "agi", "luk", "hp", "mp", "spd", "mag", "hit", "acc", "eva"]
 	for key in keys:
 		var nv: int = int(new_stats.get(key, 0))
 		var cv: int = int(current_stats.get(key, 0))
-		if nv != cv:
-			result[key] = nv - cv
+		if nv == cv:
+			continue
+		match key:
+			"int", "wis":
+				result["wis"] = int(result.get("wis", 0)) + (nv - cv)
+				result["matk"] = int(result.get("matk", 0)) + (nv - cv)
+			"dex", "agi":
+				result["agi"] = int(result.get("agi", 0)) + (nv - cv)
+			"mag":
+				result["matk"] = int(result.get("matk", 0)) + (nv - cv)
+			"acc", "hit":
+				result["hit"] = int(result.get("hit", 0)) + (nv - cv)
+			_:
+				result[key] = int(result.get(key, 0)) + (nv - cv)
 	return result
 #endregion
 
@@ -745,7 +782,7 @@ func _refresh_equip_slots() -> void:
 func _get_main_stat_text(data: Dictionary) -> String:
 	var stats: Dictionary = data.get("stats", {})
 	var parts: Array = []
-	for key in ["atk", "def", "str", "int", "hp", "mp", "dex", "luk", "spd"]:
+	for key in ["atk", "def", "mag", "str", "wis", "int", "hp", "mp", "agi", "dex", "luk", "spd", "hit", "eva"]:
 		var val: int = int(stats.get(key, 0))
 		if val != 0:
 			parts.append("%s %d" % [key.to_upper(), val])
