@@ -365,14 +365,9 @@ func _execute_hero_action(hero: Hero) -> void:
 		skill_id = "basic_attack"
 		skill_data = DataManager.get_skill("basic_attack")
 
-	# Will 소모
+	# Will 소모 (Will이 유일한 행동 자원)
 	var will_cost: int = int(skill_data.get("will_cost", 1))
 	hero.consume_will(will_cost)
-
-	# MP 소모
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	if mp_cost > 0:
-		hero.consume_mp(mp_cost)
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -403,8 +398,13 @@ func _execute_enemy_action(enemy: BattleEnemy) -> void:
 
 
 func _select_hero_skill(hero: Hero) -> String:
-	## 영웅의 스킬 선택 (클래스별 전투 AI)
+	## 영웅의 스킬 선택 (클래스별 전투 AI + 작전 연동)
 	var skills: Array = hero.get_available_skills()
+	var tactic: String = hero.get_meta("ai_target", "weak_first") if hero.has_meta("ai_target") else "weak_first"
+
+	# ── 작전: MP 절약 → 기본 공격만 ──
+	if tactic == "mp_save":
+		return "basic_attack"
 
 	# ── 성직자: 아군 HP 60% 이하면 힐 우선 ──
 	if hero.class_id == "cleric":
@@ -416,16 +416,23 @@ func _select_hero_skill(hero: Hero) -> String:
 					if _can_use_skill(hero, s):
 						return s
 
-	# ── 마법사: 적 2마리 이상이면 전체 마법 ──
+	# ── 마법사: 적 2마리 이상이면 전체 마법, 1마리여도 마법 사용 ──
 	if hero.class_id == "mage":
+		# 전체 공격 우선 (적 2+)
 		if get_enemy_count() >= 2:
 			for s in skills:
 				var data: Dictionary = DataManager.get_skill(s)
 				if data.get("target", "") == "all_enemies":
 					if _can_use_skill(hero, s):
 						return s
+		# 단일 대상이라도 마법 스킬 사용
+		for s in skills:
+			if s == "basic_attack":
+				continue
+			if _can_use_skill(hero, s):
+				return s
 
-	# ── 기사: 전투창 진입 후 첫 공격은 반드시 스킬 ──
+	# ── 기사: 전투창마다 첫 공격은 반드시 스킬 ──
 	if hero.class_id == "knight":
 		if not _knight_used_first.get(hero.id, false):
 			_knight_used_first[hero.id] = true
@@ -435,8 +442,8 @@ func _select_hero_skill(hero: Hero) -> String:
 				if _can_use_skill(hero, s):
 					return s
 
-	# ── 공통: 스킬로 한 방에 죽일 수 있는 적이 있으면 스킬 우선 ──
-	var usable_attack_skills: Array = []
+	# ── 사용 가능한 공격 스킬 수집 ──
+	var usable_skills: Array = []
 	for s in skills:
 		if s == "basic_attack":
 			continue
@@ -444,31 +451,32 @@ func _select_hero_skill(hero: Hero) -> String:
 		if data.get("type", "") == "heal":
 			continue
 		if _can_use_skill(hero, s):
-			usable_attack_skills.append(s)
+			usable_skills.append(s)
 
-	if not usable_attack_skills.is_empty():
-		var finisher: String = _can_skill_finish_enemy(hero, usable_attack_skills)
+	# ── 스킬로 적을 마무리할 수 있으면 즉시 사용 ──
+	if not usable_skills.is_empty():
+		var finisher: String = _find_finisher_skill(hero, usable_skills)
 		if not finisher.is_empty():
 			return finisher
-		# 마무리 불가해도 스킬 사용
-		return usable_attack_skills[0]
+
+	# ── 스킬 난사 작전이거나 기본 → 스킬 있으면 항상 사용 ──
+	if not usable_skills.is_empty():
+		return usable_skills[0]
 
 	# ── 기본 공격 ──
 	return "basic_attack"
 
 
 func _can_use_skill(hero: Hero, skill_id: String) -> bool:
-	## 스킬 사용 가능 여부 통합 확인 (토글 + 쿨다운 + MP)
+	## 스킬 사용 가능 여부 확인 (토글 + 쿨다운)
 	if not hero.is_skill_enabled(skill_id):
 		return false
 	if not CooldownManager.is_skill_ready(hero.id, skill_id):
 		return false
-	if not hero.has_enough_mp(skill_id):
-		return false
 	return true
 
 
-func _can_skill_finish_enemy(hero: Hero, skill_ids: Array) -> String:
+func _find_finisher_skill(hero: Hero, skill_ids: Array) -> String:
 	## 스킬로 적을 한 방에 처치할 수 있는지 확인, 가능한 스킬 ID 반환
 	var alive: Array = get_alive_enemies()
 	for skill_id in skill_ids:
@@ -804,17 +812,27 @@ func _select_smart_target(hero: Hero) -> BattleEnemy:
 	for e in enemies:
 		if e != null and e.is_alive():
 			alive.append(e)
-	
+
 	if alive.is_empty():
 		return null
-	
+
+	# 한 방에 죽일 수 있는 적 우선
 	var atk := hero.get_atk()
 	for enemy in alive:
 		var expected := maxi(1, atk - int(enemy.get_p_def() / 2))
 		if expected >= enemy.current_hp:
 			return enemy
-	
-	return alive[randi() % alive.size()]
+
+	# 작전에 따른 타겟 선택
+	var tactic: String = hero.get_meta("ai_target", "weak_first") if hero.has_meta("ai_target") else "weak_first"
+	if tactic == "strong_first":
+		# HP가 가장 높은 적 (위협적인 적 우선)
+		alive.sort_custom(func(a, b): return a.current_hp > b.current_hp)
+		return alive[0]
+	else:
+		# weak_first (기본) — HP가 가장 낮은 적 우선
+		alive.sort_custom(func(a, b): return a.current_hp < b.current_hp)
+		return alive[0]
 
 
 func has_alive_enemies() -> bool:
