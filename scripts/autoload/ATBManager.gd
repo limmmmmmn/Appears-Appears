@@ -1,6 +1,6 @@
 extends Node
 ## ATBManager: Will 충전 중앙 관리 + 액션 시그널 허브
-## - 영웅의 Will 게이지를 전투창과 무관하게 항상 충전
+## - 영웅의 Will 게이지를 전투 중에만 중앙에서 충전
 ## - 적의 Will은 각 전투창이 독립적으로 관리
 
 signal action_executed  # 액션 실행됨 (RightPartyPanel 쿨다운 업데이트용)
@@ -11,8 +11,10 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# 영웅 Will 게이지를 항상 충전 (전투창 유무와 무관, 쿨다운처럼)
+	# 전투 중에만 영웅 Will 충전 (전투창과 무관하게 중앙 관리)
 	if get_tree().paused:
+		return
+	if not BattleManager or BattleManager.get_active_battle_count() == 0:
 		return
 	_update_hero_will(delta)
 

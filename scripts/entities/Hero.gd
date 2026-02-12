@@ -598,7 +598,6 @@ func apply_seed_bonus(stat: String, value: int) -> void:
 func full_restore() -> void:
 	current_hp = get_max_hp()
 	current_mp = get_max_mp()
-	will_value = 0.0
 	is_dead = false
 
 
