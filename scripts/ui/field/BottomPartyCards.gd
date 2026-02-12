@@ -128,9 +128,9 @@ func shake(index: int) -> void:
 #endregion
 
 
-#region Will/EXP 실시간 갱신
+#region EXP 실시간 갱신
 func _update_realtime_bars() -> void:
-	## 전투 중 Will/EXP 바만 경량 갱신
+	## EXP 바만 경량 갱신
 	var party: Array = PartyManager.get_party() if PartyManager else []
 	for i in range(cards.size()):
 		if i >= party.size():
@@ -138,7 +138,6 @@ func _update_realtime_bars() -> void:
 		var hero: Hero = party[i]
 		if hero != null and not hero.is_dead:
 			var card: HeroCard = cards[i]
-			card.update_will(hero.get_will_ratio())
 			card.update_exp(hero.get_exp_ratio())
 			card.update_level(hero.level)
 #endregion
