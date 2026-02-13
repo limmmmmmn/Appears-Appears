@@ -120,6 +120,23 @@ func open() -> void:
 	_refresh_all()
 
 
+func open_with_hero_id(hero_id: String) -> void:
+	if not is_open:
+		is_open = true
+		visible = true
+		get_tree().paused = true
+		current_tab = 0
+	selected_hero_index = 0
+
+	var party := PartyManager.get_party() if PartyManager else []
+	for i in range(party.size()):
+		var hero: Hero = party[i]
+		if hero != null and hero.id == hero_id:
+			selected_hero_index = i
+			break
+	_refresh_all()
+
+
 func close() -> void:
 	if not is_open:
 		return

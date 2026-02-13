@@ -11,6 +11,22 @@ const ROOM_RATIO: float = 1.5 # 3:2 (width:height)
 const ROOM_BG: Color = Color(0.12, 0.11, 0.13)
 const ROOM_BORDER: Color = Color(0.34, 0.32, 0.38)
 const ROOM_PLACEHOLDER_TEXT: Color = Color(0.55, 0.55, 0.62)
+const WORLD_MAP_NODES: Array[Dictionary] = [
+	{"id": "north_ruins", "name": "북부 폐허", "pos": Vector2(0.22, 0.2)},
+	{"id": "west_forest", "name": "서부 숲", "pos": Vector2(0.12, 0.55)},
+	{"id": "central_plains", "name": "중앙 평원", "pos": Vector2(0.45, 0.48)},
+	{"id": "east_mine", "name": "동부 광산", "pos": Vector2(0.75, 0.42)},
+	{"id": "south_citadel", "name": "남부 성채", "pos": Vector2(0.58, 0.78)},
+]
+const SORTIE_EQUIP_ROWS: Array[Dictionary] = [
+	{"slot": "main_hand", "label": "손(무기)"},
+	{"slot": "off_hand", "label": "손(방패/보조무기)"},
+	{"slot": "head", "label": "투구"},
+	{"slot": "body", "label": "갑옷"},
+	{"slot": "acc1", "label": "악세1"},
+	{"slot": "acc2", "label": "악세2"},
+]
+const SORTIE_INV_TABS: Array[String] = ["무기", "방패", "투구", "갑옷", "악세"]
 
 const WALKER_MIN_SPEED: float = 16.0
 const WALKER_MAX_SPEED: float = 34.0
@@ -33,6 +49,32 @@ var room_one_sky: ColorRect = null
 var room_one_floor: ColorRect = null
 var room_one_floor_line: ColorRect = null
 var room_one_walkers: Array[Dictionary] = []
+var room_two_button: Button = null
+
+var world_map_layer: CanvasLayer = null
+var world_map_panel: PanelContainer = null
+var world_map_nodes_root: Control = null
+var world_map_selected_label: Label = null
+var world_map_deploy_button: Button = null
+var world_map_node_buttons: Array[Button] = []
+var world_map_selected_id: String = ""
+
+# 출격 준비 화면
+var sortie_layer: CanvasLayer = null
+var sortie_panel: PanelContainer = null
+var sortie_party_slots: Array[Button] = []
+var sortie_hero_list: VBoxContainer = null
+var sortie_equipment_rows: Dictionary = {}
+var sortie_stat_labels: Dictionary = {}
+var sortie_inventory_tab_buttons: Array[Button] = []
+var sortie_inventory_list: VBoxContainer = null
+var sortie_inventory_hint: Label = null
+var sortie_selected_hero_id: String = ""
+var sortie_pending_hero_id: String = ""
+var sortie_selected_item_id: String = ""
+var sortie_selected_slot_index: int = 0
+var sortie_inventory_tab: String = "무기"
+var sortie_party_ids: Array[String] = ["", "", "", ""]
 
 
 func _ready() -> void:
@@ -69,6 +111,8 @@ func _build_ui() -> void:
 
 	_build_header(root)
 	_build_rooms_grid(root)
+	_build_world_map_popup()
+	_build_sortie_prep_popup()
 
 
 func _build_header(parent: VBoxContainer) -> void:
@@ -139,6 +183,8 @@ func _build_rooms_grid(parent: VBoxContainer) -> void:
 		room_cells.append(cell)
 		if i == 0:
 			_setup_room_one(cell)
+		elif i == 1:
+			_setup_room_two(cell)
 		else:
 			var placeholder := Label.new()
 			placeholder.text = "빈 방"
@@ -193,11 +239,827 @@ func _setup_room_one(cell: PanelContainer) -> void:
 	room_one_view.add_child(room_one_floor_line)
 
 	var room_label := Label.new()
-	room_label.text = "1번 방"
+	room_label.text = "1번 방 · 광장"
 	room_label.position = Vector2(6, 4)
 	room_label.add_theme_font_size_override("font_size", 10)
 	room_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.92, 0.85))
 	room_one_view.add_child(room_label)
+
+
+func _setup_room_two(cell: PanelContainer) -> void:
+	var bg := ColorRect.new()
+	bg.color = Color(0.17, 0.16, 0.2)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cell.add_child(bg)
+
+	room_two_button = Button.new()
+	room_two_button.set_anchors_preset(Control.PRESET_FULL_RECT)
+	room_two_button.text = "2번 방 · 지휘실\n(클릭: 세계지도)"
+	room_two_button.add_theme_font_size_override("font_size", 12)
+	room_two_button.focus_mode = Control.FOCUS_NONE
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+	normal.content_margin_left = 8
+	normal.content_margin_top = 8
+	room_two_button.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate()
+	hover.bg_color = Color(0.7, 0.7, 0.9, 0.07)
+	room_two_button.add_theme_stylebox_override("hover", hover)
+	room_two_button.pressed.connect(_open_world_map_popup)
+	cell.add_child(room_two_button)
+
+
+func _build_world_map_popup() -> void:
+	world_map_layer = CanvasLayer.new()
+	world_map_layer.layer = 100
+	world_map_layer.visible = false
+	add_child(world_map_layer)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.gui_input.connect(_on_world_map_dim_input)
+	world_map_layer.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	world_map_layer.add_child(center)
+
+	world_map_panel = PanelContainer.new()
+	world_map_panel.custom_minimum_size = Vector2(760, 460)
+	world_map_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.1, 0.1, 0.14, 0.98)
+	panel_style.border_width_left = 2
+	panel_style.border_width_top = 2
+	panel_style.border_width_right = 2
+	panel_style.border_width_bottom = 2
+	panel_style.border_color = Color(0.42, 0.4, 0.52)
+	panel_style.corner_radius_top_left = 8
+	panel_style.corner_radius_top_right = 8
+	panel_style.corner_radius_bottom_left = 8
+	panel_style.corner_radius_bottom_right = 8
+	panel_style.content_margin_left = 12
+	panel_style.content_margin_right = 12
+	panel_style.content_margin_top = 12
+	panel_style.content_margin_bottom = 12
+	world_map_panel.add_theme_stylebox_override("panel", panel_style)
+	center.add_child(world_map_panel)
+
+	var root := VBoxContainer.new()
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 8)
+	world_map_panel.add_child(root)
+
+	var top := HBoxContainer.new()
+	root.add_child(top)
+	var title := Label.new()
+	title.text = "세계지도"
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", Color(0.92, 0.9, 0.74))
+	top.add_child(title)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(spacer)
+	var close_btn := Button.new()
+	close_btn.text = "닫기"
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.pressed.connect(_close_world_map_popup)
+	top.add_child(close_btn)
+
+	var map_frame := PanelContainer.new()
+	map_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var frame_style := StyleBoxFlat.new()
+	frame_style.bg_color = Color(0.12, 0.13, 0.17, 1.0)
+	frame_style.border_width_left = 1
+	frame_style.border_width_top = 1
+	frame_style.border_width_right = 1
+	frame_style.border_width_bottom = 1
+	frame_style.border_color = Color(0.3, 0.35, 0.42)
+	map_frame.add_theme_stylebox_override("panel", frame_style)
+	root.add_child(map_frame)
+
+	world_map_nodes_root = Control.new()
+	world_map_nodes_root.custom_minimum_size = Vector2(720, 340)
+	world_map_nodes_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	world_map_nodes_root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	map_frame.add_child(world_map_nodes_root)
+
+	world_map_selected_label = Label.new()
+	world_map_selected_label.text = "노드를 선택하세요."
+	world_map_selected_label.add_theme_color_override("font_color", Color(0.72, 0.74, 0.8))
+	root.add_child(world_map_selected_label)
+
+	var bottom := HBoxContainer.new()
+	root.add_child(bottom)
+	var bottom_spacer := Control.new()
+	bottom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(bottom_spacer)
+	world_map_deploy_button = Button.new()
+	world_map_deploy_button.text = "출격 준비"
+	world_map_deploy_button.visible = false
+	world_map_deploy_button.focus_mode = Control.FOCUS_NONE
+	world_map_deploy_button.add_theme_font_size_override("font_size", 14)
+	world_map_deploy_button.pressed.connect(_on_world_map_deploy_pressed)
+	bottom.add_child(world_map_deploy_button)
+
+	_build_world_map_nodes()
+
+
+func _build_world_map_nodes() -> void:
+	if world_map_nodes_root == null:
+		return
+	for c in world_map_nodes_root.get_children():
+		c.queue_free()
+	world_map_node_buttons.clear()
+
+	var area: Vector2 = world_map_nodes_root.custom_minimum_size
+	for node_data in WORLD_MAP_NODES:
+		var btn := Button.new()
+		btn.size = Vector2(22, 22)
+		btn.custom_minimum_size = Vector2(22, 22)
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.set_meta("node_id", str(node_data.get("id", "")))
+		btn.tooltip_text = str(node_data.get("name", "지역"))
+		var p: Vector2 = node_data.get("pos", Vector2(0.5, 0.5))
+		btn.position = Vector2(
+			clampf(p.x, 0.03, 0.97) * area.x - 11.0,
+			clampf(p.y, 0.03, 0.97) * area.y - 11.0
+		)
+		btn.pressed.connect(_on_world_map_node_pressed.bind(str(node_data.get("id", "")), str(node_data.get("name", ""))))
+		_apply_world_node_style(btn, false)
+		world_map_nodes_root.add_child(btn)
+		world_map_node_buttons.append(btn)
+
+
+func _apply_world_node_style(btn: Button, selected: bool) -> void:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(1.0, 0.86, 0.38) if selected else Color(0.75, 0.77, 0.86)
+	s.border_width_left = 2
+	s.border_width_top = 2
+	s.border_width_right = 2
+	s.border_width_bottom = 2
+	s.border_color = Color(1.0, 0.95, 0.7) if selected else Color(0.36, 0.4, 0.5)
+	s.corner_radius_top_left = 11
+	s.corner_radius_top_right = 11
+	s.corner_radius_bottom_left = 11
+	s.corner_radius_bottom_right = 11
+	btn.add_theme_stylebox_override("normal", s)
+	btn.add_theme_stylebox_override("hover", s)
+	btn.add_theme_stylebox_override("pressed", s)
+
+
+func _open_world_map_popup() -> void:
+	world_map_selected_id = ""
+	if world_map_selected_label:
+		world_map_selected_label.text = "노드를 선택하세요."
+	if world_map_deploy_button:
+		world_map_deploy_button.visible = false
+	for btn in world_map_node_buttons:
+		_apply_world_node_style(btn, false)
+	if world_map_layer:
+		world_map_layer.visible = true
+
+
+func _close_world_map_popup() -> void:
+	if world_map_layer:
+		world_map_layer.visible = false
+
+
+func _on_world_map_dim_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		_close_world_map_popup()
+
+
+func _on_world_map_node_pressed(node_id: String, node_name: String) -> void:
+	world_map_selected_id = node_id
+	if world_map_selected_label:
+		world_map_selected_label.text = "선택 지역: %s" % node_name
+	if world_map_deploy_button:
+		world_map_deploy_button.visible = true
+
+	for btn in world_map_node_buttons:
+		var is_selected := (str(btn.get_meta("node_id", "")) == node_id)
+		_apply_world_node_style(btn, is_selected)
+
+
+func _on_world_map_deploy_pressed() -> void:
+	if world_map_selected_id.is_empty():
+		return
+	_close_world_map_popup()
+	_open_sortie_prep()
+
+
+func _build_sortie_prep_popup() -> void:
+	sortie_layer = CanvasLayer.new()
+	sortie_layer.layer = 120
+	sortie_layer.visible = false
+	add_child(sortie_layer)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.6)
+	sortie_layer.add_child(dim)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sortie_layer.add_child(center)
+
+	sortie_panel = PanelContainer.new()
+	sortie_panel.custom_minimum_size = Vector2(1240, 680)
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0.08, 0.08, 0.12, 0.98)
+	s.border_width_left = 2
+	s.border_width_top = 2
+	s.border_width_right = 2
+	s.border_width_bottom = 2
+	s.border_color = Color(0.45, 0.42, 0.5)
+	s.corner_radius_top_left = 8
+	s.corner_radius_top_right = 8
+	s.corner_radius_bottom_left = 8
+	s.corner_radius_bottom_right = 8
+	s.content_margin_left = 12
+	s.content_margin_right = 12
+	s.content_margin_top = 10
+	s.content_margin_bottom = 10
+	sortie_panel.add_theme_stylebox_override("panel", s)
+	center.add_child(sortie_panel)
+
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 10)
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sortie_panel.add_child(root)
+
+	var title := Label.new()
+	title.text = "출격 준비"
+	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
+	root.add_child(title)
+
+	var content := HBoxContainer.new()
+	content.add_theme_constant_override("separation", 10)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(content)
+
+	# 좌측 컬럼: 출격 영웅(상단) + 영웅 목록(하단)
+	var hero_col := VBoxContainer.new()
+	hero_col.custom_minimum_size.x = 320
+	hero_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hero_col.add_theme_constant_override("separation", 8)
+	content.add_child(hero_col)
+
+	var hero_top := PanelContainer.new()
+	hero_top.custom_minimum_size.y = 170
+	var hero_top_style := StyleBoxFlat.new()
+	hero_top_style.bg_color = Color(0.13, 0.13, 0.18, 0.95)
+	hero_top_style.border_width_left = 1
+	hero_top_style.border_width_top = 1
+	hero_top_style.border_width_right = 1
+	hero_top_style.border_width_bottom = 1
+	hero_top_style.border_color = Color(0.3, 0.32, 0.42)
+	hero_top_style.content_margin_left = 8
+	hero_top_style.content_margin_right = 8
+	hero_top_style.content_margin_top = 8
+	hero_top_style.content_margin_bottom = 8
+	hero_top.add_theme_stylebox_override("panel", hero_top_style)
+	hero_col.add_child(hero_top)
+
+	var hero_top_v := VBoxContainer.new()
+	hero_top_v.add_theme_constant_override("separation", 6)
+	hero_top.add_child(hero_top_v)
+	var top_title := Label.new()
+	top_title.text = "출격 영웅"
+	top_title.add_theme_font_size_override("font_size", 14)
+	hero_top_v.add_child(top_title)
+
+	var slot_grid := GridContainer.new()
+	slot_grid.columns = 2
+	slot_grid.add_theme_constant_override("h_separation", 6)
+	slot_grid.add_theme_constant_override("v_separation", 6)
+	hero_top_v.add_child(slot_grid)
+	sortie_party_slots.clear()
+	for i in range(4):
+		var slot_btn := Button.new()
+		slot_btn.custom_minimum_size = Vector2(146, 50)
+		slot_btn.focus_mode = Control.FOCUS_NONE
+		slot_btn.text = "빈 슬롯"
+		slot_btn.pressed.connect(_on_sortie_party_slot_pressed.bind(i))
+		slot_grid.add_child(slot_btn)
+		sortie_party_slots.append(slot_btn)
+
+	var hero_bottom := PanelContainer.new()
+	hero_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var hero_bottom_style := hero_top_style.duplicate()
+	hero_bottom.add_theme_stylebox_override("panel", hero_bottom_style)
+	hero_col.add_child(hero_bottom)
+
+	var hero_bottom_v := VBoxContainer.new()
+	hero_bottom_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hero_bottom_v.add_theme_constant_override("separation", 6)
+	hero_bottom.add_child(hero_bottom_v)
+	var hero_list_title := Label.new()
+	hero_list_title.text = "영웅 목록"
+	hero_list_title.add_theme_font_size_override("font_size", 14)
+	hero_bottom_v.add_child(hero_list_title)
+	var hero_scroll := ScrollContainer.new()
+	hero_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hero_bottom_v.add_child(hero_scroll)
+	sortie_hero_list = VBoxContainer.new()
+	sortie_hero_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sortie_hero_list.add_theme_constant_override("separation", 4)
+	hero_scroll.add_child(sortie_hero_list)
+
+	# 중앙 컬럼: 정비 (장비 6줄 + 스탯)
+	var equip_col := PanelContainer.new()
+	equip_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equip_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var equip_col_style := hero_top_style.duplicate()
+	equip_col.add_theme_stylebox_override("panel", equip_col_style)
+	content.add_child(equip_col)
+
+	var equip_v := VBoxContainer.new()
+	equip_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	equip_v.add_theme_constant_override("separation", 8)
+	equip_col.add_child(equip_v)
+	var equip_title := Label.new()
+	equip_title.text = "정비"
+	equip_title.add_theme_font_size_override("font_size", 14)
+	equip_v.add_child(equip_title)
+
+	var equip_rows_panel := PanelContainer.new()
+	var equip_rows_style := StyleBoxFlat.new()
+	equip_rows_style.bg_color = Color(0.09, 0.09, 0.13, 0.9)
+	equip_rows_style.border_width_left = 1
+	equip_rows_style.border_width_top = 1
+	equip_rows_style.border_width_right = 1
+	equip_rows_style.border_width_bottom = 1
+	equip_rows_style.border_color = Color(0.26, 0.28, 0.36)
+	equip_rows_style.content_margin_left = 8
+	equip_rows_style.content_margin_right = 8
+	equip_rows_style.content_margin_top = 8
+	equip_rows_style.content_margin_bottom = 8
+	equip_rows_panel.add_theme_stylebox_override("panel", equip_rows_style)
+	equip_v.add_child(equip_rows_panel)
+
+	var equip_rows_v := VBoxContainer.new()
+	equip_rows_v.add_theme_constant_override("separation", 4)
+	equip_rows_panel.add_child(equip_rows_v)
+	sortie_equipment_rows.clear()
+	for row in SORTIE_EQUIP_ROWS:
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 8)
+		equip_rows_v.add_child(line)
+		var name_lbl := Label.new()
+		name_lbl.custom_minimum_size.x = 120
+		name_lbl.text = str(row.get("label", ""))
+		name_lbl.add_theme_font_size_override("font_size", 12)
+		line.add_child(name_lbl)
+		var value_lbl := Label.new()
+		value_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		value_lbl.text = "비어 있음"
+		value_lbl.add_theme_font_size_override("font_size", 12)
+		value_lbl.add_theme_color_override("font_color", Color(0.8, 0.83, 0.9))
+		line.add_child(value_lbl)
+		sortie_equipment_rows[str(row.get("slot", ""))] = value_lbl
+
+	var stat_panel := PanelContainer.new()
+	stat_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stat_panel.add_theme_stylebox_override("panel", equip_rows_style.duplicate())
+	equip_v.add_child(stat_panel)
+
+	var stat_v := VBoxContainer.new()
+	stat_v.add_theme_constant_override("separation", 4)
+	stat_panel.add_child(stat_v)
+	var stat_title := Label.new()
+	stat_title.text = "스탯"
+	stat_title.add_theme_font_size_override("font_size", 13)
+	stat_v.add_child(stat_title)
+	sortie_stat_labels.clear()
+	for key in ["ATK", "DEF", "MATK", "SPD", "HP"]:
+		var stat_lbl := Label.new()
+		stat_lbl.add_theme_font_size_override("font_size", 12)
+		stat_v.add_child(stat_lbl)
+		sortie_stat_labels[key] = stat_lbl
+
+	# 우측 컬럼: 인벤토리 (5탭 + 목록)
+	var inv_col := PanelContainer.new()
+	inv_col.custom_minimum_size.x = 360
+	inv_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inv_col.add_theme_stylebox_override("panel", hero_top_style.duplicate())
+	content.add_child(inv_col)
+
+	var inv_v := VBoxContainer.new()
+	inv_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inv_v.add_theme_constant_override("separation", 8)
+	inv_col.add_child(inv_v)
+	var inv_title := Label.new()
+	inv_title.text = "인벤토리"
+	inv_title.add_theme_font_size_override("font_size", 14)
+	inv_v.add_child(inv_title)
+
+	var tab_row := HBoxContainer.new()
+	tab_row.add_theme_constant_override("separation", 4)
+	inv_v.add_child(tab_row)
+	sortie_inventory_tab_buttons.clear()
+	for tab_name in SORTIE_INV_TABS:
+		var tab_btn := Button.new()
+		tab_btn.text = tab_name
+		tab_btn.custom_minimum_size.x = 62
+		tab_btn.focus_mode = Control.FOCUS_NONE
+		tab_btn.pressed.connect(_on_sortie_inventory_tab_pressed.bind(tab_name))
+		tab_row.add_child(tab_btn)
+		sortie_inventory_tab_buttons.append(tab_btn)
+
+	var inv_scroll := ScrollContainer.new()
+	inv_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	inv_v.add_child(inv_scroll)
+	sortie_inventory_list = VBoxContainer.new()
+	sortie_inventory_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sortie_inventory_list.add_theme_constant_override("separation", 4)
+	inv_scroll.add_child(sortie_inventory_list)
+
+	sortie_inventory_hint = Label.new()
+	sortie_inventory_hint.text = "아이템을 선택하면 스탯 비교가 표시됩니다."
+	sortie_inventory_hint.add_theme_font_size_override("font_size", 11)
+	sortie_inventory_hint.add_theme_color_override("font_color", Color(0.68, 0.7, 0.78))
+	inv_v.add_child(sortie_inventory_hint)
+
+	# 하단 버튼
+	var bottom := HBoxContainer.new()
+	bottom.add_theme_constant_override("separation", 8)
+	root.add_child(bottom)
+	var bottom_spacer := Control.new()
+	bottom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(bottom_spacer)
+	var back_btn := Button.new()
+	back_btn.text = "돌아가기"
+	back_btn.focus_mode = Control.FOCUS_NONE
+	back_btn.pressed.connect(_close_sortie_prep)
+	bottom.add_child(back_btn)
+	var start_btn := Button.new()
+	start_btn.text = "출발"
+	start_btn.focus_mode = Control.FOCUS_NONE
+	start_btn.pressed.connect(_on_sortie_start_pressed)
+	bottom.add_child(start_btn)
+
+
+func _open_sortie_prep() -> void:
+	sortie_selected_item_id = ""
+	sortie_inventory_tab = SORTIE_INV_TABS[0]
+	sortie_pending_hero_id = ""
+	sortie_selected_hero_id = ""
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	for i in range(sortie_party_ids.size()):
+		sortie_party_ids[i] = str(party[i].id) if i < party.size() else ""
+	for i in range(sortie_party_ids.size()):
+		if not sortie_party_ids[i].is_empty():
+			sortie_selected_slot_index = i
+			break
+	for id in sortie_party_ids:
+		if not id.is_empty():
+			sortie_selected_hero_id = id
+			break
+	if sortie_layer:
+		sortie_layer.visible = true
+	_refresh_sortie_ui()
+
+
+func _close_sortie_prep() -> void:
+	if sortie_layer:
+		sortie_layer.visible = false
+
+
+func _get_recruited_heroes() -> Array:
+	var arr: Array = []
+	var seen: Dictionary = {}
+	if PartyManager == null:
+		return arr
+	for h_any in PartyManager.get_party():
+		var h: Hero = h_any as Hero
+		if h == null or seen.has(h.id):
+			continue
+		seen[h.id] = true
+		arr.append(h)
+	if PartyManager.has_method("get_bench_heroes"):
+		for h_any in PartyManager.get_bench_heroes():
+			var h: Hero = h_any as Hero
+			if h == null or seen.has(h.id):
+				continue
+			seen[h.id] = true
+			arr.append(h)
+	return arr
+
+
+func _refresh_sortie_ui() -> void:
+	_refresh_sortie_party_slots()
+	_refresh_sortie_hero_list()
+	_refresh_sortie_equipment_rows()
+	_refresh_sortie_stats()
+	_refresh_sortie_inventory_tabs()
+	_refresh_sortie_inventory()
+
+
+func _refresh_sortie_party_slots() -> void:
+	for i in range(sortie_party_slots.size()):
+		var btn: Button = sortie_party_slots[i]
+		var hero_id: String = sortie_party_ids[i]
+		if hero_id.is_empty():
+			btn.text = "빈 슬롯"
+		else:
+			var hero := _find_recruited_hero_by_id(hero_id)
+			btn.text = hero.hero_name if hero else hero_id
+		var normal := StyleBoxFlat.new()
+		normal.bg_color = Color(0.12, 0.12, 0.18, 0.92) if i == sortie_selected_slot_index else Color(0.1, 0.1, 0.14, 0.9)
+		normal.border_width_left = 1
+		normal.border_width_top = 1
+		normal.border_width_right = 1
+		normal.border_width_bottom = 1
+		normal.border_color = Color(0.95, 0.8, 0.35, 0.95) if i == sortie_selected_slot_index else Color(0.3, 0.32, 0.4, 0.9)
+		btn.add_theme_stylebox_override("normal", normal)
+		btn.add_theme_stylebox_override("hover", normal)
+
+
+func _refresh_sortie_hero_list() -> void:
+	if sortie_hero_list == null:
+		return
+	for c in sortie_hero_list.get_children():
+		c.queue_free()
+
+	for hero_any in _get_recruited_heroes():
+		var hero: Hero = hero_any as Hero
+		if hero == null:
+			continue
+		var btn := Button.new()
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var assigned_slot := sortie_party_ids.find(hero.id)
+		var marker := "[%d] " % int(assigned_slot + 1) if assigned_slot >= 0 else ""
+		btn.text = "%s%s  Lv.%d" % [marker, hero.hero_name, int(hero.level)]
+		if hero.id == sortie_selected_hero_id:
+			var selected_style := StyleBoxFlat.new()
+			selected_style.bg_color = Color(0.25, 0.22, 0.14, 0.95)
+			selected_style.border_width_left = 1
+			selected_style.border_width_top = 1
+			selected_style.border_width_right = 1
+			selected_style.border_width_bottom = 1
+			selected_style.border_color = Color(0.95, 0.8, 0.35, 0.95)
+			btn.add_theme_stylebox_override("normal", selected_style)
+			btn.add_theme_stylebox_override("hover", selected_style)
+		btn.pressed.connect(_on_sortie_roster_clicked.bind(hero.id))
+		sortie_hero_list.add_child(btn)
+
+
+func _refresh_sortie_equipment_rows() -> void:
+	var hero := _find_recruited_hero_by_id(sortie_selected_hero_id)
+	for row in SORTIE_EQUIP_ROWS:
+		var slot: String = str(row.get("slot", ""))
+		var value_lbl: Label = sortie_equipment_rows.get(slot) as Label
+		if value_lbl == null:
+			continue
+		if hero == null:
+			value_lbl.text = "비어 있음"
+			continue
+		var equip_id: String = str(hero.equipment.get(slot, ""))
+		if equip_id.is_empty():
+			value_lbl.text = "비어 있음"
+			continue
+		var data: Dictionary = DataManager.get_equipment(equip_id)
+		value_lbl.text = str(data.get("name", equip_id))
+
+
+func _refresh_sortie_stats() -> void:
+	if sortie_stat_labels.is_empty():
+		return
+	var hero := _find_recruited_hero_by_id(sortie_selected_hero_id)
+	if hero == null:
+		for key in sortie_stat_labels.keys():
+			var empty_lbl: Label = sortie_stat_labels[key]
+			empty_lbl.text = "%s -" % str(key)
+		return
+	var base := {
+		"ATK": hero.get_atk(),
+		"DEF": hero.get_def(),
+		"MATK": hero.get_magic_attack(),
+		"SPD": hero.get_spd(),
+		"HP": hero.get_max_hp(),
+	}
+	var delta := _calc_sortie_item_delta(hero, sortie_selected_item_id)
+	for key in ["ATK", "DEF", "MATK", "SPD", "HP"]:
+		var lbl: Label = sortie_stat_labels.get(key) as Label
+		if lbl == null:
+			continue
+		var cur: int = int(base.get(key, 0))
+		var diff: int = int(delta.get(key, 0))
+		if diff == 0:
+			lbl.text = "%s %d" % [key, cur]
+			lbl.add_theme_color_override("font_color", Color(0.83, 0.85, 0.9))
+		else:
+			var sign := "+" if diff > 0 else ""
+			lbl.text = "%s %d (%s%d)" % [key, cur, sign, diff]
+			lbl.add_theme_color_override("font_color", Color(0.5, 0.95, 0.56) if diff > 0 else Color(1.0, 0.55, 0.55))
+
+
+func _refresh_sortie_inventory_tabs() -> void:
+	for btn in sortie_inventory_tab_buttons:
+		if btn == null:
+			continue
+		var selected: bool = (btn.text == sortie_inventory_tab)
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.2, 0.17, 0.1, 0.95) if selected else Color(0.11, 0.11, 0.15, 0.95)
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.border_color = Color(0.95, 0.8, 0.35) if selected else Color(0.32, 0.34, 0.4)
+		btn.add_theme_stylebox_override("normal", style)
+		btn.add_theme_stylebox_override("hover", style)
+
+
+func _refresh_sortie_inventory() -> void:
+	if sortie_inventory_list == null:
+		return
+	for c in sortie_inventory_list.get_children():
+		c.queue_free()
+	if InventoryManager == null:
+		return
+	var equips: Array = InventoryManager.get_equipment_items()
+	equips = equips.filter(func(it): return _sortie_item_group(str(it.get("data", {}).get("slot", ""))) == sortie_inventory_tab)
+	equips.sort_custom(func(a, b): return str(a.get("data", {}).get("name", a.get("id", ""))) < str(b.get("data", {}).get("name", b.get("id", ""))))
+	if equips.is_empty():
+		var empty_lbl := Label.new()
+		empty_lbl.text = "표시할 장비 없음"
+		empty_lbl.add_theme_font_size_override("font_size", 12)
+		empty_lbl.add_theme_color_override("font_color", Color(0.62, 0.64, 0.72))
+		sortie_inventory_list.add_child(empty_lbl)
+		if sortie_inventory_hint:
+			sortie_inventory_hint.text = "%s 탭 장비가 없습니다." % sortie_inventory_tab
+		return
+	for e_any in equips:
+		var e: Dictionary = e_any
+		var item_id: String = str(e.get("id", ""))
+		var data: Dictionary = e.get("data", {})
+		var btn := Button.new()
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.text = "%s x%d" % [str(data.get("name", item_id)), int(e.get("quantity", 0))]
+		if item_id == sortie_selected_item_id:
+			var selected_style := StyleBoxFlat.new()
+			selected_style.bg_color = Color(0.22, 0.19, 0.11, 0.95)
+			selected_style.border_width_left = 1
+			selected_style.border_width_top = 1
+			selected_style.border_width_right = 1
+			selected_style.border_width_bottom = 1
+			selected_style.border_color = Color(0.95, 0.8, 0.35)
+			btn.add_theme_stylebox_override("normal", selected_style)
+			btn.add_theme_stylebox_override("hover", selected_style)
+		btn.pressed.connect(_on_sortie_inventory_item_pressed.bind(item_id))
+		sortie_inventory_list.add_child(btn)
+	if sortie_inventory_hint:
+		var selected_data := DataManager.get_equipment(sortie_selected_item_id) if not sortie_selected_item_id.is_empty() else {}
+		if selected_data.is_empty():
+			sortie_inventory_hint.text = "아이템을 선택하면 스탯 비교가 표시됩니다."
+		else:
+			sortie_inventory_hint.text = "선택: %s" % str(selected_data.get("name", sortie_selected_item_id))
+
+
+func _on_sortie_roster_clicked(hero_id: String) -> void:
+	sortie_selected_hero_id = hero_id
+	sortie_pending_hero_id = hero_id
+	if sortie_party_ids.find(hero_id) < 0:
+		sortie_party_ids[sortie_selected_slot_index] = hero_id
+		for i in range(sortie_party_ids.size()):
+			if i != sortie_selected_slot_index and sortie_party_ids[i] == hero_id:
+				sortie_party_ids[i] = ""
+	_refresh_sortie_ui()
+
+
+func _on_sortie_party_slot_pressed(slot_index: int) -> void:
+	if slot_index < 0 or slot_index >= sortie_party_ids.size():
+		return
+	sortie_selected_slot_index = slot_index
+	if not sortie_pending_hero_id.is_empty():
+		for i in range(sortie_party_ids.size()):
+			if sortie_party_ids[i] == sortie_pending_hero_id:
+				sortie_party_ids[i] = ""
+		sortie_party_ids[slot_index] = sortie_pending_hero_id
+		sortie_selected_hero_id = sortie_pending_hero_id
+		sortie_pending_hero_id = ""
+	else:
+		var id: String = sortie_party_ids[slot_index]
+		if id == sortie_selected_hero_id:
+			sortie_party_ids[slot_index] = ""
+		else:
+			sortie_selected_hero_id = id
+	_refresh_sortie_ui()
+
+
+func _on_sortie_inventory_tab_pressed(tab_name: String) -> void:
+	sortie_inventory_tab = tab_name
+	sortie_selected_item_id = ""
+	_refresh_sortie_inventory_tabs()
+	_refresh_sortie_inventory()
+	_refresh_sortie_stats()
+
+
+func _on_sortie_inventory_item_pressed(item_id: String) -> void:
+	sortie_selected_item_id = item_id
+	_refresh_sortie_inventory()
+	_refresh_sortie_stats()
+
+
+func _find_recruited_hero_by_id(hero_id: String) -> Hero:
+	if hero_id.is_empty():
+		return null
+	for hero_any in _get_recruited_heroes():
+		var hero: Hero = hero_any as Hero
+		if hero and hero.id == hero_id:
+			return hero
+	return null
+
+
+func _sortie_item_group(raw_slot: String) -> String:
+	var slot := Hero.normalize_equipment_slot(raw_slot)
+	match slot:
+		"main_hand":
+			return "무기"
+		"off_hand":
+			return "방패"
+		"head":
+			return "투구"
+		"body":
+			return "갑옷"
+		_:
+			return "악세"
+
+
+func _resolve_sortie_target_slot(hero: Hero, data: Dictionary) -> String:
+	var slot := Hero.normalize_equipment_slot(str(data.get("slot", "")))
+	if slot == "acc":
+		var left: String = str(hero.equipment.get("acc1", ""))
+		var right: String = str(hero.equipment.get("acc2", ""))
+		if left.is_empty():
+			return "acc1"
+		if right.is_empty():
+			return "acc2"
+		return "acc1"
+	if slot == "off_hand" and hero.is_off_hand_disabled():
+		return ""
+	return slot
+
+
+func _calc_sortie_item_delta(hero: Hero, item_id: String) -> Dictionary:
+	var result := {"ATK": 0, "DEF": 0, "MATK": 0, "SPD": 0, "HP": 0}
+	if hero == null or item_id.is_empty():
+		return result
+	var data: Dictionary = DataManager.get_equipment(item_id)
+	if data.is_empty():
+		return result
+	var target_slot: String = _resolve_sortie_target_slot(hero, data)
+	if target_slot.is_empty():
+		return result
+	var current_id: String = str(hero.equipment.get(target_slot, ""))
+	var old_data: Dictionary = DataManager.get_equipment(current_id)
+	var new_stats: Dictionary = data.get("stats", {})
+	var old_stats: Dictionary = old_data.get("stats", {})
+
+	result["ATK"] = int(new_stats.get("atk", 0)) - int(old_stats.get("atk", 0))
+	result["DEF"] = int(new_stats.get("p_def", new_stats.get("def", 0))) - int(old_stats.get("p_def", old_stats.get("def", 0)))
+	result["SPD"] = int(new_stats.get("spd", 0)) - int(old_stats.get("spd", 0))
+	result["HP"] = int(new_stats.get("hp", 0)) - int(old_stats.get("hp", 0))
+	var new_matk: int = int(new_stats.get("mag", 0)) + int(new_stats.get("int", 0)) + int(new_stats.get("wis", 0))
+	var old_matk: int = int(old_stats.get("mag", 0)) + int(old_stats.get("int", 0)) + int(old_stats.get("wis", 0))
+	result["MATK"] = new_matk - old_matk
+	return result
+
+
+func _on_sortie_start_pressed() -> void:
+	if PartyManager == null:
+		return
+	var all: Array = _get_recruited_heroes()
+	var chosen: Array[Hero] = []
+	for hero_id in sortie_party_ids:
+		if hero_id.is_empty():
+			continue
+		for h_any in all:
+			var h: Hero = h_any
+			if h and h.id == hero_id and not chosen.has(h):
+				chosen.append(h)
+				break
+	var required_count: int = mini(4, all.size())
+	if chosen.size() < required_count:
+		return
+	var reserve: Array[Hero] = []
+	for h_any in all:
+		var h: Hero = h_any
+		if h and not chosen.has(h):
+			reserve.append(h)
+	PartyManager.party = chosen
+	PartyManager.reserve_party = reserve
+	PartyManager.party_changed.emit()
+	_close_sortie_prep()
+	GameManager.go_to_field()
 
 
 func _layout_rooms() -> void:
@@ -431,6 +1293,8 @@ func _on_gold_changed(_new_gold: int) -> void:
 
 func _on_party_changed() -> void:
 	_spawn_room_one_walkers()
+	if sortie_layer and sortie_layer.visible:
+		_refresh_sortie_ui()
 
 
 func _on_den_resized() -> void:
