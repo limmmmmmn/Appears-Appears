@@ -27,6 +27,9 @@ const SORTIE_EQUIP_ROWS: Array[Dictionary] = [
 	{"slot": "acc2", "label": "악세2"},
 ]
 const SORTIE_INV_TABS: Array[String] = ["무기", "방패", "투구", "갑옷", "악세"]
+const SORTIE_PANEL_MIN_SIZE: Vector2 = Vector2(760, 460)
+const SORTIE_PANEL_PREFERRED_SIZE: Vector2 = Vector2(1160, 640)
+const SORTIE_PANEL_MARGIN: float = 24.0
 
 const WALKER_MIN_SPEED: float = 16.0
 const WALKER_MAX_SPEED: float = 34.0
@@ -467,7 +470,7 @@ func _build_sortie_prep_popup() -> void:
 	sortie_layer.add_child(center)
 
 	sortie_panel = PanelContainer.new()
-	sortie_panel.custom_minimum_size = Vector2(1240, 680)
+	sortie_panel.custom_minimum_size = SORTIE_PANEL_PREFERRED_SIZE
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.08, 0.08, 0.12, 0.98)
 	s.border_width_left = 2
@@ -505,7 +508,7 @@ func _build_sortie_prep_popup() -> void:
 
 	# 좌측 컬럼: 출격 영웅(상단) + 영웅 목록(하단)
 	var hero_col := VBoxContainer.new()
-	hero_col.custom_minimum_size.x = 320
+	hero_col.custom_minimum_size.x = 280
 	hero_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	hero_col.add_theme_constant_override("separation", 8)
 	content.add_child(hero_col)
@@ -542,7 +545,7 @@ func _build_sortie_prep_popup() -> void:
 	sortie_party_slots.clear()
 	for i in range(4):
 		var slot_btn := Button.new()
-		slot_btn.custom_minimum_size = Vector2(146, 50)
+		slot_btn.custom_minimum_size = Vector2(126, 50)
 		slot_btn.focus_mode = Control.FOCUS_NONE
 		slot_btn.text = "빈 슬롯"
 		slot_btn.pressed.connect(_on_sortie_party_slot_pressed.bind(i))
@@ -645,7 +648,7 @@ func _build_sortie_prep_popup() -> void:
 
 	# 우측 컬럼: 인벤토리 (5탭 + 목록)
 	var inv_col := PanelContainer.new()
-	inv_col.custom_minimum_size.x = 360
+	inv_col.custom_minimum_size.x = 280
 	inv_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	inv_col.add_theme_stylebox_override("panel", hero_top_style.duplicate())
 	content.add_child(inv_col)
@@ -704,6 +707,18 @@ func _build_sortie_prep_popup() -> void:
 	start_btn.pressed.connect(_on_sortie_start_pressed)
 	bottom.add_child(start_btn)
 
+	_update_sortie_panel_size()
+
+
+func _update_sortie_panel_size() -> void:
+	if sortie_panel == null:
+		return
+	var viewport_size := get_viewport_rect().size
+	var available := viewport_size - Vector2(SORTIE_PANEL_MARGIN * 2.0, SORTIE_PANEL_MARGIN * 2.0)
+	var panel_w := clampf(available.x, SORTIE_PANEL_MIN_SIZE.x, SORTIE_PANEL_PREFERRED_SIZE.x)
+	var panel_h := clampf(available.y, SORTIE_PANEL_MIN_SIZE.y, SORTIE_PANEL_PREFERRED_SIZE.y)
+	sortie_panel.custom_minimum_size = Vector2(panel_w, panel_h)
+
 
 func _open_sortie_prep() -> void:
 	sortie_selected_item_id = ""
@@ -723,6 +738,7 @@ func _open_sortie_prep() -> void:
 			break
 	if sortie_layer:
 		sortie_layer.visible = true
+	_update_sortie_panel_size()
 	_refresh_sortie_ui()
 
 
@@ -1299,6 +1315,7 @@ func _on_party_changed() -> void:
 
 func _on_den_resized() -> void:
 	_layout_rooms()
+	_update_sortie_panel_size()
 
 
 func _on_exit_pressed() -> void:
