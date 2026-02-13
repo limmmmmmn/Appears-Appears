@@ -3,8 +3,8 @@ class_name RightPartyPanel
 ## 우측 파티 패널 - 정보 + 장비 목록
 ## 레이아웃: 이름+HP바, 스킬 쿨다운바, 장비목록(6줄)
 
-const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "⛑", "body": "🛡", "gloves": "🧤", "boots": "👢", "necklace": "📿", "ring1": "💍", "ring2": "💎"}
-const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"]
+const SLOT_ICONS := {"main_hand": "⚔", "off_hand": "🛡", "head": "⛑", "body": "🛡", "acc1": "💍", "acc2": "💎"}
+const SLOT_ORDER := ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 
 # 색상
 const HP_COLOR_HIGH := Color(0.2, 0.75, 0.2)
@@ -457,13 +457,13 @@ func _on_equipment_dropped(hero_index: int, item_id: String) -> void:
 
 	# 장비 장착 시도
 	var item_data: Dictionary = DataManager.get_equipment(item_id)
-	var item_slot: String = item_data.get("slot", "")
+	var item_slot: String = Hero.normalize_equipment_slot(str(item_data.get("slot", "")))
 
-	# 반지 슬롯 처리
+	# 악세 슬롯 처리
 	var target_slot: String = item_slot
-	if item_slot in ["ring", "acc"]:
-		target_slot = "ring1"
-		for s in ["ring1", "ring2"]:
+	if item_slot == "acc":
+		target_slot = "acc1"
+		for s in ["acc1", "acc2"]:
 			if hero.equipment.get(s, "").is_empty():
 				target_slot = s
 				break

@@ -24,11 +24,8 @@ const SLOT_ICONS: Dictionary = {
 	"off_hand": "🛡️",
 	"head": "⛑️",
 	"body": "🛡️",
-	"gloves": "🧤",
-	"boots": "👢",
-	"necklace": "📿",
-	"ring1": "💍",
-	"ring2": "💎"
+	"acc1": "💍",
+	"acc2": "💎"
 }
 
 const TYPE_ICONS: Dictionary = {
@@ -282,7 +279,7 @@ func _find_drop_target(pos: Vector2) -> Dictionary:
 		
 		if slot_rect.has_point(pos):
 			# 특정 장비 슬롯 위인지 체크
-			for slot_name in ["main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"]:
+			for slot_name in ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]:
 				var equip_btn: Button = slot.get_equipment_button(slot_name)
 				if equip_btn and equip_btn.get_global_rect().has_point(pos):
 					return {"hero_index": i, "slot_name": slot_name}
@@ -317,7 +314,7 @@ func _try_equip_to_hero(item_id: String, hero_index: int, target_slot: String) -
 		return false
 	
 	var item_name: String = str(data.get("name", item_id))
-	var item_slot: String = str(data.get("slot", ""))
+	var item_slot: String = Hero.normalize_equipment_slot(str(data.get("slot", "")))
 	
 	# 타겟 슬롯이 지정 안 되었거나 호환 안 되면 자동으로 최적 슬롯 찾기
 	if target_slot.is_empty() or not _is_slot_compatible(item_slot, target_slot):
@@ -346,7 +343,7 @@ func _try_move_equipment(item_id: String, from_hero_index: int, from_slot: Strin
 	var to_hero: Hero = party[to_hero_index]
 	var data: Dictionary = DataManager.get_equipment(item_id)
 	var item_name: String = str(data.get("name", item_id))
-	var item_slot: String = str(data.get("slot", ""))
+	var item_slot: String = Hero.normalize_equipment_slot(str(data.get("slot", "")))
 	
 	# 타겟 슬롯이 지정 안 되었거나 호환 안 되면 자동으로 최적 슬롯 찾기
 	if to_slot.is_empty() or not _is_slot_compatible(item_slot, to_slot):
@@ -400,28 +397,36 @@ func _unequip_item(hero_index: int, slot_name: String) -> bool:
 
 func _determine_best_slot(hero: Hero, item_slot: String) -> String:
 	## 아이템 슬롯에 맞는 최적의 장착 슬롯 결정
-	var target_slot := item_slot
+	var target_slot := Hero.normalize_equipment_slot(item_slot)
 
-	if item_slot in ["ring", "acc"]:
-		for s in ["ring1", "ring2"]:
+	if target_slot == "acc":
+		for s in ["acc1", "acc2"]:
 			if hero.equipment.get(s, "").is_empty():
 				target_slot = s
 				break
-		if target_slot == item_slot:
-			target_slot = "ring1"
+		if target_slot == "acc":
+			target_slot = "acc1"
+	elif target_slot == "main_hand":
+		if hero.equipment.get("main_hand", "").is_empty():
+			target_slot = "main_hand"
+		elif hero.can_dual_wield() and hero.equipment.get("off_hand", "").is_empty() and not hero.is_off_hand_disabled():
+			target_slot = "off_hand"
+		else:
+			target_slot = "main_hand"
 
 	return target_slot
 
 
 func _is_slot_compatible(item_slot: String, target_slot: String) -> bool:
 	## 아이템 슬롯과 타겟 슬롯이 호환되는지 확인
+	var normalized_item_slot: String = Hero.normalize_equipment_slot(item_slot)
 	if item_slot == target_slot:
 		return true
-	if item_slot in ["ring", "acc"] and target_slot in ["ring1", "ring2"]:
+	if normalized_item_slot == target_slot:
 		return true
-	if item_slot == "weapon" and target_slot == "main_hand":
+	if normalized_item_slot == "acc" and target_slot in ["acc1", "acc2"]:
 		return true
-	if item_slot == "shield" and target_slot == "off_hand":
+	if normalized_item_slot == "main_hand" and target_slot == "off_hand":
 		return true
 	return false
 #endregion

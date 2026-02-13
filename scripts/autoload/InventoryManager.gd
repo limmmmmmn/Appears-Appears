@@ -114,16 +114,27 @@ func equip_item(hero: RefCounted, item_id: String, slot: String) -> bool:
 		item_data = DataManager.get_item(item_id)
 		if item_data.is_empty():
 			return false
-	
+
+	var target_slot: String = _resolve_target_slot(hero, item_data, slot)
+	if target_slot.is_empty() or not hero.equipment.has(target_slot):
+		return false
+	if target_slot == "off_hand" and hero.is_off_hand_disabled():
+		return false
+
 	# 이미 장착된 장비가 있으면 인벤으로 돌려보냄
-	var current_equip: String = hero.equipment.get(slot, "")
+	var current_equip: String = hero.equipment.get(target_slot, "")
 	if not current_equip.is_empty():
 		add_item(current_equip, 1)
-	
+
 	# 인벤에서 빼고 장착
 	remove_item(item_id, 1)
-	hero.equipment[slot] = item_id
-	item_equipped.emit(hero.hero_name, item_id, slot, current_equip)
+	hero.equipment[target_slot] = item_id
+	if item_data.get("two_handed", false) and target_slot == "main_hand":
+		var old_off: String = str(hero.equipment.get("off_hand", ""))
+		if not old_off.is_empty():
+			add_item(old_off, 1)
+			hero.equipment["off_hand"] = ""
+	item_equipped.emit(hero.hero_name, item_id, target_slot, current_equip)
 	
 	PartyManager.party_changed.emit()
 	
@@ -222,6 +233,8 @@ func get_item_type_name(item_id: String) -> String:
 		item_type = data.get("type", "shield")
 	elif slot in ["body", "head", "hands", "feet"]:
 		item_type = data.get("type", slot)
+	elif _is_accessory_slot(slot):
+		item_type = "amulet"
 
 	return ITEM_TYPE_NAMES.get(item_type, item_type)
 
@@ -246,7 +259,6 @@ func try_auto_equip(item_id: String) -> bool:
 		return false  # 장비가 아님
 
 	var item_slot: String = item_data.get("slot", "")
-	var item_type: String = item_data.get("type", "")
 	if item_slot.is_empty():
 		return false
 
@@ -296,14 +308,12 @@ func try_auto_equip(item_id: String) -> bool:
 
 func _get_slots_for_item(item_slot: String, hero: Hero) -> Array:
 	## 아이템이 장착될 수 있는 슬롯 목록 반환
-	if item_slot in ["ring", "acc"]:
-		return ["ring1", "ring2"]
-	elif item_slot == "necklace":
-		return ["necklace"]
-	elif item_slot == "boots":
-		return ["boots"]
-	elif item_slot == "gloves":
-		return ["gloves"]
+	if _is_accessory_slot(item_slot):
+		return ["acc1", "acc2"]
+	elif item_slot == "main_hand":
+		if hero.can_dual_wield() and not hero.is_off_hand_disabled():
+			return ["main_hand", "off_hand"]
+		return ["main_hand"]
 	elif item_slot == "off_hand":
 		# 양손무기 체크
 		if hero.is_off_hand_disabled():
@@ -311,6 +321,39 @@ func _get_slots_for_item(item_slot: String, hero: Hero) -> Array:
 		return ["off_hand"]
 	else:
 		return [item_slot]
+
+
+func _is_accessory_slot(slot: String) -> bool:
+	var normalized: String = Hero.normalize_equipment_slot(slot)
+	return normalized == "acc"
+
+
+func _resolve_target_slot(hero: Hero, item_data: Dictionary, requested_slot: String) -> String:
+	var req_norm: String = Hero.normalize_equipment_slot(requested_slot)
+	if req_norm == "acc":
+		req_norm = "acc1"
+
+	var item_slot: String = str(item_data.get("slot", ""))
+	var item_norm: String = Hero.normalize_equipment_slot(item_slot)
+
+	if item_norm == "acc":
+		if req_norm in ["acc1", "acc2"]:
+			return req_norm
+		if str(hero.equipment.get("acc1", "")).is_empty():
+			return "acc1"
+		if str(hero.equipment.get("acc2", "")).is_empty():
+			return "acc2"
+		return "acc1"
+
+	if item_norm == "main_hand":
+		if req_norm == "off_hand" and hero.can_dual_wield():
+			return "off_hand"
+		return "main_hand"
+
+	if item_norm == "off_hand":
+		return "off_hand"
+
+	return item_norm
 
 
 func _calculate_item_power(item_id: String) -> int:

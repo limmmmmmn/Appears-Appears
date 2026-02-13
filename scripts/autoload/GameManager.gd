@@ -6,7 +6,7 @@ signal gold_changed(new_gold: int)
 signal game_over
 signal game_clear
 
-enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER }
+enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER, DEN }
 var current_state: GameState = GameState.TITLE
 
 var current_stage: int = 1
@@ -162,5 +162,8 @@ func go_to_ending() -> void:
 
 func go_to_den() -> void:
 	## 기지 화면으로 이동
+	change_state(GameState.DEN)
+	if SaveManager:
+		SaveManager.save_game()
 	get_tree().change_scene_to_file("res://scenes/main/Den.tscn")
 #endregion

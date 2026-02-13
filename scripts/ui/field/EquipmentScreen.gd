@@ -8,15 +8,12 @@ const FIELD_SPRITE_PATH := "res://assets/sprites/heroes/%s.png"
 
 # 슬롯 정의
 const SLOT_DISPLAY := [
-	{"slot": "main_hand", "label": "메인손", "icon": "⚔"},
-	{"slot": "off_hand", "label": "서브손", "icon": "🛡"},
+	{"slot": "main_hand", "label": "손", "icon": "⚔"},
+	{"slot": "off_hand", "label": "손", "icon": "🛡"},
 	{"slot": "head", "label": "투구", "icon": "⛑"},
 	{"slot": "body", "label": "갑옷", "icon": "🛡"},
-	{"slot": "gloves", "label": "장갑", "icon": "🧤"},
-	{"slot": "boots", "label": "신발", "icon": "👢"},
-	{"slot": "necklace", "label": "목걸이", "icon": "📿"},
-	{"slot": "ring1", "label": "반지1", "icon": "💍"},
-	{"slot": "ring2", "label": "반지2", "icon": "💎"},
+	{"slot": "acc1", "label": "악세1", "icon": "💍"},
+	{"slot": "acc2", "label": "악세2", "icon": "💎"},
 ]
 
 # 스킬 아이콘
@@ -689,16 +686,9 @@ func _calc_per_stat_diff(hero: Hero, item_id: String) -> Dictionary:
 	if data.is_empty():
 		return {}
 	var new_stats: Dictionary = data.get("stats", {})
-	var item_slot: String = data.get("slot", "")
-
-	var target_slot: String = item_slot
-	if item_slot in ["ring", "acc"]:
-		if hero.equipment.get("ring1", "").is_empty():
-			target_slot = "ring1"
-		elif hero.equipment.get("ring2", "").is_empty():
-			target_slot = "ring2"
-		else:
-			target_slot = "ring1"
+	var target_slot: String = _resolve_target_slot_for_item(hero, data)
+	if target_slot.is_empty():
+		return {}
 
 	var current_id: String = hero.equipment.get(target_slot, "")
 	var current_stats: Dictionary = {}
@@ -1089,16 +1079,9 @@ func _on_inv_item_clicked(item_id: String) -> void:
 		return
 
 	var data: Dictionary = DataManager.get_equipment(item_id)
-	var item_slot: String = data.get("slot", "")
-	var target_slot: String = item_slot
-
-	if item_slot in ["ring", "acc"]:
-		if hero.equipment.get("ring1", "").is_empty():
-			target_slot = "ring1"
-		elif hero.equipment.get("ring2", "").is_empty():
-			target_slot = "ring2"
-		else:
-			target_slot = "ring1"
+	var target_slot: String = _resolve_target_slot_for_item(hero, data)
+	if target_slot.is_empty():
+		return
 
 	if data.get("two_handed", false) and target_slot == "main_hand":
 		if not hero.equipment.get("off_hand", "").is_empty():
@@ -1124,11 +1107,29 @@ func _get_slot_icon(slot: String) -> String:
 		"off_hand": return "🛡"
 		"body": return "🧥"
 		"head": return "⛑"
-		"gloves": return "🧤"
-		"boots", "shoes": return "👢"
-		"necklace": return "📿"
-		"acc", "ring": return "💍"
+		"acc1", "acc2", "acc", "ring", "necklace", "boots", "shoes", "gloves": return "💍"
 		_: return "•"
+
+
+func _resolve_target_slot_for_item(hero: Hero, data: Dictionary) -> String:
+	if hero == null or data.is_empty():
+		return ""
+	var slot_norm: String = Hero.normalize_equipment_slot(str(data.get("slot", "")))
+	if slot_norm == "acc":
+		if hero.equipment.get("acc1", "").is_empty():
+			return "acc1"
+		if hero.equipment.get("acc2", "").is_empty():
+			return "acc2"
+		return "acc1"
+	if slot_norm == "main_hand":
+		if hero.equipment.get("main_hand", "").is_empty():
+			return "main_hand"
+		if hero.can_dual_wield() and hero.equipment.get("off_hand", "").is_empty() and not hero.is_off_hand_disabled():
+			return "off_hand"
+		return "main_hand"
+	if slot_norm == "off_hand" and hero.is_off_hand_disabled():
+		return ""
+	return slot_norm
 #endregion
 
 

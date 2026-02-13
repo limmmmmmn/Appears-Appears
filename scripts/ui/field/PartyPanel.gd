@@ -6,10 +6,13 @@ class_name PartyPanel
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
 
 signal equipment_dropped(hero_index: int, item_id: String)
+signal hero_selected(hero_index: int)
 
 @onready var cards_container: VBoxContainer = %CardsContainer
 
 var cards: Array[HeroCard] = []
+var selected_hero_index: int = -1
+var selection_enabled: bool = true
 
 
 func _ready() -> void:
@@ -68,8 +71,10 @@ func _rebuild_cards() -> void:
 		card.init(i)
 		card.equipment_dropped.connect(_on_card_equip_dropped)
 		card.field_heal_requested.connect(_on_field_heal_requested)
+		card.card_selected.connect(_on_card_selected)
 		cards_container.add_child(card)
 		cards.append(card)
+	_update_selection_visuals()
 
 
 func update_display() -> void:
@@ -82,6 +87,7 @@ func update_display() -> void:
 		if i >= party.size() or party[i] == null:
 			continue
 		cards[i].update_from_hero(party[i])
+	_update_selection_visuals()
 #endregion
 
 
@@ -100,9 +106,11 @@ func init_party(heroes: Array) -> void:
 		card.init(i)
 		card.equipment_dropped.connect(_on_card_equip_dropped)
 		card.field_heal_requested.connect(_on_field_heal_requested)
+		card.card_selected.connect(_on_card_selected)
 		cards_container.add_child(card)
 		cards.append(card)
 		card.update_from_hero(heroes[i])
+	_update_selection_visuals()
 
 
 func update_hp(index: int, current: int, max_hp: int) -> void:
@@ -177,6 +185,16 @@ func _on_card_accordion_toggle(hero_index: int) -> void:
 	pass
 
 
+func _on_card_selected(hero_index: int) -> void:
+	if not selection_enabled:
+		return
+	if hero_index < 0:
+		return
+	selected_hero_index = hero_index
+	_update_selection_visuals()
+	hero_selected.emit(hero_index)
+
+
 func _on_item_equipped(hero_name: String, item_id: String, slot: String, _replaced_id: String) -> void:
 	pass
 #endregion
@@ -184,6 +202,41 @@ func _on_item_equipped(hero_name: String, item_id: String, slot: String, _replac
 
 func get_hero_slot_global_center(hero_name: String, slot: String) -> Vector2:
 	return Vector2.ZERO
+
+
+func _update_selection_visuals() -> void:
+	if cards.is_empty():
+		return
+	if selected_hero_index >= cards.size():
+		selected_hero_index = cards.size() - 1
+	if selected_hero_index < -1:
+		selected_hero_index = -1
+	for i in range(cards.size()):
+		cards[i].set_selected(i == selected_hero_index)
+
+
+func get_selected_hero_index() -> int:
+	return selected_hero_index
+
+
+func set_selection_enabled(enabled: bool) -> void:
+	selection_enabled = enabled
+	if not enabled:
+		selected_hero_index = -1
+	_update_selection_visuals()
+
+
+func set_selected_hero_index(index: int, emit_signal: bool = false) -> void:
+	if cards.is_empty():
+		selected_hero_index = -1
+		return
+	if index < 0:
+		selected_hero_index = -1
+	else:
+		selected_hero_index = clampi(index, 0, cards.size() - 1)
+	_update_selection_visuals()
+	if emit_signal and selected_hero_index >= 0:
+		hero_selected.emit(selected_hero_index)
 
 
 #region 필드 힐

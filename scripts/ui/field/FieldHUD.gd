@@ -85,40 +85,49 @@ var equip_notice_panel: PanelContainer = null
 var equip_notice_face: TextureRect = null
 var equip_notice_name: Label = null
 var equip_notice_slot_rows: Dictionary = {} # slot_key -> {panel, item_label}
-var equip_notice_stat_rows: Array = [] # [{key, label}]
+var equip_notice_stat_rows: Array = [] # [{key, value_label, delta_label}]
 var equip_row_style_normal: StyleBoxFlat = null
 var equip_row_style_highlight: StyleBoxFlat = null
 var equip_notice_queue: Array = []
 var equip_notice_playing: bool = false
+var right_inventory_panel: PanelContainer = null
+var right_inventory_rows: GridContainer = null
+var right_desc_panel: PanelContainer = null
+var right_desc_label: Label = null
+var right_inventory_slots: Array = []
+var selected_hero_index: int = -1
+var right_panel_opened: bool = false
+var last_equip_hero_id: String = ""
+var right_collapse_button: Button = null
+var right_expand_button: Button = null
+var right_panel_collapsed: bool = false
 
 const EQUIP_CARD_FACE_SIZE: float = 92.0
-const EQUIP_CARD_WIDTH: float = 228.0
+const EQUIP_CARD_WIDTH: float = EQUIP_CARD_FACE_SIZE
 const EQUIP_CARD_MARGIN_RIGHT: float = 12.0
 const EQUIP_CARD_STAY_TIME: float = 2.0
+const EQUIP_CARD_INVENTORY_HEIGHT: float = 112.0
+const EQUIP_CARD_INVENTORY_GAP: float = 8.0
+const INVENTORY_COLS: int = 2
+const INVENTORY_ROWS: int = 4
 const SLOT_NAMES_KR: Dictionary = {
 	"main_hand": "무기",
-	"off_hand": "방패",
+	"off_hand": "보조손",
 	"head": "투구",
 	"body": "갑옷",
-	"gloves": "장갑",
-	"boots": "신발",
-	"necklace": "목걸이",
-	"ring1": "반지",
-	"ring2": "반지",
+	"acc1": "악세1",
+	"acc2": "악세2",
 }
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️",
 	"off_hand": "🛡️",
 	"head": "⛑️",
 	"body": "🛡️",
-	"gloves": "🧤",
-	"boots": "👢",
-	"necklace": "📿",
-	"ring1": "💍",
-	"ring2": "💎",
+	"acc1": "💍",
+	"acc2": "💎",
 }
 const SLOT_ORDER: Array[String] = [
-	"main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"
+	"main_hand", "off_hand", "head", "body", "acc1", "acc2"
 ]
 #endregion
 
@@ -137,9 +146,11 @@ func _ready() -> void:
 	_init_equipment_screen()
 	_init_notice_box()
 	_init_equip_notice_card()
+	_init_right_panel_toggle_buttons()
 	_init_recruit_button()
 	_init_battle_pause_button()
 	_connect_signals()
+	_apply_pause_ui_state(false)
 	update_all()
 
 
@@ -161,6 +172,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			if not is_pause_menu_active and not (equipment_screen and equipment_screen.is_open):
 				_toggle_battle_pause()
 				get_viewport().set_input_as_handled()
+				return
+
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			if right_panel_opened and not _is_click_inside_right_ui(mb.global_position) and not _is_click_on_party_panel(mb.global_position):
+				_close_right_panel()
 
 
 #region 초기화
@@ -329,6 +347,7 @@ func _toggle_battle_pause() -> void:
 	BattleManager.toggle_battle_pause()
 	# 필드+전투 모두 정지/재개
 	get_tree().paused = BattleManager.is_battle_paused
+	_apply_pause_ui_state(BattleManager.is_battle_paused)
 	# 버튼 상태 동기화
 	if battle_pause_button:
 		battle_pause_button.set_pressed_no_signal(BattleManager.is_battle_paused)
@@ -341,6 +360,7 @@ func _on_battle_pause_toggled(toggled_on: bool) -> void:
 		return
 	BattleManager.set_battle_paused(toggled_on)
 	get_tree().paused = toggled_on
+	_apply_pause_ui_state(toggled_on)
 	_update_battle_pause_button_text(toggled_on)
 
 
@@ -408,7 +428,7 @@ func _init_equip_notice_card() -> void:
 	equip_notice_panel.visible = false
 	equip_notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	equip_notice_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	equip_notice_panel.size = Vector2(EQUIP_CARD_WIDTH, 258)
+	equip_notice_panel.size = Vector2(EQUIP_CARD_WIDTH, 214)
 	var card_style := _make_flat_style(Color(0.03, 0.03, 0.06, 0.94), STYLE.border_gold, 6, 1)
 	card_style.content_margin_left = 4
 	card_style.content_margin_right = 4
@@ -423,64 +443,17 @@ func _init_equip_notice_card() -> void:
 	equip_notice_panel.add_child(root)
 
 	equip_notice_face = TextureRect.new()
-	equip_notice_face.custom_minimum_size = Vector2(EQUIP_CARD_WIDTH - 8.0, EQUIP_CARD_FACE_SIZE - 8.0)
+	equip_notice_face.custom_minimum_size = Vector2(EQUIP_CARD_WIDTH, EQUIP_CARD_FACE_SIZE)
 	equip_notice_face.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	equip_notice_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	equip_notice_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(equip_notice_face)
 
-	var row_hbox := HBoxContainer.new()
-	row_hbox.add_theme_constant_override("separation", 4)
-	root.add_child(row_hbox)
-
-	var box_w: float = floorf((EQUIP_CARD_WIDTH - 16.0) * 0.5)
+	var box_w: float = EQUIP_CARD_WIDTH - 16.0
 	var box_h: float = 150.0
-
-	var stat_box := PanelContainer.new()
-	stat_box.custom_minimum_size = Vector2(box_w, box_h)
-	stat_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stat_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var stat_style := _make_flat_style(Color(0.08, 0.08, 0.12, 0.95), STYLE.border_default, 5, 1)
-	stat_style.content_margin_left = 6
-	stat_style.content_margin_right = 6
-	stat_style.content_margin_top = 6
-	stat_style.content_margin_bottom = 6
-	stat_box.add_theme_stylebox_override("panel", stat_style)
-	row_hbox.add_child(stat_box)
-
-	var stat_vbox := VBoxContainer.new()
-	stat_vbox.add_theme_constant_override("separation", 2)
-	stat_box.add_child(stat_vbox)
-
-	var stat_title := Label.new()
-	stat_title.text = "능력치"
-	stat_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stat_title.add_theme_font_size_override("font_size", STYLE.font_small)
-	stat_title.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
-	stat_vbox.add_child(stat_title)
-
 	equip_notice_stat_rows.clear()
-	for key in ["atk", "def", "mag", "spd", "hit", "eva", "str", "agi", "wis", "luk", "hp"]:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 4)
-		stat_vbox.add_child(row)
-
-		var name_lbl := Label.new()
-		name_lbl.text = str(EQUIP_STAT_LABELS.get(key, key.to_upper()))
-		name_lbl.custom_minimum_size.x = 28
-		name_lbl.add_theme_font_size_override("font_size", STYLE.font_tiny)
-		name_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
-		row.add_child(name_lbl)
-
-		var delta_lbl := Label.new()
-		delta_lbl.text = "—"
-		delta_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		delta_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		delta_lbl.add_theme_font_size_override("font_size", STYLE.font_tiny)
-		delta_lbl.add_theme_color_override("font_color", Color(0.62, 0.62, 0.66))
-		row.add_child(delta_lbl)
-
-		equip_notice_stat_rows.append({"key": key, "label": delta_lbl})
+	right_desc_panel = null
+	right_desc_label = null
 
 	var equip_box := PanelContainer.new()
 	equip_box.custom_minimum_size = Vector2(box_w, box_h)
@@ -492,7 +465,7 @@ func _init_equip_notice_card() -> void:
 	equip_style.content_margin_top = 6
 	equip_style.content_margin_bottom = 6
 	equip_box.add_theme_stylebox_override("panel", equip_style)
-	row_hbox.add_child(equip_box)
+	root.add_child(equip_box)
 
 	var equip_vbox := VBoxContainer.new()
 	equip_vbox.add_theme_constant_override("separation", 2)
@@ -517,9 +490,11 @@ func _init_equip_notice_card() -> void:
 	equip_notice_slot_rows.clear()
 	for slot_key in SLOT_ORDER:
 		var row_panel := PanelContainer.new()
-		row_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 		row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
+		row_panel.mouse_entered.connect(_on_equip_slot_row_hovered.bind(slot_key, true))
+		row_panel.mouse_exited.connect(_on_equip_slot_row_hovered.bind(slot_key, false))
 		equip_vbox.add_child(row_panel)
 
 		var slot_row_hbox := HBoxContainer.new()
@@ -547,6 +522,82 @@ func _init_equip_notice_card() -> void:
 			"panel": row_panel,
 			"item_label": item_label
 		}
+
+
+func _init_right_inventory_panel() -> void:
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	right_inventory_panel = PanelContainer.new()
+	right_inventory_panel.visible = false
+	right_inventory_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	right_inventory_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	right_inventory_panel.size = Vector2(EQUIP_CARD_WIDTH, EQUIP_CARD_INVENTORY_HEIGHT)
+
+	var panel_style := _make_flat_style(Color(0.03, 0.03, 0.06, 0.94), STYLE.border_gold, 6, 1)
+	panel_style.content_margin_left = 6
+	panel_style.content_margin_right = 6
+	panel_style.content_margin_top = 6
+	panel_style.content_margin_bottom = 6
+	right_inventory_panel.add_theme_stylebox_override("panel", panel_style)
+	ctrl.add_child(right_inventory_panel)
+
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 4)
+	right_inventory_panel.add_child(root)
+
+	var inv_box := PanelContainer.new()
+	inv_box.custom_minimum_size = Vector2(EQUIP_CARD_WIDTH - 12.0, EQUIP_CARD_INVENTORY_HEIGHT - 12.0)
+	inv_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var inv_style := _make_flat_style(Color(0.05, 0.06, 0.09, 0.95), STYLE.border_default, 4, 1)
+	inv_style.content_margin_left = 4
+	inv_style.content_margin_right = 4
+	inv_style.content_margin_top = 4
+	inv_style.content_margin_bottom = 4
+	inv_box.add_theme_stylebox_override("panel", inv_style)
+	root.add_child(inv_box)
+
+	right_inventory_rows = GridContainer.new()
+	right_inventory_rows.columns = INVENTORY_COLS
+	right_inventory_rows.add_theme_constant_override("h_separation", 3)
+	right_inventory_rows.add_theme_constant_override("v_separation", 3)
+	inv_box.add_child(right_inventory_rows)
+
+	right_inventory_slots.clear()
+	for i in range(INVENTORY_COLS * INVENTORY_ROWS):
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2((EQUIP_CARD_WIDTH - 24.0) * 0.5, 22)
+		btn.clip_text = true
+		btn.add_theme_font_size_override("font_size", STYLE.font_tiny)
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.mouse_entered.connect(_on_inventory_slot_hovered.bind(i))
+		btn.mouse_exited.connect(_on_inventory_slot_unhovered)
+		btn.pressed.connect(_on_inventory_slot_pressed.bind(i))
+		right_inventory_rows.add_child(btn)
+		right_inventory_slots.append({"button": btn, "item_id": "", "slot": "", "replaced_id": ""})
+
+
+func _init_right_panel_toggle_buttons() -> void:
+	var ctrl := get_node_or_null("Control")
+	if not ctrl:
+		return
+
+	right_collapse_button = Button.new()
+	right_collapse_button.text = "▶"
+	right_collapse_button.custom_minimum_size = Vector2(18, 24)
+	right_collapse_button.visible = false
+	right_collapse_button.focus_mode = Control.FOCUS_NONE
+	right_collapse_button.pressed.connect(_on_right_panel_collapse_pressed)
+	ctrl.add_child(right_collapse_button)
+
+	right_expand_button = Button.new()
+	right_expand_button.text = "◀"
+	right_expand_button.custom_minimum_size = Vector2(20, 26)
+	right_expand_button.visible = false
+	right_expand_button.focus_mode = Control.FOCUS_NONE
+	right_expand_button.pressed.connect(_on_right_panel_expand_pressed)
+	ctrl.add_child(right_expand_button)
 
 
 func _toggle_equipment_screen() -> void:
@@ -720,10 +771,19 @@ func _connect_signals() -> void:
 		if InventoryManager.has_signal("item_equipped"):
 			if not InventoryManager.item_equipped.is_connected(_on_item_equipped):
 				InventoryManager.item_equipped.connect(_on_item_equipped)
+		if InventoryManager.has_signal("item_auto_equipped"):
+			if not InventoryManager.item_auto_equipped.is_connected(_on_item_auto_equipped):
+				InventoryManager.item_auto_equipped.connect(_on_item_auto_equipped)
+		if InventoryManager.has_signal("inventory_changed"):
+			if not InventoryManager.inventory_changed.is_connected(_on_inventory_changed):
+				InventoryManager.inventory_changed.connect(_on_inventory_changed)
 
 	if party_panel:
 		if not party_panel.equipment_dropped.is_connected(_on_equip_dropped):
 			party_panel.equipment_dropped.connect(_on_equip_dropped)
+		if party_panel.has_signal("hero_selected"):
+			if not party_panel.hero_selected.is_connected(_on_party_hero_selected):
+				party_panel.hero_selected.connect(_on_party_hero_selected)
 #endregion
 
 
@@ -761,12 +821,23 @@ func _on_hud_notice_requested(message: String, duration: float = 2.0, color: Col
 	_show_notice(message, duration, color)
 
 
-func _on_item_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String) -> void:
+func _on_item_equipped(hero_name: String, item_id: String, _slot: String, replaced_id: String) -> void:
 	var item_data: Dictionary = DataManager.get_equipment(item_id)
 	var item_name: String = str(item_data.get("name", item_id))
 	var delta_text: String = _build_equip_stat_delta_text(item_id, replaced_id)
 	_show_notice("%s 장착: %s\n%s" % [hero_name, item_name, delta_text], 2.2, Color(0.8, 1.0, 0.6))
+
+
+func _on_item_auto_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String) -> void:
 	_queue_equip_notice_card(hero_name, item_id, slot, replaced_id)
+
+
+func _on_party_hero_selected(hero_index: int) -> void:
+	selected_hero_index = hero_index
+
+
+func _on_inventory_changed() -> void:
+	_refresh_selected_hero_panels()
 #endregion
 
 
@@ -787,8 +858,302 @@ func update_top_bar() -> void:
 func update_party_display() -> void:
 	if party_panel:
 		party_panel.update_display()
+		if party_panel.has_method("get_selected_hero_index"):
+			var panel_selected: int = party_panel.get_selected_hero_index()
+			if selected_hero_index < 0:
+				selected_hero_index = panel_selected
+	_refresh_selected_hero_panels()
 #endregion
 
+
+func _refresh_selected_hero_panels() -> void:
+	if not equip_notice_playing:
+		if equip_notice_panel:
+			equip_notice_panel.visible = false
+		if right_inventory_panel:
+			right_inventory_panel.visible = false
+		_hide_equip_hover_desc()
+		_update_right_toggle_buttons()
+		return
+
+	_hide_equip_hover_desc()
+	_layout_right_panels()
+	if equip_notice_panel:
+		equip_notice_panel.visible = true
+	_update_right_toggle_buttons()
+
+
+func _get_selected_hero() -> Hero:
+	if not PartyManager:
+		return null
+	var party: Array = PartyManager.get_party()
+	if party.is_empty():
+		selected_hero_index = -1
+		return null
+	if selected_hero_index < 0 or selected_hero_index >= party.size():
+		selected_hero_index = 0
+	return party[selected_hero_index] as Hero
+
+
+func _layout_right_panels() -> void:
+	if equip_notice_panel == null:
+		return
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var x: float = viewport_size.x - EQUIP_CARD_WIDTH - EQUIP_CARD_MARGIN_RIGHT
+	var total_h: float = equip_notice_panel.size.y
+	var y_start: float = (viewport_size.y - total_h) * 0.5
+	equip_notice_panel.position = Vector2(x, y_start)
+	_update_right_toggle_buttons()
+
+
+func _refresh_right_inventory(hero: Hero) -> void:
+	if right_inventory_rows == null:
+		return
+	right_desc_panel.visible = false
+	if right_desc_label:
+		right_desc_label.text = ""
+
+	for i in range(right_inventory_slots.size()):
+		var s: Dictionary = right_inventory_slots[i]
+		var btn: Button = s.get("button") as Button
+		if btn:
+			btn.text = "—"
+			btn.disabled = true
+			btn.tooltip_text = ""
+		s["item_id"] = ""
+		s["slot"] = ""
+		s["replaced_id"] = ""
+		right_inventory_slots[i] = s
+
+	if InventoryManager == null or hero == null:
+		return
+	var equips: Array = InventoryManager.get_equipment_items()
+	var write_idx: int = 0
+	for entry_any in equips:
+		if write_idx >= right_inventory_slots.size():
+			break
+		var entry: Dictionary = entry_any as Dictionary
+		var item_id: String = str(entry.get("id", ""))
+		var qty: int = int(entry.get("quantity", 0))
+		var data: Dictionary = entry.get("data", {}) as Dictionary
+		if not hero.can_equip(item_id):
+			continue
+		var target_slot: String = _resolve_target_slot(hero, data)
+		if target_slot.is_empty():
+			continue
+		var replaced_id: String = str(hero.equipment.get(target_slot, ""))
+		var item_name: String = str(data.get("name", item_id))
+		var icon: String = str(SLOT_ICONS.get(Hero.normalize_equipment_slot(str(data.get("slot", ""))), "📦"))
+		var s: Dictionary = right_inventory_slots[write_idx]
+		var btn: Button = s.get("button") as Button
+		if btn:
+			btn.text = "%s %s" % [icon, item_name]
+			btn.disabled = false
+			btn.tooltip_text = "%s x%d" % [item_name, qty]
+		s["item_id"] = item_id
+		s["slot"] = target_slot
+		s["replaced_id"] = replaced_id
+		right_inventory_slots[write_idx] = s
+		write_idx += 1
+
+
+func _resolve_target_slot(hero: Hero, item_data: Dictionary) -> String:
+	var raw_slot: String = Hero.normalize_equipment_slot(str(item_data.get("slot", "")))
+	if raw_slot == "acc":
+		if str(hero.equipment.get("acc1", "")).is_empty():
+			return "acc1"
+		if str(hero.equipment.get("acc2", "")).is_empty():
+			return "acc2"
+		return "acc1"
+	if raw_slot == "main_hand":
+		if str(hero.equipment.get("main_hand", "")).is_empty():
+			return "main_hand"
+		if hero.can_dual_wield() and str(hero.equipment.get("off_hand", "")).is_empty() and not hero.is_off_hand_disabled():
+			return "off_hand"
+		return "main_hand"
+	if SLOT_ORDER.has(raw_slot):
+		return raw_slot
+	return ""
+
+
+func _on_inventory_slot_hovered(slot_index: int) -> void:
+	if slot_index < 0 or slot_index >= right_inventory_slots.size():
+		return
+	var hero: Hero = _get_selected_hero()
+	if hero == null:
+		return
+	var s: Dictionary = right_inventory_slots[slot_index]
+	var item_id: String = str(s.get("item_id", ""))
+	if item_id.is_empty():
+		return
+	var target_slot: String = str(s.get("slot", ""))
+	var replaced_id: String = str(s.get("replaced_id", ""))
+	_refresh_equip_notice_slots(hero, target_slot)
+	var delta: Dictionary = _build_equip_stat_delta(item_id, replaced_id)
+	_refresh_equip_notice_stats(hero, delta)
+
+
+func _on_inventory_slot_unhovered() -> void:
+	var hero: Hero = _get_selected_hero()
+	if hero:
+		_refresh_equip_notice_slots(hero, "")
+		_refresh_equip_notice_stats(hero, {})
+	_hide_equip_hover_desc()
+
+
+func _on_inventory_slot_pressed(slot_index: int) -> void:
+	if slot_index < 0 or slot_index >= right_inventory_slots.size():
+		return
+	var hero: Hero = _get_selected_hero()
+	if hero == null:
+		return
+	var s: Dictionary = right_inventory_slots[slot_index]
+	var item_id: String = str(s.get("item_id", ""))
+	var target_slot: String = str(s.get("slot", ""))
+	if item_id.is_empty() or target_slot.is_empty():
+		return
+	InventoryManager.equip_item(hero, item_id, target_slot)
+
+
+func _show_equip_hover_desc(item_id: String, delta: Dictionary) -> void:
+	if right_desc_panel == null or right_desc_label == null:
+		return
+	var data: Dictionary = DataManager.get_equipment(item_id)
+	var item_name: String = str(data.get("name", item_id))
+	var desc: String = str(data.get("description", data.get("desc", "")))
+	var parts: Array[String] = []
+	for key in EQUIP_STAT_ORDER:
+		var d: int = int(delta.get(key, 0))
+		if d == 0:
+			continue
+		var arrow: String = "▲" if d > 0 else "▼"
+		var sign: String = "+" if d > 0 else ""
+		parts.append("%s %s%s%d" % [str(EQUIP_STAT_LABELS.get(key, key.to_upper())), arrow, sign, d])
+	var delta_text: String = ", ".join(parts)
+	right_desc_label.text = "%s\n%s\n%s" % [item_name, desc, delta_text]
+	right_desc_panel.visible = true
+
+
+func _hide_equip_hover_desc() -> void:
+	if right_desc_panel:
+		right_desc_panel.visible = false
+	if right_desc_label:
+		right_desc_label.text = ""
+
+
+func _on_right_panel_collapse_pressed() -> void:
+	right_panel_collapsed = true
+	_refresh_selected_hero_panels()
+
+
+func _on_right_panel_expand_pressed() -> void:
+	right_panel_collapsed = false
+	right_panel_opened = true
+	_refresh_selected_hero_panels()
+
+
+func _close_right_panel() -> void:
+	right_panel_opened = false
+	right_panel_collapsed = false
+	_hide_equip_hover_desc()
+	if party_panel and party_panel.has_method("set_selected_hero_index"):
+		party_panel.set_selected_hero_index(-1, false)
+	selected_hero_index = -1
+	_refresh_selected_hero_panels()
+
+
+func _update_right_toggle_buttons() -> void:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var block_top: float = 0.0
+	var block_h: float = 0.0
+	if equip_notice_panel:
+		block_top = equip_notice_panel.position.y
+		block_h = equip_notice_panel.size.y
+		if right_inventory_panel and right_inventory_panel.visible:
+			block_h += EQUIP_CARD_INVENTORY_GAP + right_inventory_panel.size.y
+	var center_y: float = block_top + block_h * 0.5 if block_h > 0.0 else viewport_size.y * 0.5
+	if right_collapse_button:
+		right_collapse_button.visible = right_panel_opened and not right_panel_collapsed and equip_notice_panel and equip_notice_panel.visible
+		if right_collapse_button.visible:
+			right_collapse_button.position = Vector2(
+				equip_notice_panel.position.x - right_collapse_button.size.x - 2.0,
+				center_y - right_collapse_button.size.y * 0.5
+			)
+	if right_expand_button:
+		right_expand_button.visible = right_panel_opened and right_panel_collapsed
+		if right_expand_button.visible:
+			right_expand_button.position = Vector2(
+				viewport_size.x - right_expand_button.size.x + 2.0,
+				center_y - right_expand_button.size.y * 0.5
+			)
+
+
+func _is_click_inside_right_ui(pos: Vector2) -> bool:
+	if equip_notice_panel and equip_notice_panel.visible and equip_notice_panel.get_global_rect().has_point(pos):
+		return true
+	if right_inventory_panel and right_inventory_panel.visible and right_inventory_panel.get_global_rect().has_point(pos):
+		return true
+	if right_collapse_button and right_collapse_button.visible and right_collapse_button.get_global_rect().has_point(pos):
+		return true
+	if right_expand_button and right_expand_button.visible and right_expand_button.get_global_rect().has_point(pos):
+		return true
+	return false
+
+
+func _is_click_on_party_panel(pos: Vector2) -> bool:
+	return party_panel != null and party_panel.get_global_rect().has_point(pos)
+
+
+func _on_equip_slot_row_hovered(slot_key: String, hovered: bool) -> void:
+	var row: Dictionary = equip_notice_slot_rows.get(slot_key, {}) as Dictionary
+	if row.is_empty():
+		return
+	var panel: PanelContainer = row.get("panel") as PanelContainer
+	if panel == null:
+		return
+	panel.add_theme_stylebox_override("panel", equip_row_style_highlight if hovered else equip_row_style_normal)
+	if hovered:
+		var hero: Hero = _get_selected_hero()
+		if hero == null:
+			return
+		var equip_id: String = str(hero.equipment.get(slot_key, ""))
+		if not equip_id.is_empty():
+			_show_equip_hover_desc(equip_id, {})
+	else:
+		_hide_equip_hover_desc()
+
+
+func _apply_pause_ui_state(paused: bool) -> void:
+	if party_panel and party_panel.has_method("set_selection_enabled"):
+		party_panel.set_selection_enabled(true)
+
+	if paused:
+		selected_hero_index = _resolve_default_selected_hero_index()
+		if party_panel and party_panel.has_method("set_selected_hero_index"):
+			party_panel.set_selected_hero_index(selected_hero_index, false)
+	else:
+		right_panel_opened = false
+		right_panel_collapsed = false
+		_hide_equip_hover_desc()
+		if party_panel and party_panel.has_method("set_selected_hero_index"):
+			party_panel.set_selected_hero_index(-1, false)
+
+	_refresh_selected_hero_panels()
+
+
+func _resolve_default_selected_hero_index() -> int:
+	if not PartyManager:
+		return 0
+	var party: Array = PartyManager.get_party()
+	if party.is_empty():
+		return 0
+
+	if not last_equip_hero_id.is_empty():
+		for i in range(party.size()):
+			var hero: Hero = party[i]
+			if hero != null and hero.id == last_equip_hero_id:
+				return i
+	return 0
 
 func _show_notice(message: String, duration: float = 2.0, color: Color = Color.WHITE) -> void:
 	if notice_panel == null or notice_label == null:
@@ -884,7 +1249,7 @@ func _accumulate_equip_stat_delta(dest: Dictionary, stats: Dictionary, mult: int
 		dest[normalized] = int(dest.get(normalized, 0)) + int(stats[key_any]) * mult
 
 
-func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String, replaced_id: String = "") -> void:
+func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String, _replaced_id: String = "") -> void:
 	if equip_notice_panel == null:
 		return
 	var hero: Hero = _find_hero_by_name(hero_name)
@@ -898,7 +1263,6 @@ func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String, 
 		"slot_key": slot,
 		"slot_kr": SLOT_NAMES_KR.get(slot, slot),
 		"item_name": item_name,
-		"delta": _build_equip_stat_delta(item_id, replaced_id),
 	})
 	if not equip_notice_playing:
 		_play_next_equip_notice_card()
@@ -928,14 +1292,13 @@ func _play_next_equip_notice_card() -> void:
 	var hero_id: String = str(payload.get("hero_id", ""))
 	var hero_name: String = str(payload.get("hero_name", ""))
 	var slot_key: String = str(payload.get("slot_key", ""))
-	var delta: Dictionary = payload.get("delta", {}) as Dictionary
 	var hero: Hero = _find_hero_by_id(hero_id)
+	last_equip_hero_id = hero_id
 
 	if equip_notice_face and SpriteManager:
 		equip_notice_face.texture = SpriteManager.get_hero_face_sprite(hero_id)
 	if equip_notice_name:
 		equip_notice_name.text = hero_name
-	_refresh_equip_notice_stats(delta)
 	_refresh_equip_notice_slots(hero, slot_key)
 
 	await get_tree().process_frame
@@ -985,6 +1348,7 @@ func _play_next_equip_notice_card() -> void:
 	equip_notice_panel.scale = Vector2.ONE
 	equip_notice_panel.modulate = Color.WHITE
 
+	_refresh_selected_hero_panels()
 	call_deferred("_play_next_equip_notice_card")
 
 
@@ -1035,23 +1399,61 @@ func _build_equip_stat_delta(item_id: String, replaced_id: String) -> Dictionary
 	return delta
 
 
-func _refresh_equip_notice_stats(delta: Dictionary) -> void:
+func _refresh_equip_notice_stats(hero: Hero, delta: Dictionary) -> void:
 	for entry in equip_notice_stat_rows:
 		var e: Dictionary = entry as Dictionary
 		var key: String = str(e.get("key", ""))
-		var label: Label = e.get("label") as Label
-		if label == null:
+		var value_label: Label = e.get("value_label") as Label
+		var delta_label: Label = e.get("delta_label") as Label
+		if value_label == null or delta_label == null:
 			continue
+		value_label.text = _format_equip_stat_value(key, _get_hero_stat_value(hero, key))
 		var d: int = int(delta.get(key, 0))
 		if d > 0:
-			label.text = "▲ +%d" % d
-			label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55))
+			delta_label.text = "▲ +%d" % d
+			delta_label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.55))
 		elif d < 0:
-			label.text = "▼ %d" % d
-			label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+			delta_label.text = "▼ %d" % d
+			delta_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
 		else:
-			label.text = "—"
-			label.add_theme_color_override("font_color", Color(0.62, 0.62, 0.66))
+			delta_label.text = "—"
+			delta_label.add_theme_color_override("font_color", Color(0.62, 0.62, 0.66))
+
+
+func _get_hero_stat_value(hero: Hero, key: String) -> float:
+	if hero == null:
+		return 0.0
+	match key:
+		"atk":
+			return float(hero.get_atk())
+		"def":
+			return float(hero.get_def())
+		"mag":
+			return float(hero.get_magic_attack())
+		"spd":
+			return float(hero.get_spd())
+		"hit":
+			return float(hero.get_hit_rate())
+		"eva":
+			return float(hero.get_eva())
+		"str":
+			return float(hero.get_str())
+		"agi":
+			return float(hero.get_dex())
+		"wis":
+			return float(hero.get_base_stat("wis"))
+		"luk":
+			return float(hero.get_luk())
+		"hp":
+			return float(hero.get_max_hp())
+		_:
+			return 0.0
+
+
+func _format_equip_stat_value(key: String, value: float) -> String:
+	if key == "hit" or key == "eva":
+		return "%.1f%%" % value
+	return str(int(round(value)))
 
 
 func _get_equip_notice_row_panel(slot_key: String) -> PanelContainer:

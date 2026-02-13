@@ -72,8 +72,7 @@ var taunt_count: int = 0
 
 # 장비
 var equipment: Dictionary = {
-	"main_hand": "", "off_hand": "", "head": "", "body": "",
-	"gloves": "", "boots": "", "necklace": "", "ring1": "", "ring2": ""
+	"main_hand": "", "off_hand": "", "head": "", "body": "", "acc1": "", "acc2": ""
 }
 
 # 스킬 토글
@@ -550,6 +549,16 @@ func has_taunt() -> bool:
 	## 도발 상태인지 확인
 	return taunt_count > 0
 #endregion
+
+
+static func normalize_equipment_slot(slot: String) -> String:
+	match slot:
+		"main_hand", "off_hand", "head", "body", "acc1", "acc2":
+			return slot
+		"ring", "ring1", "ring2", "acc", "necklace", "boots", "shoes", "gloves", "hands", "feet":
+			return "acc"
+		_:
+			return slot
 
 
 #region 장비

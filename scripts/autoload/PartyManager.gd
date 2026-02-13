@@ -11,7 +11,7 @@ var party: Array[Hero] = []
 var reserve_party: Array[Hero] = []
 var inventory: Dictionary = {}  # item_id -> 수량
 
-const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"]
+const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
 
 
 func _ready() -> void:
@@ -190,17 +190,25 @@ func auto_equip_to_party(equip_id: String) -> bool:
 	if equip_data.is_empty():
 		return false
 	
-	var slot: String = equip_data.get("slot", "")
-	if slot in ["ring", "acc"]:
+	var slot: String = Hero.normalize_equipment_slot(str(equip_data.get("slot", "")))
+	if slot == "acc":
 		for hero in party:
 			if hero.can_equip(equip_id):
-				for s in ["ring1", "ring2"]:
+				for s in ["acc1", "acc2"]:
 					if hero.equipment[s].is_empty():
 						return equip_to_hero(hero, equip_id, s)
-	elif slot in ["necklace", "boots", "gloves"]:
+	elif slot == "main_hand":
 		for hero in party:
-			if hero.can_equip(equip_id) and hero.equipment[slot].is_empty():
-				return equip_to_hero(hero, equip_id, slot)
+			if not hero.can_equip(equip_id):
+				continue
+			if hero.equipment["main_hand"].is_empty():
+				if equip_data.get("two_handed", false):
+					if hero.equipment["off_hand"].is_empty():
+						return equip_to_hero(hero, equip_id, "main_hand")
+				else:
+					return equip_to_hero(hero, equip_id, "main_hand")
+			elif hero.can_dual_wield() and hero.equipment["off_hand"].is_empty() and not hero.is_off_hand_disabled():
+				return equip_to_hero(hero, equip_id, "off_hand")
 	else:
 		for hero in party:
 			if hero.can_equip(equip_id) and hero.equipment[slot].is_empty():

@@ -210,8 +210,7 @@ func _deserialize_party(data: Array) -> void:
 		hero.set_progress(saved_level, saved_exp, saved_level_stats, saved_unlocked_skills)
 
 		var saved_equip: Dictionary = hero_data.get("equipment", {})
-		for slot in saved_equip:
-			hero.equipment[slot] = str(saved_equip[slot])
+		_apply_saved_equipment(hero, saved_equip)
 		
 		var saved_toggles: Dictionary = hero_data.get("skill_toggles", {})
 		for skill_id in saved_toggles:
@@ -230,6 +229,34 @@ func _deserialize_inventory(data: Dictionary) -> void:
 	for item_id in data:
 		InventoryManager.items[item_id] = int(data[item_id])
 	InventoryManager.inventory_changed.emit()
+
+
+func _apply_saved_equipment(hero: Hero, saved_equip: Dictionary) -> void:
+	for slot in hero.equipment.keys():
+		hero.equipment[slot] = ""
+	if saved_equip.is_empty():
+		return
+
+	var accessory_queue: Array[String] = []
+	for old_slot in ["acc1", "acc2", "ring1", "ring2", "necklace", "boots", "shoes", "gloves", "hands", "feet", "acc", "ring"]:
+		var id: String = str(saved_equip.get(old_slot, ""))
+		if not id.is_empty():
+			accessory_queue.append(id)
+
+	for old_slot in ["main_hand", "off_hand", "head", "body"]:
+		var id: String = str(saved_equip.get(old_slot, ""))
+		if id.is_empty():
+			continue
+		hero.equipment[old_slot] = id
+
+	var acc_idx: int = 0
+	for acc_slot in ["acc1", "acc2"]:
+		while acc_idx < accessory_queue.size():
+			var equip_id: String = accessory_queue[acc_idx]
+			acc_idx += 1
+			if not equip_id.is_empty():
+				hero.equipment[acc_slot] = equip_id
+				break
 
 
 func _deserialize_field_position(data: Dictionary) -> void:

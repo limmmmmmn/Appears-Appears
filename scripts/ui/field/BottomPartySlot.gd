@@ -38,14 +38,12 @@ const SLOT_FONT_SIZE: int = 10
 
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️", "off_hand": "🛡️", "head": "⛑️",
-	"body": "🛡️", "gloves": "🧤", "boots": "👢",
-	"necklace": "📿", "ring1": "💍", "ring2": "💎"
+	"body": "🛡️", "acc1": "💍", "acc2": "💎"
 }
 
 const SLOT_NAMES_KR: Dictionary = {
-	"main_hand": "메인손", "off_hand": "서브손", "head": "투구",
-	"body": "갑옷", "gloves": "장갑", "boots": "신발",
-	"necklace": "목걸이", "ring1": "반지1", "ring2": "반지2"
+	"main_hand": "손", "off_hand": "손", "head": "투구",
+	"body": "갑옷", "acc1": "악세1", "acc2": "악세2"
 }
 
 const ITEM_ICONS: Dictionary = {
@@ -115,21 +113,13 @@ func _create_layout() -> void:
 	for slot_name in ["main_hand", "off_hand", "head"]:
 		_create_equip_button(equip_row1, slot_name)
 	
-	# 4행: 장비 슬롯 (갑옷, 장갑, 신발)
+	# 4행: 장비 슬롯 (갑옷, 악세1, 악세2)
 	equip_row2 = HBoxContainer.new()
 	equip_row2.add_theme_constant_override("separation", 1)
 	add_child(equip_row2)
 
-	for slot_name in ["body", "gloves", "boots"]:
+	for slot_name in ["body", "acc1", "acc2"]:
 		_create_equip_button(equip_row2, slot_name)
-
-	# 5행: 장비 슬롯 (목걸이, 반지1, 반지2)
-	var equip_row3 := HBoxContainer.new()
-	equip_row3.add_theme_constant_override("separation", 1)
-	add_child(equip_row3)
-
-	for slot_name in ["necklace", "ring1", "ring2"]:
-		_create_equip_button(equip_row3, slot_name)
 	
 	# 5행: 스킬 토글
 	skill_row = HBoxContainer.new()

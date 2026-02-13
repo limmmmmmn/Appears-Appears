@@ -19,15 +19,12 @@ const STAT_NAMES: Dictionary = {
 }
 
 const SLOT_NAMES_KR: Dictionary = {
-	"main_hand": "메인손",
-	"off_hand": "서브손",
+	"main_hand": "손",
+	"off_hand": "손",
 	"head": "투구",
 	"body": "갑옷",
-	"gloves": "장갑",
-	"boots": "신발",
-	"necklace": "목걸이",
-	"ring1": "반지1",
-	"ring2": "반지2"
+	"acc1": "악세1",
+	"acc2": "악세2"
 }
 
 

@@ -19,12 +19,11 @@ const EXPAND_DURATION := 0.28
 const COLLAPSE_DURATION := 0.22
 
 const SLOT_ORDER: Array[String] = [
-	"main_hand", "off_hand", "head", "body", "gloves", "boots", "necklace", "ring1", "ring2"
+	"main_hand", "off_hand", "head", "body", "acc1", "acc2"
 ]
 const SLOT_ICONS: Dictionary = {
 	"main_hand": "⚔️", "off_hand": "🛡️", "head": "⛑️",
-	"body": "🛡️", "gloves": "🧤", "boots": "👢",
-	"necklace": "📿", "ring1": "💍", "ring2": "💎"
+	"body": "🛡️", "acc1": "💍", "acc2": "💎"
 }
 
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
@@ -44,6 +43,7 @@ const SHAKE_STRENGTH := 3.0
 
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
+signal card_selected(hero_index: int)
 
 var hero_index: int = -1
 var hero_id: String = ""
@@ -78,11 +78,15 @@ var _hp_tween: Tween
 var _ghost_tween: Tween
 var _shake_tween: Tween
 var _expand_tween: Tween
+var _is_selected: bool = false
 
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(CARD_WIDTH, FACE_SIZE)
+	mouse_filter = MOUSE_FILTER_STOP
+	gui_input.connect(_on_gui_input)
 	_build_ui()
+	queue_redraw()
 
 
 func _build_ui() -> void:
@@ -269,6 +273,18 @@ func _create_tick_overlay(pos: Vector2, height: float) -> Control:
 
 func init(p_hero_index: int) -> void:
 	hero_index = p_hero_index
+
+
+func _draw() -> void:
+	if not _is_selected:
+		return
+	var border_rect := Rect2(Vector2.ZERO, Vector2(FACE_SIZE, FACE_SIZE))
+	draw_rect(border_rect, Color(1.0, 0.88, 0.28, 1.0), false, 2.0)
+
+
+func set_selected(selected: bool) -> void:
+	_is_selected = selected
+	queue_redraw()
 
 
 func update_from_hero(hero: Hero) -> void:
@@ -467,13 +483,17 @@ func _kill_tween(tw: Tween) -> void:
 
 
 func _on_gui_input(event: InputEvent) -> void:
-	pass
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			card_selected.emit(hero_index)
 
 
 static func get_target_slots(item_slot: String) -> Array:
-	if item_slot in ["ring", "acc"]:
-		return ["ring1", "ring2"]
-	return [item_slot]
+	var normalized: String = Hero.normalize_equipment_slot(item_slot)
+	if normalized == "acc":
+		return ["acc1", "acc2"]
+	return [normalized]
 
 
 func get_slot_global_center(slot: String) -> Vector2:
