@@ -19,17 +19,38 @@ const WORLD_MAP_NODES: Array[Dictionary] = [
 	{"id": "south_citadel", "name": "남부 성채", "pos": Vector2(0.58, 0.78)},
 ]
 const SORTIE_EQUIP_ROWS: Array[Dictionary] = [
-	{"slot": "main_hand", "label": "손(무기)"},
-	{"slot": "off_hand", "label": "손(방패/보조무기)"},
-	{"slot": "head", "label": "투구"},
-	{"slot": "body", "label": "갑옷"},
-	{"slot": "acc1", "label": "악세1"},
-	{"slot": "acc2", "label": "악세2"},
+	{"slot": "main_hand", "label": "⚔"},
+	{"slot": "off_hand", "label": "🛡"},
+	{"slot": "head", "label": "🪖"},
+	{"slot": "body", "label": "👕"},
+	{"slot": "acc1", "label": "💍"},
+	{"slot": "acc2", "label": "💎"},
 ]
-const SORTIE_INV_TABS: Array[String] = ["무기", "방패", "투구", "갑옷", "악세"]
-const SORTIE_PANEL_MIN_SIZE: Vector2 = Vector2(760, 460)
-const SORTIE_PANEL_PREFERRED_SIZE: Vector2 = Vector2(1160, 640)
+const SORTIE_FONT_SIZE: int = 12
+const SORTIE_FACE_PATH := "res://assets/sprites/heroes/%s.png"
+const SORTIE_PANEL_MIN_SIZE: Vector2 = Vector2(720, 440)
+const SORTIE_PANEL_PREFERRED_SIZE: Vector2 = Vector2(1040, 600)
 const SORTIE_PANEL_MARGIN: float = 24.0
+const SORTIE_FACE_BOX_SIZE: Vector2 = Vector2(112, 112)
+const SORTIE_STANDBY_CARD_SIZE: Vector2 = Vector2(40, 58)
+const SORTIE_SORTIE_CARD_SIZE: Vector2 = Vector2(72, 108)
+const SORTIE_STANDBY_LABEL_FONT: int = 10
+const SORTIE_STANDBY_ICON_SCALE: float = 1.2
+const SORTIE_SORTIE_ICON_SCALE: float = 1.9
+const SORTIE_SORTIE_PADDING: float = 8.0
+const SORTIE_SORTIE_SLOTS: int = 4
+const SORTIE_WALK_MIN_SPEED: float = 12.0
+const SORTIE_WALK_MAX_SPEED: float = 24.0
+const SORTIE_WALK_FRAME_TIME: float = 0.18
+const SORTIE_IDLE_CHANCE: float = 0.22
+const SORTIE_IDLE_MIN_TIME: float = 0.6
+const SORTIE_IDLE_MAX_TIME: float = 1.4
+const SORTIE_LOOK_DOWN_CHANCE: float = 0.15
+const SORTIE_LOOK_DOWN_MIN_TIME: float = 0.35
+const SORTIE_LOOK_DOWN_MAX_TIME: float = 0.8
+const SORTIE_BUBBLE_MIN_TIME: float = 1.2
+const SORTIE_BUBBLE_MAX_TIME: float = 2.4
+const SORTIE_BUBBLE_CHANCE: float = 0.25
 
 const WALKER_MIN_SPEED: float = 16.0
 const WALKER_MAX_SPEED: float = 34.0
@@ -65,8 +86,10 @@ var world_map_selected_id: String = ""
 # 출격 준비 화면
 var sortie_layer: CanvasLayer = null
 var sortie_panel: PanelContainer = null
-var sortie_party_slots: Array[Button] = []
-var sortie_hero_list: VBoxContainer = null
+var sortie_root: VBoxContainer = null
+var sortie_standby_grid: GridContainer = null
+var sortie_sortie_area: Control = null
+var sortie_face_rect: TextureRect = null
 var sortie_equipment_rows: Dictionary = {}
 var sortie_stat_labels: Dictionary = {}
 var sortie_inventory_tab_buttons: Array[Button] = []
@@ -75,9 +98,88 @@ var sortie_inventory_hint: Label = null
 var sortie_selected_hero_id: String = ""
 var sortie_pending_hero_id: String = ""
 var sortie_selected_item_id: String = ""
-var sortie_selected_slot_index: int = 0
+var sortie_selected_equip_slot: String = "main_hand"
 var sortie_inventory_tab: String = "무기"
 var sortie_party_ids: Array[String] = ["", "", "", ""]
+var sortie_scaled_icon_cache: Dictionary = {}
+var sortie_sortie_walkers: Array[Dictionary] = []
+var sortie_sortie_bubbles: Array[Label] = []
+var sortie_sortie_placeholders: Array[Control] = []
+
+
+class _SortieHeroEntryButton extends Button:
+	var den_ref: Node = null
+	var hero_id: String = ""
+	var source_kind: String = "standby"
+	var hide_on_drag: bool = false
+	var was_dragging: bool = false
+
+	func _get_drag_data(_pos: Vector2) -> Variant:
+		if den_ref == null or not den_ref.has_method("_build_sortie_hero_drag_data"):
+			return null
+		var data: Variant = den_ref.call("_build_sortie_hero_drag_data", hero_id, source_kind)
+		if not data is Dictionary:
+			return null
+		if str(data.get("hero_id", "")).is_empty():
+			return null
+		was_dragging = true
+		var preview := self.duplicate(0)
+		preview.size = size
+		preview.custom_minimum_size = custom_minimum_size
+		preview.position = -_pos
+		preview.clip_contents = false
+		preview.visible = true
+		if hide_on_drag:
+			visible = false
+		set_drag_preview(preview)
+		return data
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		return data is Dictionary and data.get("type", "") == "hero_drag"
+
+	func _drop_data(_pos: Vector2, data: Variant) -> void:
+		if den_ref and den_ref.has_method("_on_sortie_area_drop_from_child"):
+			den_ref.call("_on_sortie_area_drop_from_child", data)
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			if den_ref and den_ref.has_method("_on_sortie_roster_right_clicked"):
+				den_ref.call("_on_sortie_roster_right_clicked", hero_id)
+			accept_event()
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_DRAG_END:
+			was_dragging = false
+			visible = true
+
+
+class _SortieListDropTarget extends PanelContainer:
+	var den_ref: Node = null
+	var target_kind: String = "standby"
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		return data is Dictionary and data.get("type", "") == "hero_drag"
+
+	func _drop_data(_pos: Vector2, data: Variant) -> void:
+		if den_ref == null:
+			return
+		if target_kind == "standby" and den_ref.has_method("_on_sortie_hero_dropped_to_standby"):
+			den_ref.call("_on_sortie_hero_dropped_to_standby", data)
+		if target_kind == "sortie" and den_ref.has_method("_on_sortie_hero_dropped_to_sortie"):
+			den_ref.call("_on_sortie_hero_dropped_to_sortie", data)
+
+
+class _SortieSortieArea extends Control:
+	var den_ref: Node = null
+
+	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		return data is Dictionary and data.get("type", "") == "hero_drag"
+
+	func _drop_data(pos: Vector2, data: Variant) -> void:
+		if den_ref == null:
+			return
+		if den_ref.has_method("_on_sortie_area_drop"):
+			den_ref.call("_on_sortie_area_drop", pos, data)
 
 
 func _ready() -> void:
@@ -98,6 +200,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_update_room_one_walkers(delta)
+	_update_sortie_walkers(delta)
 
 
 func _build_ui() -> void:
@@ -470,7 +573,7 @@ func _build_sortie_prep_popup() -> void:
 	sortie_layer.add_child(center)
 
 	sortie_panel = PanelContainer.new()
-	sortie_panel.custom_minimum_size = SORTIE_PANEL_PREFERRED_SIZE
+	sortie_panel.custom_minimum_size = Vector2.ZERO
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.08, 0.08, 0.12, 0.98)
 	s.border_width_left = 2
@@ -489,109 +592,107 @@ func _build_sortie_prep_popup() -> void:
 	sortie_panel.add_theme_stylebox_override("panel", s)
 	center.add_child(sortie_panel)
 
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 10)
-	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sortie_panel.add_child(root)
+	sortie_root = VBoxContainer.new()
+	sortie_root.add_theme_constant_override("separation", 10)
+	sortie_root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sortie_panel.add_child(sortie_root)
 
 	var title := Label.new()
 	title.text = "출격 준비"
 	title.add_theme_font_size_override("font_size", 20)
 	title.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
-	root.add_child(title)
+	sortie_root.add_child(title)
 
-	var content := HBoxContainer.new()
-	content.add_theme_constant_override("separation", 10)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 12)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(content)
+	sortie_root.add_child(content)
 
-	# 좌측 컬럼: 출격 영웅(상단) + 영웅 목록(하단)
-	var hero_col := VBoxContainer.new()
-	hero_col.custom_minimum_size.x = 280
-	hero_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	hero_col.add_theme_constant_override("separation", 8)
-	content.add_child(hero_col)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.13, 0.13, 0.18, 0.95)
+	panel_style.border_width_left = 1
+	panel_style.border_width_top = 1
+	panel_style.border_width_right = 1
+	panel_style.border_width_bottom = 1
+	panel_style.border_color = Color(0.3, 0.32, 0.42)
+	panel_style.corner_radius_top_left = 6
+	panel_style.corner_radius_top_right = 6
+	panel_style.corner_radius_bottom_left = 6
+	panel_style.corner_radius_bottom_right = 6
+	panel_style.shadow_size = 6
+	panel_style.shadow_color = Color(0, 0, 0, 0.35)
+	panel_style.content_margin_left = 10
+	panel_style.content_margin_right = 10
+	panel_style.content_margin_top = 10
+	panel_style.content_margin_bottom = 10
 
-	var hero_top := PanelContainer.new()
-	hero_top.custom_minimum_size.y = 170
-	var hero_top_style := StyleBoxFlat.new()
-	hero_top_style.bg_color = Color(0.13, 0.13, 0.18, 0.95)
-	hero_top_style.border_width_left = 1
-	hero_top_style.border_width_top = 1
-	hero_top_style.border_width_right = 1
-	hero_top_style.border_width_bottom = 1
-	hero_top_style.border_color = Color(0.3, 0.32, 0.42)
-	hero_top_style.content_margin_left = 8
-	hero_top_style.content_margin_right = 8
-	hero_top_style.content_margin_top = 8
-	hero_top_style.content_margin_bottom = 8
-	hero_top.add_theme_stylebox_override("panel", hero_top_style)
-	hero_col.add_child(hero_top)
+	var top_row_center := CenterContainer.new()
+	top_row_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(top_row_center)
 
-	var hero_top_v := VBoxContainer.new()
-	hero_top_v.add_theme_constant_override("separation", 6)
-	hero_top.add_child(hero_top_v)
-	var top_title := Label.new()
-	top_title.text = "출격 영웅"
-	top_title.add_theme_font_size_override("font_size", 14)
-	hero_top_v.add_child(top_title)
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 12)
+	top_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	top_row_center.add_child(top_row)
 
-	var slot_grid := GridContainer.new()
-	slot_grid.columns = 2
-	slot_grid.add_theme_constant_override("h_separation", 6)
-	slot_grid.add_theme_constant_override("v_separation", 6)
-	hero_top_v.add_child(slot_grid)
-	sortie_party_slots.clear()
-	for i in range(4):
-		var slot_btn := Button.new()
-		slot_btn.custom_minimum_size = Vector2(126, 50)
-		slot_btn.focus_mode = Control.FOCUS_NONE
-		slot_btn.text = "빈 슬롯"
-		slot_btn.pressed.connect(_on_sortie_party_slot_pressed.bind(i))
-		slot_grid.add_child(slot_btn)
-		sortie_party_slots.append(slot_btn)
+	# 대기 영웅 카드
+	var standby_col := _SortieListDropTarget.new()
+	standby_col.target_kind = "standby"
+	standby_col.den_ref = self
+	standby_col.custom_minimum_size = Vector2(190, 240)
+	standby_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	standby_col.add_theme_stylebox_override("panel", panel_style.duplicate())
+	top_row.add_child(standby_col)
 
-	var hero_bottom := PanelContainer.new()
-	hero_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var hero_bottom_style := hero_top_style.duplicate()
-	hero_bottom.add_theme_stylebox_override("panel", hero_bottom_style)
-	hero_col.add_child(hero_bottom)
+	var standby_v := VBoxContainer.new()
+	standby_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	standby_v.add_theme_constant_override("separation", 6)
+	standby_col.add_child(standby_v)
+	var standby_title := Label.new()
+	standby_title.text = "대기 영웅 카드"
+	standby_title.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
+	standby_v.add_child(standby_title)
+	sortie_standby_grid = GridContainer.new()
+	sortie_standby_grid.columns = 7
+	sortie_standby_grid.add_theme_constant_override("h_separation", 3)
+	sortie_standby_grid.add_theme_constant_override("v_separation", 3)
+	standby_v.add_child(sortie_standby_grid)
 
-	var hero_bottom_v := VBoxContainer.new()
-	hero_bottom_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	hero_bottom_v.add_theme_constant_override("separation", 6)
-	hero_bottom.add_child(hero_bottom_v)
-	var hero_list_title := Label.new()
-	hero_list_title.text = "영웅 목록"
-	hero_list_title.add_theme_font_size_override("font_size", 14)
-	hero_bottom_v.add_child(hero_list_title)
-	var hero_scroll := ScrollContainer.new()
-	hero_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	hero_bottom_v.add_child(hero_scroll)
-	sortie_hero_list = VBoxContainer.new()
-	sortie_hero_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sortie_hero_list.add_theme_constant_override("separation", 4)
-	hero_scroll.add_child(sortie_hero_list)
-
-	# 중앙 컬럼: 정비 (장비 6줄 + 스탯)
+	# 선택 영웅 스탯 및 장비 패널
 	var equip_col := PanelContainer.new()
-	equip_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equip_col.custom_minimum_size = Vector2(340, 240)
 	equip_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var equip_col_style := hero_top_style.duplicate()
-	equip_col.add_theme_stylebox_override("panel", equip_col_style)
-	content.add_child(equip_col)
+	equip_col.add_theme_stylebox_override("panel", panel_style.duplicate())
+	top_row.add_child(equip_col)
 
 	var equip_v := VBoxContainer.new()
 	equip_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	equip_v.add_theme_constant_override("separation", 8)
 	equip_col.add_child(equip_v)
 	var equip_title := Label.new()
-	equip_title.text = "정비"
-	equip_title.add_theme_font_size_override("font_size", 14)
+	equip_title.text = "선택 영웅 스탯 및 장비 패널"
+	equip_title.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 	equip_v.add_child(equip_title)
 
+	var hero_top_row := HBoxContainer.new()
+	hero_top_row.add_theme_constant_override("separation", 10)
+	hero_top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	equip_v.add_child(hero_top_row)
+	var face_box := PanelContainer.new()
+	face_box.custom_minimum_size = SORTIE_FACE_BOX_SIZE
+	face_box.add_theme_stylebox_override("panel", panel_style.duplicate())
+	hero_top_row.add_child(face_box)
+	sortie_face_rect = TextureRect.new()
+	sortie_face_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	sortie_face_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sortie_face_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	face_box.add_child(sortie_face_rect)
+
 	var equip_rows_panel := PanelContainer.new()
+	equip_rows_panel.custom_minimum_size.x = 200
+	equip_rows_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var equip_rows_style := StyleBoxFlat.new()
 	equip_rows_style.bg_color = Color(0.09, 0.09, 0.13, 0.9)
 	equip_rows_style.border_width_left = 1
@@ -604,7 +705,7 @@ func _build_sortie_prep_popup() -> void:
 	equip_rows_style.content_margin_top = 8
 	equip_rows_style.content_margin_bottom = 8
 	equip_rows_panel.add_theme_stylebox_override("panel", equip_rows_style)
-	equip_v.add_child(equip_rows_panel)
+	hero_top_row.add_child(equip_rows_panel)
 
 	var equip_rows_v := VBoxContainer.new()
 	equip_rows_v.add_theme_constant_override("separation", 4)
@@ -615,43 +716,48 @@ func _build_sortie_prep_popup() -> void:
 		line.add_theme_constant_override("separation", 8)
 		equip_rows_v.add_child(line)
 		var name_lbl := Label.new()
-		name_lbl.custom_minimum_size.x = 120
+		name_lbl.custom_minimum_size.x = 24
 		name_lbl.text = str(row.get("label", ""))
-		name_lbl.add_theme_font_size_override("font_size", 12)
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 		line.add_child(name_lbl)
-		var value_lbl := Label.new()
-		value_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		value_lbl.text = "비어 있음"
-		value_lbl.add_theme_font_size_override("font_size", 12)
-		value_lbl.add_theme_color_override("font_color", Color(0.8, 0.83, 0.9))
-		line.add_child(value_lbl)
-		sortie_equipment_rows[str(row.get("slot", ""))] = value_lbl
+		var slot: String = str(row.get("slot", ""))
+		var value_btn := Button.new()
+		value_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		value_btn.text = "비어 있음"
+		value_btn.focus_mode = Control.FOCUS_NONE
+		value_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		value_btn.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
+		value_btn.pressed.connect(_on_sortie_equipment_row_pressed.bind(slot))
+		line.add_child(value_btn)
+		sortie_equipment_rows[slot] = value_btn
 
 	var stat_panel := PanelContainer.new()
+	stat_panel.custom_minimum_size = Vector2(0, 120)
 	stat_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stat_panel.add_theme_stylebox_override("panel", equip_rows_style.duplicate())
 	equip_v.add_child(stat_panel)
 
 	var stat_v := VBoxContainer.new()
-	stat_v.add_theme_constant_override("separation", 4)
+	stat_v.add_theme_constant_override("separation", 2)
 	stat_panel.add_child(stat_v)
 	var stat_title := Label.new()
 	stat_title.text = "스탯"
-	stat_title.add_theme_font_size_override("font_size", 13)
+	stat_title.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 	stat_v.add_child(stat_title)
 	sortie_stat_labels.clear()
 	for key in ["ATK", "DEF", "MATK", "SPD", "HP"]:
 		var stat_lbl := Label.new()
-		stat_lbl.add_theme_font_size_override("font_size", 12)
+		stat_lbl.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 		stat_v.add_child(stat_lbl)
 		sortie_stat_labels[key] = stat_lbl
 
-	# 우측 컬럼: 인벤토리 (5탭 + 목록)
+	# 인벤토리
 	var inv_col := PanelContainer.new()
-	inv_col.custom_minimum_size.x = 280
+	inv_col.custom_minimum_size = Vector2(190, 240)
 	inv_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	inv_col.add_theme_stylebox_override("panel", hero_top_style.duplicate())
-	content.add_child(inv_col)
+	inv_col.add_theme_stylebox_override("panel", panel_style.duplicate())
+	top_row.add_child(inv_col)
 
 	var inv_v := VBoxContainer.new()
 	inv_v.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -659,18 +765,22 @@ func _build_sortie_prep_popup() -> void:
 	inv_col.add_child(inv_v)
 	var inv_title := Label.new()
 	inv_title.text = "인벤토리"
-	inv_title.add_theme_font_size_override("font_size", 14)
+	inv_title.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 	inv_v.add_child(inv_title)
 
 	var tab_row := HBoxContainer.new()
-	tab_row.add_theme_constant_override("separation", 4)
+	tab_row.add_theme_constant_override("separation", 2)
+	tab_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inv_v.add_child(tab_row)
 	sortie_inventory_tab_buttons.clear()
-	for tab_name in SORTIE_INV_TABS:
+	for tab_name in ["무기", "방패", "투구", "갑옷", "악세"]:
 		var tab_btn := Button.new()
-		tab_btn.text = tab_name
-		tab_btn.custom_minimum_size.x = 62
+		tab_btn.text = _sortie_tab_label(tab_name)
+		tab_btn.set_meta("tab_id", tab_name)
+		tab_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab_btn.custom_minimum_size.x = 0
 		tab_btn.focus_mode = Control.FOCUS_NONE
+		tab_btn.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 		tab_btn.pressed.connect(_on_sortie_inventory_tab_pressed.bind(tab_name))
 		tab_row.add_child(tab_btn)
 		sortie_inventory_tab_buttons.append(tab_btn)
@@ -684,28 +794,101 @@ func _build_sortie_prep_popup() -> void:
 	inv_scroll.add_child(sortie_inventory_list)
 
 	sortie_inventory_hint = Label.new()
-	sortie_inventory_hint.text = "아이템을 선택하면 스탯 비교가 표시됩니다."
-	sortie_inventory_hint.add_theme_font_size_override("font_size", 11)
+	sortie_inventory_hint.text = "장비 선택 후 장비 슬롯 클릭: 장착"
+	sortie_inventory_hint.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 	sortie_inventory_hint.add_theme_color_override("font_color", Color(0.68, 0.7, 0.78))
 	inv_v.add_child(sortie_inventory_hint)
 
-	# 하단 버튼
-	var bottom := HBoxContainer.new()
-	bottom.add_theme_constant_override("separation", 8)
-	root.add_child(bottom)
-	var bottom_spacer := Control.new()
-	bottom_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bottom.add_child(bottom_spacer)
+	# 하단 출격 목록 + 출발 버튼
+	var bottom_row := HBoxContainer.new()
+	bottom_row.add_theme_constant_override("separation", 12)
+	bottom_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_child(bottom_row)
+
+	var back_cell := CenterContainer.new()
+	back_cell.custom_minimum_size = Vector2(110, 60)
+	back_cell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bottom_row.add_child(back_cell)
+
 	var back_btn := Button.new()
 	back_btn.text = "돌아가기"
 	back_btn.focus_mode = Control.FOCUS_NONE
+	var back_style := StyleBoxFlat.new()
+	back_style.bg_color = Color(0.45, 0.12, 0.12, 0.95)
+	back_style.border_width_left = 1
+	back_style.border_width_top = 1
+	back_style.border_width_right = 1
+	back_style.border_width_bottom = 1
+	back_style.border_color = Color(0.85, 0.35, 0.35, 0.95)
+	back_style.corner_radius_top_left = 6
+	back_style.corner_radius_top_right = 6
+	back_style.corner_radius_bottom_left = 6
+	back_style.corner_radius_bottom_right = 6
+	back_style.content_margin_left = 8
+	back_style.content_margin_right = 8
+	back_style.content_margin_top = 4
+	back_style.content_margin_bottom = 4
+	back_btn.add_theme_stylebox_override("normal", back_style)
+	back_btn.add_theme_stylebox_override("hover", back_style)
+	back_btn.add_theme_stylebox_override("pressed", back_style)
+	back_btn.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 	back_btn.pressed.connect(_close_sortie_prep)
-	bottom.add_child(back_btn)
+	back_cell.add_child(back_btn)
+
+	var sortie_panel := _SortieListDropTarget.new()
+	sortie_panel.target_kind = "sortie"
+	sortie_panel.den_ref = self
+	sortie_panel.custom_minimum_size = Vector2(480, 140)
+	sortie_panel.add_theme_stylebox_override("panel", panel_style.duplicate())
+	sortie_panel.clip_contents = false
+	sortie_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom_row.add_child(sortie_panel)
+	var sortie_panel_v := VBoxContainer.new()
+	sortie_panel_v.add_theme_constant_override("separation", 6)
+	sortie_panel.add_child(sortie_panel_v)
+	var sortie_panel_title := Label.new()
+	sortie_panel_title.text = "출격 목록"
+	sortie_panel_title.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
+	sortie_panel_v.add_child(sortie_panel_title)
+	sortie_sortie_area = _SortieSortieArea.new()
+	sortie_sortie_area.den_ref = self
+	var sortie_min_w := SORTIE_SORTIE_CARD_SIZE.x * SORTIE_SORTIE_SLOTS + SORTIE_SORTIE_PADDING * maxf(0.0, float(SORTIE_SORTIE_SLOTS - 1))
+	sortie_sortie_area.custom_minimum_size = Vector2(maxf(440.0, sortie_min_w), 90)
+	sortie_sortie_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sortie_sortie_area.mouse_filter = Control.MOUSE_FILTER_STOP
+	sortie_sortie_area.clip_contents = false
+	sortie_sortie_area.resized.connect(_layout_sortie_walkers)
+	sortie_panel_v.add_child(sortie_sortie_area)
+
+	var start_cell := CenterContainer.new()
+	start_cell.custom_minimum_size = Vector2(110, 60)
+	start_cell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bottom_row.add_child(start_cell)
+
 	var start_btn := Button.new()
 	start_btn.text = "출발"
 	start_btn.focus_mode = Control.FOCUS_NONE
+	var start_style := StyleBoxFlat.new()
+	start_style.bg_color = Color(0.12, 0.4, 0.18, 0.95)
+	start_style.border_width_left = 1
+	start_style.border_width_top = 1
+	start_style.border_width_right = 1
+	start_style.border_width_bottom = 1
+	start_style.border_color = Color(0.4, 0.9, 0.55, 0.95)
+	start_style.corner_radius_top_left = 6
+	start_style.corner_radius_top_right = 6
+	start_style.corner_radius_bottom_left = 6
+	start_style.corner_radius_bottom_right = 6
+	start_style.content_margin_left = 8
+	start_style.content_margin_right = 8
+	start_style.content_margin_top = 4
+	start_style.content_margin_bottom = 4
+	start_btn.add_theme_stylebox_override("normal", start_style)
+	start_btn.add_theme_stylebox_override("hover", start_style)
+	start_btn.add_theme_stylebox_override("pressed", start_style)
+	start_btn.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 	start_btn.pressed.connect(_on_sortie_start_pressed)
-	bottom.add_child(start_btn)
+	start_cell.add_child(start_btn)
 
 	_update_sortie_panel_size()
 
@@ -715,23 +898,23 @@ func _update_sortie_panel_size() -> void:
 		return
 	var viewport_size := get_viewport_rect().size
 	var available := viewport_size - Vector2(SORTIE_PANEL_MARGIN * 2.0, SORTIE_PANEL_MARGIN * 2.0)
-	var panel_w := clampf(available.x, SORTIE_PANEL_MIN_SIZE.x, SORTIE_PANEL_PREFERRED_SIZE.x)
-	var panel_h := clampf(available.y, SORTIE_PANEL_MIN_SIZE.y, SORTIE_PANEL_PREFERRED_SIZE.y)
+	var desired := Vector2.ZERO
+	if sortie_root:
+		desired = sortie_root.get_combined_minimum_size() + Vector2(24, 24)
+	var panel_w := minf(available.x, maxf(desired.x, 0.0))
+	var panel_h := minf(available.y, maxf(desired.y, 0.0))
 	sortie_panel.custom_minimum_size = Vector2(panel_w, panel_h)
 
 
 func _open_sortie_prep() -> void:
 	sortie_selected_item_id = ""
-	sortie_inventory_tab = SORTIE_INV_TABS[0]
+	sortie_selected_equip_slot = "main_hand"
+	sortie_inventory_tab = "무기"
 	sortie_pending_hero_id = ""
 	sortie_selected_hero_id = ""
 	var party: Array = PartyManager.get_party() if PartyManager else []
 	for i in range(sortie_party_ids.size()):
 		sortie_party_ids[i] = str(party[i].id) if i < party.size() else ""
-	for i in range(sortie_party_ids.size()):
-		if not sortie_party_ids[i].is_empty():
-			sortie_selected_slot_index = i
-			break
 	for id in sortie_party_ids:
 		if not id.is_empty():
 			sortie_selected_hero_id = id
@@ -769,7 +952,7 @@ func _get_recruited_heroes() -> Array:
 
 
 func _refresh_sortie_ui() -> void:
-	_refresh_sortie_party_slots()
+	_refresh_sortie_sortie_list()
 	_refresh_sortie_hero_list()
 	_refresh_sortie_equipment_rows()
 	_refresh_sortie_stats()
@@ -777,72 +960,352 @@ func _refresh_sortie_ui() -> void:
 	_refresh_sortie_inventory()
 
 
-func _refresh_sortie_party_slots() -> void:
-	for i in range(sortie_party_slots.size()):
-		var btn: Button = sortie_party_slots[i]
-		var hero_id: String = sortie_party_ids[i]
+func _refresh_sortie_sortie_list() -> void:
+	if sortie_sortie_area == null:
+		return
+	for c in sortie_sortie_area.get_children():
+		c.queue_free()
+	for bubble in sortie_sortie_bubbles:
+		if bubble:
+			bubble.queue_free()
+	sortie_sortie_bubbles.clear()
+	sortie_sortie_walkers.clear()
+	for ph in sortie_sortie_placeholders:
+		if ph:
+			ph.queue_free()
+	sortie_sortie_placeholders.clear()
+
+	for i in range(sortie_party_ids.size()):
+		var hero_id := str(sortie_party_ids[i])
 		if hero_id.is_empty():
-			btn.text = "빈 슬롯"
+			var placeholder := PanelContainer.new()
+			placeholder.custom_minimum_size = SORTIE_SORTIE_CARD_SIZE
+			var ph_style := StyleBoxFlat.new()
+			ph_style.bg_color = Color(0.1, 0.1, 0.14, 0.95)
+			ph_style.border_width_left = 1
+			ph_style.border_width_top = 1
+			ph_style.border_width_right = 1
+			ph_style.border_width_bottom = 1
+			ph_style.border_color = Color(0.3, 0.32, 0.4)
+			placeholder.add_theme_stylebox_override("panel", ph_style)
+			placeholder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			placeholder.set_meta("slot_index", i)
+			sortie_sortie_area.add_child(placeholder)
+			sortie_sortie_placeholders.append(placeholder)
+			continue
+		var hero := _find_recruited_hero_by_id(hero_id)
+		if hero == null:
+			continue
+		var btn := _SortieHeroEntryButton.new()
+		btn.den_ref = self
+		btn.hero_id = hero.id
+		btn.source_kind = "sortie"
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
+		btn.custom_minimum_size = SORTIE_SORTIE_CARD_SIZE
+		btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		btn.icon = _get_sortie_field_texture_scaled(hero, SORTIE_SORTIE_ICON_SCALE)
+		btn.text = ""
+		btn.hide_on_drag = true
+		btn.pressed.connect(_on_sortie_roster_clicked.bind(hero.id, btn))
+		if hero.id == sortie_selected_hero_id:
+			var sel_style := StyleBoxFlat.new()
+			sel_style.bg_color = Color(0.18, 0.18, 0.22, 0.95)
+			sel_style.border_width_left = 1
+			sel_style.border_width_top = 1
+			sel_style.border_width_right = 1
+			sel_style.border_width_bottom = 1
+			sel_style.border_color = Color(0.95, 0.8, 0.35, 0.95)
+			btn.add_theme_stylebox_override("normal", sel_style)
+			btn.add_theme_stylebox_override("hover", sel_style)
+		sortie_sortie_area.add_child(btn)
+		btn.set_meta("slot_index", i)
+
+		var bubble := Label.new()
+		bubble.visible = false
+		bubble.text = ""
+		bubble.add_theme_font_size_override("font_size", SORTIE_STANDBY_LABEL_FONT)
+		bubble.add_theme_color_override("font_color", Color(0.1, 0.08, 0.1))
+		var bubble_style := StyleBoxFlat.new()
+		bubble_style.bg_color = Color(0.95, 0.95, 0.98, 0.95)
+		bubble_style.border_width_left = 1
+		bubble_style.border_width_top = 1
+		bubble_style.border_width_right = 1
+		bubble_style.border_width_bottom = 1
+		bubble_style.border_color = Color(0.2, 0.2, 0.25, 0.9)
+		bubble_style.corner_radius_top_left = 6
+		bubble_style.corner_radius_top_right = 6
+		bubble_style.corner_radius_bottom_left = 6
+		bubble_style.corner_radius_bottom_right = 6
+		bubble_style.content_margin_left = 6
+		bubble_style.content_margin_right = 6
+		bubble_style.content_margin_top = 2
+		bubble_style.content_margin_bottom = 2
+		bubble.add_theme_stylebox_override("normal", bubble_style)
+		bubble.z_index = 50
+		bubble.top_level = true
+		sortie_layer.add_child(bubble)
+		sortie_sortie_bubbles.append(bubble)
+
+		sortie_sortie_walkers.append({
+			"hero_id": hero.id,
+			"node": btn,
+			"bubble": bubble,
+			"slot_index": i,
+			"dir": (1 if randi() % 2 == 0 else -1),
+			"speed": randf_range(SORTIE_WALK_MIN_SPEED, SORTIE_WALK_MAX_SPEED),
+			"frame_time": 0.0,
+			"frame": 0,
+			"look_down": 0.0,
+			"idle": 0.0,
+			"bubble_time": 0.0,
+			"bubble_cool": randf_range(0.4, 1.2),
+		})
+	call_deferred("_layout_sortie_walkers")
+
+
+func _layout_sortie_walkers() -> void:
+	if sortie_sortie_area == null:
+		return
+	var area_size := sortie_sortie_area.size
+	if area_size.x <= 0.0 or area_size.y <= 0.0:
+		return
+	var padding := SORTIE_SORTIE_PADDING
+	var count := sortie_party_ids.size()
+	var cell_w := SORTIE_SORTIE_CARD_SIZE.x
+	var total_w := cell_w * count + padding * maxf(0.0, float(count - 1))
+	var start_x := maxf(padding, (area_size.x - total_w) * 0.5)
+	for node in sortie_sortie_area.get_children():
+		if node == null or not node.has_meta("slot_index"):
+			continue
+		var idx := int(node.get_meta("slot_index"))
+		var x: float = start_x + idx * (cell_w + padding)
+		var y: float = (area_size.y - node.size.y) * 0.5
+		node.position = Vector2(x, y)
+	for i in range(sortie_sortie_walkers.size()):
+		var w: Dictionary = sortie_sortie_walkers[i]
+		var idx: int = int(w.get("slot_index", i))
+		var x := start_x + idx * (cell_w + padding)
+		w["min_x"] = x
+		w["max_x"] = x
+		w["base_y"] = (area_size.y - SORTIE_SORTIE_CARD_SIZE.y) * 0.5
+		sortie_sortie_walkers[i] = w
+
+
+func _update_sortie_walkers(delta: float) -> void:
+	if sortie_layer == null or not sortie_layer.visible:
+		return
+	if sortie_sortie_walkers.is_empty():
+		return
+	for i in range(sortie_sortie_walkers.size()):
+		var w: Dictionary = sortie_sortie_walkers[i]
+		var node: Control = w.get("node")
+		if node == null or sortie_sortie_area == null:
+			continue
+		var hero := _find_recruited_hero_by_id(str(w.get("hero_id", "")))
+		if hero == null:
+			continue
+		var base_y: float = float(w.get("base_y", (sortie_sortie_area.size.y - node.size.y) * 0.5))
+		var frame_time: float = float(w.get("frame_time", 0.0))
+		var frame: int = int(w.get("frame", 0))
+		var idle_time: float = float(w.get("idle", 0.0))
+
+		var pos := node.position
+		pos.y = base_y
+		node.position = pos
+
+		var frames: SpriteFrames = SpriteManager.get_hero_sprite_frames(hero.id) if SpriteManager else null
+		var max_frames := frames.get_frame_count("walk_down") if frames and frames.has_animation("walk_down") else 1
+		if idle_time <= 0.0 and randf() < SORTIE_IDLE_CHANCE * delta:
+			idle_time = randf_range(SORTIE_IDLE_MIN_TIME, SORTIE_IDLE_MAX_TIME)
+
+		if idle_time > 0.0:
+			idle_time -= delta
+			frame = (max_frames / 2) if max_frames > 0 else 0
 		else:
-			var hero := _find_recruited_hero_by_id(hero_id)
-			btn.text = hero.hero_name if hero else hero_id
-		var normal := StyleBoxFlat.new()
-		normal.bg_color = Color(0.12, 0.12, 0.18, 0.92) if i == sortie_selected_slot_index else Color(0.1, 0.1, 0.14, 0.9)
-		normal.border_width_left = 1
-		normal.border_width_top = 1
-		normal.border_width_right = 1
-		normal.border_width_bottom = 1
-		normal.border_color = Color(0.95, 0.8, 0.35, 0.95) if i == sortie_selected_slot_index else Color(0.3, 0.32, 0.4, 0.9)
-		btn.add_theme_stylebox_override("normal", normal)
-		btn.add_theme_stylebox_override("hover", normal)
+			frame_time += delta
+			if frame_time >= SORTIE_WALK_FRAME_TIME:
+				frame_time = 0.0
+				frame = (frame + 1) % max_frames
+
+		var tex := _get_sortie_anim_texture_scaled(hero, "walk_down", frame, SORTIE_SORTIE_ICON_SCALE)
+		if tex != null:
+			node.icon = tex
+
+		var bubble: Label = w.get("bubble")
+		if bubble:
+			var bubble_time: float = float(w.get("bubble_time", 0.0))
+			var bubble_cool: float = float(w.get("bubble_cool", 0.0))
+			if bubble_time > 0.0:
+				bubble_time -= delta
+				bubble.visible = true
+			else:
+				bubble.visible = false
+				bubble_cool -= delta
+				if bubble_cool <= 0.0 and randf() < SORTIE_BUBBLE_CHANCE * delta:
+					bubble_time = randf_range(SORTIE_BUBBLE_MIN_TIME, SORTIE_BUBBLE_MAX_TIME)
+					bubble_cool = randf_range(1.0, 2.0)
+					bubble.text = _pick_sortie_bubble_text()
+					bubble.reset_size()
+			if bubble.visible:
+				var global_pos := node.global_position
+				bubble.global_position = global_pos + Vector2(node.size.x * 0.5 - bubble.size.x * 0.5, -18.0)
+			w["bubble_time"] = bubble_time
+			w["bubble_cool"] = bubble_cool
+
+		w["frame_time"] = frame_time
+		w["frame"] = frame
+		w["idle"] = idle_time
+		sortie_sortie_walkers[i] = w
+
+
+func _get_sortie_face_texture(hero: Hero) -> Texture2D:
+	if hero == null:
+		return null
+	var sprite_key: String = hero.portrait if not hero.portrait.is_empty() else hero.field_sprite
+	if sprite_key.is_empty():
+		return null
+	var path := SORTIE_FACE_PATH % sprite_key
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+
+func _get_sortie_field_texture(hero: Hero) -> Texture2D:
+	if hero == null:
+		return null
+	if hero.field_sprite.is_empty() and hero.portrait.is_empty():
+		return null
+	if SpriteManager:
+		var frames: SpriteFrames = SpriteManager.get_hero_sprite_frames(hero.id)
+		if frames and frames.has_animation("walk_down") and frames.get_frame_count("walk_down") > 0:
+			return frames.get_frame_texture("walk_down", 0)
+	return _get_sortie_face_texture(hero)
+
+
+func _get_sortie_field_texture_scaled(hero: Hero, scale: float) -> Texture2D:
+	var base := _get_sortie_field_texture(hero)
+	if base == null or is_equal_approx(scale, 1.0):
+		return base
+	var key := "%s|%s" % [hero.id, str(scale)]
+	if sortie_scaled_icon_cache.has(key):
+		return sortie_scaled_icon_cache[key]
+	var img := base.get_image()
+	if img == null:
+		return base
+	var target := Vector2i(maxi(1, int(round(img.get_width() * scale))), maxi(1, int(round(img.get_height() * scale))))
+	img.resize(target.x, target.y, Image.INTERPOLATE_NEAREST)
+	var tex := ImageTexture.create_from_image(img)
+	sortie_scaled_icon_cache[key] = tex
+	return tex
+
+
+func _get_sortie_anim_texture_scaled(hero: Hero, anim: String, frame_idx: int, scale: float) -> Texture2D:
+	if hero == null:
+		return null
+	var base: Texture2D = null
+	if SpriteManager:
+		var frames: SpriteFrames = SpriteManager.get_hero_sprite_frames(hero.id)
+		if frames and frames.has_animation(anim) and frames.get_frame_count(anim) > 0:
+			var idx := clampi(frame_idx, 0, frames.get_frame_count(anim) - 1)
+			base = frames.get_frame_texture(anim, idx)
+	if base == null:
+		return _get_sortie_field_texture_scaled(hero, scale)
+	if is_equal_approx(scale, 1.0):
+		return base
+	var key := "%s|%s|%d|%s" % [hero.id, anim, frame_idx, str(scale)]
+	if sortie_scaled_icon_cache.has(key):
+		return sortie_scaled_icon_cache[key]
+	var img := base.get_image()
+	if img == null:
+		return base
+	var target := Vector2i(maxi(1, int(round(img.get_width() * scale))), maxi(1, int(round(img.get_height() * scale))))
+	img.resize(target.x, target.y, Image.INTERPOLATE_NEAREST)
+	var tex := ImageTexture.create_from_image(img)
+	sortie_scaled_icon_cache[key] = tex
+	return tex
 
 
 func _refresh_sortie_hero_list() -> void:
-	if sortie_hero_list == null:
+	if sortie_standby_grid == null:
 		return
-	for c in sortie_hero_list.get_children():
+	for c in sortie_standby_grid.get_children():
 		c.queue_free()
 
 	for hero_any in _get_recruited_heroes():
 		var hero: Hero = hero_any as Hero
 		if hero == null:
 			continue
-		var btn := Button.new()
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		var assigned_slot := sortie_party_ids.find(hero.id)
-		var marker := "[%d] " % int(assigned_slot + 1) if assigned_slot >= 0 else ""
-		btn.text = "%s%s  Lv.%d" % [marker, hero.hero_name, int(hero.level)]
+		var card := VBoxContainer.new()
+		card.add_theme_constant_override("separation", 2)
+		sortie_standby_grid.add_child(card)
+
+		var btn := _SortieHeroEntryButton.new()
+		btn.den_ref = self
+		btn.hero_id = hero.id
+		btn.source_kind = "standby"
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.custom_minimum_size = SORTIE_STANDBY_CARD_SIZE
+		btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		btn.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
+		btn.icon = _get_sortie_field_texture_scaled(hero, SORTIE_STANDBY_ICON_SCALE)
+		btn.text = ""
+		btn.hide_on_drag = false
+		if assigned_slot >= 0:
+			btn.modulate = Color(0.6, 0.6, 0.65, 1.0)
+			btn.disabled = true
 		if hero.id == sortie_selected_hero_id:
-			var selected_style := StyleBoxFlat.new()
-			selected_style.bg_color = Color(0.25, 0.22, 0.14, 0.95)
-			selected_style.border_width_left = 1
-			selected_style.border_width_top = 1
-			selected_style.border_width_right = 1
-			selected_style.border_width_bottom = 1
-			selected_style.border_color = Color(0.95, 0.8, 0.35, 0.95)
-			btn.add_theme_stylebox_override("normal", selected_style)
-			btn.add_theme_stylebox_override("hover", selected_style)
-		btn.pressed.connect(_on_sortie_roster_clicked.bind(hero.id))
-		sortie_hero_list.add_child(btn)
+			var sel_style := StyleBoxFlat.new()
+			sel_style.bg_color = Color(0.18, 0.18, 0.22, 0.95)
+			sel_style.border_width_left = 1
+			sel_style.border_width_top = 1
+			sel_style.border_width_right = 1
+			sel_style.border_width_bottom = 1
+			sel_style.border_color = Color(0.95, 0.8, 0.35, 0.95)
+			btn.add_theme_stylebox_override("normal", sel_style)
+			btn.add_theme_stylebox_override("hover", sel_style)
+		btn.pressed.connect(_on_sortie_roster_clicked.bind(hero.id, btn))
+		card.add_child(btn)
+
+		var name_lbl := Label.new()
+		name_lbl.text = "%s Lv.%s" % [hero.hero_name, str(hero.level)]
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_lbl.add_theme_font_size_override("font_size", SORTIE_STANDBY_LABEL_FONT)
+		name_lbl.add_theme_color_override("font_color", Color(0.55, 0.56, 0.62) if assigned_slot >= 0 else Color(0.78, 0.8, 0.9))
+		name_lbl.custom_minimum_size.x = SORTIE_STANDBY_CARD_SIZE.x
+		name_lbl.clip_text = true
+		card.add_child(name_lbl)
 
 
 func _refresh_sortie_equipment_rows() -> void:
 	var hero := _find_recruited_hero_by_id(sortie_selected_hero_id)
 	for row in SORTIE_EQUIP_ROWS:
 		var slot: String = str(row.get("slot", ""))
-		var value_lbl: Label = sortie_equipment_rows.get(slot) as Label
-		if value_lbl == null:
+		var value_btn: Button = sortie_equipment_rows.get(slot) as Button
+		if value_btn == null:
 			continue
+		var row_style := StyleBoxFlat.new()
+		row_style.bg_color = Color(0.2, 0.17, 0.1, 0.95) if slot == sortie_selected_equip_slot else Color(0.1, 0.1, 0.14, 0.95)
+		row_style.border_width_left = 1
+		row_style.border_width_top = 1
+		row_style.border_width_right = 1
+		row_style.border_width_bottom = 1
+		row_style.border_color = Color(0.95, 0.8, 0.35) if slot == sortie_selected_equip_slot else Color(0.3, 0.32, 0.4)
+		value_btn.add_theme_stylebox_override("normal", row_style)
+		value_btn.add_theme_stylebox_override("hover", row_style)
+
 		if hero == null:
-			value_lbl.text = "비어 있음"
+			value_btn.text = "비어 있음"
 			continue
 		var equip_id: String = str(hero.equipment.get(slot, ""))
 		if equip_id.is_empty():
-			value_lbl.text = "비어 있음"
+			value_btn.text = "비어 있음"
 			continue
 		var data: Dictionary = DataManager.get_equipment(equip_id)
-		value_lbl.text = str(data.get("name", equip_id))
+		value_btn.text = str(data.get("name", equip_id))
 
 
 func _refresh_sortie_stats() -> void:
@@ -850,10 +1313,14 @@ func _refresh_sortie_stats() -> void:
 		return
 	var hero := _find_recruited_hero_by_id(sortie_selected_hero_id)
 	if hero == null:
+		if sortie_face_rect:
+			sortie_face_rect.texture = null
 		for key in sortie_stat_labels.keys():
 			var empty_lbl: Label = sortie_stat_labels[key]
 			empty_lbl.text = "%s -" % str(key)
 		return
+	if sortie_face_rect:
+		sortie_face_rect.texture = _get_sortie_face_texture(hero)
 	var base := {
 		"ATK": hero.get_atk(),
 		"DEF": hero.get_def(),
@@ -861,7 +1328,7 @@ func _refresh_sortie_stats() -> void:
 		"SPD": hero.get_spd(),
 		"HP": hero.get_max_hp(),
 	}
-	var delta := _calc_sortie_item_delta(hero, sortie_selected_item_id)
+	var delta := _calc_sortie_item_delta(hero, sortie_selected_item_id, sortie_selected_equip_slot)
 	for key in ["ATK", "DEF", "MATK", "SPD", "HP"]:
 		var lbl: Label = sortie_stat_labels.get(key) as Label
 		if lbl == null:
@@ -881,7 +1348,8 @@ func _refresh_sortie_inventory_tabs() -> void:
 	for btn in sortie_inventory_tab_buttons:
 		if btn == null:
 			continue
-		var selected: bool = (btn.text == sortie_inventory_tab)
+		var tab_id: String = str(btn.get_meta("tab_id", btn.text))
+		var selected: bool = (tab_id == sortie_inventory_tab)
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.2, 0.17, 0.1, 0.95) if selected else Color(0.11, 0.11, 0.15, 0.95)
 		style.border_width_left = 1
@@ -906,7 +1374,7 @@ func _refresh_sortie_inventory() -> void:
 	if equips.is_empty():
 		var empty_lbl := Label.new()
 		empty_lbl.text = "표시할 장비 없음"
-		empty_lbl.add_theme_font_size_override("font_size", 12)
+		empty_lbl.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 		empty_lbl.add_theme_color_override("font_color", Color(0.62, 0.64, 0.72))
 		sortie_inventory_list.add_child(empty_lbl)
 		if sortie_inventory_hint:
@@ -919,6 +1387,7 @@ func _refresh_sortie_inventory() -> void:
 		var btn := Button.new()
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_font_size_override("font_size", SORTIE_FONT_SIZE)
 		btn.text = "%s x%d" % [str(data.get("name", item_id)), int(e.get("quantity", 0))]
 		if item_id == sortie_selected_item_id:
 			var selected_style := StyleBoxFlat.new()
@@ -935,39 +1404,145 @@ func _refresh_sortie_inventory() -> void:
 	if sortie_inventory_hint:
 		var selected_data := DataManager.get_equipment(sortie_selected_item_id) if not sortie_selected_item_id.is_empty() else {}
 		if selected_data.is_empty():
-			sortie_inventory_hint.text = "아이템을 선택하면 스탯 비교가 표시됩니다."
+			sortie_inventory_hint.text = "장비 선택 후 장비 슬롯 클릭: 장착"
 		else:
 			sortie_inventory_hint.text = "선택: %s" % str(selected_data.get("name", sortie_selected_item_id))
 
 
-func _on_sortie_roster_clicked(hero_id: String) -> void:
-	sortie_selected_hero_id = hero_id
-	sortie_pending_hero_id = hero_id
-	if sortie_party_ids.find(hero_id) < 0:
-		sortie_party_ids[sortie_selected_slot_index] = hero_id
-		for i in range(sortie_party_ids.size()):
-			if i != sortie_selected_slot_index and sortie_party_ids[i] == hero_id:
-				sortie_party_ids[i] = ""
+func _on_sortie_roster_clicked(hero_id: String, btn: _SortieHeroEntryButton = null) -> void:
+	if btn != null and btn.was_dragging:
+		btn.was_dragging = false
+		return
+	var was_selected := (hero_id == sortie_selected_hero_id)
+	var is_in_sortie := sortie_party_ids.has(hero_id)
+	if was_selected:
+		if is_in_sortie:
+			_move_hero_to_standby(hero_id)
+		else:
+			_move_hero_to_sortie(hero_id)
+	else:
+		sortie_selected_hero_id = hero_id
 	_refresh_sortie_ui()
 
 
-func _on_sortie_party_slot_pressed(slot_index: int) -> void:
-	if slot_index < 0 or slot_index >= sortie_party_ids.size():
+func _on_sortie_roster_right_clicked(hero_id: String) -> void:
+	if hero_id.is_empty():
 		return
-	sortie_selected_slot_index = slot_index
-	if not sortie_pending_hero_id.is_empty():
-		for i in range(sortie_party_ids.size()):
-			if sortie_party_ids[i] == sortie_pending_hero_id:
-				sortie_party_ids[i] = ""
-		sortie_party_ids[slot_index] = sortie_pending_hero_id
-		sortie_selected_hero_id = sortie_pending_hero_id
-		sortie_pending_hero_id = ""
+	var is_in_sortie := sortie_party_ids.has(hero_id)
+	if is_in_sortie:
+		_move_hero_to_standby(hero_id)
 	else:
-		var id: String = sortie_party_ids[slot_index]
-		if id == sortie_selected_hero_id:
-			sortie_party_ids[slot_index] = ""
-		else:
-			sortie_selected_hero_id = id
+		_move_hero_to_sortie(hero_id)
+	sortie_selected_hero_id = hero_id
+	_refresh_sortie_ui()
+
+
+func _build_sortie_hero_drag_data(hero_id: String, source_kind: String) -> Dictionary:
+	if hero_id.is_empty():
+		return {}
+	var hero := _find_recruited_hero_by_id(hero_id)
+	var label := hero.hero_name if hero else hero_id
+	return {
+		"type": "hero_drag",
+		"hero_id": hero_id,
+		"source": source_kind,
+		"label": label,
+	}
+
+
+func _on_sortie_area_drop(pos: Vector2, data: Dictionary) -> void:
+	var hero_id: String = str(data.get("hero_id", ""))
+	if hero_id.is_empty():
+		return
+	var source: String = str(data.get("source", ""))
+	if source == "sortie":
+		_reorder_sortie_by_drop(hero_id, pos.x)
+	else:
+		_reorder_sortie_by_drop(hero_id, pos.x)
+	_refresh_sortie_ui()
+
+
+func _on_sortie_area_drop_from_child(data: Dictionary) -> void:
+	if sortie_sortie_area == null:
+		return
+	var local_pos: Vector2 = get_viewport().get_mouse_position() - sortie_sortie_area.get_global_position()
+	_on_sortie_area_drop(local_pos, data)
+
+
+func _reorder_sortie_by_drop(hero_id: String, drop_x: float) -> void:
+	var area_w := sortie_sortie_area.size.x if sortie_sortie_area else 0.0
+	var count := sortie_party_ids.size()
+	var cell_w := SORTIE_SORTIE_CARD_SIZE.x
+	var total_w := cell_w * count + SORTIE_SORTIE_PADDING * maxf(0.0, float(count - 1))
+	var start_x := maxf(SORTIE_SORTIE_PADDING, (area_w - total_w) * 0.5)
+	var step := cell_w + SORTIE_SORTIE_PADDING
+	var target := int(floor((drop_x - start_x) / step))
+	target = clampi(target, 0, count - 1)
+
+	var from := sortie_party_ids.find(hero_id)
+	if from < 0:
+		# insert from standby
+		var shifted := sortie_party_ids.duplicate()
+		shifted.insert(target, hero_id)
+		shifted.resize(count)
+		for i in range(count):
+			sortie_party_ids[i] = str(shifted[i])
+		return
+
+	if from == target:
+		return
+	if target < from:
+		for i in range(from, target, -1):
+			sortie_party_ids[i] = sortie_party_ids[i - 1]
+		sortie_party_ids[target] = hero_id
+	else:
+		for i in range(from, target):
+			sortie_party_ids[i] = sortie_party_ids[i + 1]
+		sortie_party_ids[target] = hero_id
+
+
+func _on_sortie_hero_dropped_to_sortie(data: Dictionary) -> void:
+	var hero_id: String = str(data.get("hero_id", ""))
+	if hero_id.is_empty():
+		return
+	_move_hero_to_sortie(hero_id)
+	_refresh_sortie_ui()
+
+
+func _on_sortie_hero_dropped_to_standby(data: Dictionary) -> void:
+	var hero_id: String = str(data.get("hero_id", ""))
+	if hero_id.is_empty():
+		return
+	_move_hero_to_standby(hero_id)
+	_refresh_sortie_ui()
+
+
+func _move_hero_to_sortie(hero_id: String) -> void:
+	if hero_id.is_empty():
+		return
+	if sortie_party_ids.has(hero_id):
+		sortie_selected_hero_id = hero_id
+		return
+	var open_index := sortie_party_ids.find("")
+	if open_index < 0:
+		return
+	sortie_party_ids[open_index] = hero_id
+	sortie_selected_hero_id = hero_id
+
+
+func _move_hero_to_standby(hero_id: String) -> void:
+	if hero_id.is_empty():
+		return
+	for i in range(sortie_party_ids.size()):
+		if sortie_party_ids[i] == hero_id:
+			sortie_party_ids[i] = ""
+
+
+func _on_sortie_hero_double_clicked(hero_id: String, source_kind: String) -> void:
+	if source_kind == "standby":
+		_move_hero_to_sortie(hero_id)
+	else:
+		_move_hero_to_standby(hero_id)
 	_refresh_sortie_ui()
 
 
@@ -983,6 +1558,23 @@ func _on_sortie_inventory_item_pressed(item_id: String) -> void:
 	sortie_selected_item_id = item_id
 	_refresh_sortie_inventory()
 	_refresh_sortie_stats()
+
+
+func _on_sortie_equipment_row_pressed(slot: String) -> void:
+	sortie_selected_equip_slot = slot
+	var hero := _find_recruited_hero_by_id(sortie_selected_hero_id)
+	if hero == null:
+		_refresh_sortie_ui()
+		return
+
+	if not sortie_selected_item_id.is_empty() and _can_sortie_item_fit_slot(hero, sortie_selected_item_id, slot):
+		if InventoryManager and InventoryManager.equip_item(hero, sortie_selected_item_id, slot):
+			sortie_selected_item_id = ""
+	else:
+		var equipped_id: String = str(hero.equipment.get(slot, ""))
+		if not equipped_id.is_empty() and InventoryManager:
+			InventoryManager.unequip_item(hero, slot)
+	_refresh_sortie_ui()
 
 
 func _find_recruited_hero_by_id(hero_id: String) -> Hero:
@@ -1010,8 +1602,57 @@ func _sortie_item_group(raw_slot: String) -> String:
 			return "악세"
 
 
-func _resolve_sortie_target_slot(hero: Hero, data: Dictionary) -> String:
+func _sortie_tab_label(tab_name: String) -> String:
+	match tab_name:
+		"무기":
+			return "⚔"
+		"방패":
+			return "🛡"
+		"투구":
+			return "🪖"
+		"갑옷":
+			return "👕"
+		"악세":
+			return "💎"
+	return tab_name
+
+
+func _pick_sortie_bubble_text() -> String:
+	var options := [
+		"준비됐어.",
+		"출격 준비 완료.",
+		"잠깐, 장비 체크.",
+		"오늘 날씨 괜찮네.",
+		"음, 몸이 조금 굳었네.",
+		"서둘러야 하나?",
+		"물 좀 마실까.",
+		"좋아, 가자!",
+		"잠깐 쉬었다 가자.",
+		"정비는 끝났어.",
+		"오케이, 문제 없어.",
+		"대기 중이야.",
+		"배고프네.",
+		"이거 맞지?",
+		"조심해서 가자.",
+		"나부터?",
+		"한숨 돌리자.",
+		"좋은 예감이야.",
+		"응? 뭐라고?",
+		"알겠어.",
+	]
+	return options[randi() % options.size()]
+
+
+func _resolve_sortie_target_slot(hero: Hero, data: Dictionary, preferred_slot: String = "") -> String:
 	var slot := Hero.normalize_equipment_slot(str(data.get("slot", "")))
+	var preferred := Hero.normalize_equipment_slot(preferred_slot)
+	if preferred in ["acc1", "acc2"]:
+		if slot == "acc":
+			return preferred
+	if slot in ["main_hand", "off_hand", "head", "body"] and preferred == slot:
+		return preferred
+	if slot == "main_hand" and preferred == "off_hand" and hero.can_dual_wield() and not hero.is_off_hand_disabled():
+		return "off_hand"
 	if slot == "acc":
 		var left: String = str(hero.equipment.get("acc1", ""))
 		var right: String = str(hero.equipment.get("acc2", ""))
@@ -1025,14 +1666,22 @@ func _resolve_sortie_target_slot(hero: Hero, data: Dictionary) -> String:
 	return slot
 
 
-func _calc_sortie_item_delta(hero: Hero, item_id: String) -> Dictionary:
+func _can_sortie_item_fit_slot(hero: Hero, item_id: String, target_slot: String) -> bool:
+	var data: Dictionary = DataManager.get_equipment(item_id)
+	if data.is_empty():
+		return false
+	var resolved := _resolve_sortie_target_slot(hero, data, target_slot)
+	return not resolved.is_empty() and resolved == target_slot
+
+
+func _calc_sortie_item_delta(hero: Hero, item_id: String, preferred_slot: String = "") -> Dictionary:
 	var result := {"ATK": 0, "DEF": 0, "MATK": 0, "SPD": 0, "HP": 0}
 	if hero == null or item_id.is_empty():
 		return result
 	var data: Dictionary = DataManager.get_equipment(item_id)
 	if data.is_empty():
 		return result
-	var target_slot: String = _resolve_sortie_target_slot(hero, data)
+	var target_slot: String = _resolve_sortie_target_slot(hero, data, preferred_slot)
 	if target_slot.is_empty():
 		return result
 	var current_id: String = str(hero.equipment.get(target_slot, ""))
