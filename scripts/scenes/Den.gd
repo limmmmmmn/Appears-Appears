@@ -123,12 +123,22 @@ class _SortieHeroEntryButton extends Button:
 		if str(data.get("hero_id", "")).is_empty():
 			return null
 		was_dragging = true
-		var preview := self.duplicate(0)
-		preview.size = size
-		preview.custom_minimum_size = custom_minimum_size
-		preview.position = -_pos
+		var target_size := size
+		if target_size.x <= 0.0 or target_size.y <= 0.0:
+			target_size = custom_minimum_size
+		if target_size.x <= 0.0 or target_size.y <= 0.0:
+			target_size = SORTIE_SORTIE_CARD_SIZE if source_kind == "sortie" else SORTIE_STANDBY_CARD_SIZE
+		var preview := Control.new()
+		preview.custom_minimum_size = target_size
+		preview.size = target_size
 		preview.clip_contents = false
-		preview.visible = true
+		var card := self.duplicate(0)
+		card.visible = true
+		card.size = target_size
+		card.custom_minimum_size = target_size
+		# Cursor hotspot is preview top-left; shift card so cursor sits at card center.
+		card.position = -target_size * 0.5
+		preview.add_child(card)
 		if hide_on_drag:
 			visible = false
 		set_drag_preview(preview)
@@ -1481,12 +1491,17 @@ func _reorder_sortie_by_drop(hero_id: String, drop_x: float) -> void:
 
 	var from := sortie_party_ids.find(hero_id)
 	if from < 0:
-		# insert from standby
-		var shifted := sortie_party_ids.duplicate()
-		shifted.insert(target, hero_id)
-		shifted.resize(count)
-		for i in range(count):
-			sortie_party_ids[i] = str(shifted[i])
+		# insert from standby into exact slot (mouse-based), shift until nearest empty slot
+		var empty_idx := -1
+		for i in range(count - 1, target - 1, -1):
+			if str(sortie_party_ids[i]).is_empty():
+				empty_idx = i
+				break
+		if empty_idx == -1:
+			empty_idx = count - 1
+		for i in range(empty_idx, target, -1):
+			sortie_party_ids[i] = sortie_party_ids[i - 1]
+		sortie_party_ids[target] = hero_id
 		return
 
 	if from == target:
