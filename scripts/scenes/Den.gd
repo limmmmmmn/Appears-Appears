@@ -105,6 +105,7 @@ var sortie_scaled_icon_cache: Dictionary = {}
 var sortie_sortie_walkers: Array[Dictionary] = []
 var sortie_sortie_bubbles: Array[Label] = []
 var sortie_sortie_placeholders: Array[Control] = []
+var sortie_drag_active_hero_id: String = ""
 
 
 class _SortieHeroEntryButton extends Button:
@@ -122,6 +123,8 @@ class _SortieHeroEntryButton extends Button:
 			return null
 		if str(data.get("hero_id", "")).is_empty():
 			return null
+		if den_ref and den_ref.has_method("_on_sortie_drag_started"):
+			den_ref.call("_on_sortie_drag_started", hero_id)
 		was_dragging = true
 		var target_size := size
 		if target_size.x <= 0.0 or target_size.y <= 0.0:
@@ -145,6 +148,8 @@ class _SortieHeroEntryButton extends Button:
 		return data
 
 	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		if source_kind == "sortie" and den_ref and den_ref.has_method("_on_sortie_area_drag_motion_from_child"):
+			den_ref.call("_on_sortie_area_drag_motion_from_child", data)
 		return data is Dictionary and data.get("type", "") == "hero_drag"
 
 	func _drop_data(_pos: Vector2, data: Variant) -> void:
@@ -161,6 +166,8 @@ class _SortieHeroEntryButton extends Button:
 		if what == NOTIFICATION_DRAG_END:
 			was_dragging = false
 			visible = true
+			if den_ref and den_ref.has_method("_on_sortie_drag_ended"):
+				den_ref.call("_on_sortie_drag_ended", hero_id)
 
 
 class _SortieListDropTarget extends PanelContainer:
@@ -183,6 +190,8 @@ class _SortieSortieArea extends Control:
 	var den_ref: Node = null
 
 	func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+		if den_ref and den_ref.has_method("_on_sortie_area_drag_motion"):
+			den_ref.call("_on_sortie_area_drag_motion", _pos, data)
 		return data is Dictionary and data.get("type", "") == "hero_drag"
 
 	func _drop_data(pos: Vector2, data: Variant) -> void:
@@ -1145,6 +1154,11 @@ func _update_sortie_walkers(delta: float) -> void:
 
 		var bubble: Label = w.get("bubble")
 		if bubble:
+			if hero.id == sortie_drag_active_hero_id:
+				bubble.visible = false
+				w["bubble_time"] = 0.0
+				sortie_sortie_walkers[i] = w
+				continue
 			var bubble_time: float = float(w.get("bubble_time", 0.0))
 			var bubble_cool: float = float(w.get("bubble_cool", 0.0))
 			if bubble_time > 0.0:
@@ -1168,6 +1182,15 @@ func _update_sortie_walkers(delta: float) -> void:
 		w["frame"] = frame
 		w["idle"] = idle_time
 		sortie_sortie_walkers[i] = w
+
+
+func _on_sortie_drag_started(hero_id: String) -> void:
+	sortie_drag_active_hero_id = hero_id
+
+
+func _on_sortie_drag_ended(hero_id: String) -> void:
+	if sortie_drag_active_hero_id == hero_id:
+		sortie_drag_active_hero_id = ""
 
 
 func _get_sortie_face_texture(hero: Hero) -> Texture2D:
@@ -1465,10 +1488,11 @@ func _on_sortie_area_drop(pos: Vector2, data: Dictionary) -> void:
 	if hero_id.is_empty():
 		return
 	var source: String = str(data.get("source", ""))
+	var target := _sortie_target_index_from_x(pos.x)
 	if source == "sortie":
-		_reorder_sortie_by_drop(hero_id, pos.x)
+		_reorder_sortie_by_target(hero_id, target)
 	else:
-		_reorder_sortie_by_drop(hero_id, pos.x)
+		_reorder_sortie_by_target(hero_id, target)
 	_refresh_sortie_ui()
 
 
@@ -1479,7 +1503,25 @@ func _on_sortie_area_drop_from_child(data: Dictionary) -> void:
 	_on_sortie_area_drop(local_pos, data)
 
 
-func _reorder_sortie_by_drop(hero_id: String, drop_x: float) -> void:
+func _on_sortie_area_drag_motion(pos: Vector2, data: Dictionary) -> void:
+	var hero_id: String = str(data.get("hero_id", ""))
+	if hero_id.is_empty():
+		return
+	if str(data.get("source", "")) != "sortie":
+		return
+	var target := _sortie_target_index_from_x(pos.x)
+	if _reorder_sortie_by_target(hero_id, target):
+		_sync_sortie_visual_slot_indices()
+
+
+func _on_sortie_area_drag_motion_from_child(data: Dictionary) -> void:
+	if sortie_sortie_area == null:
+		return
+	var local_pos: Vector2 = get_viewport().get_mouse_position() - sortie_sortie_area.get_global_position()
+	_on_sortie_area_drag_motion(local_pos, data)
+
+
+func _sortie_target_index_from_x(drop_x: float) -> int:
 	var area_w := sortie_sortie_area.size.x if sortie_sortie_area else 0.0
 	var count := sortie_party_ids.size()
 	var cell_w := SORTIE_SORTIE_CARD_SIZE.x
@@ -1487,8 +1529,11 @@ func _reorder_sortie_by_drop(hero_id: String, drop_x: float) -> void:
 	var start_x := maxf(SORTIE_SORTIE_PADDING, (area_w - total_w) * 0.5)
 	var step := cell_w + SORTIE_SORTIE_PADDING
 	var target := int(floor((drop_x - start_x) / step))
-	target = clampi(target, 0, count - 1)
+	return clampi(target, 0, count - 1)
 
+
+func _reorder_sortie_by_target(hero_id: String, target: int) -> bool:
+	var count := sortie_party_ids.size()
 	var from := sortie_party_ids.find(hero_id)
 	if from < 0:
 		# insert from standby into exact slot (mouse-based), shift until nearest empty slot
@@ -1502,10 +1547,10 @@ func _reorder_sortie_by_drop(hero_id: String, drop_x: float) -> void:
 		for i in range(empty_idx, target, -1):
 			sortie_party_ids[i] = sortie_party_ids[i - 1]
 		sortie_party_ids[target] = hero_id
-		return
+		return true
 
 	if from == target:
-		return
+		return false
 	if target < from:
 		for i in range(from, target, -1):
 			sortie_party_ids[i] = sortie_party_ids[i - 1]
@@ -1514,6 +1559,36 @@ func _reorder_sortie_by_drop(hero_id: String, drop_x: float) -> void:
 		for i in range(from, target):
 			sortie_party_ids[i] = sortie_party_ids[i + 1]
 		sortie_party_ids[target] = hero_id
+	return true
+
+
+func _sync_sortie_visual_slot_indices() -> void:
+	var empty_slots: Array[int] = []
+	for i in range(sortie_party_ids.size()):
+		if str(sortie_party_ids[i]).is_empty():
+			empty_slots.append(i)
+
+	for i in range(sortie_sortie_walkers.size()):
+		var w: Dictionary = sortie_sortie_walkers[i]
+		var hero_id: String = str(w.get("hero_id", ""))
+		var node: Control = w.get("node")
+		var idx := sortie_party_ids.find(hero_id)
+		if node and idx >= 0:
+			node.set_meta("slot_index", idx)
+			w["slot_index"] = idx
+		sortie_sortie_walkers[i] = w
+
+	for i in range(sortie_sortie_placeholders.size()):
+		var ph := sortie_sortie_placeholders[i]
+		if ph == null:
+			continue
+		if i < empty_slots.size():
+			ph.visible = true
+			ph.set_meta("slot_index", empty_slots[i])
+		else:
+			ph.visible = false
+
+	_layout_sortie_walkers()
 
 
 func _on_sortie_hero_dropped_to_sortie(data: Dictionary) -> void:
