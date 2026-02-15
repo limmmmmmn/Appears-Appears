@@ -87,6 +87,7 @@ var equipped_rune_id: String = ""
 
 # 행동 타이머 (내부 ATB, UI 비노출)
 var action_timer: float = 0.0
+var skill_action_timer: float = 0.0
 
 
 static func create_from_id(hero_id: String) -> Hero:
@@ -274,8 +275,12 @@ func get_atk() -> int:
 
 
 func get_defense() -> int:
-	# 수비력은 장비 전용
-	return _get_equipment_stat("def")
+	# DEF = base_def + growth_def*(level-1) + seed_bonus_def + equipment_def
+	var growth: Dictionary = DataManager.get_class_growth(class_id)
+	var growth_def: int = int(growth.get("def", 0))
+	var level_bonus: int = growth_def * maxi(0, level - 1)
+	var seed_bonus_def: int = int(seed_bonus.get("def", 0))
+	return base_def + level_bonus + seed_bonus_def + _get_equipment_stat("def")
 
 
 func get_p_def() -> int:
@@ -283,12 +288,15 @@ func get_p_def() -> int:
 
 
 func get_m_def() -> int:
-	return get_defense()
+	# MDEF = base_mdef(0) + INT*0.5 + equipment_mdef
+	var int_stat: int = get_base_stat("wis")
+	var equip_mdef: int = _get_equipment_stat("mdef") + _get_equipment_stat("m_def")
+	return int(round(float(int_stat) * 0.5)) + equip_mdef
 
 
 func get_magic_attack() -> int:
-	# 신규 MAG + 구형 INT 장비 보정 동시 지원
-	return get_base_stat("wis") + _get_equipment_stat("mag") + _get_equipment_stat("int")
+	# INT 기반 + 장비 마법공격 보정(matk/matk_bonus/mag/int)
+	return get_base_stat("wis") + _get_equipment_stat("matk") + _get_equipment_stat("matk_bonus") + _get_equipment_stat("mag") + _get_equipment_stat("int")
 
 
 func get_atb_speed() -> float:
@@ -302,8 +310,9 @@ func get_spd() -> int:
 
 
 func get_crit() -> float:
-	# 전투 코드가 0~100 기준 확률을 사용함
-	return clampf(get_base_stat("agi") * AGI_CRIT_RATIO * 100.0, 0.0, 95.0)
+	# crit_chance = LUK * 0.5 + equipment_crit_chance
+	var equip_crit: float = float(_get_equipment_stat("crit")) + float(_get_equipment_stat("crit_chance"))
+	return clampf(get_base_stat("luk") * 0.5 + equip_crit, 0.0, 95.0)
 
 
 func get_hit_rate() -> float:
@@ -497,11 +506,29 @@ func revive(hp_percent: float = 0.3) -> void:
 
 # === 행동 타이머 ===
 func is_action_ready() -> bool:
-	return action_timer >= ACTION_INTERVAL
+	return action_timer >= get_action_delay()
 
 
 func reset_action_timer() -> void:
 	action_timer = 0.0
+
+
+func is_skill_action_ready() -> bool:
+	return skill_action_timer >= get_skill_action_delay()
+
+
+func reset_skill_action_timer() -> void:
+	skill_action_timer = 0.0
+
+
+func get_action_delay() -> float:
+	# 기본공격 기준 액션 딜레이: 2.0 - DEX*0.05, 최소 0.5
+	return maxf(0.5, 2.0 - get_dex() * 0.05)
+
+
+func get_skill_action_delay() -> float:
+	# 액티브 스킬 ATB는 기본공격보다 느리게 충전
+	return maxf(1.0, 3.8 - get_dex() * 0.03)
 
 
 func apply_seed_bonus(stat: String, value: int) -> void:
@@ -635,6 +662,9 @@ func get_usable_skills() -> Array:
 		# 토글이 OFF면 스킵
 		if not is_skill_enabled(skill_id):
 			continue
+		# 스킬 전용 ATB가 덜 찼으면 스킵
+		if not is_skill_action_ready():
+			continue
 		# 쿨타임 체크
 		if CooldownManager.is_skill_ready(id, skill_id):
 			result.append(skill_id)
@@ -642,8 +672,10 @@ func get_usable_skills() -> Array:
 
 
 func can_use_skill(skill_id: String) -> bool:
-	## 해당 스킬을 사용할 수 있는지 확인 (쿨타임 체크)
-	return CooldownManager.is_skill_ready(id, skill_id)
+	## 해당 스킬을 사용할 수 있는지 확인 (공격/스킬 ATB + 쿨타임)
+	if skill_id == "basic_attack":
+		return is_action_ready()
+	return is_skill_action_ready() and CooldownManager.is_skill_ready(id, skill_id)
 #endregion
 
 

@@ -7,6 +7,8 @@ const FACE_SIZE := 48
 const BAR_GAP := 2
 
 const HP_BAR_HEIGHT := 9
+const SKILL_ATB_BAR_HEIGHT := 3
+const SKILL_ATB_BAR_SPACING := 1
 const EXP_BAR_HEIGHT := 4
 const BAR_SPACING := 2
 
@@ -61,6 +63,10 @@ var hp_bar_bg: ColorRect
 var hp_ghost: ColorRect
 var hp_bar: ColorRect
 var hp_tick_overlay: Control
+var skill_bars_container: Control
+var skill_bar_bgs: Array[ColorRect] = []
+var skill_bar_fills: Array[ColorRect] = []
+var skill_bar_skill_ids: Array[String] = []
 var exp_bar_bg: ColorRect
 var exp_bar: ColorRect
 var level_label: Label
@@ -140,10 +146,7 @@ func _build_ui() -> void:
 	bars_container.mouse_filter = MOUSE_FILTER_IGNORE
 	content.add_child(bars_container)
 
-	var total_bar_height: float = HP_BAR_HEIGHT + BAR_SPACING + EXP_BAR_HEIGHT
-	var start_y: float = floorf((FACE_SIZE - total_bar_height) / 2.0)
-
-	var hp_y: float = start_y
+	var hp_y: float = 0.0
 	hp_bar_bg = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(hp_bar_bg)
 	hp_ghost = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), HP_GHOST_COLOR)
@@ -153,19 +156,26 @@ func _build_ui() -> void:
 	hp_tick_overlay = _create_tick_overlay(Vector2(0, hp_y), HP_BAR_HEIGHT)
 	bars_container.add_child(hp_tick_overlay)
 
+	skill_bars_container = Control.new()
+	skill_bars_container.position = Vector2.ZERO
+	skill_bars_container.size = Vector2(LONG_BAR_MAX_WIDTH, FACE_SIZE)
+	skill_bars_container.mouse_filter = MOUSE_FILTER_IGNORE
+	bars_container.add_child(skill_bars_container)
+
 	level_label = Label.new()
-	level_label.position = Vector2(0, hp_y + HP_BAR_HEIGHT + BAR_SPACING)
 	level_label.text = "Lv.1"
 	level_label.add_theme_font_size_override("font_size", 9)
 	level_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7))
 	level_label.mouse_filter = MOUSE_FILTER_IGNORE
 	bars_container.add_child(level_label)
 
-	var exp_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
+	var exp_y: float = 0.0
 	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(SHORT_BAR_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
 	bars_container.add_child(exp_bar_bg)
 	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
 	bars_container.add_child(exp_bar)
+
+	_layout_bar_elements()
 
 	# 아코디언 장비 패널 비활성화
 
@@ -293,8 +303,10 @@ func update_from_hero(hero: Hero) -> void:
 	_hero_ref = hero
 	hero_id = hero.id
 	_load_face_chip(hero)
+	_rebuild_skill_atb_rows(hero)
 	_recalc_bar_widths(hero.get_max_hp())
 	update_hp(hero.current_hp, hero.get_max_hp())
+	update_skill_atb_bars(hero)
 	update_exp(hero.get_exp_ratio())
 	update_level(hero.level)
 	set_dead(hero.is_dead)
@@ -326,11 +338,58 @@ func _recalc_bar_widths(max_hp: int) -> void:
 	_hp_bar_width = _calc_bar_length(max_hp, hp_reference, LONG_BAR_MAX_WIDTH)
 	if hp_bar_bg:
 		hp_bar_bg.size.x = _hp_bar_width
+	if hp_ghost:
+		hp_ghost.size.x = minf(hp_ghost.size.x, _hp_bar_width)
 	if max_hp != _cached_max_hp:
 		_cached_max_hp = max_hp
 		if hp_tick_overlay and hp_tick_overlay is TickOverlay:
 			(hp_tick_overlay as TickOverlay).setup(max_hp, _hp_bar_width, HP_BAR_HEIGHT)
+	_layout_bar_elements()
 	custom_minimum_size.x = FACE_SIZE + BAR_GAP + _hp_bar_width
+
+
+func _layout_bar_elements() -> void:
+	if bars_container == null:
+		return
+	var skill_count: int = skill_bar_skill_ids.size()
+	var skill_total_height: float = 0.0
+	if skill_count > 0:
+		skill_total_height = skill_count * SKILL_ATB_BAR_HEIGHT + maxi(0, skill_count - 1) * SKILL_ATB_BAR_SPACING
+
+	var total_height: float = HP_BAR_HEIGHT + BAR_SPACING + skill_total_height + BAR_SPACING + EXP_BAR_HEIGHT
+	var start_y: float = maxf(0.0, floorf((FACE_SIZE - total_height) * 0.5))
+
+	var hp_y: float = start_y
+	if hp_bar_bg:
+		hp_bar_bg.position.y = hp_y
+		hp_bar_bg.size.x = _hp_bar_width
+	if hp_ghost:
+		hp_ghost.position.y = hp_y
+	if hp_bar:
+		hp_bar.position.y = hp_y
+	if hp_tick_overlay:
+		hp_tick_overlay.position.y = hp_y
+		hp_tick_overlay.size.x = _hp_bar_width
+		if hp_tick_overlay is TickOverlay:
+			(hp_tick_overlay as TickOverlay).setup(_cached_max_hp, _hp_bar_width, HP_BAR_HEIGHT)
+
+	var skill_start_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
+	for i in range(skill_bar_skill_ids.size()):
+		if i >= skill_bar_bgs.size() or i >= skill_bar_fills.size():
+			continue
+		var y: float = skill_start_y + i * (SKILL_ATB_BAR_HEIGHT + SKILL_ATB_BAR_SPACING)
+		skill_bar_bgs[i].position = Vector2(0.0, y)
+		skill_bar_bgs[i].size = Vector2(_hp_bar_width, SKILL_ATB_BAR_HEIGHT)
+		skill_bar_fills[i].position = Vector2(0.0, y)
+		skill_bar_fills[i].size.y = SKILL_ATB_BAR_HEIGHT
+
+	var exp_y: float = skill_start_y + skill_total_height + BAR_SPACING
+	if exp_bar_bg:
+		exp_bar_bg.position = Vector2(0.0, exp_y)
+	if exp_bar:
+		exp_bar.position = Vector2(0.0, exp_y)
+	if level_label:
+		level_label.position = Vector2(SHORT_BAR_WIDTH + 4.0, exp_y - 3.0)
 
 
 func _calc_bar_length(max_value: int, reference: int, max_width: float) -> float:
@@ -401,6 +460,91 @@ func update_exp(percent: float) -> void:
 func update_level(lv: int) -> void:
 	if level_label:
 		level_label.text = "Lv.%d" % lv
+
+
+func _rebuild_skill_atb_rows(hero: Hero) -> void:
+	if skill_bars_container == null or hero == null:
+		return
+	var skills: Array[String] = []
+	for skill_any in hero.get_available_skills():
+		skills.append(str(skill_any))
+	if skills.is_empty():
+		skills.append("basic_attack")
+
+	if skills == skill_bar_skill_ids:
+		return
+
+	skill_bar_skill_ids = skills
+	for child in skill_bars_container.get_children():
+		child.queue_free()
+	skill_bar_bgs.clear()
+	skill_bar_fills.clear()
+
+	for skill_id in skill_bar_skill_ids:
+		var bg := _make_rect(Vector2.ZERO, Vector2(_hp_bar_width, SKILL_ATB_BAR_HEIGHT), BAR_BG_COLOR)
+		bg.mouse_filter = MOUSE_FILTER_IGNORE
+		bg.tooltip_text = _get_skill_atb_tooltip(skill_id)
+		skill_bars_container.add_child(bg)
+		skill_bar_bgs.append(bg)
+
+		var fill := _make_rect(Vector2.ZERO, Vector2(0.0, SKILL_ATB_BAR_HEIGHT), Color(0.35, 0.65, 1.0))
+		fill.mouse_filter = MOUSE_FILTER_IGNORE
+		fill.tooltip_text = _get_skill_atb_tooltip(skill_id)
+		skill_bars_container.add_child(fill)
+		skill_bar_fills.append(fill)
+
+	_layout_bar_elements()
+
+
+func update_skill_atb_bars(hero: Hero) -> void:
+	if hero == null:
+		return
+	_rebuild_skill_atb_rows(hero)
+	for i in range(skill_bar_skill_ids.size()):
+		if i >= skill_bar_fills.size():
+			continue
+		var skill_id: String = skill_bar_skill_ids[i]
+		var ratio: float = _get_skill_atb_ratio(hero, skill_id)
+		var fill: ColorRect = skill_bar_fills[i]
+		fill.size.x = _hp_bar_width * clampf(ratio, 0.0, 1.0)
+		fill.color = _get_skill_atb_color(hero, skill_id, ratio)
+
+
+func _get_skill_atb_ratio(hero: Hero, skill_id: String) -> float:
+	var action_delay: float = maxf(0.001, hero.get_action_delay())
+	var loop_ratio: float = clampf(hero.action_timer / action_delay, 0.0, 1.0)
+	var has_active_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
+	if skill_id == "basic_attack":
+		return loop_ratio
+
+	var skill_delay: float = maxf(0.001, hero.get_skill_action_delay())
+	var skill_ratio: float = clampf(hero.skill_action_timer / skill_delay, 0.0, 1.0)
+	if CooldownManager == null:
+		return skill_ratio
+	var cd_ratio: float = clampf(1.0 - CooldownManager.get_cooldown_percent(hero.id, skill_id), 0.0, 1.0)
+	if not has_active_battle and cd_ratio >= 0.999:
+		return skill_ratio
+	return minf(skill_ratio, cd_ratio)
+
+
+func _get_skill_atb_color(hero: Hero, skill_id: String, ratio: float) -> Color:
+	if skill_id != "basic_attack" and hero.has_method("is_skill_enabled") and not hero.is_skill_enabled(skill_id):
+		return Color(0.35, 0.35, 0.4, 0.9)
+	if ratio >= 0.999:
+		return Color(0.25, 0.9, 0.35, 0.95)
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	var skill_type: String = str(skill_data.get("type", "physical"))
+	if skill_type == "magic":
+		return Color(0.45, 0.65, 1.0, 0.95)
+	if skill_type == "heal":
+		return Color(0.35, 0.9, 0.75, 0.95)
+	return Color(0.95, 0.65, 0.35, 0.95)
+
+
+func _get_skill_atb_tooltip(skill_id: String) -> String:
+	var data: Dictionary = DataManager.get_skill(skill_id)
+	var skill_name: String = str(data.get("name", skill_id))
+	return "%s ATB" % skill_name
 
 
 func set_dead(is_dead: bool) -> void:

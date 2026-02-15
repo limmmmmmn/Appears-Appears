@@ -5,6 +5,42 @@ signal battle_triggered(battle_enemies: Array)
 signal exit_reached(next_destination: String)
 signal field_cleared
 
+const TEST_FIELD_ID := "field_1_1"
+const TEST_MAP_TILES := Vector2i(60, 34) # 960x544 (tile 16 기준)
+const TEST_TILE_SIZE := 16
+const TEST_CAMERA_MARGIN_TILES := 0
+const TEST_FLOOR_SOURCE_ID := 0
+const TEST_WALL_SOURCE_ID := 2
+const FIELD_TILE_TYPE_MAP := {
+	0: "grass",
+	1: "forest",
+	2: "mountain",
+	3: "water",
+	4: "cave",
+}
+const TEST_PLAYER_SPAWN_RATIO := Vector2(0.18, 0.72)
+const TEST_BOSS_SPAWN_RATIO := Vector2(0.82, 0.28)
+const RECRUIT_TRIGGER_DISTANCE: float = 46.0
+const RECRUIT_MIN_DIST_FROM_PLAYER: float = 170.0
+const RECRUIT_MIN_DIST_FROM_BOSS: float = 130.0
+const TREASURE_CHEST_RATIOS: Array[Vector2] = [
+	Vector2(0.30, 0.30),
+	Vector2(0.60, 0.74),
+	Vector2(0.78, 0.52),
+]
+const TREASURE_LOCKED_CHEST_INDEX: int = 2
+const TREASURE_KEY_ITEM_ID: String = "treasure_key"
+const TREASURE_REWARD_RARITIES: Array[String] = ["magic", "rare", "epic", "legendary"]
+const RECRUIT_EVENT_LINE_INTERVAL: float = 1.55
+const EVENT_WINDOW_SCENE := preload("res://scenes/event/EventWindow.tscn")
+const REWARD_WINDOW_SCENE := preload("res://scenes/ui/RewardWindow.tscn")
+const WINDOW_SHELL_SCRIPT := preload("res://scripts/ui/window/WindowShell.gd")
+const EVENT_WINDOW_MARGIN: float = 20.0
+const EVENT_CENTER_SAFE_SIZE: float = 100.0
+const EVENT_HUD_TOP_HEIGHT: float = 32.0
+const EVENT_HUD_BOTTOM_HEIGHT: float = 60.0
+const EVENT_WINDOW_SIZE_FALLBACK := Vector2(280, 200)
+
 @export var spawn_point: Marker2D
 @export var exit_area: Area2D
 @export var tilemap: TileMapLayer
@@ -27,15 +63,46 @@ var hud_scene: PackedScene
 
 # 분리된 시스템들
 var spawner: EnemySpawner
+var test_field_bounds: Rect2 = Rect2()
+
+# 필드 동료 NPC
+var recruit_npc_root: Node2D = null
+var recruit_npc_label: Label = null
+var recruit_npc_bubble: PanelContainer = null
+var recruit_npc_bubble_base_y: float = -52.0
+var recruit_npc_hero_id: String = ""
+var recruit_dialog_active: bool = false
+var recruit_float_t: float = 0.0
+var recruit_retry_cooldown: float = 0.0
+var recruit_followup_pending: bool = false
+var recruit_followup_active: bool = false
+var recruit_followup_hero_id: String = ""
+var recruit_followup_lines: Array[String] = []
+var recruit_event_active: bool = false
+var recruit_event_layer: CanvasLayer = null
+var recruit_event_window: BattleWindow = null
+var recruit_event_on_complete: Callable = Callable()
+
+# 보물상자
+var field_treasure_chests: Array[Dictionary] = []
+var reward_window_layer: CanvasLayer = null
+var reward_window: RewardWindow = null
+var pending_treasure_chest_index: int = -1
+var treasure_interact_cooldown: float = 0.0
 
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_load_scenes()
 	_find_tilemap()
+	_setup_test_field_layout()
 	_setup_systems()
 	_spawn_party()
+	_apply_camera_limits()
 	_spawn_field_enemies()
+	_spawn_recruit_npc()
+	_spawn_field_treasure_chests()
 	_setup_exit()
 	_connect_signals()
 	
@@ -44,6 +111,13 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	if get_tree().paused:
+		# pause 중에는 필수 후속 처리만 유지
+		_update_recruit_followup_dialog(_delta)
+		return
+
+	treasure_interact_cooldown = maxf(0.0, treasure_interact_cooldown - _delta)
+
 	# 이동 기반 적 스폰 체크
 	if spawner and not FieldManager.is_boss_field():
 		spawner.update_movement_spawn(field_enemies)
@@ -52,6 +126,10 @@ func _process(_delta: float) -> void:
 		for enemy in field_enemies:
 			if not enemy.player_contacted.is_connected(_on_field_enemy_contacted):
 				enemy.player_contacted.connect(_on_field_enemy_contacted)
+
+	_update_recruit_npc(_delta)
+	_update_recruit_followup_dialog(_delta)
+	_poll_treasure_chest_interaction()
 
 
 func _load_scenes() -> void:
@@ -63,6 +141,11 @@ func _load_scenes() -> void:
 
 func _find_tilemap() -> void:
 	if tilemap:
+		return
+
+	var named_tilemap := get_node_or_null("TileMapLayer")
+	if named_tilemap is TileMapLayer:
+		tilemap = named_tilemap as TileMapLayer
 		return
 	
 	# 직접 자식에서 찾기
@@ -83,6 +166,117 @@ func _find_node_recursive(node: Node, type) -> Node:
 		if found:
 			return found
 	return null
+
+
+func _is_test_field() -> bool:
+	return FieldManager != null and FieldManager.current_field_id == TEST_FIELD_ID
+
+
+func _setup_test_field_layout() -> void:
+	if not _is_test_field():
+		return
+
+	var collision_map := get_node_or_null("TileMapLayer") as TileMapLayer
+	var background_map := get_node_or_null("TileMapLayerBg") as TileMapLayer
+
+	if collision_map:
+		_build_test_map(collision_map, true)
+		tilemap = collision_map
+	if background_map:
+		_build_test_map(background_map, false)
+
+	var map_size_px := Vector2(TEST_MAP_TILES.x * TEST_TILE_SIZE, TEST_MAP_TILES.y * TEST_TILE_SIZE)
+	test_field_bounds = Rect2(Vector2.ZERO, map_size_px)
+
+	var bg_rect := get_node_or_null("Background") as ColorRect
+	if bg_rect:
+		bg_rect.offset_right = map_size_px.x
+		bg_rect.offset_bottom = map_size_px.y
+
+	var player_spawn := map_size_px * TEST_PLAYER_SPAWN_RATIO
+	if spawn_point:
+		spawn_point.global_position = player_spawn
+
+	var preview_player := get_node_or_null("Player") as Node2D
+	if preview_player:
+		preview_player.global_position = player_spawn
+
+
+func get_test_field_boss_position() -> Vector2:
+	if not _is_test_field():
+		return Vector2.ZERO
+	var bounds := _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return Vector2.ZERO
+	return bounds.position + bounds.size * TEST_BOSS_SPAWN_RATIO
+
+
+func _build_test_map(layer: TileMapLayer, add_border_wall: bool) -> void:
+	layer.clear()
+	for y in range(TEST_MAP_TILES.y):
+		for x in range(TEST_MAP_TILES.x):
+			var source_id := TEST_FLOOR_SOURCE_ID
+			if add_border_wall and (x == 0 or y == 0 or x == TEST_MAP_TILES.x - 1 or y == TEST_MAP_TILES.y - 1):
+				source_id = TEST_WALL_SOURCE_ID
+			layer.set_cell(Vector2i(x, y), source_id, Vector2i.ZERO)
+
+
+func _apply_camera_limits() -> void:
+	if not party_leader:
+		return
+
+	var camera := _ensure_player_camera()
+	if not camera:
+		return
+
+	var bounds := _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+
+	# 테스트 필드: 카메라는 가장자리보다 안쪽에서 멈추고 플레이어만 끝까지 이동
+	if _is_test_field():
+		camera.position_smoothing_enabled = false
+		var margin_px: float = float(TEST_TILE_SIZE * TEST_CAMERA_MARGIN_TILES)
+		var inner_pos: Vector2 = bounds.position + Vector2(margin_px, margin_px)
+		var inner_size: Vector2 = bounds.size - Vector2(margin_px * 2.0, margin_px * 2.0)
+		if inner_size.x > TEST_TILE_SIZE * 4 and inner_size.y > TEST_TILE_SIZE * 4:
+			bounds = Rect2(inner_pos, inner_size)
+
+	camera.limit_enabled = true
+	camera.limit_left = int(bounds.position.x)
+	camera.limit_top = int(bounds.position.y)
+	camera.limit_right = int(bounds.end.x)
+	camera.limit_bottom = int(bounds.end.y)
+
+
+func _ensure_player_camera() -> Camera2D:
+	if not party_leader:
+		return null
+
+	var camera := party_leader.get_node_or_null("Camera2D") as Camera2D
+	if not camera:
+		camera = Camera2D.new()
+		camera.name = "Camera2D"
+		party_leader.add_child(camera)
+
+	camera.enabled = true
+	camera.make_current()
+	return camera
+
+
+func _get_map_bounds() -> Rect2:
+	if test_field_bounds.size.x > 0.0 and test_field_bounds.size.y > 0.0:
+		return test_field_bounds
+
+	if tilemap:
+		var used_rect: Rect2i = tilemap.get_used_rect()
+		if used_rect.size.x > 0 and used_rect.size.y > 0:
+			var tile_size: Vector2 = Vector2(TEST_TILE_SIZE, TEST_TILE_SIZE)
+			if tilemap.tile_set:
+				tile_size = Vector2(tilemap.tile_set.tile_size)
+			return Rect2(Vector2(used_rect.position) * tile_size, Vector2(used_rect.size) * tile_size)
+
+	return Rect2()
 
 
 func _setup_systems() -> void:
@@ -127,6 +321,8 @@ func _connect_signals() -> void:
 			BattleManager.elite_victory.connect(_on_elite_victory)
 		if not BattleManager.boss_victory.is_connected(_on_boss_victory):
 			BattleManager.boss_victory.connect(_on_boss_victory)
+		if not BattleManager.all_battles_ended.is_connected(_on_all_battles_ended):
+			BattleManager.all_battles_ended.connect(_on_all_battles_ended)
 		# 보스전 관전 시스템
 		if not BattleManager.boss_battle_started.is_connected(_on_boss_battle_started):
 			BattleManager.boss_battle_started.connect(_on_boss_battle_started)
@@ -172,6 +368,12 @@ func _spawn_party() -> void:
 
 
 func _get_start_position() -> Vector2:
+	if _is_test_field():
+		if spawn_point:
+			return spawn_point.global_position
+		var bounds := _get_map_bounds()
+		return bounds.position + bounds.size * TEST_PLAYER_SPAWN_RATIO if bounds.size.x > 0.0 else Vector2(180, 390)
+
 	var saved_pos: Vector2 = SaveManager.get_saved_field_position()
 	if saved_pos != Vector2.ZERO:
 		return saved_pos
@@ -197,6 +399,722 @@ func _spawn_field_enemies() -> void:
 		# 일반 적 시그널 연결
 		for enemy in field_enemies:
 			enemy.player_contacted.connect(_on_field_enemy_contacted)
+
+
+func _spawn_recruit_npc() -> void:
+	if FieldManager.is_boss_field():
+		return
+	if not PartyManager or not DataManager:
+		return
+	if PartyManager.get_party().size() >= 4:
+		return
+
+	var hero_id: String = _pick_random_recruit_hero_id()
+	if hero_id.is_empty():
+		return
+
+	var spawn_pos: Vector2 = _find_recruit_spawn_position()
+	if spawn_pos == Vector2.ZERO:
+		return
+
+	recruit_npc_hero_id = hero_id
+	recruit_npc_root = Node2D.new()
+	recruit_npc_root.name = "RecruitNPC"
+	recruit_npc_root.position = spawn_pos
+	add_child(recruit_npc_root)
+
+	var sprite := AnimatedSprite2D.new()
+	sprite.name = "Sprite"
+	sprite.position = Vector2(0, -12)
+	if SpriteManager:
+		sprite.sprite_frames = SpriteManager.get_hero_sprite_frames(hero_id)
+		sprite.animation = "walk_down"
+		sprite.frame = 1
+		sprite.stop()
+	recruit_npc_root.add_child(sprite)
+
+	recruit_npc_bubble = PanelContainer.new()
+	recruit_npc_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	recruit_npc_bubble.position = Vector2(-44, recruit_npc_bubble_base_y)
+	var bubble_style := StyleBoxFlat.new()
+	bubble_style.bg_color = Color(0.96, 0.96, 1.0, 0.95)
+	bubble_style.border_width_left = 1
+	bubble_style.border_width_top = 1
+	bubble_style.border_width_right = 1
+	bubble_style.border_width_bottom = 1
+	bubble_style.border_color = Color(0.25, 0.28, 0.38, 1.0)
+	bubble_style.corner_radius_top_left = 6
+	bubble_style.corner_radius_top_right = 6
+	bubble_style.corner_radius_bottom_left = 6
+	bubble_style.corner_radius_bottom_right = 6
+	bubble_style.content_margin_left = 8
+	bubble_style.content_margin_right = 8
+	bubble_style.content_margin_top = 4
+	bubble_style.content_margin_bottom = 4
+	recruit_npc_bubble.add_theme_stylebox_override("panel", bubble_style)
+	recruit_npc_root.add_child(recruit_npc_bubble)
+
+	recruit_npc_label = Label.new()
+	recruit_npc_label.text = "도와줘!"
+	recruit_npc_label.add_theme_font_size_override("font_size", 11)
+	recruit_npc_label.add_theme_color_override("font_color", Color(0.08, 0.08, 0.12, 1.0))
+	recruit_npc_bubble.add_child(recruit_npc_label)
+
+
+func _pick_random_recruit_hero_id() -> String:
+	var party_ids: Array[String] = []
+	for hero in PartyManager.get_party():
+		if hero:
+			party_ids.append(hero.id)
+
+	var available: Array[String] = []
+	for hero_id in DataManager.get_all_hero_ids():
+		var hid: String = str(hero_id)
+		if hid not in party_ids:
+			available.append(hid)
+
+	if available.is_empty():
+		return ""
+	available.shuffle()
+	return str(available[0])
+
+
+func _find_recruit_spawn_position() -> Vector2:
+	var bounds: Rect2 = _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return Vector2.ZERO
+
+	var player_pos: Vector2 = party_leader.global_position if party_leader else bounds.get_center()
+	var boss_pos := Vector2.ZERO
+	for enemy in field_enemies:
+		if is_instance_valid(enemy) and enemy.is_boss:
+			boss_pos = enemy.global_position
+			break
+
+	for _i in range(80):
+		var pos := Vector2(
+			randf_range(bounds.position.x + 56.0, bounds.end.x - 56.0),
+			randf_range(bounds.position.y + 56.0, bounds.end.y - 56.0)
+		)
+		if pos.distance_to(player_pos) < RECRUIT_MIN_DIST_FROM_PLAYER:
+			continue
+		if boss_pos != Vector2.ZERO and pos.distance_to(boss_pos) < RECRUIT_MIN_DIST_FROM_BOSS:
+			continue
+		var near_enemy: bool = false
+		for enemy in field_enemies:
+			if is_instance_valid(enemy) and pos.distance_to(enemy.global_position) < 72.0:
+				near_enemy = true
+				break
+		if near_enemy:
+			continue
+		if not _can_place_recruit_npc_at(pos):
+			continue
+		return pos
+
+	return Vector2.ZERO
+
+
+func _can_place_recruit_npc_at(pos: Vector2) -> bool:
+	if not tilemap:
+		return true
+
+	var cell: Vector2i = tilemap.local_to_map(pos)
+	var source_id: int = tilemap.get_cell_source_id(cell)
+	if source_id == -1:
+		return true
+
+	var tile_type: String = str(FIELD_TILE_TYPE_MAP.get(source_id, "grass"))
+	return FieldManager.is_tile_walkable(tile_type)
+
+
+func _update_recruit_npc(delta: float) -> void:
+	if recruit_npc_root == null or not is_instance_valid(recruit_npc_root):
+		return
+
+	recruit_float_t += delta
+	recruit_retry_cooldown = maxf(0.0, recruit_retry_cooldown - delta)
+	if recruit_npc_bubble and is_instance_valid(recruit_npc_bubble):
+		recruit_npc_bubble.position.y = recruit_npc_bubble_base_y + sin(recruit_float_t * 2.6) * 2.0
+
+	if recruit_dialog_active or recruit_event_active:
+		return
+
+	if not party_leader:
+		return
+
+	var distance: float = party_leader.global_position.distance_to(recruit_npc_root.global_position)
+	if distance <= RECRUIT_TRIGGER_DISTANCE and recruit_retry_cooldown <= 0.0:
+		_start_recruit_dialog()
+
+
+func _start_recruit_dialog() -> void:
+	if recruit_dialog_active:
+		return
+	recruit_dialog_active = true
+	var leader_hero_id: String = _get_party_leader_hero_id()
+	var recruit_name: String = recruit_npc_hero_id
+	var recruit_hero_data: Dictionary = DataManager.get_hero(recruit_npc_hero_id) if DataManager else {}
+	if not recruit_hero_data.is_empty():
+		recruit_name = str(recruit_hero_data.get("name", recruit_npc_hero_id))
+	var leader_name: String = "리더"
+	if PartyManager:
+		var leader_hero: Hero = PartyManager.get_hero_by_id(leader_hero_id)
+		if leader_hero != null:
+			leader_name = leader_hero.hero_name
+
+	var lines: Array[Dictionary] = [
+		{"speaker": "right", "name": recruit_name, "text": "도, 도와줘...! 여기 너무 위험해!"},
+		{"speaker": "left", "name": leader_name, "text": "괜찮아. 진정하고 상황부터 말해줘."},
+		{"speaker": "right", "name": recruit_name, "text": "같이 가게 해줘. 나도 싸울 수 있어!"},
+	]
+	if recruit_npc_label and is_instance_valid(recruit_npc_label):
+		recruit_npc_label.text = "..."
+	_close_blocking_ui_for_recruit_followup()
+	_start_recruit_event_dialog(leader_hero_id, recruit_npc_hero_id, lines, Callable(self, "_on_recruit_intro_dialog_finished"))
+
+
+func _on_recruit_intro_dialog_finished() -> void:
+	recruit_dialog_active = false
+	_complete_recruit_dialog()
+
+
+func _complete_recruit_dialog() -> void:
+	if recruit_npc_hero_id.is_empty():
+		return
+	if not PartyManager:
+		return
+
+	var hero_name: String = recruit_npc_hero_id
+	var hero_data: Dictionary = DataManager.get_hero(recruit_npc_hero_id)
+	if not hero_data.is_empty():
+		hero_name = str(hero_data.get("name", recruit_npc_hero_id))
+
+	if PartyManager.add_hero_by_id(recruit_npc_hero_id):
+		var recruited_id: String = recruit_npc_hero_id
+		_on_hero_recruited(recruit_npc_hero_id)
+		_show_field_notice("%s(이)가 동료가 되었다!" % hero_name, 1.6, Color(0.78, 1.0, 0.82))
+		if is_instance_valid(recruit_npc_root):
+			recruit_npc_root.queue_free()
+		recruit_npc_root = null
+		recruit_npc_bubble = null
+		recruit_npc_label = null
+		recruit_npc_hero_id = ""
+		_schedule_recruit_followup_dialog(recruited_id, hero_name)
+	else:
+		if recruit_npc_label and is_instance_valid(recruit_npc_label):
+			recruit_npc_label.text = "파티가 가득 찼어..."
+		_show_field_notice("파티가 가득 차서 동료를 받을 수 없다.", 1.8, Color(1.0, 0.75, 0.75))
+		recruit_retry_cooldown = 2.0
+
+
+func _show_field_notice(message: String, duration: float = 1.5, color: Color = Color.WHITE) -> void:
+	if hud and hud.has_method("_show_notice"):
+		hud.call("_show_notice", message, duration, color)
+
+
+func _schedule_recruit_followup_dialog(_hero_id: String, hero_name: String) -> void:
+	recruit_followup_hero_id = _hero_id
+	recruit_followup_lines = _build_recruit_followup_lines(hero_name)
+	if recruit_followup_lines.is_empty():
+		return
+	recruit_followup_pending = true
+	recruit_followup_active = false
+	_try_start_recruit_followup_dialog()
+
+
+func _build_recruit_followup_lines(hero_name: String) -> Array[String]:
+	var lines: Array[String] = []
+	lines.append("%s: 살았다... 정말 고마워." % hero_name)
+	lines.append("%s: 주변 몬스터 동선은 내가 먼저 확인할게." % hero_name)
+	lines.append("파티: 좋아, 이제 같이 움직이자.")
+	return lines
+
+
+func _try_start_recruit_followup_dialog() -> void:
+	if not recruit_followup_pending:
+		return
+	if recruit_followup_active or recruit_dialog_active or recruit_event_active:
+		return
+	if BattleManager and BattleManager.get_active_battle_count() > 0:
+		return
+	if get_tree().paused:
+		# 장비창/메뉴로 pause된 경우 후속 대화 전에 닫아준다.
+		_close_blocking_ui_for_recruit_followup()
+		if get_tree().paused:
+			return
+
+	recruit_followup_pending = false
+	recruit_followup_active = true
+	var leader_hero_id: String = _get_party_leader_hero_id()
+	var lines: Array[Dictionary] = _build_recruit_followup_event_lines()
+	_start_recruit_event_dialog(
+		leader_hero_id,
+		recruit_followup_hero_id,
+		lines,
+		Callable(self, "_on_recruit_followup_dialog_finished")
+	)
+
+
+func _update_recruit_followup_dialog(_delta: float) -> void:
+	if recruit_followup_pending:
+		_try_start_recruit_followup_dialog()
+
+
+func _on_recruit_followup_dialog_finished() -> void:
+	recruit_followup_active = false
+	recruit_followup_hero_id = ""
+	recruit_followup_lines.clear()
+
+
+func _get_party_leader_hero_id() -> String:
+	if not PartyManager:
+		return ""
+	var party: Array = PartyManager.get_party()
+	if party.is_empty():
+		return ""
+	var leader: Hero = party[0] as Hero
+	if leader == null:
+		return ""
+	return leader.id
+
+
+func _build_recruit_followup_event_lines() -> Array[Dictionary]:
+	var lines: Array[Dictionary] = []
+	var leader_name: String = "리더"
+	var leader_hero_id: String = _get_party_leader_hero_id()
+	if PartyManager:
+		var leader_hero: Hero = PartyManager.get_hero_by_id(leader_hero_id)
+		if leader_hero != null:
+			leader_name = leader_hero.hero_name
+
+	for raw in recruit_followup_lines:
+		var line: String = str(raw)
+		var split_idx: int = line.find(":")
+		if split_idx <= 0:
+			lines.append({
+				"speaker": "left",
+				"name": leader_name,
+				"text": line,
+			})
+			continue
+
+		var speaker_name: String = line.substr(0, split_idx).strip_edges()
+		var content: String = line.substr(split_idx + 1).strip_edges()
+		var speaker_side: String = "left"
+		if recruit_followup_hero_id != "" and speaker_name != "파티":
+			speaker_side = "right"
+		lines.append({
+			"speaker": speaker_side,
+			"name": speaker_name,
+			"text": content,
+		})
+	return lines
+
+
+func _start_recruit_event_dialog(left_hero_id: String, right_hero_id: String, lines: Array[Dictionary], on_complete: Callable) -> void:
+	if lines.is_empty():
+		if on_complete.is_valid():
+			on_complete.call_deferred()
+		return
+
+	_close_recruit_event_dialog()
+	recruit_event_on_complete = on_complete
+	recruit_event_active = true
+	recruit_event_window = EVENT_WINDOW_SCENE.instantiate() as BattleWindow
+	if recruit_event_window == null:
+		recruit_event_active = false
+		if on_complete.is_valid():
+			on_complete.call_deferred()
+		return
+
+	recruit_event_layer = CanvasLayer.new()
+	recruit_event_layer.layer = 180
+	recruit_event_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(recruit_event_layer)
+	recruit_event_layer.add_child(recruit_event_window)
+
+	recruit_event_window.position = _get_event_window_spawn_position()
+	recruit_event_window.event_finished.connect(_on_recruit_event_window_finished, CONNECT_ONE_SHOT)
+	recruit_event_window.setup_event_dialog(
+		"동료 이벤트",
+		left_hero_id,
+		right_hero_id,
+		lines,
+		{"line_interval": RECRUIT_EVENT_LINE_INTERVAL}
+	)
+
+
+func _on_recruit_event_window_finished(_result: Dictionary) -> void:
+	var finished_callback: Callable = recruit_event_on_complete
+	recruit_event_active = false
+	recruit_event_window = null
+	if recruit_event_layer and is_instance_valid(recruit_event_layer):
+		recruit_event_layer.queue_free()
+	recruit_event_layer = null
+	recruit_event_on_complete = Callable()
+	if finished_callback.is_valid():
+		finished_callback.call()
+
+
+func _close_recruit_event_dialog() -> void:
+	if recruit_event_window and is_instance_valid(recruit_event_window):
+		recruit_event_window.close_event_window_immediate()
+	recruit_event_window = null
+	if recruit_event_layer and is_instance_valid(recruit_event_layer):
+		recruit_event_layer.queue_free()
+	recruit_event_layer = null
+	recruit_event_active = false
+	recruit_event_on_complete = Callable()
+
+
+func _get_event_window_spawn_position() -> Vector2:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var window_size: Vector2 = EVENT_WINDOW_SIZE_FALLBACK
+	if recruit_event_window:
+		var cm: Vector2 = recruit_event_window.custom_minimum_size
+		if cm != Vector2.ZERO:
+			window_size = cm
+		elif recruit_event_window.size != Vector2.ZERO:
+			window_size = recruit_event_window.size
+
+	var existing_rects: Array[Rect2] = []
+	if BattleManager:
+		for bid in BattleManager.active_battles:
+			var bd: Dictionary = BattleManager.active_battles[bid]
+			var window_ref: Variant = bd.get("window")
+			if window_ref != null and is_instance_valid(window_ref):
+				var w: Control = window_ref as Control
+				if w != null:
+					existing_rects.append(Rect2(w.position, window_size))
+
+	return WINDOW_SHELL_SCRIPT.calculate_spawn_position(
+		window_size,
+		viewport_size,
+		existing_rects,
+		EVENT_WINDOW_MARGIN,
+		EVENT_HUD_TOP_HEIGHT,
+		EVENT_HUD_BOTTOM_HEIGHT,
+		EVENT_CENTER_SAFE_SIZE
+	)
+
+
+func _close_blocking_ui_for_recruit_followup() -> void:
+	if hud == null:
+		return
+
+	if hud.has_method("close_blocking_ui"):
+		hud.call("close_blocking_ui")
+		return
+
+	# 장비 화면이 열려 있으면 우선 닫는다.
+	var eq_screen: Variant = hud.get("equipment_screen")
+	if eq_screen != null and eq_screen.has_method("close") and bool(eq_screen.get("is_open")):
+		eq_screen.call("close")
+
+	# 일시정지 메뉴가 열려 있으면 닫는다.
+	if hud.has_method("hide_pause_menu"):
+		hud.call("hide_pause_menu")
+
+	# 장착 연출 패널/우측 패널이 남아있으면 정리한다.
+	if hud.has_method("_close_right_panel"):
+		hud.call("_close_right_panel")
+	var equip_notice_panel: Variant = hud.get("equip_notice_panel")
+	if equip_notice_panel != null:
+		equip_notice_panel.set("visible", false)
+	var right_inventory_panel: Variant = hud.get("right_inventory_panel")
+	if right_inventory_panel != null:
+		right_inventory_panel.set("visible", false)
+	var right_desc_panel: Variant = hud.get("right_desc_panel")
+	if right_desc_panel != null:
+		right_desc_panel.set("visible", false)
+	hud.set("equip_notice_playing", false)
+	hud.set("equip_notice_queue", [])
+
+	# 전투가 없는데 pause가 남아 있으면 해제
+	if get_tree().paused and BattleManager and BattleManager.get_active_battle_count() <= 0:
+		if BattleManager.is_battle_paused:
+			BattleManager.set_battle_paused(false)
+		else:
+			get_tree().paused = false
+
+
+#=============================================================================
+# 보물상자
+#=============================================================================
+func _spawn_field_treasure_chests() -> void:
+	field_treasure_chests.clear()
+	if not _is_test_field():
+		return
+	if FieldManager.is_boss_field():
+		return
+
+	var bounds: Rect2 = _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+
+	_ensure_reward_window()
+
+	for i in range(TREASURE_CHEST_RATIOS.size()):
+		var ratio: Vector2 = TREASURE_CHEST_RATIOS[i]
+		var locked: bool = (i == TREASURE_LOCKED_CHEST_INDEX)
+		var pos := bounds.position + bounds.size * ratio
+		_create_treasure_chest(i, pos, locked)
+
+	_show_field_notice("보물상자 3개가 배치되었다. (잠긴 상자 1개)", 1.6, Color(0.98, 0.9, 0.65))
+
+
+func _ensure_reward_window() -> void:
+	if reward_window != null and is_instance_valid(reward_window):
+		return
+
+	if reward_window_layer == null or not is_instance_valid(reward_window_layer):
+		reward_window_layer = CanvasLayer.new()
+		reward_window_layer.layer = 170
+		reward_window_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(reward_window_layer)
+
+	reward_window = REWARD_WINDOW_SCENE.instantiate() as RewardWindow
+	if reward_window == null:
+		return
+	reward_window.name = "RewardWindow"
+	if not reward_window.item_selected.is_connected(_on_treasure_loot_selected):
+		reward_window.item_selected.connect(_on_treasure_loot_selected)
+	if reward_window_layer:
+		reward_window_layer.add_child(reward_window)
+	else:
+		add_child(reward_window)
+
+
+func _create_treasure_chest(chest_index: int, world_pos: Vector2, is_locked: bool) -> void:
+	var root := Node2D.new()
+	root.name = "TreasureChest_%d" % chest_index
+	root.position = world_pos
+	add_child(root)
+
+	var icon := Label.new()
+	icon.name = "Icon"
+	icon.text = "🔒📦" if is_locked else "📦"
+	icon.position = Vector2(-18, -26)
+	icon.add_theme_font_size_override("font_size", 24)
+	icon.add_theme_color_override("font_color", Color(1.0, 0.92, 0.58, 1.0))
+	root.add_child(icon)
+
+	var title := Label.new()
+	title.name = "Title"
+	title.text = "잠긴 상자" if is_locked else "보물상자"
+	title.position = Vector2(-34, -40)
+	title.add_theme_font_size_override("font_size", 11)
+	title.add_theme_color_override("font_color", Color(0.96, 0.96, 1.0, 0.95))
+	root.add_child(title)
+
+	var area := Area2D.new()
+	area.name = "ContactArea"
+	area.monitoring = true
+	area.monitorable = true
+	# PartyMember는 collision_layer=2 이므로 마스크를 맞춰야 body_entered가 동작한다.
+	area.collision_layer = 1
+	area.collision_mask = 2
+	root.add_child(area)
+
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 20.0
+	shape.shape = circle
+	shape.position = Vector2(0, -8)
+	area.add_child(shape)
+
+	if not area.body_entered.is_connected(_on_treasure_chest_body_entered.bind(chest_index)):
+		area.body_entered.connect(_on_treasure_chest_body_entered.bind(chest_index))
+
+	field_treasure_chests.append({
+		"index": chest_index,
+		"root": root,
+		"icon": icon,
+		"title": title,
+		"area": area,
+		"locked": is_locked,
+		"opened": false,
+	})
+
+
+func _on_treasure_chest_body_entered(body: Node2D, chest_index: int) -> void:
+	if body == null or not body.is_in_group("party_leader"):
+		return
+	if chest_index < 0 or chest_index >= field_treasure_chests.size():
+		return
+	if pending_treasure_chest_index >= 0:
+		return
+	if reward_window != null and is_instance_valid(reward_window) and reward_window.visible:
+		return
+
+	var chest: Dictionary = field_treasure_chests[chest_index]
+	if bool(chest.get("opened", false)):
+		return
+
+	if bool(chest.get("locked", false)):
+		if InventoryManager == null or not InventoryManager.has_item(TREASURE_KEY_ITEM_ID, 1):
+			_show_field_notice("잠겨 있다. 보물상자 열쇠가 필요하다.", 1.5, Color(1.0, 0.72, 0.72))
+			return
+		InventoryManager.remove_item(TREASURE_KEY_ITEM_ID, 1)
+		_show_field_notice("열쇠를 사용해 잠긴 상자를 열었다!", 1.4, Color(0.82, 1.0, 0.86))
+
+	_open_treasure_chest(chest_index)
+
+
+func _poll_treasure_chest_interaction() -> void:
+	if party_leader == null:
+		return
+	if treasure_interact_cooldown > 0.0:
+		return
+	if field_treasure_chests.is_empty():
+		return
+
+	for i in range(field_treasure_chests.size()):
+		var chest: Dictionary = field_treasure_chests[i]
+		if bool(chest.get("opened", false)):
+			continue
+		var root: Node2D = chest.get("root") as Node2D
+		if root == null:
+			continue
+		if party_leader.global_position.distance_to(root.global_position) <= 24.0:
+			treasure_interact_cooldown = 0.25
+			_on_treasure_chest_body_entered(party_leader, i)
+			return
+
+
+func _open_treasure_chest(chest_index: int) -> void:
+	if chest_index < 0 or chest_index >= field_treasure_chests.size():
+		return
+
+	_close_blocking_ui_for_recruit_followup()
+
+	var chest: Dictionary = field_treasure_chests[chest_index]
+	if bool(chest.get("opened", false)):
+		return
+
+	chest["opened"] = true
+	field_treasure_chests[chest_index] = chest
+
+	var icon: Label = chest.get("icon") as Label
+	if icon:
+		icon.text = "✅"
+		icon.add_theme_color_override("font_color", Color(0.78, 1.0, 0.82, 1.0))
+	var title: Label = chest.get("title") as Label
+	if title:
+		title.text = "개봉 완료"
+	var area: Area2D = chest.get("area") as Area2D
+	if area:
+		area.set_deferred("monitoring", false)
+
+	var choices: Array[String] = _roll_treasure_reward_choices(3)
+	if choices.is_empty():
+		_show_field_notice("보상 풀이 비어 있다.", 1.2, Color(1.0, 0.75, 0.75))
+		return
+
+	pending_treasure_chest_index = chest_index
+	_ensure_reward_window()
+	if reward_window and is_instance_valid(reward_window):
+		reward_window.set_title("보상윈도우")
+		reward_window.call_deferred("show_loot_selection", choices)
+	else:
+		# UI 생성 실패 시 첫 번째 보상 지급
+		_grant_treasure_reward(choices[0])
+		pending_treasure_chest_index = -1
+
+
+func _roll_treasure_reward_choices(count: int) -> Array[String]:
+	var pool: Array[String] = DataManager.get_equipment_by_rarities(TREASURE_REWARD_RARITIES)
+	if pool.is_empty():
+		return []
+
+	pool.shuffle()
+	var result: Array[String] = []
+	for equip_id in pool:
+		result.append(str(equip_id))
+		if result.size() >= count:
+			break
+
+	while result.size() < count:
+		result.append(str(pool[randi() % pool.size()]))
+
+	return result
+
+
+func _on_treasure_loot_selected(item_id: String) -> void:
+	var target_hero_id: String = ""
+	if reward_window != null and is_instance_valid(reward_window) and reward_window.has_method("get_selected_hero_id"):
+		target_hero_id = str(reward_window.call("get_selected_hero_id"))
+	_grant_treasure_reward(item_id, target_hero_id)
+	pending_treasure_chest_index = -1
+
+	if _are_all_treasure_chests_opened():
+		_show_field_notice("필드의 보물상자를 모두 열었다!", 1.6, Color(1.0, 0.9, 0.65))
+
+
+func _grant_treasure_reward(item_id: String, target_hero_id: String = "") -> void:
+	if item_id.is_empty():
+		return
+
+	var added: bool = false
+	if InventoryManager:
+		added = InventoryManager.add_item(item_id, 1)
+	else:
+		return
+
+	var data: Dictionary = DataManager.get_equipment(item_id)
+	var item_name: String = str(data.get("name", item_id))
+	if not added:
+		_show_field_notice("보상을 획득하지 못했다: 인벤토리 확인 필요", 1.4, Color(1.0, 0.75, 0.75))
+		return
+
+	var equipped: bool = false
+	var hero_name: String = ""
+	if not target_hero_id.is_empty() and PartyManager:
+		var hero: Hero = PartyManager.get_hero_by_id(target_hero_id)
+		if hero != null and InventoryManager:
+			hero_name = hero.hero_name
+			equipped = InventoryManager.equip_item(hero, item_id, "")
+
+	# 명시 장착 실패/미선택 시: 더 좋은 장비면 자동장착
+	if not equipped and InventoryManager:
+		equipped = InventoryManager.try_auto_equip(item_id)
+		if equipped and PartyManager:
+			var equipped_hero: Hero = _find_hero_equipped_item(item_id)
+			if equipped_hero != null:
+				hero_name = equipped_hero.hero_name
+
+	if equipped:
+		if hero_name.is_empty():
+			_show_field_notice("획득: %s → 자동 장착 완료" % item_name, 1.5, Color(0.82, 1.0, 0.86))
+		else:
+			_show_field_notice("획득: %s → %s 자동 장착" % [item_name, hero_name], 1.5, Color(0.82, 1.0, 0.86))
+	else:
+		_show_field_notice("획득: %s" % item_name, 1.4, Color(0.88, 0.96, 1.0))
+	if SaveManager:
+		SaveManager.auto_save("보물상자 개봉")
+
+
+func _find_hero_equipped_item(item_id: String) -> Hero:
+	if item_id.is_empty() or not PartyManager:
+		return null
+	for hero_any in PartyManager.get_party():
+		var hero: Hero = hero_any as Hero
+		if hero == null:
+			continue
+		for slot in ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]:
+			if str(hero.equipment.get(slot, "")) == item_id:
+				return hero
+	return null
+
+
+func _are_all_treasure_chests_opened() -> bool:
+	if field_treasure_chests.is_empty():
+		return false
+	for chest in field_treasure_chests:
+		var chest_dict: Dictionary = chest as Dictionary
+		if not bool(chest_dict.get("opened", false)):
+			return false
+	return true
 
 
 #=============================================================================
@@ -299,7 +1217,14 @@ func _handle_boss_contact(enemy_id: String, is_elite: bool, collision_pos: Vecto
 	}
 
 	# 누적 보상이 있으면 확인 팝업 표시
-	if hud and hud.has_unclaimed_rewards():
+	var has_rewards: bool = false
+	if hud and hud.has_method("has_unclaimed_rewards"):
+		has_rewards = bool(hud.call("has_unclaimed_rewards"))
+	elif BattleManager:
+		var rewards: Dictionary = BattleManager.get_accumulated_rewards()
+		has_rewards = int(rewards.get("gold", 0)) > 0 or int(rewards.get("exp", 0)) > 0 or not (rewards.get("items", []) as Array).is_empty()
+
+	if has_rewards:
 		_show_boss_reward_popup()
 	else:
 		# 보상이 없으면 바로 보스전 시작
@@ -527,6 +1452,8 @@ func _on_menu_pressed() -> void:
 
 
 func _on_title_pressed() -> void:
+	if recruit_event_active:
+		_close_recruit_event_dialog()
 	if party_leader:
 		SaveManager.save_field_position(
 			party_leader.global_position,
@@ -538,6 +1465,8 @@ func _on_title_pressed() -> void:
 
 
 func _on_party_wiped() -> void:
+	if recruit_event_active:
+		_close_recruit_event_dialog()
 	spawner.stop_respawn()
 
 	if BattleManager:
@@ -595,6 +1524,11 @@ func _on_boss_battle_ended(_battle_id: int) -> void:
 	for enemy in field_enemies:
 		if is_instance_valid(enemy) and enemy.has_method("stop_spectating"):
 			enemy.stop_spectating()
+
+
+func _on_all_battles_ended() -> void:
+	## 전투창이 모두 닫힌 뒤 동료 후속 대화가 있으면 시작
+	_try_start_recruit_followup_dialog()
 
 
 func _get_camera_rect() -> Rect2:

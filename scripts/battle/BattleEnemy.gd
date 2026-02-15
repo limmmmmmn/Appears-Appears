@@ -152,7 +152,7 @@ func get_p_def() -> int:
 	return base_def
 
 func get_m_def() -> int:
-	return base_int
+	return int(round(float(base_int) * 0.5))
 
 func get_dex() -> int:
 	return base_dex
@@ -167,7 +167,7 @@ func get_eva() -> float:
 	return base_dex * 0.3 + base_luk * 0.1
 
 func get_crit() -> float:
-	return base_luk * 0.3
+	return clampf(base_luk * 0.5, 0.0, 95.0)
 #endregion
 
 
@@ -203,11 +203,18 @@ func _update_hp_display() -> void:
 
 
 func is_action_ready() -> bool:
-	return action_timer >= Hero.ACTION_INTERVAL
+	return action_timer >= get_action_delay()
 
 
 func reset_action_timer() -> void:
 	action_timer = 0.0
+
+
+func get_action_delay() -> float:
+	# 보스는 고정 2.5초, 일반/엘리트는 DEX 기반
+	if enemy_type == "boss":
+		return 2.5
+	return maxf(0.5, 2.0 - get_dex() * 0.05)
 #endregion
 
 

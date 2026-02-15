@@ -4,6 +4,7 @@ extends Node
 ## - 전투창 최대 MAX_BATTLE_WINDOWS 개
 
 const BATTLE_WINDOW_SCENE = preload("res://scenes/battle/BattleWindow.tscn")
+const WINDOW_SHELL_SCRIPT = preload("res://scripts/ui/window/WindowShell.gd")
 
 signal battle_started(battle_id: int)
 signal battle_ended(battle_id: int, victory: bool)
@@ -423,26 +424,6 @@ func _calculate_window_position() -> Vector2:
 	if tree:
 		viewport_size = tree.root.get_visible_rect().size
 
-	# HUD를 피한 안전 영역 계산
-	var safe_left: float = WINDOW_MARGIN
-	var safe_top: float = HUD_TOP_HEIGHT
-	var safe_right: float = viewport_size.x - WINDOW_SIZE.x - WINDOW_MARGIN
-	var safe_bottom: float = viewport_size.y - WINDOW_SIZE.y - HUD_BOTTOM_HEIGHT
-
-	safe_left = maxf(safe_left, 0)
-	safe_top = maxf(safe_top, 0)
-	safe_right = maxf(safe_right, safe_left)
-	safe_bottom = maxf(safe_bottom, safe_top)
-
-	# 중앙 회피 영역
-	var center := viewport_size / 2
-	var center_avoid := Rect2(
-		center.x - CENTER_SAFE_SIZE * 0.5,
-		center.y - CENTER_SAFE_SIZE * 0.5,
-		CENTER_SAFE_SIZE,
-		CENTER_SAFE_SIZE
-	)
-
 	# 기존 전투창 위치 수집
 	var existing_rects: Array = []
 	for bid in active_battles:
@@ -451,35 +432,15 @@ func _calculate_window_position() -> Vector2:
 		if window_ref != null and is_instance_valid(window_ref):
 			existing_rects.append(Rect2(window_ref.position, WINDOW_SIZE))
 
-	# 후보 위치 생성 및 겹침 점수 평가 (낮을수록 좋음)
-	var best_pos := Vector2(randf_range(safe_left, safe_right), randf_range(safe_top, safe_bottom))
-	var best_score: float = -1.0
-
-	for _i in range(40):
-		var x := randf_range(safe_left, safe_right)
-		var y := randf_range(safe_top, safe_bottom)
-		var candidate := Rect2(x, y, WINDOW_SIZE.x, WINDOW_SIZE.y)
-
-		# 중앙 영역 겹치면 스킵
-		if candidate.intersects(center_avoid):
-			continue
-
-		# 기존 전투창과의 겹침 면적 합산
-		var overlap_score: float = 0.0
-		for existing in existing_rects:
-			var overlap := candidate.intersection(existing)
-			overlap_score += overlap.get_area()
-
-		# 겹침이 가장 적은 후보 선택
-		if best_score < 0.0 or overlap_score < best_score:
-			best_score = overlap_score
-			best_pos = Vector2(x, y)
-
-			# 겹침 없으면 즉시 채택
-			if overlap_score == 0.0:
-				break
-
-	return best_pos
+	return WINDOW_SHELL_SCRIPT.calculate_spawn_position(
+		WINDOW_SIZE,
+		viewport_size,
+		existing_rects,
+		WINDOW_MARGIN,
+		HUD_TOP_HEIGHT,
+		HUD_BOTTOM_HEIGHT,
+		CENTER_SAFE_SIZE
+	)
 
 
 func _is_position_available(pos: Vector2) -> bool:

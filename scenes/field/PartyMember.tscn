@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://ly3qxa1t3hy3"]
 
-[ext_resource type="Script" uid="uid://caidblhiyg3o6" path="res://scripts/entities/PartyMember.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://cg0ifpvwdeg6u" path="res://scripts/entities/PartyMember.gd" id="1_script"]
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_member"]
 
@@ -49,7 +49,6 @@ zoom = Vector2(2, 2)
 position_smoothing_enabled = true
 
 [node name="StatusBars" type="Control" parent="." unique_id=1042767789]
-visible = false
 z_index = 10
 layout_mode = 3
 anchors_preset = 0
@@ -66,4 +65,3 @@ theme_override_styles/background = SubResource("StyleBoxFlat_hp_bg")
 theme_override_styles/fill = SubResource("StyleBoxFlat_hp_fill")
 value = 100.0
 show_percentage = false
-

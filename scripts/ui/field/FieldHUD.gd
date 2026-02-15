@@ -90,6 +90,19 @@ var equip_row_style_normal: StyleBoxFlat = null
 var equip_row_style_highlight: StyleBoxFlat = null
 var equip_notice_queue: Array = []
 var equip_notice_playing: bool = false
+var equip_notice_left_panel: PanelContainer = null
+var equip_notice_left_face: TextureRect = null
+var equip_notice_left_name: Label = null
+var equip_notice_left_slot_rows: Dictionary = {}
+var equip_notice_pending_events: Array = []
+var equip_notice_flush_scheduled: bool = false
+var equip_notice_recent_keys: Dictionary = {}
+var equip_notice_right_payload: Dictionary = {}
+var equip_notice_left_payload: Dictionary = {}
+var equip_notice_right_expire_ms: int = 0
+var equip_notice_left_expire_ms: int = 0
+var equip_notice_right_token: int = 0
+var equip_notice_left_token: int = 0
 var right_inventory_panel: PanelContainer = null
 var right_inventory_rows: GridContainer = null
 var right_desc_panel: PanelContainer = null
@@ -105,6 +118,7 @@ var right_panel_collapsed: bool = false
 const EQUIP_CARD_FACE_SIZE: float = 92.0
 const EQUIP_CARD_WIDTH: float = EQUIP_CARD_FACE_SIZE
 const EQUIP_CARD_MARGIN_RIGHT: float = 12.0
+const EQUIP_CARD_GAP: float = 8.0
 const EQUIP_CARD_STAY_TIME: float = 2.0
 const EQUIP_CARD_INVENTORY_HEIGHT: float = 112.0
 const EQUIP_CARD_INVENTORY_GAP: float = 8.0
@@ -424,37 +438,62 @@ func _init_equip_notice_card() -> void:
 	if not ctrl:
 		return
 
-	equip_notice_panel = PanelContainer.new()
-	equip_notice_panel.visible = false
-	equip_notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	equip_notice_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	equip_notice_panel.size = Vector2(EQUIP_CARD_WIDTH, 214)
+	equip_notice_panel = _create_equip_notice_panel_instance(ctrl)
+	equip_notice_face = equip_notice_panel.get_meta("face") as TextureRect
+	equip_notice_name = equip_notice_panel.get_meta("name_label") as Label
+	equip_notice_slot_rows = equip_notice_panel.get_meta("slot_rows") as Dictionary
+
+	equip_notice_left_panel = _create_equip_notice_panel_instance(ctrl)
+	equip_notice_left_face = equip_notice_left_panel.get_meta("face") as TextureRect
+	equip_notice_left_name = equip_notice_left_panel.get_meta("name_label") as Label
+	equip_notice_left_slot_rows = equip_notice_left_panel.get_meta("slot_rows") as Dictionary
+
+	equip_notice_stat_rows.clear()
+	right_desc_panel = null
+	right_desc_label = null
+
+	equip_row_style_normal = _make_flat_style(Color(0.05, 0.06, 0.09, 0.95), Color(0.42, 0.36, 0.18, 0.7), 4, 1)
+	equip_row_style_normal.content_margin_left = 4
+	equip_row_style_normal.content_margin_right = 4
+	equip_row_style_normal.content_margin_top = 2
+	equip_row_style_normal.content_margin_bottom = 2
+	equip_row_style_highlight = _make_flat_style(Color(0.09, 0.08, 0.02, 0.98), Color(1.0, 0.9, 0.35, 1.0), 4, 2)
+	equip_row_style_highlight.content_margin_left = 4
+	equip_row_style_highlight.content_margin_right = 4
+	equip_row_style_highlight.content_margin_top = 2
+	equip_row_style_highlight.content_margin_bottom = 2
+	_apply_equip_row_styles(equip_notice_slot_rows)
+	_apply_equip_row_styles(equip_notice_left_slot_rows)
+
+
+func _create_equip_notice_panel_instance(parent_ctrl: Control) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.visible = false
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	panel.size = Vector2(EQUIP_CARD_WIDTH, 214)
 	var card_style := _make_flat_style(Color(0.03, 0.03, 0.06, 0.94), STYLE.border_gold, 6, 1)
 	card_style.content_margin_left = 4
 	card_style.content_margin_right = 4
 	card_style.content_margin_top = 4
 	card_style.content_margin_bottom = 4
-	equip_notice_panel.add_theme_stylebox_override("panel", card_style)
-	ctrl.add_child(equip_notice_panel)
+	panel.add_theme_stylebox_override("panel", card_style)
+	parent_ctrl.add_child(panel)
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 4)
 	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	equip_notice_panel.add_child(root)
+	panel.add_child(root)
 
-	equip_notice_face = TextureRect.new()
-	equip_notice_face.custom_minimum_size = Vector2(EQUIP_CARD_WIDTH, EQUIP_CARD_FACE_SIZE)
-	equip_notice_face.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	equip_notice_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	equip_notice_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(equip_notice_face)
+	var face := TextureRect.new()
+	face.custom_minimum_size = Vector2(EQUIP_CARD_WIDTH, EQUIP_CARD_FACE_SIZE)
+	face.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(face)
 
 	var box_w: float = EQUIP_CARD_WIDTH - 16.0
 	var box_h: float = 150.0
-	equip_notice_stat_rows.clear()
-	right_desc_panel = null
-	right_desc_label = null
-
 	var equip_box := PanelContainer.new()
 	equip_box.custom_minimum_size = Vector2(box_w, box_h)
 	equip_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -471,30 +510,17 @@ func _init_equip_notice_card() -> void:
 	equip_vbox.add_theme_constant_override("separation", 2)
 	equip_box.add_child(equip_vbox)
 
-	equip_notice_name = Label.new()
-	equip_notice_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	equip_notice_name.add_theme_font_size_override("font_size", STYLE.font_small)
-	equip_notice_name.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
-	equip_vbox.add_child(equip_notice_name)
+	var name_label := Label.new()
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", STYLE.font_small)
+	name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
+	equip_vbox.add_child(name_label)
 
-	equip_row_style_normal = _make_flat_style(Color(0.05, 0.06, 0.09, 0.95), Color(0.42, 0.36, 0.18, 0.7), 4, 1)
-	equip_row_style_normal.content_margin_left = 4
-	equip_row_style_normal.content_margin_right = 4
-	equip_row_style_normal.content_margin_top = 2
-	equip_row_style_normal.content_margin_bottom = 2
-	equip_row_style_highlight = _make_flat_style(Color(0.09, 0.08, 0.02, 0.98), Color(1.0, 0.9, 0.35, 1.0), 4, 2)
-	equip_row_style_highlight.content_margin_left = 4
-	equip_row_style_highlight.content_margin_right = 4
-	equip_row_style_highlight.content_margin_top = 2
-	equip_row_style_highlight.content_margin_bottom = 2
-	equip_notice_slot_rows.clear()
+	var rows: Dictionary = {}
 	for slot_key in SLOT_ORDER:
 		var row_panel := PanelContainer.new()
-		row_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		row_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row_panel.add_theme_stylebox_override("panel", equip_row_style_normal)
-		row_panel.mouse_entered.connect(_on_equip_slot_row_hovered.bind(slot_key, true))
-		row_panel.mouse_exited.connect(_on_equip_slot_row_hovered.bind(slot_key, false))
 		equip_vbox.add_child(row_panel)
 
 		var slot_row_hbox := HBoxContainer.new()
@@ -518,10 +544,25 @@ func _init_equip_notice_card() -> void:
 		item_label.text = "— 비어있음 —"
 		slot_row_hbox.add_child(item_label)
 
-		equip_notice_slot_rows[slot_key] = {
+		rows[slot_key] = {
 			"panel": row_panel,
 			"item_label": item_label
 		}
+
+	panel.set_meta("face", face)
+	panel.set_meta("name_label", name_label)
+	panel.set_meta("slot_rows", rows)
+	return panel
+
+
+func _apply_equip_row_styles(rows: Dictionary) -> void:
+	for slot_key in SLOT_ORDER:
+		var row: Dictionary = rows.get(slot_key, {}) as Dictionary
+		if row.is_empty():
+			continue
+		var panel: PanelContainer = row.get("panel") as PanelContainer
+		if panel and equip_row_style_normal:
+			panel.add_theme_stylebox_override("panel", equip_row_style_normal)
 
 
 func _init_right_inventory_panel() -> void:
@@ -607,6 +648,44 @@ func _toggle_equipment_screen() -> void:
 		equipment_screen.close()
 	else:
 		equipment_screen.open()
+
+
+func close_blocking_ui() -> void:
+	## 필드 이벤트(대화/보상) 진행을 위해 열려있는 UI를 강제로 정리
+	if equipment_screen and equipment_screen.is_open:
+		equipment_screen.close()
+	if is_pause_menu_active:
+		hide_pause_menu()
+
+	# 먼저 상태를 끈 뒤 패널 정리를 해야 재표시되지 않는다.
+	equip_notice_playing = false
+	equip_notice_queue.clear()
+	equip_notice_pending_events.clear()
+	equip_notice_flush_scheduled = false
+	equip_notice_recent_keys.clear()
+	equip_notice_right_payload.clear()
+	equip_notice_left_payload.clear()
+
+	_close_right_panel()
+	_hide_equip_hover_desc()
+
+	if equip_notice_panel:
+		equip_notice_panel.visible = false
+	if equip_notice_left_panel:
+		equip_notice_left_panel.visible = false
+	if right_inventory_panel:
+		right_inventory_panel.visible = false
+	if right_desc_panel:
+		right_desc_panel.visible = false
+	if right_desc_label:
+		right_desc_label.text = ""
+
+	_refresh_selected_hero_panels()
+	_update_right_toggle_buttons()
+
+	# 전투 일시정지 중이 아닐 때만 트리 pause 해제
+	if not BattleManager or not BattleManager.is_battle_paused:
+		get_tree().paused = false
 
 
 func _init_pause_menu() -> void:
@@ -826,10 +905,11 @@ func _on_item_equipped(hero_name: String, item_id: String, _slot: String, replac
 	var item_name: String = str(item_data.get("name", item_id))
 	var delta_text: String = _build_equip_stat_delta_text(item_id, replaced_id)
 	_show_notice("%s 장착: %s\n%s" % [hero_name, item_name, delta_text], 2.2, Color(0.8, 1.0, 0.6))
+	_enqueue_equip_notice_event(hero_name, item_id, _slot)
 
 
 func _on_item_auto_equipped(hero_name: String, item_id: String, slot: String, replaced_id: String) -> void:
-	_queue_equip_notice_card(hero_name, item_id, slot, replaced_id)
+	_enqueue_equip_notice_event(hero_name, item_id, slot)
 
 
 func _on_party_hero_selected(hero_index: int) -> void:
@@ -870,6 +950,8 @@ func _refresh_selected_hero_panels() -> void:
 	if not equip_notice_playing:
 		if equip_notice_panel:
 			equip_notice_panel.visible = false
+		if equip_notice_left_panel:
+			equip_notice_left_panel.visible = false
 		if right_inventory_panel:
 			right_inventory_panel.visible = false
 		_hide_equip_hover_desc()
@@ -898,12 +980,21 @@ func _get_selected_hero() -> Hero:
 func _layout_right_panels() -> void:
 	if equip_notice_panel == null:
 		return
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var x: float = viewport_size.x - EQUIP_CARD_WIDTH - EQUIP_CARD_MARGIN_RIGHT
-	var total_h: float = equip_notice_panel.size.y
-	var y_start: float = (viewport_size.y - total_h) * 0.5
-	equip_notice_panel.position = Vector2(x, y_start)
+	_layout_equip_notice_cards()
 	_update_right_toggle_buttons()
+
+
+func _layout_equip_notice_cards() -> void:
+	if equip_notice_panel == null:
+		return
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var right_x: float = viewport_size.x - EQUIP_CARD_WIDTH - EQUIP_CARD_MARGIN_RIGHT
+	var left_x: float = right_x - EQUIP_CARD_WIDTH - EQUIP_CARD_GAP
+	var y: float = (viewport_size.y - equip_notice_panel.size.y) * 0.5
+	if equip_notice_left_panel and equip_notice_left_panel.visible:
+		equip_notice_left_panel.position = Vector2(left_x, y)
+	if equip_notice_panel.visible:
+		equip_notice_panel.position = Vector2(right_x, y)
 
 
 func _refresh_right_inventory(hero: Hero) -> void:
@@ -1067,7 +1158,10 @@ func _update_right_toggle_buttons() -> void:
 	var block_top: float = 0.0
 	var block_h: float = 0.0
 	if equip_notice_panel:
-		block_top = equip_notice_panel.position.y
+		var card_top: float = equip_notice_panel.position.y
+		if equip_notice_left_panel and equip_notice_left_panel.visible:
+			card_top = minf(card_top, equip_notice_left_panel.position.y)
+		block_top = card_top
 		block_h = equip_notice_panel.size.y
 		if right_inventory_panel and right_inventory_panel.visible:
 			block_h += EQUIP_CARD_INVENTORY_GAP + right_inventory_panel.size.y
@@ -1090,6 +1184,8 @@ func _update_right_toggle_buttons() -> void:
 
 func _is_click_inside_right_ui(pos: Vector2) -> bool:
 	if equip_notice_panel and equip_notice_panel.visible and equip_notice_panel.get_global_rect().has_point(pos):
+		return true
+	if equip_notice_left_panel and equip_notice_left_panel.visible and equip_notice_left_panel.get_global_rect().has_point(pos):
 		return true
 	if right_inventory_panel and right_inventory_panel.visible and right_inventory_panel.get_global_rect().has_point(pos):
 		return true
@@ -1169,8 +1265,8 @@ func _show_notice(message: String, duration: float = 2.0, color: Color = Color.W
 	notice_panel.scale = Vector2.ONE
 	notice_panel.modulate.a = 1.0
 
-	# 이전 타이머 무시 (새 메시지로 교체)
-	notice_timer = get_tree().create_timer(maxf(0.3, duration))
+	# paused 상태에서도 알림이 멈추지 않도록 process_always=true
+	notice_timer = get_tree().create_timer(maxf(0.3, duration), true)
 	await notice_timer.timeout
 	if notice_label.text == message:
 		_hide_notice()
@@ -1250,22 +1346,7 @@ func _accumulate_equip_stat_delta(dest: Dictionary, stats: Dictionary, mult: int
 
 
 func _queue_equip_notice_card(hero_name: String, item_id: String, slot: String, _replaced_id: String = "") -> void:
-	if equip_notice_panel == null:
-		return
-	var hero: Hero = _find_hero_by_name(hero_name)
-	if hero == null:
-		return
-	var item_data: Dictionary = DataManager.get_equipment(item_id)
-	var item_name: String = str(item_data.get("name", item_id))
-	equip_notice_queue.append({
-		"hero_id": hero.id,
-		"hero_name": hero.hero_name,
-		"slot_key": slot,
-		"slot_kr": SLOT_NAMES_KR.get(slot, slot),
-		"item_name": item_name,
-	})
-	if not equip_notice_playing:
-		_play_next_equip_notice_card()
+	_enqueue_equip_notice_event(hero_name, item_id, slot)
 
 
 func _find_hero_by_name(hero_name: String) -> Hero:
@@ -1279,77 +1360,155 @@ func _find_hero_by_name(hero_name: String) -> Hero:
 
 
 func _play_next_equip_notice_card() -> void:
-	if equip_notice_queue.is_empty():
-		equip_notice_playing = false
-		return
-	if equip_notice_panel == null:
-		equip_notice_queue.clear()
-		equip_notice_playing = false
-		return
+	# 레거시 호출 호환: 새 이벤트 집계 플로우로 위임
+	_flush_equip_notice_events()
 
+
+func _enqueue_equip_notice_event(hero_name: String, item_id: String, slot: String) -> void:
+	if slot.is_empty():
+		return
+	var hero: Hero = _find_hero_by_name(hero_name)
+	if hero == null:
+		return
+	var key: String = "%s|%s|%s" % [hero.id, item_id, slot]
+	var now_ms: int = Time.get_ticks_msec()
+	var prev_ms: int = int(equip_notice_recent_keys.get(key, 0))
+	if prev_ms > 0 and now_ms - prev_ms < 120:
+		return
+	equip_notice_recent_keys[key] = now_ms
+	equip_notice_pending_events.append({
+		"hero_id": hero.id,
+		"hero_name": hero.hero_name,
+		"item_id": item_id,
+		"slot_key": slot,
+	})
+	if equip_notice_flush_scheduled:
+		return
+	equip_notice_flush_scheduled = true
+	call_deferred("_flush_equip_notice_events_deferred")
+
+
+func _flush_equip_notice_events_deferred() -> void:
+	await get_tree().create_timer(0.08, true).timeout
+	_flush_equip_notice_events()
+
+
+func _flush_equip_notice_events() -> void:
+	equip_notice_flush_scheduled = false
+	if equip_notice_pending_events.is_empty():
+		return
+	var grouped: Dictionary = {}
+	var order: Array[String] = []
+	for ev_any in equip_notice_pending_events:
+		var ev: Dictionary = ev_any as Dictionary
+		var hero_id: String = str(ev.get("hero_id", ""))
+		if hero_id.is_empty():
+			continue
+		if not grouped.has(hero_id):
+			grouped[hero_id] = {
+				"hero_id": hero_id,
+				"hero_name": str(ev.get("hero_name", "")),
+				"slot_keys": [],
+			}
+			order.append(hero_id)
+		var g: Dictionary = grouped[hero_id] as Dictionary
+		var slots: Array = g.get("slot_keys", [])
+		var slot_key: String = str(ev.get("slot_key", ""))
+		if not slot_key.is_empty() and not slots.has(slot_key):
+			slots.append(slot_key)
+		g["slot_keys"] = slots
+		grouped[hero_id] = g
+	equip_notice_pending_events.clear()
+	for hero_id in order:
+		var payload: Dictionary = grouped.get(hero_id, {}) as Dictionary
+		if payload.is_empty():
+			continue
+		_show_equip_notice_payload(payload)
+
+
+func _show_equip_notice_payload(payload: Dictionary) -> void:
+	if equip_notice_panel == null:
+		return
+	var now_ms: int = Time.get_ticks_msec()
+	_layout_equip_notice_cards()
+
+	# 오른쪽 카드가 이미 보이는 상태에서 새 카드가 오면, 기존 카드를 왼쪽으로 밀어 보관
+	if equip_notice_panel.visible and not equip_notice_right_payload.is_empty():
+		equip_notice_left_payload = equip_notice_right_payload.duplicate(true)
+		equip_notice_left_expire_ms = equip_notice_right_expire_ms
+		_render_payload_to_card(equip_notice_left_panel, equip_notice_left_face, equip_notice_left_name, equip_notice_left_slot_rows, equip_notice_left_payload, false)
+		equip_notice_left_token += 1
+		_schedule_hide_card(equip_notice_left_panel, false, maxf(0.05, float(equip_notice_left_expire_ms - now_ms) / 1000.0), equip_notice_left_token)
+
+	equip_notice_right_payload = payload.duplicate(true)
+	equip_notice_right_expire_ms = now_ms + int((EQUIP_CARD_STAY_TIME + 0.2) * 1000.0)
+	last_equip_hero_id = str(payload.get("hero_id", ""))
+	_render_payload_to_card(equip_notice_panel, equip_notice_face, equip_notice_name, equip_notice_slot_rows, equip_notice_right_payload, true)
+	equip_notice_right_token += 1
+	_schedule_hide_card(equip_notice_panel, true, EQUIP_CARD_STAY_TIME, equip_notice_right_token)
 	equip_notice_playing = true
-	var payload: Dictionary = equip_notice_queue.pop_front()
+	_layout_equip_notice_cards()
+
+
+func _render_payload_to_card(
+	panel: PanelContainer,
+	face: TextureRect,
+	name_label: Label,
+	rows: Dictionary,
+	payload: Dictionary,
+	play_fx: bool
+) -> void:
+	if panel == null:
+		return
 	var hero_id: String = str(payload.get("hero_id", ""))
 	var hero_name: String = str(payload.get("hero_name", ""))
-	var slot_key: String = str(payload.get("slot_key", ""))
 	var hero: Hero = _find_hero_by_id(hero_id)
-	last_equip_hero_id = hero_id
+	var highlight_slots: Array[String] = []
+	for s in payload.get("slot_keys", []):
+		highlight_slots.append(str(s))
+	if face and SpriteManager:
+		face.texture = SpriteManager.get_hero_face_sprite(hero_id)
+	if name_label:
+		name_label.text = hero_name
+	_refresh_equip_notice_slots_for_rows(rows, hero, highlight_slots)
+	panel.modulate = Color.WHITE
+	panel.scale = Vector2.ONE
+	panel.visible = true
+	if play_fx:
+		if SoundManager:
+			SoundManager.play_equip()
+		for slot_key in highlight_slots:
+			var row_panel: PanelContainer = _get_equip_notice_row_panel_from_rows(rows, slot_key)
+			if row_panel:
+				var flash_tween := create_tween()
+				flash_tween.tween_property(row_panel, "modulate", Color(1.25, 1.2, 0.85, 1.0), 0.07)
+				flash_tween.tween_property(row_panel, "modulate", Color.WHITE, 0.11)
 
-	if equip_notice_face and SpriteManager:
-		equip_notice_face.texture = SpriteManager.get_hero_face_sprite(hero_id)
-	if equip_notice_name:
-		equip_notice_name.text = hero_name
-	_refresh_equip_notice_slots(hero, slot_key)
 
-	await get_tree().process_frame
+func _schedule_hide_card(panel: PanelContainer, is_right: bool, stay_sec: float, token: int) -> void:
+	if panel == null:
+		return
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var panel_size: Vector2 = equip_notice_panel.size
-	var target_x: float = viewport_size.x - panel_size.x - EQUIP_CARD_MARGIN_RIGHT
-	var start_x: float = viewport_size.x + 8.0
-	var center_y: float = (viewport_size.y - panel_size.y) * 0.5
-
-	equip_notice_panel.visible = true
-	equip_notice_panel.scale = Vector2.ONE
-	equip_notice_panel.modulate = Color(1, 1, 1, 1)
-	equip_notice_panel.position = Vector2(start_x, center_y)
-	equip_notice_panel.pivot_offset = Vector2(panel_size.x, panel_size.y * 0.5)
-
-	var in_tween := create_tween()
-	in_tween.tween_property(equip_notice_panel, "position:x", target_x, 0.18).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	await in_tween.finished
-
-	# 장착 순간: 노란 테두리 + 철컹(짧은 흔들림 + 장착음)
-	if SoundManager:
-		SoundManager.play_equip()
-	var clank_tween := create_tween()
-	clank_tween.tween_property(equip_notice_panel, "position:x", target_x - 4.0, 0.03)
-	clank_tween.tween_property(equip_notice_panel, "position:x", target_x + 3.0, 0.03)
-	clank_tween.tween_property(equip_notice_panel, "position:x", target_x - 2.0, 0.03)
-	clank_tween.tween_property(equip_notice_panel, "position:x", target_x, 0.03)
-	await clank_tween.finished
-
-	var highlight_row: PanelContainer = _get_equip_notice_row_panel(slot_key)
-	if highlight_row:
-		var flash_tween := create_tween()
-		flash_tween.tween_property(highlight_row, "modulate", Color(1.25, 1.2, 0.85, 1.0), 0.07)
-		flash_tween.tween_property(highlight_row, "modulate", Color.WHITE, 0.11)
-		await flash_tween.finished
-
-	await get_tree().create_timer(EQUIP_CARD_STAY_TIME).timeout
-
+	await get_tree().create_timer(stay_sec, true).timeout
+	if is_right and token != equip_notice_right_token:
+		return
+	if not is_right and token != equip_notice_left_token:
+		return
 	var out_tween := create_tween()
 	out_tween.set_parallel(true)
-	out_tween.tween_property(equip_notice_panel, "position:x", viewport_size.x + 4.0, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	out_tween.tween_property(equip_notice_panel, "scale:x", 0.03, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	out_tween.tween_property(equip_notice_panel, "modulate:a", 0.0, 0.18)
+	out_tween.tween_property(panel, "position:x", viewport_size.x + 4.0, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	out_tween.tween_property(panel, "scale:x", 0.03, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	out_tween.tween_property(panel, "modulate:a", 0.0, 0.18)
 	await out_tween.finished
-
-	equip_notice_panel.visible = false
-	equip_notice_panel.scale = Vector2.ONE
-	equip_notice_panel.modulate = Color.WHITE
-
-	_refresh_selected_hero_panels()
-	call_deferred("_play_next_equip_notice_card")
+	panel.visible = false
+	panel.scale = Vector2.ONE
+	panel.modulate = Color.WHITE
+	if is_right:
+		equip_notice_right_payload.clear()
+	else:
+		equip_notice_left_payload.clear()
+	equip_notice_playing = equip_notice_panel.visible or (equip_notice_left_panel != null and equip_notice_left_panel.visible)
+	_layout_equip_notice_cards()
 
 
 func _find_hero_by_id(hero_id: String) -> Hero:
@@ -1363,8 +1522,15 @@ func _find_hero_by_id(hero_id: String) -> Hero:
 
 
 func _refresh_equip_notice_slots(hero: Hero, highlighted_slot: String) -> void:
+	var highlighted_slots: Array[String] = []
+	if not highlighted_slot.is_empty():
+		highlighted_slots.append(highlighted_slot)
+	_refresh_equip_notice_slots_for_rows(equip_notice_slot_rows, hero, highlighted_slots)
+
+
+func _refresh_equip_notice_slots_for_rows(rows: Dictionary, hero: Hero, highlighted_slots: Array[String]) -> void:
 	for slot_key in SLOT_ORDER:
-		var row: Dictionary = equip_notice_slot_rows.get(slot_key, {}) as Dictionary
+		var row: Dictionary = rows.get(slot_key, {}) as Dictionary
 		if row.is_empty():
 			continue
 		var panel: PanelContainer = row.get("panel") as PanelContainer
@@ -1377,12 +1543,15 @@ func _refresh_equip_notice_slots(hero: Hero, highlighted_slot: String) -> void:
 				var equip_data: Dictionary = DataManager.get_equipment(equip_id)
 				item_text = str(equip_data.get("name", equip_id))
 				item_color = Color(0.95, 0.95, 0.8)
+		var is_highlighted: bool = highlighted_slots.has(slot_key)
+		if is_highlighted and item_text != "— 비어있음 —":
+			item_text += " [장착]"
 		if item_label:
 			item_label.text = item_text
 			item_label.add_theme_color_override("font_color", item_color)
 		if panel:
 			panel.modulate = Color.WHITE
-			if slot_key == highlighted_slot and equip_row_style_highlight:
+			if is_highlighted and equip_row_style_highlight:
 				panel.add_theme_stylebox_override("panel", equip_row_style_highlight)
 			elif equip_row_style_normal:
 				panel.add_theme_stylebox_override("panel", equip_row_style_normal)
@@ -1457,10 +1626,24 @@ func _format_equip_stat_value(key: String, value: float) -> String:
 
 
 func _get_equip_notice_row_panel(slot_key: String) -> PanelContainer:
-	var row: Dictionary = equip_notice_slot_rows.get(slot_key, {}) as Dictionary
+	return _get_equip_notice_row_panel_from_rows(equip_notice_slot_rows, slot_key)
+
+
+func _get_equip_notice_row_panel_from_rows(rows: Dictionary, slot_key: String) -> PanelContainer:
+	var row: Dictionary = rows.get(slot_key, {}) as Dictionary
 	if row.is_empty():
 		return null
 	return row.get("panel") as PanelContainer
+
+
+func has_unclaimed_rewards() -> bool:
+	if not BattleManager:
+		return false
+	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
+	var gold: int = int(rewards.get("gold", 0))
+	var exp: int = int(rewards.get("exp", 0))
+	var items: Array = rewards.get("items", []) as Array
+	return gold > 0 or exp > 0 or not items.is_empty()
 
 
 #region 로그 (스텁 - 외부 호출 호환용)

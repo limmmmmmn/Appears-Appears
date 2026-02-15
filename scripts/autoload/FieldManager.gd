@@ -145,6 +145,12 @@ func get_exit_type(tile_type: String) -> String:
 
 
 func get_enemy_pool_for_tile(tile_type: String) -> Dictionary:
+	var field_enemy_pool: Dictionary = current_field_data.get("enemy_pool", {}) as Dictionary
+	if field_enemy_pool.has(tile_type):
+		return field_enemy_pool[tile_type] as Dictionary
+	if field_enemy_pool.has("default"):
+		return field_enemy_pool["default"] as Dictionary
+
 	var terrain_enemies: Dictionary = current_stage_data.get("terrain_enemies", {}) as Dictionary
 	if not terrain_enemies.has(tile_type):
 		return {}
@@ -164,55 +170,18 @@ func select_field_enemy_for_tile(tile_type: String) -> String:
 
 
 #region 전투 에너미 생성
-func generate_battle_enemies(field_enemy_id: String, tile_type: String) -> Array:
+func generate_battle_enemies(field_enemy_id: String, _tile_type: String) -> Array:
 	## 필드 에너미 접촉 시 전투 에너미 배열 생성
 
-	var min_enemies: int = int(battle_config.get("min_enemies", 1))
-	var max_enemies: int = int(battle_config.get("max_enemies", 3))
-	var battle_size: int = randi_range(min_enemies, max_enemies)
-
+	# 필드 접촉 전투는 항상 1~2마리만 등장
+	var battle_size: int = randi_range(1, 2)
 	var enemies: Array = [field_enemy_id]
-
-	var pool: Dictionary = get_enemy_pool_for_tile(tile_type)
-	if pool.is_empty():
-		var terrain_enemies: Dictionary = current_stage_data.get("terrain_enemies", {}) as Dictionary
-		if terrain_enemies.has("grass"):
-			pool = terrain_enemies["grass"] as Dictionary
-	if pool.is_empty():
-		return enemies
-
-	# 가중치 내림차순 정렬하여 서열 결정
-	var sorted_enemies: Array = pool.keys()
-	sorted_enemies.sort_custom(func(a, b): return float(pool[a]) > float(pool[b]))
-
-	# 필드 적의 서열 인덱스
-	var field_rank: int = sorted_enemies.find(field_enemy_id)
-	if field_rank == -1:
+	if battle_size == 1:
 		battle_generated.emit(field_enemy_id, enemies)
 		return enemies
 
-	# 인접 서열 적만 추가 풀에 포함
-	var add_pool: Dictionary = {}
-	if field_rank > 0:
-		var prev_id: String = sorted_enemies[field_rank - 1]
-		add_pool[prev_id] = pool[prev_id]
-	if field_rank < sorted_enemies.size() - 1:
-		var next_id: String = sorted_enemies[field_rank + 1]
-		add_pool[next_id] = pool[next_id]
-
-	if add_pool.is_empty():
-		battle_generated.emit(field_enemy_id, enemies)
-		return enemies
-
-	var field_enemy_count: int = 1
-	while enemies.size() < battle_size:
-		var new_enemy: String = _weighted_random_select(add_pool)
-		var new_count: int = enemies.count(new_enemy)
-		if new_count + 1 <= field_enemy_count:
-			enemies.append(new_enemy)
-		else:
-			enemies.append(field_enemy_id)
-			field_enemy_count += 1
+	# 섞임 방지: 접촉한 종류만 전투에 등장
+	enemies.append(field_enemy_id)
 
 	battle_generated.emit(field_enemy_id, enemies)
 	return enemies
@@ -299,6 +268,13 @@ func get_elite_enemy() -> String:
 
 func get_boss_enemy() -> String:
 	return str(current_stage_data.get("boss_id", ""))
+
+
+func get_field_boss_enemy() -> String:
+	var field_boss_id: String = str(current_field_data.get("field_boss_id", ""))
+	if not field_boss_id.is_empty():
+		return field_boss_id
+	return get_boss_enemy()
 
 
 func get_next_destination() -> String:

@@ -1,4 +1,4 @@
-extends PanelContainer
+extends "res://scripts/ui/window/WindowShell.gd"
 class_name BattleWindow
 ## BattleWindow: 실시간 전투창
 ## - 행동 타이머: DEX 비례로 충전, 가득 차면 즉시 행동 (턴 없음)
@@ -7,6 +7,7 @@ signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
 signal turn_started(unit_name: String, is_hero: bool)
+signal event_finished(result: Dictionary)
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
 
@@ -39,7 +40,7 @@ var window_mode: WindowMode = WindowMode.NORMAL
 # === UI 참조 ===
 @onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
 @onready var run_button: Button = %RunButton
-@onready var close_button: Button = $MainVBox/TopBar/CloseButton
+@onready var battle_close_button: Button = $MainVBox/TopBar/CloseButton
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
 
 
@@ -53,6 +54,11 @@ var _knight_used_first: Dictionary = {}  # hero_id -> bool (전투창당 첫 공
 const ACTION_DELAY: float = 0.3  # 행동 사이 딜레이 (초)
 var is_processing_action: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
+const MIN_BATTLE_VISIBLE_TIME: float = 0.4
+const VICTORY_POST_KILL_DELAY: float = 0.18
+var battle_started_ms: int = 0
+var pending_victory: bool = false
+var pending_victory_ready_ms: int = 0
 
 # === 행동 타임아웃 안전장치 ===
 var _action_process_timer: float = 0.0
@@ -86,8 +92,8 @@ const EFFECT_CHANGE_INTERVAL: float = 4.0
 var effect_timer: float = 0.0
 
 # === 마우스 드래그 이동 ===
-var _is_dragging: bool = false
-var _drag_offset: Vector2 = Vector2.ZERO
+var _battle_is_dragging: bool = false
+var _battle_drag_offset: Vector2 = Vector2.ZERO
 
 # === 적 호버 툴팁 ===
 var _enemy_tooltip: PanelContainer = null
@@ -101,6 +107,22 @@ var _hover_panel_style: StyleBoxFlat = null
 # === 전투창 드래그 머지 ===
 var _merge_target: BattleWindow = null
 
+# === 이벤트 모드 ===
+var is_event_mode: bool = false
+var event_context: Dictionary = {}
+var event_lines: Array[Dictionary] = []
+var event_line_index: int = -1
+var event_line_timer: float = 0.0
+var event_line_interval: float = 1.5
+var event_waiting_choice: bool = false
+var event_last_choice_id: String = ""
+var event_overlay_root: Control = null
+var event_left_face_panel: PanelContainer = null
+var event_right_face_panel: PanelContainer = null
+var event_speaker_label: Label = null
+var event_text_label: RichTextLabel = null
+var event_choice_panel: VBoxContainer = null
+
 
 func _ready() -> void:
 	visible = false
@@ -113,8 +135,8 @@ func _ready() -> void:
 		run_button.pressed.connect(_on_run_button_pressed)
 		run_button.set_as_top_level(true)
 
-	if close_button:
-		close_button.pressed.connect(_on_close_pressed)
+	if battle_close_button:
+		battle_close_button.pressed.connect(_on_close_pressed)
 
 	# 마우스 GUI 입력 연결
 	gui_input.connect(_on_gui_input)
@@ -136,8 +158,21 @@ func _process(delta: float) -> void:
 	if get_tree().paused:
 		return
 
+	if is_event_mode:
+		_process_event_dialog(delta)
+		return
+
 	if current_state != BattleState.RUNNING:
 		return
+
+	if pending_victory:
+		var now_ms: int = Time.get_ticks_msec()
+		var min_visible_ms: int = int(MIN_BATTLE_VISIBLE_TIME * 1000.0)
+		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
+		if can_finish:
+			pending_victory = false
+			_show_claim_reward_button()
+			return
 
 	_update_background_effect(delta)
 
@@ -269,11 +304,279 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
+	battle_started_ms = Time.get_ticks_msec()
+	pending_victory = false
+	pending_victory_ready_ms = 0
 	_update_buttons_for_enemies()
 	set_process(true)
 	_reset_enemy_timers()
 #endregion
 
+
+func setup_event_dialog(
+		title: String,
+		left_hero_id: String,
+		right_hero_id: String,
+		lines: Array[Dictionary],
+		context: Dictionary = {}
+	) -> void:
+	## 전투창을 이벤트창으로 재사용
+	_reset_event_mode_state()
+	is_event_mode = true
+	event_context = context.duplicate(true)
+	event_lines = lines.duplicate(true)
+	event_line_interval = float(event_context.get("line_interval", 1.5))
+	event_line_index = -1
+	event_line_timer = 0.0
+	event_waiting_choice = false
+	event_last_choice_id = ""
+
+	visible = true
+	modulate.a = 0.0
+	scale = Vector2(0.8, 0.8)
+	current_state = BattleState.RUNNING
+	set_process(true)
+
+	if run_button:
+		run_button.visible = false
+
+	var top_bar := get_node_or_null("MainVBox/TopBar") as Control
+	if top_bar:
+		top_bar.visible = true
+	if battle_close_button:
+		battle_close_button.visible = true
+
+	var title_label := Label.new()
+	title_label.name = "EventTitleRuntime"
+	title_label.text = title
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title_label.add_theme_font_size_override("font_size", 11)
+	title_label.add_theme_color_override("font_color", Color(0.98, 0.92, 0.65, 1.0))
+	if top_bar:
+		top_bar.add_child(title_label)
+		top_bar.move_child(title_label, 0)
+
+	if background:
+		background.material = null
+		background.color = Color(0, 0, 0, 0.93)
+	if enemy_container:
+		enemy_container.visible = false
+
+	_build_event_overlay(left_hero_id, right_hero_id)
+
+	var appear := create_tween()
+	appear.set_parallel(true)
+	appear.set_ease(Tween.EASE_OUT)
+	appear.set_trans(Tween.TRANS_BACK)
+	appear.tween_property(self, "modulate:a", 1.0, 0.2)
+	appear.tween_property(self, "scale", Vector2.ONE, 0.25)
+
+	_advance_event_line()
+
+
+func _build_event_overlay(left_hero_id: String, right_hero_id: String) -> void:
+	if battle_area == null:
+		return
+	if event_overlay_root and is_instance_valid(event_overlay_root):
+		event_overlay_root.queue_free()
+	event_overlay_root = Control.new()
+	event_overlay_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	event_overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	battle_area.add_child(event_overlay_root)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	event_overlay_root.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
+
+	var face_row := HBoxContainer.new()
+	face_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	face_row.add_theme_constant_override("separation", 24)
+	vbox.add_child(face_row)
+
+	event_left_face_panel = PanelContainer.new()
+	event_left_face_panel.custom_minimum_size = Vector2(64, 64)
+	face_row.add_child(event_left_face_panel)
+
+	var left_face := TextureRect.new()
+	left_face.set_anchors_preset(Control.PRESET_FULL_RECT)
+	left_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	left_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	event_left_face_panel.add_child(left_face)
+
+	event_right_face_panel = PanelContainer.new()
+	event_right_face_panel.custom_minimum_size = Vector2(64, 64)
+	face_row.add_child(event_right_face_panel)
+
+	var right_face := TextureRect.new()
+	right_face.set_anchors_preset(Control.PRESET_FULL_RECT)
+	right_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	right_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	event_right_face_panel.add_child(right_face)
+
+	if SpriteManager:
+		left_face.texture = SpriteManager.get_hero_face_sprite(left_hero_id)
+		right_face.texture = SpriteManager.get_hero_face_sprite(right_hero_id)
+
+	var dialog_panel := PanelContainer.new()
+	dialog_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(dialog_panel)
+
+	var dialog_margin := MarginContainer.new()
+	dialog_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog_margin.add_theme_constant_override("margin_left", 8)
+	dialog_margin.add_theme_constant_override("margin_top", 6)
+	dialog_margin.add_theme_constant_override("margin_right", 8)
+	dialog_margin.add_theme_constant_override("margin_bottom", 6)
+	dialog_panel.add_child(dialog_margin)
+
+	var dialog_vbox := VBoxContainer.new()
+	dialog_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dialog_vbox.add_theme_constant_override("separation", 4)
+	dialog_margin.add_child(dialog_vbox)
+
+	event_speaker_label = Label.new()
+	event_speaker_label.add_theme_font_size_override("font_size", 10)
+	event_speaker_label.add_theme_color_override("font_color", Color(0.99, 0.93, 0.65, 1.0))
+	dialog_vbox.add_child(event_speaker_label)
+
+	event_text_label = RichTextLabel.new()
+	event_text_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	event_text_label.scroll_active = false
+	event_text_label.fit_content = true
+	event_text_label.bbcode_enabled = false
+	event_text_label.add_theme_font_size_override("normal_font_size", 9)
+	dialog_vbox.add_child(event_text_label)
+
+	event_choice_panel = VBoxContainer.new()
+	event_choice_panel.visible = false
+	event_choice_panel.add_theme_constant_override("separation", 3)
+	dialog_vbox.add_child(event_choice_panel)
+
+
+func _process_event_dialog(delta: float) -> void:
+	if not is_event_mode:
+		return
+	if event_waiting_choice:
+		return
+	event_line_timer -= delta
+	if event_line_timer <= 0.0:
+		_advance_event_line()
+
+
+func _advance_event_line() -> void:
+	event_line_index += 1
+	if event_line_index >= event_lines.size():
+		_finish_event_dialog({"choice_id": event_last_choice_id})
+		return
+
+	var line: Dictionary = event_lines[event_line_index]
+	var speaker: String = str(line.get("speaker", "left"))
+	var speaker_name: String = str(line.get("name", ""))
+	var text: String = str(line.get("text", ""))
+
+	if event_speaker_label:
+		event_speaker_label.text = speaker_name
+	if event_text_label:
+		event_text_label.text = text
+	_set_event_speaker_highlight(speaker)
+
+	var choices: Array = line.get("choices", []) as Array
+	if not choices.is_empty():
+		event_waiting_choice = true
+		_show_event_choices(choices)
+		return
+
+	event_waiting_choice = false
+	_hide_event_choices()
+	event_line_timer = float(line.get("duration", event_line_interval))
+
+
+func _show_event_choices(choices: Array) -> void:
+	_hide_event_choices()
+	if event_choice_panel == null:
+		return
+	event_choice_panel.visible = true
+	for raw_choice in choices:
+		var choice: Dictionary = raw_choice as Dictionary
+		var button := Button.new()
+		button.text = str(choice.get("text", "선택"))
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 9)
+		button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(_on_event_choice_pressed.bind(choice))
+		event_choice_panel.add_child(button)
+
+
+func _hide_event_choices() -> void:
+	if event_choice_panel == null:
+		return
+	for child in event_choice_panel.get_children():
+		child.queue_free()
+	event_choice_panel.visible = false
+
+
+func _on_event_choice_pressed(choice: Dictionary) -> void:
+	event_last_choice_id = str(choice.get("id", ""))
+	var line: Dictionary = {}
+	if event_line_index >= 0 and event_line_index < event_lines.size():
+		line = event_lines[event_line_index]
+	var branch_map: Dictionary = line.get("next_index_by_choice", {}) as Dictionary
+	if not branch_map.is_empty() and branch_map.has(event_last_choice_id):
+		event_line_index = int(branch_map.get(event_last_choice_id, event_line_index + 1)) - 1
+	event_waiting_choice = false
+	_hide_event_choices()
+	event_line_timer = 0.05
+
+
+func _set_event_speaker_highlight(speaker: String) -> void:
+	var left_active: bool = speaker != "right"
+	if event_left_face_panel:
+		event_left_face_panel.modulate = Color(1, 1, 1, 1.0 if left_active else 0.45)
+	if event_right_face_panel:
+		event_right_face_panel.modulate = Color(1, 1, 1, 1.0 if not left_active else 0.45)
+
+
+func _finish_event_dialog(result: Dictionary) -> void:
+	if not is_event_mode:
+		return
+	event_finished.emit(result)
+	_reset_event_mode_state()
+	_play_close_effect()
+
+
+func close_event_window_immediate() -> void:
+	_reset_event_mode_state()
+	queue_free()
+
+
+func _reset_event_mode_state() -> void:
+	is_event_mode = false
+	event_context.clear()
+	event_lines.clear()
+	event_line_index = -1
+	event_line_timer = 0.0
+	event_waiting_choice = false
+	event_last_choice_id = ""
+	if event_overlay_root and is_instance_valid(event_overlay_root):
+		event_overlay_root.queue_free()
+	event_overlay_root = null
+	event_left_face_panel = null
+	event_right_face_panel = null
+	event_speaker_label = null
+	event_text_label = null
+	event_choice_panel = null
 
 func get_alive_enemies() -> Array:
 	## 살아있는 적 목록 반환
@@ -293,15 +596,14 @@ func _reset_enemy_timers() -> void:
 
 
 func _update_enemy_timers(delta: float) -> void:
-	## 적 행동 타이머를 민첩에 비례하여 채움
+	## 적 행동 타이머를 액션 딜레이 기준으로 채움
 	if is_battle_paused:
 		return
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
 		if not enemy.is_action_ready():
-			var dex_mult: float = enemy.get_dex() / 10.0
-			enemy.action_timer = minf(enemy.action_timer + Hero.ACTION_FILL_RATE * dex_mult * delta, Hero.ACTION_INTERVAL)
+			enemy.action_timer = minf(enemy.action_timer + delta, enemy.get_action_delay())
 #endregion
 
 
@@ -367,6 +669,8 @@ func _execute_hero_action(hero: Hero) -> void:
 
 	# 행동 타이머 리셋
 	hero.reset_action_timer()
+	if skill_id != "basic_attack":
+		hero.reset_skill_action_timer()
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -381,8 +685,9 @@ func _execute_hero_action(hero: Hero) -> void:
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
 
-	# 스킬 쿨타임 시작
-	CooldownManager.start_cooldown(hero.id, skill_id)
+	# 액티브 스킬만 쿨타임 시작
+	if skill_id != "basic_attack":
+		CooldownManager.start_cooldown(hero.id, skill_id)
 
 
 func _execute_enemy_action(enemy: BattleEnemy) -> void:
@@ -400,7 +705,7 @@ func _select_hero_skill(hero: Hero) -> String:
 	## 영웅의 스킬 선택 (클래스별 전투 AI)
 	var skills: Array = hero.get_available_skills()
 
-	# ── 성직자: 아군 HP 60% 이하면 힐 우선 ──
+	# ── 성직자: 아군 HP 70% 미만이면 힐 우선 ──
 	if hero.class_id == "cleric":
 		var wounded: Array = _get_wounded_heroes()
 		if not wounded.is_empty():
@@ -474,8 +779,12 @@ func _has_ready_hero_action(hero: Hero) -> bool:
 
 
 func _can_use_skill(hero: Hero, skill_id: String) -> bool:
-	## 스킬 사용 가능 여부 확인 (토글 + 쿨다운)
+	## 스킬 사용 가능 여부 확인 (토글 + 일반/스킬 ATB + 쿨다운)
 	if not hero.is_skill_enabled(skill_id):
+		return false
+	if skill_id == "basic_attack":
+		return hero.is_action_ready()
+	if not hero.is_skill_action_ready():
 		return false
 	if not CooldownManager.is_skill_ready(hero.id, skill_id):
 		return false
@@ -491,35 +800,33 @@ func _find_finisher_skill(hero: Hero, skill_ids: Array) -> String:
 		if target_type != "single_enemy":
 			continue
 		for enemy in alive:
-			var estimated_dmg: int = _estimate_skill_damage(hero, enemy, skill_data)
+			var estimated_dmg: int = _estimate_skill_damage(hero, enemy, skill_data, str(skill_id))
 			if estimated_dmg >= enemy.current_hp:
 				return skill_id
 	return ""
 
 
-func _estimate_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary) -> int:
+func _estimate_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, skill_id: String = "") -> int:
 	## 스킬 예상 데미지 (크리 제외, 방어 반영)
+	var resolved_skill_id: String = skill_id if not skill_id.is_empty() else str(skill_data.get("id", ""))
+	if resolved_skill_id == "power_strike":
+		var basic_damage: int = _calc_physical_damage(float(hero.get_atk()), target.get_p_def())
+		return maxi(1, basic_damage * 2)
+
 	var damage_base: int = int(skill_data.get("damage_base", 0))
 	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
-	var stat_name: String = scaling.get("stat", "str")
 	var multiplier: float = scaling.get("multiplier", 1.0)
-
-	var stat_value: int = 0
-	match stat_name:
-		"str": stat_value = hero.get_str()
-		"int": stat_value = hero.get_int()
-		"dex": stat_value = hero.get_dex()
-		"luk": stat_value = hero.get_luk()
-
-	var base_damage: int = damage_base + int(stat_value * multiplier)
 	var skill_type: String = skill_data.get("type", "physical")
-	var defense: int = 0
-	if skill_type == "physical":
-		defense = target.get_p_def()
-	elif skill_type == "magic":
-		defense = target.get_m_def()
+	if skill_type == "magic":
+		var int_stat: int = hero.get_base_stat("wis")
+		var equip_matk_bonus: int = hero.get_magic_attack() - int_stat
+		var matk: float = float(damage_base) + float(int_stat) * multiplier + float(equip_matk_bonus)
+		return _calc_magic_damage(matk, target.get_m_def())
 
-	return maxi(1, base_damage - int(defense / 2))
+	var skill_mult: float = float(skill_data.get("skill_multiplier", multiplier))
+	var skill_flat: int = int(skill_data.get("skill_flat_bonus", damage_base))
+	var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
+	return _calc_physical_damage(effective_atk, target.get_p_def())
 
 
 func _play_turn_effect() -> void:
@@ -547,6 +854,10 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		skill_id = "basic_attack"
 		skill_data = DataManager.get_skill("basic_attack")
 
+	hero.reset_action_timer()
+	if skill_id != "basic_attack":
+		hero.reset_skill_action_timer()
+
 	var target_type: String = skill_data.get("target", "single_enemy")
 
 	# 타겟 타입에 따른 처리
@@ -558,15 +869,16 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
 
-	# 스킬 쿨타임 시작
-	CooldownManager.start_cooldown(hero.id, skill_id)
+	# 액티브 스킬만 쿨타임 시작
+	if skill_id != "basic_attack":
+		CooldownManager.start_cooldown(hero.id, skill_id)
 
 
 func _get_wounded_heroes() -> Array:
-	## HP가 60% 이하인 아군 반환
+	## HP가 70% 미만인 아군 반환
 	var result: Array = []
 	for hero in PartyManager.get_alive_heroes():
-		if hero.get_hp_percent() < 0.6:
+		if hero.get_hp_percent() < 0.7:
 			result.append(hero)
 	return result
 
@@ -603,7 +915,7 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var is_crit: bool = randf() * 100 < crit_chance
 
 	# 데미지 계산
-	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
+	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit, skill_id)
 
 	# 클래스별 공격 사운드
 	if SoundManager:
@@ -650,7 +962,7 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 		var is_crit: bool = randf() * 100 < hero.get_crit()
 		if is_crit:
 			any_crit = true
-		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
+		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit, skill_id)
 
 		target.take_damage(damage)
 		target.play_hit_effect(is_crit)
@@ -745,51 +1057,41 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 		pass
 
 
-func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, is_crit: bool) -> int:
+func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, is_crit: bool, skill_id: String = "") -> int:
 	## 스킬 데미지 계산
+	var resolved_skill_id: String = skill_id if not skill_id.is_empty() else str(skill_data.get("id", ""))
 	var damage_base: int = int(skill_data.get("damage_base", 0))
 	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
-	var stat_name: String = scaling.get("stat", "str")
 	var multiplier: float = scaling.get("multiplier", 1.0)
-
-	var stat_value: int = 0
-	match stat_name:
-		"str": stat_value = hero.get_str()
-		"int": stat_value = hero.get_int()
-		"def": stat_value = hero.get_def()
-		"dex": stat_value = hero.get_dex()
-		"luk": stat_value = hero.get_luk()
-
-	var base_damage: int = damage_base + int(stat_value * multiplier)
-
-	# 방어력 적용
 	var skill_type: String = skill_data.get("type", "physical")
-	var defense: int = 0
-	if skill_type == "physical":
-		defense = target.get_p_def()
+	var damage: int = 1
+	if resolved_skill_id == "power_strike":
+		# 강타: 평타 강화가 아니라 액티브 스킬, 최종 데미지 = 평타 데미지의 2배
+		var basic_damage: int = _calc_physical_damage(float(hero.get_atk()), target.get_p_def())
+		damage = maxi(1, basic_damage * 2)
 	elif skill_type == "magic":
-		defense = target.get_m_def()
+		var int_stat: int = hero.get_base_stat("wis")
+		var equip_matk_bonus: int = hero.get_magic_attack() - int_stat
+		var matk: float = float(damage_base) + float(int_stat) * multiplier + float(equip_matk_bonus)
+		damage = _calc_magic_damage(matk, target.get_m_def())
+	else:
+		var skill_mult: float = float(skill_data.get("skill_multiplier", multiplier))
+		var skill_flat: int = int(skill_data.get("skill_flat_bonus", damage_base))
+		var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
+		damage = _calc_physical_damage(effective_atk, target.get_p_def())
 
 	if is_crit:
-		return maxi(1, base_damage)  # 크리티컬은 방어 무시
-
-	return maxi(1, base_damage - int(defense / 2))
+		damage = _apply_critical_damage(damage)
+	return maxi(1, damage)
 
 
 func _calc_heal_amount(hero: Hero, skill_data: Dictionary) -> int:
 	## 힐량 계산
-	var heal_base: int = int(skill_data.get("heal_base", 0))
-	var scaling: Dictionary = skill_data.get("heal_scaling", {"stat": "int", "multiplier": 0.5})
-	var stat_name: String = scaling.get("stat", "int")
-	var multiplier: float = scaling.get("multiplier", 0.5)
-
-	var stat_value: int = 0
-	match stat_name:
-		"str": stat_value = hero.get_str()
-		"int": stat_value = hero.get_int()
-		_: stat_value = hero.get_int()
-
-	return heal_base + int(stat_value * multiplier)
+	var heal_base: float = float(skill_data.get("heal_base", skill_data.get("base_damage", 0)))
+	var scaling: Dictionary = skill_data.get("heal_scaling", {"stat": "int", "multiplier": skill_data.get("scaling", 0.5)})
+	var multiplier: float = float(scaling.get("multiplier", skill_data.get("scaling", 0.5)))
+	var int_stat: int = hero.get_base_stat("wis")
+	return _round_half_up(heal_base + float(int_stat) * multiplier)
 
 
 func _get_skill_effect_value(skill_data: Dictionary, effect_type: String, default_value: float) -> float:
@@ -825,7 +1127,7 @@ func _select_smart_target(hero: Hero) -> BattleEnemy:
 	# 한 방에 죽일 수 있는 적 우선
 	var atk := hero.get_atk()
 	for enemy in alive:
-		var expected := maxi(1, atk - int(enemy.get_p_def() / 2))
+		var expected := _calc_physical_damage(float(atk), enemy.get_p_def())
 		if expected >= enemy.current_hp:
 			return enemy
 
@@ -856,7 +1158,11 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	# 도발 상태인 영웅이 있으면 우선 타겟
 	var target: Hero = _find_taunt_target(alive_heroes)
 	if target == null:
-		target = alive_heroes[randi() % alive_heroes.size()]
+		if enemy.enemy_type == "boss":
+			target = alive_heroes[randi() % alive_heroes.size()]
+		else:
+			alive_heroes.sort_custom(func(a, b): return a.get_hp_percent() < b.get_hp_percent())
+			target = alive_heroes[0]
 
 	enemy.play_attack_effect()
 
@@ -883,11 +1189,32 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 
 
 func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
-	var atk := enemy.get_atk()
-	var p_def := target.get_p_def()
-	if is_crit:
-		return maxi(1, atk)
-	return maxi(1, atk - int(p_def / 2))
+	var attack: int = enemy.get_atk()
+	if enemy.damage_type == "magic":
+		var magic_damage := _calc_magic_damage(float(attack), target.get_m_def())
+		return _apply_critical_damage(magic_damage) if is_crit else magic_damage
+	else:
+		var physical_damage := _calc_physical_damage(float(attack), target.get_p_def())
+		return _apply_critical_damage(physical_damage) if is_crit else physical_damage
+
+
+func _calc_physical_damage(atk: float, def_val: float) -> int:
+	return maxi(1, _round_half_up(atk / 2.0 - def_val / 4.0))
+
+
+func _calc_magic_damage(matk: float, mdef: float) -> int:
+	return maxi(1, _round_half_up(matk / 2.0 - mdef / 4.0))
+
+
+func _apply_critical_damage(base_damage: int) -> int:
+	return maxi(1, _round_half_up(float(base_damage) * 1.5))
+
+
+func _round_half_up(value: float) -> int:
+	# Rules require 0.5 up.
+	if value >= 0.0:
+		return int(floor(value + 0.5))
+	return int(ceil(value - 0.5))
 
 
 func _find_taunt_target(alive_heroes: Array) -> Hero:
@@ -1140,18 +1467,8 @@ func _animate_popup(canvas_layer: CanvasLayer, bg: PanelContainer) -> void:
 
 func _check_all_enemies_dead() -> void:
 	## 모든 적이 처치되었는지 확인
-	_update_buttons_for_enemies()
-
-	if current_state == BattleState.VICTORY:
-		return
-
-	var alive_enemies: Array = []
-	for e in enemies:
-		if e != null and e.is_alive():
-			alive_enemies.append(e)
-
-	if alive_enemies.is_empty():
-		_show_claim_reward_button()
+	# 종료 판정 로직을 _check_battle_end로 일원화해서 최소 표시시간 규칙을 동일 적용
+	_check_battle_end()
 
 
 func _check_battle_end() -> bool:
@@ -1165,10 +1482,20 @@ func _check_battle_end() -> bool:
 	var alive_heroes: Array = PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
-		# 적이 모두 사라짐 - 보상 버튼 표시 (각 전투창 독립 보상)
+		# 적이 모두 사라짐 - 너무 빠른 즉시 종료를 막고 최소 시간/사망 모션을 보장
 		_update_buttons_for_enemies()
-		_show_claim_reward_button()
-		return true
+		var now_ms: int = Time.get_ticks_msec()
+		var min_visible_ms: int = int(MIN_BATTLE_VISIBLE_TIME * 1000.0)
+		var min_ready_ms: int = int(VICTORY_POST_KILL_DELAY * 1000.0)
+		if pending_victory_ready_ms <= 0:
+			pending_victory_ready_ms = now_ms + min_ready_ms
+		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
+		if can_finish:
+			_show_claim_reward_button()
+			return true
+		pending_victory = true
+		pending_victory_ready_ms = maxi(pending_victory_ready_ms, now_ms + min_ready_ms)
+		return false
 
 	if alive_heroes.is_empty():
 		_end_battle_defeat()
@@ -1537,6 +1864,9 @@ func _send_log(_msg: String, _color: Color = Color.WHITE) -> void:
 
 
 func _on_close_pressed() -> void:
+	if is_event_mode:
+		_finish_event_dialog({"choice_id": event_last_choice_id, "closed": true})
+		return
 	current_state = BattleState.ENDED
 	queue_free()
 
@@ -1660,17 +1990,17 @@ func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				_is_dragging = true
-				_drag_offset = event.global_position - global_position
+				_battle_is_dragging = true
+				_battle_drag_offset = event.global_position - global_position
 				_bring_to_front()
 			else:
-				if _is_dragging and _merge_target != null:
+				if _battle_is_dragging and _merge_target != null:
 					_execute_merge(_merge_target)
 					return
-				_is_dragging = false
+				_battle_is_dragging = false
 				_clear_merge_highlight()
-	elif event is InputEventMouseMotion and _is_dragging:
-		global_position = event.global_position - _drag_offset
+	elif event is InputEventMouseMotion and _battle_is_dragging:
+		global_position = event.global_position - _battle_drag_offset
 		# 화면 밖으로 나가지 않도록 제한
 		var vp_size := get_viewport().get_visible_rect().size
 		global_position.x = clampf(global_position.x, -size.x + 40, vp_size.x - 40)
@@ -1911,13 +2241,13 @@ func _clear_merge_highlight() -> void:
 func _execute_merge(target: BattleWindow) -> void:
 	## 드래그한 전투창의 적들을 타겟 전투창으로 이전
 	if target == null or not is_instance_valid(target):
-		_is_dragging = false
+		_battle_is_dragging = false
 		_clear_merge_highlight()
 		return
 
 	# 보스전은 머지 불가
 	if is_boss_battle or target.is_boss_battle:
-		_is_dragging = false
+		_battle_is_dragging = false
 		_clear_merge_highlight()
 		return
 
@@ -1943,7 +2273,7 @@ func _execute_merge(target: BattleWindow) -> void:
 	# 하이라이트 정리
 	target.set_merge_highlight(false)
 	_merge_target = null
-	_is_dragging = false
+	_battle_is_dragging = false
 
 	# 머지 효과음
 	if SoundManager:

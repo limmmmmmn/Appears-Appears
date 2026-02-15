@@ -27,7 +27,18 @@ func _update_cooldowns(delta: float) -> void:
 
 func start_cooldown(hero_id: String, skill_id: String) -> void:
 	## 스킬 쿨타임 시작
-	var cooldown_time: float = DataManager.get_skill_cooldown(skill_id)
+	var base_cooldown: float = _get_base_cooldown(skill_id)
+	if base_cooldown <= 0:
+		return
+
+	var dex: int = 0
+	if PartyManager and PartyManager.has_method("get_hero_by_id"):
+		var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+		if hero:
+			dex = hero.get_dex()
+
+	# action_delay = base_cooldown - (DEX * 0.05), min 0.5
+	var cooldown_time: float = maxf(0.5, base_cooldown - float(dex) * 0.05)
 	if cooldown_time <= 0:
 		return
 
@@ -60,10 +71,23 @@ func get_cooldown_percent(hero_id: String, skill_id: String) -> float:
 	var remaining := get_remaining_cooldown(hero_id, skill_id)
 	if remaining <= 0:
 		return 0.0
-	var total: float = DataManager.get_skill_cooldown(skill_id)
+	var total: float = _get_base_cooldown(skill_id)
+	var dex: int = 0
+	if PartyManager and PartyManager.has_method("get_hero_by_id"):
+		var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+		if hero:
+			dex = hero.get_dex()
+	total = maxf(0.5, total - float(dex) * 0.05)
 	if total <= 0:
 		return 0.0
 	return remaining / total
+
+
+func _get_base_cooldown(skill_id: String) -> float:
+	# 룰북: 힐 기본 쿨다운 4.0초
+	if skill_id == "heal":
+		return 4.0
+	return DataManager.get_skill_cooldown(skill_id)
 
 
 func reset_all_cooldowns() -> void:
