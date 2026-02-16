@@ -4,6 +4,7 @@ extends Node
 ## - 적의 행동 타이머는 각 전투창이 독립적으로 관리
 
 signal action_executed  # 액션 실행됨 (RightPartyPanel 쿨다운 업데이트용)
+const BATTLE_ATB_FILL_RATE: float = 0.85
 
 
 func _ready() -> void:
@@ -26,10 +27,11 @@ func _update_hero_timers(delta: float) -> void:
 		var delay: float = maxf(0.001, hero.get_action_delay())
 		var skill_delay: float = maxf(0.001, hero.get_skill_action_delay())
 		if has_active_battle:
+			var battle_delta: float = delta * BATTLE_ATB_FILL_RATE
 			if not hero.is_action_ready():
-				hero.action_timer = minf(hero.action_timer + delta, delay)
+				hero.action_timer = minf(hero.action_timer + battle_delta, delay)
 			if not hero.is_skill_action_ready():
-				hero.skill_action_timer = minf(hero.skill_action_timer + delta, skill_delay)
+				hero.skill_action_timer = minf(hero.skill_action_timer + battle_delta, skill_delay)
 		else:
 			# 필드에서는 UI 표현용으로 ATB를 순환시킨다.
 			hero.action_timer += delta

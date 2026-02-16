@@ -20,7 +20,7 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, window_rect: Rect2)
+signal field_drops_requested(hp_orbs: int, world_pos: Vector2, window_rect: Rect2)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
@@ -48,7 +48,7 @@ const WINDOW_SIZE := Vector2(280, 200)
 const BOSS_WINDOW_SIZE := Vector2(420, 300)  # 보스전 전투창 (약 2배 크기)
 const CENTER_SAFE_SIZE: float = 100.0
 const WINDOW_MARGIN: float = 20.0  # 화면 가장자리 여유
-const MAX_ENEMIES_PER_WINDOW: int = 5
+const MAX_ENEMIES_PER_WINDOW: int = 3
 
 var battle_container: CanvasLayer = null
 
@@ -83,7 +83,7 @@ func add_enemy_to_battle(enemy_ids: Array, parent_node: Node = null, is_elite: b
 	var pending_enemy_ids: Array = enemy_ids.duplicate()
 	var appended_battle_id: int = -1
 
-	# 기존 일반 전투창이 열려 있으면 우선 해당 창에 적 추가 (최대 5마리)
+	# 기존 일반 전투창이 열려 있으면 우선 해당 창에 적 추가 (최대 3마리)
 	var append_target: BattleWindow = _find_append_target_window()
 	if append_target != null and is_instance_valid(append_target):
 		var added_count: int = append_target.add_field_enemies(pending_enemy_ids, is_elite)
@@ -343,7 +343,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 
 	end_battle(battle_id, victory)
 
-	# 승리 보상: 골드/아이템 즉시 지급 + HP/MP 오브 드롭
+	# 승리 보상: 골드/아이템 즉시 지급 + HP 오브 드롭
 	if victory and (window_gold > 0 or not window_items.is_empty()):
 		# 골드 즉시 지급
 		if window_gold > 0 and GameManager:
@@ -356,10 +356,9 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 				if not equipped:
 					InventoryManager.add_item(item_id)
 
-		# 보상 규모에 따라 오브 개수 결정
+		# 보상 규모에 따라 HP 오브 개수 결정
 		var hp_orbs: int = _calc_orb_count(window_gold, window_items.size())
-		var mp_orbs: int = _calc_orb_count(window_gold, window_items.size())
-		field_drops_requested.emit(hp_orbs, mp_orbs, battle_pos, window_screen_rect)
+		field_drops_requested.emit(hp_orbs, battle_pos, window_screen_rect)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -432,8 +431,7 @@ func claim_accumulated_rewards() -> void:
 				if not InventoryManager.try_auto_equip(item_id):
 					InventoryManager.add_item(item_id)
 		var hp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
-		var mp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
-		field_drops_requested.emit(hp_orbs, mp_orbs, last_battle_pos, last_window_rect)
+		field_drops_requested.emit(hp_orbs, last_battle_pos, last_window_rect)
 
 	# 초기화
 	reset_accumulated_rewards()

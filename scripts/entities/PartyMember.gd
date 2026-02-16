@@ -24,7 +24,7 @@ var stun_timer: float = 0.0
 var path_history: Array[Vector2] = []  # 리더만 사용
 var leader_ref: PartyMember = null  # 팔로워만 사용
 const PATH_RECORD_DISTANCE: float = 4.0  # 몇 픽셀마다 기록할지
-const FOLLOW_DISTANCE: float = 18.0  # 팔로워 간 거리
+const FOLLOW_DISTANCE: float = 24.0  # 팔로워 간 거리
 
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var collision: CollisionShape2D = $CollisionShape2D

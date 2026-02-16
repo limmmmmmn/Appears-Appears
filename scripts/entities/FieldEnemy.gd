@@ -64,7 +64,7 @@ func _setup_from_data() -> void:
 	
 	# DEX 기반 이동속도
 	var dex: int = int(data.get("stats", {}).get("dex", 5))
-	chase_speed = 35.0 + dex * 1.5
+	chase_speed = 28.0 + dex * 1.0
 	wander_speed = chase_speed * 0.4
 	
 	# SpriteManager에서 스프라이트 로드

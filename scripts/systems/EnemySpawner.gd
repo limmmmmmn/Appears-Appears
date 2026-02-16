@@ -7,7 +7,8 @@ class_name EnemySpawner
 #=============================================================================
 # 스폰 설정
 #=============================================================================
-const DEFAULT_MAX_ENEMIES: int = 3                    # 최대 동시 적 수(기본값)
+const DEFAULT_MAX_ENEMIES: int = 6                    # 최대 동시 적 수(기본값)
+const FIELD_ENEMY_COUNT_MULTIPLIER: float = 1.35      # 필드 적 수 증폭 계수
 const MIN_SPAWN_DISTANCE_BETWEEN: float = 24.0        # 적들 사이 최소 거리
 const EDGE_SPAWN_PADDING: float = 32.0                # 맵 가장자리 여유
 const MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER: float = 120.0  # 초기 스폰 시 플레이어와 최소 거리
@@ -266,7 +267,9 @@ func _roll_target_enemy_count() -> int:
 		var max_count: int = int(enemy_count.get("max", min_count))
 		if max_count < min_count:
 			max_count = min_count
-		return maxi(1, randi_range(min_count, max_count))
+		var rolled: int = randi_range(min_count, max_count)
+		var boosted: int = int(round(float(rolled) * FIELD_ENEMY_COUNT_MULTIPLIER))
+		return maxi(1, boosted)
 	return DEFAULT_MAX_ENEMIES
 
 

@@ -71,10 +71,10 @@ const NOTICE_PADDING_Y: float = 12.0
 const EQUIP_STAT_LABELS: Dictionary = {
 	"atk": "ATK", "def": "DEF", "mag": "MAG", "int": "INT", "wis": "WIS",
 	"str": "STR", "dex": "DEX", "agi": "AGI", "luk": "LUK", "hp": "HP",
-	"mp": "MP", "spd": "SPD", "hit": "HIT", "eva": "EVA",
+	"spd": "SPD", "hit": "HIT", "eva": "EVA",
 }
 const EQUIP_STAT_ORDER: Array[String] = [
-	"atk", "def", "mag", "int", "wis", "str", "dex", "agi", "luk", "hp", "mp", "spd", "hit", "eva"
+	"atk", "def", "mag", "int", "wis", "str", "dex", "agi", "luk", "hp", "spd", "hit", "eva"
 ]
 
 # 우측 장비 장착 카드

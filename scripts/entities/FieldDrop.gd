@@ -3,19 +3,17 @@ class_name FieldDrop
 ## 필드 드롭 오브젝트: 전투 종료 후 필드에 떨어지는 보상
 ## 플레이어가 위를 지나가면 수집
 
-enum DropType { GOLD, ITEM, HP_ORB, MP_ORB }
+enum DropType { GOLD, ITEM, HP_ORB }
 
 const DROP_ICONS := {
 	DropType.GOLD: "🪙",
 	DropType.ITEM: "📦",
 	DropType.HP_ORB: "💗",
-	DropType.MP_ORB: "💧",
 }
 const DROP_COLORS := {
 	DropType.GOLD: Color(1.0, 0.9, 0.3),
 	DropType.ITEM: Color(0.9, 0.6, 1.0),
 	DropType.HP_ORB: Color(1.0, 0.4, 0.6),
-	DropType.MP_ORB: Color(0.35, 0.75, 1.0),
 }
 
 const ITEM_TYPE_ICONS: Dictionary = {
@@ -37,7 +35,6 @@ const RARITY_COLORS: Dictionary = {
 const OBJECT_SIZE := 16
 const PICKUP_RADIUS := 8.0
 const HP_PER_ORB := 10
-const MP_PER_ORB := 10
 
 var drop_type: DropType = DropType.GOLD
 var gold_amount: int = 0
@@ -45,7 +42,6 @@ var item_id: String = ""
 var item_type: String = ""
 var item_rarity: String = ""
 var heal_amount: int = HP_PER_ORB
-var mana_amount: int = MP_PER_ORB
 var spawn_delay: float = 0.0
 
 var _collected: bool = false
@@ -117,8 +113,6 @@ func collect() -> void:
 			_collect_item()
 		DropType.HP_ORB:
 			_collect_hp()
-		DropType.MP_ORB:
-			_collect_mp()
 
 	_play_collect_anim()
 
@@ -168,32 +162,13 @@ func _collect_hp() -> void:
 		)
 
 
-func _collect_mp() -> void:
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	var restored_count: int = 0
-	for hero_any in party:
-		var hero: Hero = hero_any as Hero
-		if hero == null or hero.is_dead:
-			continue
-		hero.skill_action_timer = minf(hero.skill_action_timer + float(mana_amount) * 0.06, hero.get_skill_action_delay())
-		restored_count += 1
-
-	_spawn_restore_popups("MP+%d" % mana_amount, Color(0.35, 0.75, 1.0))
-	if restored_count > 0 and BattleManager:
-		BattleManager.battle_log_received.emit(
-			"💧 파티 전체 MP +%d" % mana_amount, Color(0.35, 0.75, 1.0)
-		)
-
-
-
-
 func _spawn_heal_popups() -> void:
 	## 필드 파티원 머리 위에 "+10" 초록색 팝업 연출
 	_spawn_restore_popups("+%d" % heal_amount, Color(0.3, 1.0, 0.3))
 
 
 func _spawn_restore_popups(text: String, color: Color) -> void:
-	## 필드 파티원 머리 위에 팝업 연출 (HP/MP 공통)
+	## 필드 파티원 머리 위에 팝업 연출
 	var field_members: Array = get_tree().get_nodes_in_group("party")
 
 	for member in field_members:
@@ -245,7 +220,7 @@ func _build_drop_texture() -> Texture2D:
 			var py: int = y - OBJECT_SIZE / 2
 			var inside: bool = false
 			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.MP_ORB:
+				DropType.GOLD, DropType.HP_ORB:
 					inside = float(px * px + py * py) <= 36.0
 				DropType.ITEM:
 					inside = x >= 3 and x <= 12 and y >= 3 and y <= 12
@@ -257,7 +232,7 @@ func _build_drop_texture() -> Texture2D:
 
 			var edge: bool = false
 			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.MP_ORB:
+				DropType.GOLD, DropType.HP_ORB:
 					edge = float(px * px + py * py) >= 28.0
 				DropType.ITEM:
 					edge = x == 3 or x == 12 or y == 3 or y == 12

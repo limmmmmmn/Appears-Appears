@@ -87,7 +87,8 @@ const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 const BASE_ESCAPE_RATE: float = 40.0
 const GRUDGE_KILLS_PER_LEVEL: int = 5
 const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
-const MAX_ENEMIES_PER_WINDOW: int = 5
+const MAX_ENEMIES_PER_WINDOW: int = 3
+const BATTLE_ATB_FILL_RATE: float = 0.85
 const ENEMY_ROW_GAP: int = 5
 
 # === Mother 2 스타일 배경 효과 ===
@@ -488,7 +489,7 @@ func _spawn_single_enemy(enemy_id: String, make_elite: bool = false, refresh_lay
 
 
 func add_field_enemies(enemy_ids: Array, is_elite: bool = false) -> int:
-	## 필드 조우로 들어온 적을 현재 전투창에 추가 (최대 5)
+	## 필드 조우로 들어온 적을 현재 전투창에 추가 (최대 3)
 	if entry_blocked:
 		return 0
 	if enemy_ids.is_empty():
@@ -842,8 +843,6 @@ func _on_local_grudge_kill() -> void:
 		_play_grudge_levelup_effect()
 		var msg := "⚠ 원념 레벨 %d! 적이 더 맹렬히 공격합니다." % local_grudge_level
 		_send_log(msg, Color(1.0, 0.42, 0.42, 1.0))
-		if BattleManager and BattleManager.has_method("push_hud_notice"):
-			BattleManager.push_hud_notice(msg, 1.4, Color(1.0, 0.42, 0.42, 1.0))
 
 	if leveled:
 		_apply_local_grudge_to_all_enemies()
@@ -1228,7 +1227,7 @@ func _update_enemy_timers(delta: float) -> void:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
 		if not enemy.is_action_ready():
-			enemy.action_timer = minf(enemy.action_timer + delta, enemy.get_action_delay())
+			enemy.action_timer = minf(enemy.action_timer + delta * BATTLE_ATB_FILL_RATE, enemy.get_action_delay())
 #endregion
 
 

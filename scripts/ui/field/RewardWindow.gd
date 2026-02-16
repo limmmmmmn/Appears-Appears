@@ -631,8 +631,6 @@ func _get_stats_text(data: Dictionary) -> String:
 		parts.append("MDEF %+d" % int(stats.get("mdef", 0)))
 	if int(stats.get("hp", 0)) != 0:
 		parts.append("HP %+d" % int(stats.get("hp", 0)))
-	if int(stats.get("mp", 0)) != 0:
-		parts.append("MP %+d" % int(stats.get("mp", 0)))
 	if int(stats.get("str", 0)) != 0:
 		parts.append("STR %+d" % int(stats.get("str", 0)))
 	if int(stats.get("int", 0)) != 0:
