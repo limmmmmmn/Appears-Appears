@@ -1,6 +1,6 @@
 [gd_scene format=4 uid="uid://c008tqwu8n251"]
 
-[ext_resource type="Script" uid="uid://dgnfc32uwrn30" path="res://scripts/scenes/Field.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://rfdeqsdabhqc" path="res://scripts/scenes/Field.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://w64om3yc6rup" path="res://assets/sprites/tilesets/grass.png" id="2_4afwf"]
 [ext_resource type="Texture2D" uid="uid://cidwgh8l8espo" path="res://assets/sprites/tilesets/forest.png" id="3_c8nu2"]
 [ext_resource type="Texture2D" uid="uid://dyx34ojd6pmj3" path="res://assets/sprites/tilesets/mountain.png" id="4_ptagh"]
@@ -43,6 +43,7 @@ tile_map_data = PackedByteArray("AAD2//X/AQAAAAAAAAD2//b/AQAAAAAAAAD2//f/AQAAAAA
 tile_set = SubResource("TileSet_ptagh")
 
 [node name="SpawnPoint" type="Marker2D" parent="." unique_id=608308844]
+visible = false
 position = Vector2(240, 135)
 
 [node name="EnemySpawnPoints" type="Node2D" parent="." unique_id=1079645584]

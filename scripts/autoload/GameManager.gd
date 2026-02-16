@@ -169,9 +169,9 @@ func go_to_ending() -> void:
 
 
 func go_to_den() -> void:
-	## 기지 화면으로 이동
-	change_state(GameState.DEN)
+	## 기지 시스템 제거: 호출 시 필드로 복귀
+	change_state(GameState.FIELD)
 	if SaveManager:
 		SaveManager.save_game()
-	get_tree().change_scene_to_file("res://scenes/main/Den.tscn")
+	go_to_field()
 #endregion

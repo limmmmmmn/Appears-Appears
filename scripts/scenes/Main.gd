@@ -27,8 +27,6 @@ func _continue_game() -> void:
 	## 저장된 게임 불러오기
 	if SaveManager.load_game():
 		match GameManager.current_state:
-			GameManager.GameState.DEN:
-				_go_to_den_from_save()
 			_:
 				# 기본은 필드 복귀
 				_go_to_field_from_save()
@@ -72,20 +70,6 @@ func _go_to_field_from_save() -> void:
 		GameManager.change_state(GameManager.GameState.FIELD)
 	else:
 		push_error("[Main] 필드 씬 로드 실패: ", scene_path)
-
-
-func _go_to_den_from_save() -> void:
-	## 저장된 상태가 기지면 기지로 복귀
-	_clear_current_scene()
-	var den_scene: PackedScene = load("res://scenes/main/Den.tscn") as PackedScene
-	if den_scene:
-		var den: Node = den_scene.instantiate()
-		add_child(den)
-		current_scene = den
-		GameManager.change_state(GameManager.GameState.DEN)
-	else:
-		push_error("[Main] 기지 씬 로드 실패")
-		_go_to_field_from_save()
 
 
 func _start_new_game() -> void:

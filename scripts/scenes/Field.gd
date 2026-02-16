@@ -1987,11 +1987,14 @@ func _on_party_wiped() -> void:
 		BattleManager.close_all_battles()
 
 	if game_over_ui:
-		game_over_ui.show_game_over("파티가 전멸했습니다...\n기지로 이동합니다.")
+		game_over_ui.show_game_over("파티가 전멸했습니다...\n타이틀로 이동합니다.")
 
 
 func _on_restart_game() -> void:
-	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
+	var tree := get_tree()
+	if tree == null:
+		return
+	tree.call_deferred("change_scene_to_file", "res://scenes/main/Main.tscn")
 
 
 func _on_quit_game() -> void:
