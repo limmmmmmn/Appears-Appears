@@ -79,11 +79,11 @@ void fragment() {
 "
 
 [node name="BattleWindow" type="PanelContainer" unique_id=1167346498]
-custom_minimum_size = Vector2(280, 190)
+custom_minimum_size = Vector2(280, 210)
 offset_left = 3.0
 offset_top = 1.0
 offset_right = 283.0
-offset_bottom = 191.0
+offset_bottom = 211.0
 mouse_filter = 0
 script = ExtResource("1_battle")
 
@@ -93,9 +93,9 @@ mouse_filter = 1
 theme_override_constants/separation = 0
 
 [node name="TopBar" type="HBoxContainer" parent="MainVBox" unique_id=1913141494]
-visible = false
 layout_mode = 2
-alignment = 2
+custom_minimum_size = Vector2(0, 22)
+theme_override_constants/separation = 6
 
 [node name="CloseButton" type="Button" parent="MainVBox/TopBar" unique_id=262349809]
 visible = false
@@ -107,6 +107,7 @@ text = "x"
 layout_mode = 2
 mouse_filter = 1
 size_flags_vertical = 3
+size_flags_stretch_ratio = 7.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_5btk3")
 
 [node name="Background" type="ColorRect" parent="MainVBox/BattleArea"]
@@ -122,13 +123,35 @@ size_flags_vertical = 4
 theme_override_constants/separation = 5
 alignment = 1
 
-[node name="RunButton" type="Button" parent="." unique_id=219318160]
+[node name="InfoBar" type="PanelContainer" parent="MainVBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 20)
+
+[node name="InfoLabel" type="Label" parent="MainVBox/InfoBar"]
+layout_mode = 2
+text = "💰0  📦0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ButtonBar" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 30)
+alignment = 1
+theme_override_constants/separation = 14
+
+[node name="BlockEntryButton" type="Button" parent="MainVBox/ButtonBar"]
+custom_minimum_size = Vector2(104, 24)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "봉쇄"
+toggle_mode = true
+
+[node name="RunButton" type="Button" parent="MainVBox/ButtonBar" unique_id=219318160]
 unique_name_in_owner = true
-layout_mode = 0
-custom_minimum_size = Vector2(40, 20)
-offset_right = 40.0
-offset_bottom = 20.0
+custom_minimum_size = Vector2(104, 24)
+layout_mode = 2
+size_flags_horizontal = 4
 mouse_filter = 0
 tooltip_text = "즉시 도주 (보상 50%)"
 theme_override_font_sizes/font_size = 9
-text = "도주"
+text = "도주 50%"

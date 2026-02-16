@@ -137,17 +137,33 @@ func _on_shell_gui_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
-				_is_dragging = true
-				_drag_offset = mb.global_position - shell_panel.global_position
-				_bring_shell_to_front()
+				begin_shell_drag(mb.global_position)
 				shell_panel.accept_event()
 			else:
-				_is_dragging = false
+				end_shell_drag()
 	elif event is InputEventMouseMotion and _is_dragging:
 		var mm := event as InputEventMouseMotion
-		shell_panel.global_position = mm.global_position - _drag_offset
-		_clamp_to_viewport()
+		drag_shell_to(mm.global_position)
 		shell_panel.accept_event()
+
+
+func begin_shell_drag(global_mouse_pos: Vector2) -> void:
+	if not draggable or shell_panel == null:
+		return
+	_is_dragging = true
+	_drag_offset = global_mouse_pos - shell_panel.global_position
+	_bring_shell_to_front()
+
+
+func drag_shell_to(global_mouse_pos: Vector2) -> void:
+	if not draggable or shell_panel == null or not _is_dragging:
+		return
+	shell_panel.global_position = global_mouse_pos - _drag_offset
+	_clamp_to_viewport()
+
+
+func end_shell_drag() -> void:
+	_is_dragging = false
 
 
 func _bring_shell_to_front() -> void:

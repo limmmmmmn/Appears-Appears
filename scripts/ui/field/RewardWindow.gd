@@ -63,6 +63,10 @@ var _prev_tree_paused: bool = false
 var _prev_battle_paused: bool = false
 var _is_shell_hovered: bool = false
 var _pause_anim_t: float = 0.0
+var _card_drag_tracking: bool = false
+var _card_drag_started: bool = false
+var _card_drag_start_pos: Vector2 = Vector2.ZERO
+const CARD_DRAG_THRESHOLD: float = 6.0
 
 
 func _ready() -> void:
@@ -102,20 +106,16 @@ func show_loot_selection(items: Array[String]) -> void:
 	hero_pick_panel.visible = false
 	subtitle_label.text = "원하는 아이템 카드를 선택하세요."
 	_build_item_cards()
-	_apply_reward_auto_pause(true)
+	_apply_reward_auto_pause(false)
 	open_shell()
 
 
 func _process(delta: float) -> void:
-	if _forced_pause_applied:
-		if BattleManager and not BattleManager.is_battle_paused:
-			BattleManager.set_battle_paused(true)
-		if get_tree() and not get_tree().paused:
-			get_tree().paused = true
-
 	var paused_now: bool = false
 	if get_tree():
 		paused_now = get_tree().paused
+	if shell_panel and is_instance_valid(shell_panel):
+		_is_shell_hovered = shell_panel.get_global_rect().has_point(get_viewport().get_mouse_position())
 	if paused_now:
 		var dim := 1.0 if _is_shell_hovered else 0.62
 		modulate = Color(dim, dim, dim, 1.0)
@@ -232,6 +232,7 @@ func _build_item_cards() -> void:
 		card_btn.focus_mode = Control.FOCUS_NONE
 		card_btn.clip_contents = false
 		card_btn.pressed.connect(_on_item_card_pressed.bind(i))
+		card_btn.gui_input.connect(_on_item_card_gui_input.bind(card_btn))
 		_apply_card_style(card_btn, i == 0 and i < item_ids.size(), i)
 		cards_row.add_child(card_btn)
 		card_buttons.append(card_btn)
@@ -241,6 +242,38 @@ func _build_item_cards() -> void:
 		else:
 			_populate_empty_card(card_btn)
 		_make_children_click_through(card_btn)
+
+
+func _on_item_card_gui_input(event: InputEvent, card_btn: Button) -> void:
+	if card_btn == null or not is_instance_valid(card_btn):
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			if mb.pressed:
+				_card_drag_tracking = true
+				_card_drag_started = false
+				_card_drag_start_pos = mb.global_position
+				begin_shell_drag(mb.global_position)
+				_is_shell_hovered = true
+			else:
+				if _card_drag_started:
+					end_shell_drag()
+					_card_drag_tracking = false
+					_card_drag_started = false
+					card_btn.accept_event()
+				else:
+					end_shell_drag()
+					_card_drag_tracking = false
+					_card_drag_started = false
+	elif event is InputEventMouseMotion and _card_drag_tracking:
+		var mm := event as InputEventMouseMotion
+		if not _card_drag_started and mm.global_position.distance_to(_card_drag_start_pos) >= CARD_DRAG_THRESHOLD:
+			_card_drag_started = true
+		if _card_drag_started:
+			drag_shell_to(mm.global_position)
+			_is_shell_hovered = true
+			card_btn.accept_event()
 
 
 func _populate_empty_card(card_btn: Button) -> void:
@@ -507,27 +540,8 @@ func _on_shell_mouse_exited() -> void:
 
 
 func _apply_reward_auto_pause(enable: bool) -> void:
-	if enable:
-		if _forced_pause_applied:
-			return
-		_prev_tree_paused = false
-		if get_tree():
-			_prev_tree_paused = get_tree().paused
-		_prev_battle_paused = BattleManager != null and BattleManager.is_battle_paused
-		if BattleManager:
-			BattleManager.set_battle_paused(true)
-		if get_tree():
-			get_tree().paused = true
-		_forced_pause_applied = true
-		return
-
-	if not _forced_pause_applied:
-		return
-	if BattleManager:
-		BattleManager.set_battle_paused(_prev_battle_paused)
-	var restore_tree: bool = _prev_tree_paused or _prev_battle_paused
-	if get_tree():
-		get_tree().paused = restore_tree
+	# 보상윈도우는 더 이상 자동으로 게임을 멈추지 않는다.
+	# 일시정지는 스페이스/전역 정지 토글에서만 제어한다.
 	_forced_pause_applied = false
 
 
