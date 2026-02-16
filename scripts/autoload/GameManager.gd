@@ -14,6 +14,7 @@ var current_field: int = 1
 var max_fields_per_stage: int = 3
 
 var gold: int = 0
+var kill_count: int = 0
 var obtained_legendaries: Array = []
 var is_paused: bool = false
 
@@ -30,6 +31,7 @@ func start_new_game() -> void:
 	current_stage = 1
 	current_field = 1
 	gold = 2000
+	kill_count = 0
 	obtained_legendaries.clear()
 	
 	# 파티 및 인벤토리 초기화
@@ -45,6 +47,12 @@ func start_new_game() -> void:
 func add_gold(amount: int) -> void:
 	gold += amount
 	gold_changed.emit(gold)
+
+
+func add_kill_count(amount: int = 1) -> void:
+	if amount <= 0:
+		return
+	kill_count += amount
 	
 
 

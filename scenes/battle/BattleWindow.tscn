@@ -114,9 +114,10 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea" unique_id=197219225]
+[node name="EnemyContainer" type="VBoxContainer" parent="MainVBox/BattleArea" unique_id=197219225]
 layout_mode = 2
 mouse_filter = 2
+size_flags_horizontal = 4
 size_flags_vertical = 4
 theme_override_constants/separation = 5
 alignment = 1

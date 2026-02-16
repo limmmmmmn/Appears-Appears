@@ -17,6 +17,7 @@ const MAX_SPAWN_ATTEMPTS: int = 50
 # 리스폰 설정
 const RESPAWN_DELAY_MIN: float = 1.0   # 최소 리스폰 대기 시간
 const RESPAWN_DELAY_MAX: float = 2.5   # 최대 리스폰 대기 시간
+const FIELD_ENEMY_Z: int = 48
 
 # 타일 타입 매핑
 var tile_type_map: Dictionary = {
@@ -299,6 +300,7 @@ func _spawn_boss(field_enemies: Array) -> void:
 		return
 
 	var enemy: Node2D = field_enemy_scene.instantiate()
+	enemy.z_index = FIELD_ENEMY_Z
 	field.add_child(enemy)
 
 	# 보스는 맵 중앙 근처에 스폰
@@ -321,6 +323,7 @@ func spawn_field_boss(field_enemies: Array) -> void:
 		boss_id = "slime"
 
 	var enemy: Node2D = field_enemy_scene.instantiate()
+	enemy.z_index = FIELD_ENEMY_Z
 	field.add_child(enemy)
 
 	# 기본은 맵 중앙, 테스트 필드는 커스텀 보스 위치 사용
@@ -342,8 +345,8 @@ func spawn_field_boss(field_enemies: Array) -> void:
 	enemy.add_to_group("field_boss")
 	enemy.add_to_group("field_enemy")
 
-	# 2배 크기 + 정지형 보스
-	enemy.scale = Vector2(2, 2)
+	# 3배 크기 + 정지형 보스
+	enemy.scale = Vector2(3, 3)
 
 	# 보스는 움직이지 않음 - _setup_from_data 이후 덮어쓰기
 	enemy.set_deferred("wander_speed", 0.0)
@@ -384,6 +387,7 @@ func _find_random_far_position(player_pos: Vector2) -> Vector2:
 
 func _spawn_enemy_at(tile_data: Dictionary, field_enemies: Array, force_elite: bool = false, is_respawn: bool = false) -> void:
 	var enemy: Node2D = field_enemy_scene.instantiate()
+	enemy.z_index = FIELD_ENEMY_Z
 	field.add_child(enemy)
 
 	var tile_type: String = str(tile_data.get("tile_type", "grass"))

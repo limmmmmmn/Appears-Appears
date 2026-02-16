@@ -43,6 +43,7 @@ var spectate_speed: float = 80.0
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_setup_from_data()
 	_set_state(State.IDLE)
 	

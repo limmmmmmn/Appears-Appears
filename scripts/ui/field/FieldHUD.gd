@@ -2,7 +2,7 @@ extends CanvasLayer
 class_name FieldHUD
 ## 필드 HUD 메인 컨트롤러
 ## 구성:
-##   TopBar     - 스테이지, 골드, 킬, 배속, 메뉴 (상단)
+##   TopBar     - 스테이지, 골드, 배속, 메뉴 (상단)
 ##   PartyCards - 파티 카드 (하단 중앙)
 
 signal menu_pressed
@@ -845,6 +845,9 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("hud_notice_requested"):
 			if not BattleManager.hud_notice_requested.is_connected(_on_hud_notice_requested):
 				BattleManager.hud_notice_requested.connect(_on_hud_notice_requested)
+		if BattleManager.has_signal("battle_pause_changed"):
+			if not BattleManager.battle_pause_changed.is_connected(_on_battle_pause_changed):
+				BattleManager.battle_pause_changed.connect(_on_battle_pause_changed)
 
 	if InventoryManager:
 		if InventoryManager.has_signal("item_equipped"):
@@ -898,6 +901,13 @@ func _on_equip_dropped(_hero_index: int, _item_id: String) -> void:
 
 func _on_hud_notice_requested(message: String, duration: float = 2.0, color: Color = Color.WHITE) -> void:
 	_show_notice(message, duration, color)
+
+
+func _on_battle_pause_changed(paused: bool) -> void:
+	if battle_pause_button:
+		battle_pause_button.set_pressed_no_signal(paused)
+	_update_battle_pause_button_text(paused)
+	_apply_pause_ui_state(paused)
 
 
 func _on_item_equipped(hero_name: String, item_id: String, _slot: String, replaced_id: String) -> void:

@@ -4,16 +4,6 @@ WARNING: res://scenes/battle/BattleWindow.tscn:3 - ext_resource, invalid UID: ui
    at: load (scene/resources/resource_format_text.cpp:500)
 WARNING: res://scenes/battle/BattleEnemy.tscn:3 - ext_resource, invalid UID: uid://buyis0no4ixyb - using text path instead: res://scripts/battle/BattleEnemy.gd
    at: load (scene/resources/resource_format_text.cpp:500)
-SCRIPT ERROR: Parse Error: Could not resolve class "WindowShell".
-   at: GDScript::reload (res://scripts/battle/BattleWindow.gd:1)
-ERROR: Failed to load script "res://scripts/battle/BattleWindow.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript.cpp:2907)
-SCRIPT ERROR: Parse Error: Value of type "WindowShell" cannot be assigned to a variable of type "PanelContainer".
-   at: GDScript::reload (res://scripts/ui/window/WindowShell.gd:38)
-SCRIPT ERROR: Compile Error: Failed to compile depended scripts.
-   at: GDScript::reload (res://scripts/autoload/BattleManager.gd:0)
-ERROR: Failed to load script "res://scripts/autoload/BattleManager.gd" with error "Compilation failed".
-   at: load (modules/gdscript/gdscript.cpp:2907)
 ERROR: Condition "ret != noErr" is true. Returning: ""
    at: get_system_ca_certificates (platform/macos/os_macos.mm:1014)
 WARNING: res://scenes/main/Title.tscn:3 - ext_resource, invalid UID: uid://d3oncedwj6ct2 - using text path instead: res://scripts/scenes/Title.gd

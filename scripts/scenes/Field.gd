@@ -9,6 +9,7 @@ const TEST_FIELD_ID := "field_1_1"
 const TEST_MAP_TILES := Vector2i(60, 34) # 960x544 (tile 16 기준)
 const TEST_TILE_SIZE := 16
 const TEST_CAMERA_MARGIN_TILES := 0
+const FIELD_OBJECT_SIZE := 16
 const TEST_FLOOR_SOURCE_ID := 0
 const TEST_WALL_SOURCE_ID := 2
 const FIELD_TILE_TYPE_MAP := {
@@ -24,22 +25,67 @@ const RECRUIT_TRIGGER_DISTANCE: float = 46.0
 const RECRUIT_MIN_DIST_FROM_PLAYER: float = 170.0
 const RECRUIT_MIN_DIST_FROM_BOSS: float = 130.0
 const TREASURE_CHEST_RATIOS: Array[Vector2] = [
-	Vector2(0.30, 0.30),
-	Vector2(0.60, 0.74),
-	Vector2(0.78, 0.52),
+	Vector2(0.56, 0.46),
 ]
-const TREASURE_LOCKED_CHEST_INDEX: int = 2
+const TREASURE_LOCKED_CHEST_INDEX: int = -1
 const TREASURE_KEY_ITEM_ID: String = "treasure_key"
-const TREASURE_REWARD_RARITIES: Array[String] = ["magic", "rare", "epic", "legendary"]
+const TREASURE_REWARD_RARITIES: Array[String] = ["uncommon", "magic", "rare"]
+const SANCTUARY_SPAWN_RATIO := Vector2(0.5, 0.58)
+const SANCTUARY_HEAL_RADIUS: float = 34.0
+const SANCTUARY_HEAL_INTERVAL: float = 0.28
+const SANCTUARY_HP_PER_TICK: int = 1
+const SANCTUARY_MP_PER_TICK: int = 2
 const RECRUIT_EVENT_LINE_INTERVAL: float = 1.55
 const EVENT_WINDOW_SCENE := preload("res://scenes/event/EventWindow.tscn")
 const REWARD_WINDOW_SCENE := preload("res://scenes/ui/RewardWindow.tscn")
 const WINDOW_SHELL_SCRIPT := preload("res://scripts/ui/window/WindowShell.gd")
+const FIELD_GRASS_SCENE := preload("res://scenes/field/Grass.tscn")
+const DEFAULT_GRASS_TEXTURE := preload("res://assets/sprites/tilesets/grass.png")
+const TEST_FIELD_OVERLAY_TEXTURE := preload("res://assets/sprites/maps/fieldmap_1.png")
 const EVENT_WINDOW_MARGIN: float = 20.0
 const EVENT_CENTER_SAFE_SIZE: float = 100.0
 const EVENT_HUD_TOP_HEIGHT: float = 32.0
 const EVENT_HUD_BOTTOM_HEIGHT: float = 60.0
 const EVENT_WINDOW_SIZE_FALLBACK := Vector2(280, 200)
+const FIELD_GRASS_A_CANDIDATE_PATHS: Array[String] = [
+	"res://assets/sprites/tilesets/Grass_A.png",
+	"res://assets/sprites/tilesets/grass_a.png",
+	"res://assets/sprites/tilesets/GrassA.png",
+]
+const FIELD_GRASS_B_CANDIDATE_PATHS: Array[String] = [
+	"res://assets/sprites/tilesets/Grass_B.png",
+	"res://assets/sprites/tilesets/grass_b.png",
+	"res://assets/sprites/tilesets/GrassB.png",
+]
+const FIELD_GRASS_MIN_COUNT: int = 420
+const FIELD_GRASS_MAX_COUNT: int = 620
+const FIELD_GRASS_PATCH_COUNT: int = 96
+const FIELD_GRASS_PATCH_SIZE_MIN: int = 8
+const FIELD_GRASS_PATCH_SIZE_MAX: int = 22
+const FIELD_GRASS_PATCH_RADIUS_MIN_TILES: float = 1.3
+const FIELD_GRASS_PATCH_RADIUS_MAX_TILES: float = 3.6
+const FIELD_GRASS_FILL_ATTEMPTS: int = 1800
+const FIELD_GRASS_MIN_SEPARATION: float = 2.3
+const FIELD_GRASS_PADDING: float = 24.0
+const FIELD_GRASS_MIN_DIST_PLAYER: float = 34.0
+const FIELD_GRASS_MIN_DIST_ENEMY: float = 26.0
+const FIELD_GRASS_MIN_DIST_OBJECT: float = 22.0
+const FIELD_GRASS_INTERACT_RADIUS: float = 30.0
+const FIELD_GRASS_INTERACT_STRENGTH: float = 1.0
+const FIELD_GRASS_ENEMY_INTERACT_RADIUS: float = 26.0
+const FIELD_GRASS_ENEMY_INTERACT_STRENGTH: float = 0.85
+const FIELD_GRASS_WIND_INTERVAL_MIN: float = 2.4
+const FIELD_GRASS_WIND_INTERVAL_MAX: float = 6.0
+const FIELD_GRASS_WIND_DURATION_MIN: float = 1.1
+const FIELD_GRASS_WIND_DURATION_MAX: float = 2.6
+const FIELD_GRASS_WIND_PEAK_MIN: float = 0.35
+const FIELD_GRASS_WIND_PEAK_MAX: float = 1.0
+const FIELD_GRASS_BACK_Z: int = 36
+const FIELD_GRASS_FRONT_Z: int = 108
+const FIELD_GRASS_FRONT_RATIO: float = 0.42
+const FIELD_GRASS_FRONT_ALPHA: float = 0.9
+const FIELD_WORLD_OBJECT_Z: int = 48
+const FIELD_WORLD_EFFECT_Z: int = 52
 
 @export var spawn_point: Marker2D
 @export var exit_area: Area2D
@@ -87,8 +133,23 @@ var recruit_event_on_complete: Callable = Callable()
 var field_treasure_chests: Array[Dictionary] = []
 var reward_window_layer: CanvasLayer = null
 var reward_window: RewardWindow = null
+var pause_dim_layer: CanvasLayer = null
+var pause_dim_rect: ColorRect = null
 var pending_treasure_chest_index: int = -1
 var treasure_interact_cooldown: float = 0.0
+var sanctuary_root: Node2D = null
+var sanctuary_area: Area2D = null
+var sanctuary_tick_timer: float = 0.0
+var field_grass_container: Node2D = null
+var field_grass_nodes: Array = []
+var field_grass_texture_a: Texture2D = null
+var field_grass_texture_b: Texture2D = null
+var grass_wind_strength: float = 0.0
+var grass_wind_dir: float = 1.0
+var grass_wind_active: bool = false
+var grass_wind_timer: float = 0.0
+var grass_wind_duration: float = 0.0
+var grass_wind_peak: float = 0.0
 
 
 
@@ -103,6 +164,9 @@ func _ready() -> void:
 	_spawn_field_enemies()
 	_spawn_recruit_npc()
 	_spawn_field_treasure_chests()
+	_spawn_sanctuary()
+	_spawn_field_grass()
+	_ensure_pause_dim_overlay()
 	_setup_exit()
 	_connect_signals()
 	
@@ -111,6 +175,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	_update_pause_dim_overlay()
 	if get_tree().paused:
 		# pause 중에는 필수 후속 처리만 유지
 		_update_recruit_followup_dialog(_delta)
@@ -130,6 +195,8 @@ func _process(_delta: float) -> void:
 	_update_recruit_npc(_delta)
 	_update_recruit_followup_dialog(_delta)
 	_poll_treasure_chest_interaction()
+	_update_sanctuary(_delta)
+	_update_field_grass(_delta)
 
 
 func _load_scenes() -> void:
@@ -137,6 +204,22 @@ func _load_scenes() -> void:
 	party_follower_scene = load("res://scenes/field/PartyMember.tscn")
 	field_enemy_scene = load("res://scenes/field/FieldEnemy.tscn")
 	hud_scene = load("res://scenes/ui/FieldHUD.tscn")
+	field_grass_texture_a = _load_first_existing_texture(FIELD_GRASS_A_CANDIDATE_PATHS)
+	field_grass_texture_b = _load_first_existing_texture(FIELD_GRASS_B_CANDIDATE_PATHS)
+	if field_grass_texture_a == null:
+		field_grass_texture_a = DEFAULT_GRASS_TEXTURE
+	if field_grass_texture_b == null:
+		field_grass_texture_b = field_grass_texture_a
+
+
+func _load_first_existing_texture(candidate_paths: Array[String]) -> Texture2D:
+	for path in candidate_paths:
+		if not ResourceLoader.exists(path):
+			continue
+		var tex_res := load(path)
+		if tex_res is Texture2D:
+			return tex_res as Texture2D
+	return null
 
 
 func _find_tilemap() -> void:
@@ -187,6 +270,7 @@ func _setup_test_field_layout() -> void:
 
 	var map_size_px := Vector2(TEST_MAP_TILES.x * TEST_TILE_SIZE, TEST_MAP_TILES.y * TEST_TILE_SIZE)
 	test_field_bounds = Rect2(Vector2.ZERO, map_size_px)
+	_apply_test_field_overlay(map_size_px)
 
 	var bg_rect := get_node_or_null("Background") as ColorRect
 	if bg_rect:
@@ -200,6 +284,28 @@ func _setup_test_field_layout() -> void:
 	var preview_player := get_node_or_null("Player") as Node2D
 	if preview_player:
 		preview_player.global_position = player_spawn
+
+
+func _apply_test_field_overlay(map_size_px: Vector2) -> void:
+	var existing := get_node_or_null("FieldMapOverlay") as Sprite2D
+	if existing:
+		existing.queue_free()
+
+	if TEST_FIELD_OVERLAY_TEXTURE == null:
+		return
+
+	var overlay := Sprite2D.new()
+	overlay.name = "FieldMapOverlay"
+	overlay.centered = false
+	overlay.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	overlay.texture = TEST_FIELD_OVERLAY_TEXTURE
+	overlay.position = Vector2.ZERO
+	overlay.z_index = 8
+	add_child(overlay)
+
+	var tex_size: Vector2 = TEST_FIELD_OVERLAY_TEXTURE.get_size()
+	if tex_size.x > 0.0 and tex_size.y > 0.0:
+		overlay.scale = Vector2(map_size_px.x / tex_size.x, map_size_px.y / tex_size.y)
 
 
 func get_test_field_boss_position() -> Vector2:
@@ -229,24 +335,8 @@ func _apply_camera_limits() -> void:
 	if not camera:
 		return
 
-	var bounds := _get_map_bounds()
-	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
-		return
-
-	# 테스트 필드: 카메라는 가장자리보다 안쪽에서 멈추고 플레이어만 끝까지 이동
-	if _is_test_field():
-		camera.position_smoothing_enabled = false
-		var margin_px: float = float(TEST_TILE_SIZE * TEST_CAMERA_MARGIN_TILES)
-		var inner_pos: Vector2 = bounds.position + Vector2(margin_px, margin_px)
-		var inner_size: Vector2 = bounds.size - Vector2(margin_px * 2.0, margin_px * 2.0)
-		if inner_size.x > TEST_TILE_SIZE * 4 and inner_size.y > TEST_TILE_SIZE * 4:
-			bounds = Rect2(inner_pos, inner_size)
-
-	camera.limit_enabled = true
-	camera.limit_left = int(bounds.position.x)
-	camera.limit_top = int(bounds.position.y)
-	camera.limit_right = int(bounds.end.x)
-	camera.limit_bottom = int(bounds.end.y)
+	# 카메라 제한 제거: 항상 플레이어를 추적
+	camera.limit_enabled = false
 
 
 func _ensure_player_camera() -> Camera2D:
@@ -421,6 +511,7 @@ func _spawn_recruit_npc() -> void:
 	recruit_npc_root = Node2D.new()
 	recruit_npc_root.name = "RecruitNPC"
 	recruit_npc_root.position = spawn_pos
+	recruit_npc_root.z_index = FIELD_WORLD_OBJECT_Z
 	add_child(recruit_npc_root)
 
 	var sprite := AnimatedSprite2D.new()
@@ -860,7 +951,129 @@ func _spawn_field_treasure_chests() -> void:
 		var pos := bounds.position + bounds.size * ratio
 		_create_treasure_chest(i, pos, locked)
 
-	_show_field_notice("보물상자 3개가 배치되었다. (잠긴 상자 1개)", 1.6, Color(0.98, 0.9, 0.65))
+	_show_field_notice("보물상자 1개가 배치되었다.", 1.6, Color(0.98, 0.9, 0.65))
+
+
+func _spawn_sanctuary() -> void:
+	if not _is_test_field():
+		return
+	if sanctuary_root != null and is_instance_valid(sanctuary_root):
+		return
+
+	var bounds: Rect2 = _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+
+	sanctuary_root = Node2D.new()
+	sanctuary_root.name = "Sanctuary"
+	sanctuary_root.position = bounds.position + bounds.size * SANCTUARY_SPAWN_RATIO
+	sanctuary_root.z_index = FIELD_WORLD_OBJECT_Z
+	add_child(sanctuary_root)
+
+	var sprite := Sprite2D.new()
+	sprite.centered = true
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.texture = _build_field_object_texture("sanctuary")
+	sanctuary_root.add_child(sprite)
+
+	sanctuary_area = Area2D.new()
+	sanctuary_area.name = "SanctuaryArea"
+	sanctuary_area.monitoring = true
+	sanctuary_area.monitorable = true
+	sanctuary_area.collision_layer = 1
+	sanctuary_area.collision_mask = 2
+	sanctuary_root.add_child(sanctuary_area)
+
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = SANCTUARY_HEAL_RADIUS
+	shape.shape = circle
+	sanctuary_area.add_child(shape)
+
+	sanctuary_tick_timer = SANCTUARY_HEAL_INTERVAL
+	_show_field_notice("성소를 발견했다. 가까이 가면 HP/MP가 회복된다.", 1.5, Color(0.64, 0.9, 1.0))
+
+
+func _build_field_object_texture(kind: String) -> Texture2D:
+	var img := Image.create(FIELD_OBJECT_SIZE, FIELD_OBJECT_SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	match kind:
+		"treasure", "treasure_locked", "treasure_opened":
+			for y in range(5, 14):
+				for x in range(2, 14):
+					var c := Color(0.62, 0.38, 0.12, 1.0)
+					if y <= 7:
+						c = Color(0.74, 0.46, 0.16, 1.0)
+					if x == 2 or x == 13 or y == 5 or y == 13:
+						c = c.darkened(0.22)
+					img.set_pixel(x, y, c)
+			if kind == "treasure_locked":
+				for y in range(8, 11):
+					for x in range(7, 9):
+						img.set_pixel(x, y, Color(1.0, 0.86, 0.3, 1.0))
+			elif kind == "treasure_opened":
+				for y in range(3, 6):
+					for x in range(2, 14):
+						var oc := Color(0.72, 0.44, 0.16, 1.0)
+						if x == 2 or x == 13 or y == 3 or y == 5:
+							oc = oc.darkened(0.25)
+						img.set_pixel(x, y, oc)
+				for y in range(8, 12):
+					for x in range(6, 10):
+						img.set_pixel(x, y, Color(0.67, 1.0, 0.78, 1.0))
+		"sanctuary":
+			for y in range(3, 14):
+				for x in range(6, 10):
+					var c := Color(0.56, 0.78, 0.88, 1.0)
+					if x == 6 or x == 9 or y == 3 or y == 13:
+						c = c.darkened(0.22)
+					img.set_pixel(x, y, c)
+			for y in range(12, 15):
+				for x in range(3, 13):
+					var b := Color(0.45, 0.6, 0.68, 1.0)
+					if x == 3 or x == 12 or y == 12 or y == 14:
+						b = b.darkened(0.25)
+					img.set_pixel(x, y, b)
+			for y in range(1, 4):
+				for x in range(6, 10):
+					img.set_pixel(x, y, Color(0.35, 0.9, 1.0, 1.0))
+		_:
+			for y in range(2, 14):
+				for x in range(2, 14):
+					img.set_pixel(x, y, Color(0.9, 0.9, 0.9, 1.0))
+
+	return ImageTexture.create_from_image(img)
+
+
+func _make_colored_rect_texture(w: int, h: int, color: Color) -> Texture2D:
+	var img := Image.create(maxi(1, w), maxi(1, h), false, Image.FORMAT_RGBA8)
+	img.fill(color)
+	return ImageTexture.create_from_image(img)
+
+
+func _ensure_pause_dim_overlay() -> void:
+	if pause_dim_layer != null and is_instance_valid(pause_dim_layer):
+		return
+	pause_dim_layer = CanvasLayer.new()
+	pause_dim_layer.name = "PauseDimLayer"
+	pause_dim_layer.layer = 9
+	pause_dim_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(pause_dim_layer)
+
+	pause_dim_rect = ColorRect.new()
+	pause_dim_rect.name = "PauseDimRect"
+	pause_dim_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_dim_rect.color = Color(0.0, 0.0, 0.0, 0.28)
+	pause_dim_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pause_dim_rect.visible = false
+	pause_dim_layer.add_child(pause_dim_rect)
+
+
+func _update_pause_dim_overlay() -> void:
+	if pause_dim_rect == null or not is_instance_valid(pause_dim_rect):
+		return
+	pause_dim_rect.visible = get_tree().paused
 
 
 func _ensure_reward_window() -> void:
@@ -889,23 +1102,15 @@ func _create_treasure_chest(chest_index: int, world_pos: Vector2, is_locked: boo
 	var root := Node2D.new()
 	root.name = "TreasureChest_%d" % chest_index
 	root.position = world_pos
+	root.z_index = FIELD_WORLD_OBJECT_Z
 	add_child(root)
 
-	var icon := Label.new()
+	var icon := Sprite2D.new()
 	icon.name = "Icon"
-	icon.text = "🔒📦" if is_locked else "📦"
-	icon.position = Vector2(-18, -26)
-	icon.add_theme_font_size_override("font_size", 24)
-	icon.add_theme_color_override("font_color", Color(1.0, 0.92, 0.58, 1.0))
+	icon.centered = true
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.texture = _build_field_object_texture("treasure_locked" if is_locked else "treasure")
 	root.add_child(icon)
-
-	var title := Label.new()
-	title.name = "Title"
-	title.text = "잠긴 상자" if is_locked else "보물상자"
-	title.position = Vector2(-34, -40)
-	title.add_theme_font_size_override("font_size", 11)
-	title.add_theme_color_override("font_color", Color(0.96, 0.96, 1.0, 0.95))
-	root.add_child(title)
 
 	var area := Area2D.new()
 	area.name = "ContactArea"
@@ -918,9 +1123,9 @@ func _create_treasure_chest(chest_index: int, world_pos: Vector2, is_locked: boo
 
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
-	circle.radius = 20.0
+	circle.radius = 10.0
 	shape.shape = circle
-	shape.position = Vector2(0, -8)
+	shape.position = Vector2.ZERO
 	area.add_child(shape)
 
 	if not area.body_entered.is_connected(_on_treasure_chest_body_entered.bind(chest_index)):
@@ -930,7 +1135,6 @@ func _create_treasure_chest(chest_index: int, world_pos: Vector2, is_locked: boo
 		"index": chest_index,
 		"root": root,
 		"icon": icon,
-		"title": title,
 		"area": area,
 		"locked": is_locked,
 		"opened": false,
@@ -995,13 +1199,9 @@ func _open_treasure_chest(chest_index: int) -> void:
 	chest["opened"] = true
 	field_treasure_chests[chest_index] = chest
 
-	var icon: Label = chest.get("icon") as Label
+	var icon: Sprite2D = chest.get("icon") as Sprite2D
 	if icon:
-		icon.text = "✅"
-		icon.add_theme_color_override("font_color", Color(0.78, 1.0, 0.82, 1.0))
-	var title: Label = chest.get("title") as Label
-	if title:
-		title.text = "개봉 완료"
+		icon.texture = _build_field_object_texture("treasure_opened")
 	var area: Area2D = chest.get("area") as Area2D
 	if area:
 		area.set_deferred("monitoring", false)
@@ -1115,6 +1315,323 @@ func _are_all_treasure_chests_opened() -> bool:
 		if not bool(chest_dict.get("opened", false)):
 			return false
 	return true
+
+
+func _update_sanctuary(delta: float) -> void:
+	if sanctuary_root == null or not is_instance_valid(sanctuary_root):
+		return
+	if party_leader == null:
+		return
+
+	var dist: float = party_leader.global_position.distance_to(sanctuary_root.global_position)
+	if dist > SANCTUARY_HEAL_RADIUS:
+		sanctuary_tick_timer = SANCTUARY_HEAL_INTERVAL
+		return
+
+	sanctuary_tick_timer -= delta
+	if sanctuary_tick_timer > 0.0:
+		return
+	sanctuary_tick_timer = SANCTUARY_HEAL_INTERVAL
+
+	var healed_total: int = 0
+	if PartyManager:
+		var party: Array = PartyManager.get_party()
+		for hero_any in party:
+			var hero: Hero = hero_any as Hero
+			if hero == null or hero.is_dead:
+				continue
+			healed_total += hero.heal(SANCTUARY_HP_PER_TICK)
+			hero.skill_action_timer = minf(
+				hero.skill_action_timer + float(SANCTUARY_MP_PER_TICK) * 0.08,
+				hero.get_skill_action_delay()
+			)
+		PartyManager.party_changed.emit()
+
+	_spawn_sanctuary_particle(Color(1.0, 0.45, 0.65, 0.95))
+	_spawn_sanctuary_particle(Color(0.35, 0.75, 1.0, 0.95))
+
+	if healed_total > 0 and BattleManager:
+		BattleManager.party_hp_changed.emit()
+
+
+func _spawn_sanctuary_particle(color: Color) -> void:
+	if sanctuary_root == null or not is_instance_valid(sanctuary_root):
+		return
+	var particle := Sprite2D.new()
+	particle.centered = true
+	particle.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	particle.texture = _make_colored_rect_texture(4, 4, color)
+	particle.global_position = sanctuary_root.global_position + Vector2(
+		randf_range(-6.0, 6.0),
+		randf_range(-6.0, 2.0)
+	)
+	particle.z_index = FIELD_WORLD_EFFECT_Z
+	add_child(particle)
+
+	var start_pos: Vector2 = particle.global_position
+	var tween := particle.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(
+		particle,
+		"global_position",
+		start_pos + Vector2(randf_range(-4.0, 4.0), -12.0),
+		0.45
+	).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(particle, "modulate:a", 0.0, 0.45)
+	tween.chain().tween_callback(particle.queue_free)
+
+
+#=============================================================================
+# 필드 풀(Grass) 배치/업데이트
+#=============================================================================
+func _spawn_field_grass() -> void:
+	field_grass_nodes.clear()
+	if field_grass_container != null and is_instance_valid(field_grass_container):
+		field_grass_container.queue_free()
+	field_grass_container = null
+
+	if not _is_test_field():
+		return
+	if FieldManager.is_boss_field():
+		return
+
+	var bounds: Rect2 = _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+
+	field_grass_container = Node2D.new()
+	field_grass_container.name = "FieldGrass"
+	field_grass_container.z_index = 0
+	add_child(field_grass_container)
+	var placed_positions: Array[Vector2] = []
+
+	# 1) 군락(클러스터) 생성: 듬성듬성 대신 뭉쳐 보이게 배치
+	for _patch_idx in range(FIELD_GRASS_PATCH_COUNT):
+		if field_grass_nodes.size() >= FIELD_GRASS_MAX_COUNT:
+			break
+		var center := Vector2(
+			randf_range(bounds.position.x + FIELD_GRASS_PADDING, bounds.end.x - FIELD_GRASS_PADDING),
+			randf_range(bounds.position.y + FIELD_GRASS_PADDING, bounds.end.y - FIELD_GRASS_PADDING)
+		)
+		var patch_size: int = randi_range(FIELD_GRASS_PATCH_SIZE_MIN, FIELD_GRASS_PATCH_SIZE_MAX)
+		var patch_radius_px: float = randf_range(
+			FIELD_GRASS_PATCH_RADIUS_MIN_TILES * TEST_TILE_SIZE,
+			FIELD_GRASS_PATCH_RADIUS_MAX_TILES * TEST_TILE_SIZE
+		)
+
+		for _i in range(patch_size):
+			if field_grass_nodes.size() >= FIELD_GRASS_MAX_COUNT:
+				break
+			var angle: float = randf() * TAU
+			var dist: float = patch_radius_px * pow(randf(), 1.45) # 중심부가 조금 더 조밀
+			var spawn_pos := center + Vector2(cos(angle), sin(angle)) * dist
+			spawn_pos += Vector2(randf_range(-2.0, 2.0), randf_range(-1.5, 1.5))
+			if not _can_place_field_grass_at(spawn_pos):
+				continue
+			if not _is_grass_spacing_ok(spawn_pos, placed_positions):
+				continue
+			if _spawn_single_field_grass(spawn_pos):
+				placed_positions.append(spawn_pos)
+
+	# 2) 부족하면 랜덤 필로 최소 밀도 보장
+	var fill_attempts: int = 0
+	while field_grass_nodes.size() < FIELD_GRASS_MIN_COUNT and fill_attempts < FIELD_GRASS_FILL_ATTEMPTS:
+		fill_attempts += 1
+		var fill_pos := Vector2(
+			randf_range(bounds.position.x + FIELD_GRASS_PADDING, bounds.end.x - FIELD_GRASS_PADDING),
+			randf_range(bounds.position.y + FIELD_GRASS_PADDING, bounds.end.y - FIELD_GRASS_PADDING)
+		)
+		if not _can_place_field_grass_at(fill_pos):
+			continue
+		if not _is_grass_spacing_ok(fill_pos, placed_positions):
+			continue
+		if _spawn_single_field_grass(fill_pos):
+			placed_positions.append(fill_pos)
+
+	grass_wind_strength = 0.0
+	grass_wind_active = false
+	grass_wind_duration = 0.0
+	grass_wind_peak = 0.0
+	grass_wind_timer = randf_range(FIELD_GRASS_WIND_INTERVAL_MIN, FIELD_GRASS_WIND_INTERVAL_MAX)
+	grass_wind_dir = -1.0 if randi() % 2 == 0 else 1.0
+
+
+func _spawn_single_field_grass(spawn_pos: Vector2) -> bool:
+	if field_grass_container == null or not is_instance_valid(field_grass_container):
+		return false
+	if field_grass_nodes.size() >= FIELD_GRASS_MAX_COUNT:
+		return false
+	var grass_node := FIELD_GRASS_SCENE.instantiate()
+	if not (grass_node is Node2D):
+		return false
+	var grass := grass_node as Node2D
+	grass.position = spawn_pos
+	var front_layer: bool = randf() < FIELD_GRASS_FRONT_RATIO
+	if grass is CanvasItem:
+		var c := grass as CanvasItem
+		c.z_index = FIELD_GRASS_FRONT_Z if front_layer else FIELD_GRASS_BACK_Z
+		var alpha: float = FIELD_GRASS_FRONT_ALPHA if front_layer else 1.0
+		c.modulate = Color(1.0, 1.0, 1.0, alpha)
+	field_grass_container.add_child(grass)
+	if grass.has_method("set_grass_textures"):
+		grass.call("set_grass_textures", field_grass_texture_a, field_grass_texture_b)
+	if grass.has_method("set_global_wind"):
+		grass.call("set_global_wind", grass_wind_strength, grass_wind_dir)
+	field_grass_nodes.append(grass)
+	return true
+
+
+func _is_grass_spacing_ok(spawn_pos: Vector2, placed_positions: Array[Vector2]) -> bool:
+	for p in placed_positions:
+		if p.distance_to(spawn_pos) < FIELD_GRASS_MIN_SEPARATION:
+			return false
+	return true
+
+
+func _can_place_field_grass_at(world_pos: Vector2) -> bool:
+	var tile_center := world_pos + Vector2(TEST_TILE_SIZE * 0.5, TEST_TILE_SIZE * 0.5)
+	if not _is_walkable_tile_at_world(tile_center):
+		return false
+
+	if party_leader and world_pos.distance_to(party_leader.global_position) < FIELD_GRASS_MIN_DIST_PLAYER:
+		return false
+
+	if recruit_npc_root != null and is_instance_valid(recruit_npc_root):
+		if world_pos.distance_to(recruit_npc_root.global_position) < FIELD_GRASS_MIN_DIST_OBJECT:
+			return false
+
+	if sanctuary_root != null and is_instance_valid(sanctuary_root):
+		if world_pos.distance_to(sanctuary_root.global_position) < FIELD_GRASS_MIN_DIST_OBJECT + 8.0:
+			return false
+
+	for enemy_any in field_enemies:
+		var enemy: FieldEnemy = enemy_any as FieldEnemy
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if world_pos.distance_to(enemy.global_position) < FIELD_GRASS_MIN_DIST_ENEMY:
+			return false
+
+	for chest_any in field_treasure_chests:
+		var chest: Dictionary = chest_any as Dictionary
+		var root: Node2D = chest.get("root", null) as Node2D
+		if root == null or not is_instance_valid(root):
+			continue
+		if world_pos.distance_to(root.global_position) < FIELD_GRASS_MIN_DIST_OBJECT:
+			return false
+
+	return true
+
+
+func _is_walkable_tile_at_world(world_pos: Vector2) -> bool:
+	if tilemap == null:
+		return true
+	var cell: Vector2i = tilemap.local_to_map(world_pos)
+	var source_id: int = tilemap.get_cell_source_id(cell)
+	if source_id == -1:
+		return true
+	var tile_type: String = str(FIELD_TILE_TYPE_MAP.get(source_id, "grass"))
+	return FieldManager.is_tile_walkable(tile_type)
+
+
+func _update_field_grass(delta: float) -> void:
+	if field_grass_nodes.is_empty():
+		return
+
+	_update_field_grass_wind(delta)
+
+	var actor_pos_list: Array[Vector2] = []
+	var actor_vel_list: Array[Vector2] = []
+	var actor_radius_list: Array[float] = []
+	var actor_strength_list: Array[float] = []
+	if party_leader:
+		var p_speed := party_leader.velocity.length()
+		actor_pos_list.append(party_leader.global_position)
+		actor_vel_list.append(party_leader.velocity)
+		actor_radius_list.append(FIELD_GRASS_INTERACT_RADIUS + clampf(p_speed * 0.08, 0.0, 12.0))
+		actor_strength_list.append(FIELD_GRASS_INTERACT_STRENGTH + clampf(p_speed / 55.0, 0.0, 1.2))
+
+	for enemy_any in field_enemies:
+		var enemy: FieldEnemy = enemy_any as FieldEnemy
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		var e_speed := enemy.velocity.length()
+		actor_pos_list.append(enemy.global_position)
+		actor_vel_list.append(enemy.velocity)
+		actor_radius_list.append(FIELD_GRASS_ENEMY_INTERACT_RADIUS + clampf(e_speed * 0.08, 0.0, 9.0))
+		actor_strength_list.append(FIELD_GRASS_ENEMY_INTERACT_STRENGTH + clampf(e_speed / 85.0, 0.0, 0.8))
+
+	for i in range(field_grass_nodes.size() - 1, -1, -1):
+		var node_ref = field_grass_nodes[i]
+		if node_ref == null or not is_instance_valid(node_ref):
+			field_grass_nodes.remove_at(i)
+			continue
+		if node_ref.has_method("set_global_wind"):
+			node_ref.call("set_global_wind", grass_wind_strength, grass_wind_dir)
+		if not node_ref.has_method("apply_player_influence"):
+			continue
+
+		var grass_node: Node2D = node_ref as Node2D
+		if grass_node == null:
+			continue
+
+		var grass_world_pos: Vector2 = grass_node.global_position + Vector2(TEST_TILE_SIZE * 0.5, TEST_TILE_SIZE * 0.5)
+		var best_idx: int = -1
+		var best_effect: float = 0.0
+		for j in range(actor_pos_list.size()):
+			var radius: float = actor_radius_list[j]
+			if radius <= 0.0:
+				continue
+			var dist: float = grass_world_pos.distance_to(actor_pos_list[j])
+			if dist > radius:
+				continue
+			var effect: float = (1.0 - dist / radius) * actor_strength_list[j]
+			if effect > best_effect:
+				best_effect = effect
+				best_idx = j
+
+		if best_idx >= 0:
+			node_ref.call(
+				"apply_player_influence",
+				actor_pos_list[best_idx],
+				actor_vel_list[best_idx],
+				actor_radius_list[best_idx],
+				actor_strength_list[best_idx],
+				delta
+			)
+		else:
+			# 근처 대상이 없으면 접촉 굴절을 빠르게 풀어줌
+			node_ref.call(
+				"apply_player_influence",
+				Vector2.ZERO,
+				Vector2.ZERO,
+				0.0,
+				0.0,
+				delta
+			)
+
+
+func _update_field_grass_wind(delta: float) -> void:
+	if grass_wind_active:
+		grass_wind_timer += delta
+		var t := clampf(grass_wind_timer / maxf(0.001, grass_wind_duration), 0.0, 1.0)
+		# 0 -> 1 -> 0 부드러운 거스트 파형
+		grass_wind_strength = sin(t * PI) * grass_wind_peak
+		if t >= 1.0:
+			grass_wind_active = false
+			grass_wind_strength = 0.0
+			grass_wind_timer = randf_range(FIELD_GRASS_WIND_INTERVAL_MIN, FIELD_GRASS_WIND_INTERVAL_MAX)
+			grass_wind_dir = -1.0 if randi() % 2 == 0 else 1.0
+		return
+
+	grass_wind_timer -= delta
+	if grass_wind_timer > 0.0:
+		return
+
+	grass_wind_active = true
+	grass_wind_timer = 0.0
+	grass_wind_duration = randf_range(FIELD_GRASS_WIND_DURATION_MIN, FIELD_GRASS_WIND_DURATION_MAX)
+	grass_wind_peak = randf_range(FIELD_GRASS_WIND_PEAK_MIN, FIELD_GRASS_WIND_PEAK_MAX)
+	grass_wind_dir = -1.0 if randi() % 2 == 0 else 1.0
 
 
 #=============================================================================
@@ -1396,7 +1913,6 @@ func _start_boss_battle() -> void:
 	var enemy_id: String = pending_boss_data.get("enemy_id", "")
 	var is_elite: bool = pending_boss_data.get("is_elite", false)
 	var collision_pos: Vector2 = pending_boss_data.get("collision_pos", Vector2.ZERO)
-	var field_enemy: FieldEnemy = pending_boss_data.get("field_enemy")
 
 	# 로그
 	var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
@@ -1404,10 +1920,8 @@ func _start_boss_battle() -> void:
 	if hud:
 		hud.add_system_log("👑 %s와(과)의 보스전 시작!" % enemy_name)
 
-	# 필드 적 제거
-	if is_instance_valid(field_enemy):
-		field_enemies.erase(field_enemy)
-		field_enemy.despawn()
+	# 보스는 전투 시작 시 필드에서 제거하지 않음.
+	# (도주 시에도 맵에 남아있어야 하므로 승리 시점에만 제거)
 
 	# 기존 전투창 모두 닫기
 	BattleManager.close_all_battles()
@@ -1498,6 +2012,16 @@ func _on_boss_victory(_battle_id: int) -> void:
 		hud.add_system_log("🎉 보스를 처치했다!")
 		hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
 
+	# 보스 처치 확정 시에만 필드 보스 제거
+	for i in range(field_enemies.size() - 1, -1, -1):
+		var enemy: FieldEnemy = field_enemies[i]
+		if not is_instance_valid(enemy):
+			continue
+		if enemy.is_boss:
+			field_enemies.remove_at(i)
+			enemy.despawn()
+			break
+
 	spawner.stop_respawn()
 	# 보스 보상은 누적 보상 시스템으로 처리됨
 
@@ -1524,6 +2048,9 @@ func _on_boss_battle_ended(_battle_id: int) -> void:
 	for enemy in field_enemies:
 		if is_instance_valid(enemy) and enemy.has_method("stop_spectating"):
 			enemy.stop_spectating()
+		if is_instance_valid(enemy) and enemy.is_boss:
+			# 도주/패배 등 보스전 종료 후 다시 접촉 가능하도록 복구
+			enemy.is_contacted = false
 
 
 func _on_all_battles_ended() -> void:
@@ -1547,8 +2074,8 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(hp_orbs: int, _mp_orbs: int, world_pos: Vector2, window_rect: Rect2) -> void:
-	## 전투 종료 시 필드에 HP 오브 드롭 스폰
+func _on_field_drops_requested(hp_orbs: int, mp_orbs: int, world_pos: Vector2, window_rect: Rect2) -> void:
+	## 전투 종료 시 필드에 HP/MP 오브 드롭 스폰
 	var drops: Array[Dictionary] = []
 	var delay: float = 0.0
 	var delay_step: float = 0.08
@@ -1556,6 +2083,11 @@ func _on_field_drops_requested(hp_orbs: int, _mp_orbs: int, world_pos: Vector2, 
 	# HP 오브
 	for i in range(hp_orbs):
 		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
+		delay += delay_step
+
+	# MP 오브
+	for i in range(mp_orbs):
+		drops.append({"type": FieldDrop.DropType.MP_ORB, "delay": delay})
 		delay += delay_step
 
 	# 전투창 스크린 영역 → 월드 좌표 변환
@@ -1582,11 +2114,14 @@ func _on_field_drops_requested(hp_orbs: int, _mp_orbs: int, world_pos: Vector2, 
 		match data.type:
 			FieldDrop.DropType.HP_ORB:
 				drop.heal_amount = FieldDrop.HP_PER_ORB
+			FieldDrop.DropType.MP_ORB:
+				drop.mana_amount = FieldDrop.MP_PER_ORB
 
 		# 전투창 영역 내 랜덤 위치
 		var rand_x: float = randf_range(scatter_rect.position.x, scatter_rect.end.x)
 		var rand_y: float = randf_range(scatter_rect.position.y, scatter_rect.end.y)
 		drop.position = Vector2(rand_x, rand_y)
+		drop.z_index = FIELD_WORLD_EFFECT_Z
 
 		add_child(drop)
 

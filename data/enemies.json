@@ -4,9 +4,9 @@
 	"name": "슬라임",
 	"type": "normal",
 	"stats": {
-	  "hp": 22,
-	  "atk": 8,
-	  "def": 3,
+	  "hp": 30,
+	  "atk": 14,
+	  "def": 6,
 	  "dex": 8
 	},
 	"rewards": {
@@ -15,8 +15,8 @@
 	  "gold_max": 10
 	},
 	"drop_table": [
-	  {"item_id": "ring_hp", "chance": 0.04},
-	  {"item_id": "leather_helmet", "chance": 0.03}
+	  {"item_id": "ring_hp", "chance": 0.015},
+	  {"item_id": "leather_helmet", "chance": 0.01}
 	],
 	"skills": ["basic_attack"],
 	"sprite": "slime",
@@ -27,10 +27,11 @@
 	"name": "드래곤",
 	"type": "normal",
 	"stats": {
-	  "hp": 55,
-	  "atk": 20,
-	  "def": 8,
-	  "dex": 9
+	  "hp": 80,
+	  "atk": 36,
+	  "def": 16,
+	  "dex": 10,
+	  "int": 6
 	},
 	"rewards": {
 	  "exp": 30,
@@ -38,9 +39,9 @@
 	  "gold_max": 40
 	},
 	"drop_table": [
-	  {"item_id": "sword_magic", "chance": 0.03},
-	  {"item_id": "shield_magic", "chance": 0.02},
-	  {"item_id": "ring_hp", "chance": 0.04}
+	  {"item_id": "sword_magic", "chance": 0.015},
+	  {"item_id": "shield_magic", "chance": 0.01},
+	  {"item_id": "ring_hp", "chance": 0.015}
 	],
 	"skills": ["basic_attack", "fireball"],
 	"sprite": "dragon",
@@ -51,10 +52,10 @@
 	"name": "박쥐",
 	"type": "normal",
 	"stats": {
-	  "hp": 18,
-	  "atk": 10,
-	  "def": 2,
-	  "dex": 14
+	  "hp": 22,
+	  "atk": 18,
+	  "def": 4,
+	  "dex": 16
 	},
 	"rewards": {
 	  "exp": 8,
@@ -62,8 +63,8 @@
 	  "gold_max": 8
 	},
 	"drop_table": [
-	  {"item_id": "ring_luck", "chance": 0.02},
-	  {"item_id": "boots_speed", "chance": 0.03}
+	  {"item_id": "ring_luck", "chance": 0.01},
+	  {"item_id": "boots_speed", "chance": 0.015}
 	],
 	"skills": ["basic_attack"],
 	"sprite": "bat",
@@ -74,9 +75,9 @@
 	"name": "골렘",
 	"type": "normal",
 	"stats": {
-	  "hp": 45,
-	  "atk": 14,
-	  "def": 10,
+	  "hp": 65,
+	  "atk": 24,
+	  "def": 20,
 	  "dex": 4
 	},
 	"rewards": {
@@ -85,9 +86,9 @@
 	  "gold_max": 25
 	},
 	"drop_table": [
-	  {"item_id": "shield_common", "chance": 0.05},
-	  {"item_id": "iron_helmet", "chance": 0.04},
-	  {"item_id": "heavy_armor_magic", "chance": 0.008}
+	  {"item_id": "shield_common", "chance": 0.02},
+	  {"item_id": "iron_helmet", "chance": 0.015},
+	  {"item_id": "heavy_armor_magic", "chance": 0.004}
 	],
 	"skills": ["basic_attack"],
 	"sprite": "golem",
@@ -98,11 +99,11 @@
 	"name": "다크 소서러",
 	"type": "normal",
 	"stats": {
-	  "hp": 28,
-	  "atk": 16,
-	  "def": 3,
-	  "dex": 7,
-	  "int": 10
+	  "hp": 35,
+	  "atk": 26,
+	  "def": 6,
+	  "dex": 10,
+	  "int": 18
 	},
 	"rewards": {
 	  "exp": 22,
@@ -110,9 +111,9 @@
 	  "gold_max": 30
 	},
 	"drop_table": [
-	  {"item_id": "robe_common", "chance": 0.05},
-	  {"item_id": "staff_magic", "chance": 0.02},
-	  {"item_id": "ring_int", "chance": 0.015}
+	  {"item_id": "robe_common", "chance": 0.02},
+	  {"item_id": "staff_magic", "chance": 0.01},
+	  {"item_id": "ring_int", "chance": 0.008}
 	],
 	"skills": ["basic_attack", "fireball"],
 	"sprite": "dark_sorcerer",
@@ -124,9 +125,9 @@
 	"name": "오크 전사",
 	"type": "elite",
 	"stats": {
-	  "hp": 80,
-	  "atk": 18,
-	  "def": 12,
+	  "hp": 120,
+	  "atk": 32,
+	  "def": 22,
 	  "dex": 8
 	},
 	"rewards": {
@@ -135,9 +136,9 @@
 	  "gold_max": 50
 	},
 	"drop_table": [
-	  {"item_id": "axe_magic", "chance": 0.18},
-	  {"item_id": "heavy_armor_magic", "chance": 0.12},
-	  {"item_id": "shield_magic", "chance": 0.08}
+	  {"item_id": "axe_magic", "chance": 0.08},
+	  {"item_id": "heavy_armor_magic", "chance": 0.05},
+	  {"item_id": "shield_magic", "chance": 0.04}
 	],
 	"skills": ["basic_attack", "power_strike"],
 	"sprite": "orc_warrior",
@@ -148,11 +149,11 @@
 	"name": "다크 메이지",
 	"type": "elite",
 	"stats": {
-	  "hp": 50,
-	  "atk": 22,
-	  "def": 5,
-	  "dex": 5,
-	  "int": 12
+	  "hp": 70,
+	  "atk": 38,
+	  "def": 8,
+	  "dex": 8,
+	  "int": 24
 	},
 	"rewards": {
 	  "exp": 60,
@@ -160,24 +161,50 @@
 	  "gold_max": 70
 	},
 	"drop_table": [
-	  {"item_id": "staff_magic", "chance": 0.18},
-	  {"item_id": "robe_magic", "chance": 0.12},
-	  {"item_id": "ring_int", "chance": 0.08}
+	  {"item_id": "staff_magic", "chance": 0.08},
+	  {"item_id": "robe_magic", "chance": 0.05},
+	  {"item_id": "ring_int", "chance": 0.04}
 	],
 	"skills": ["basic_attack", "fireball"],
 	"sprite": "dark_mage",
 	"tags": ["humanoid", "mage", "elite"],
 	"damage_type": "magic"
   },
+  "boss_slime": {
+	"id": "boss_slime",
+	"name": "슬라임 킹",
+	"type": "boss",
+	"stats": {
+	  "hp": 900,
+	  "atk": 44,
+	  "def": 36,
+	  "dex": 12,
+	  "int": 6
+	},
+	"rewards": {
+	  "exp": 120,
+	  "gold_min": 55,
+	  "gold_max": 95
+	},
+	"drop_table": [
+	  {"item_id": "ring_hp", "chance": 0.2},
+	  {"item_id": "shield_common", "chance": 0.12}
+	],
+	"skills": ["basic_attack", "power_strike"],
+	"sprite": "slime",
+	"tags": ["monster", "slime", "boss"],
+	"damage_type": "physical"
+  },
   "boss_goblin_king": {
 	"id": "boss_goblin_king",
 	"name": "고블린 킹",
 	"type": "boss",
 	"stats": {
-	  "hp": 280,
-	  "atk": 28,
-	  "def": 18,
-	  "dex": 10
+	  "hp": 900,
+	  "atk": 44,
+	  "def": 36,
+	  "dex": 12,
+	  "int": 6
 	},
 	"rewards": {
 	  "exp": 250,
@@ -186,11 +213,12 @@
 	},
 	"drop_table": [
 	  {"item_id": "crown_legendary", "chance": 1.0},
-	  {"item_id": "sword_magic", "chance": 0.25},
-	  {"item_id": "shield_magic", "chance": 0.15}
+	  {"item_id": "sword_magic", "chance": 0.12},
+	  {"item_id": "shield_magic", "chance": 0.08}
 	],
-	"skills": ["basic_attack", "power_strike", "war_cry"],
+	"skills": ["basic_attack", "power_strike"],
 	"sprite": "boss_goblin_king",
-	"tags": ["monster", "goblin", "humanoid", "boss"]
+	"tags": ["monster", "goblin", "humanoid", "boss"],
+	"damage_type": "physical"
   }
 }

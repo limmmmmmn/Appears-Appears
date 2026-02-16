@@ -48,6 +48,7 @@ const WINDOW_SIZE := Vector2(280, 200)
 const BOSS_WINDOW_SIZE := Vector2(420, 300)  # 보스전 전투창 (약 2배 크기)
 const CENTER_SAFE_SIZE: float = 100.0
 const WINDOW_MARGIN: float = 20.0  # 화면 가장자리 여유
+const MAX_ENEMIES_PER_WINDOW: int = 5
 
 var battle_container: CanvasLayer = null
 
@@ -79,18 +80,89 @@ func add_enemy_to_battle(enemy_ids: Array, parent_node: Node = null, is_elite: b
 		force_end_all_non_boss()
 		return _create_new_battle(enemy_ids, parent_node, is_elite, is_boss, collision_pos)
 
-	# 최대 전투창 도달 시 무시
+	var pending_enemy_ids: Array = enemy_ids.duplicate()
+	var appended_battle_id: int = -1
+
+	# 기존 일반 전투창이 열려 있으면 우선 해당 창에 적 추가 (최대 5마리)
+	var append_target: BattleWindow = _find_append_target_window()
+	if append_target != null and is_instance_valid(append_target):
+		var added_count: int = append_target.add_field_enemies(pending_enemy_ids, is_elite)
+		if added_count > 0:
+			appended_battle_id = append_target.battle_id
+			if SoundManager:
+				SoundManager.play_encounter()
+			pending_enemy_ids = _slice_enemy_ids(pending_enemy_ids, added_count)
+			is_elite = false
+			if pending_enemy_ids.is_empty():
+				return appended_battle_id
+
+	# 추가 후 남은 적은 새 전투창으로
 	if get_active_battle_count() >= MAX_BATTLE_WINDOWS:
-		return -1
+		return appended_battle_id
 
 	# 새 전투창 생성
-	return _create_new_battle(enemy_ids, parent_node, is_elite, false, collision_pos)
+	var new_battle_id: int = _create_new_battle(pending_enemy_ids, parent_node, is_elite, false, collision_pos)
+	if new_battle_id >= 0:
+		return new_battle_id
+	return appended_battle_id
 
 
 func start_boss_battle(enemy_id: String, parent_node: Node = null, is_elite: bool = false, collision_pos: Vector2 = Vector2.ZERO) -> int:
 	## 보스 전투 시작 (Field에서 직접 호출)
 	force_end_all_non_boss()
 	return _create_new_battle([enemy_id], parent_node, is_elite, true, collision_pos)
+
+
+func _find_append_target_window() -> BattleWindow:
+	## 기존 일반 전투창 중 적을 추가할 대상 선택
+	## 우선순위: 보상 대기 창 > 일반 실행 창 (각 그룹 내 최근 생성 창 우선)
+	var selected_reward: BattleWindow = null
+	var selected_running: BattleWindow = null
+	var latest_reward_id: int = -1
+	var latest_running_id: int = -1
+
+	for bid_any in active_battles.keys():
+		var bid: int = int(bid_any)
+		var battle_data: Dictionary = active_battles[bid]
+		if bool(battle_data.get("is_boss", false)):
+			continue
+		var window_ref: Variant = battle_data.get("window")
+		if window_ref == null or not is_instance_valid(window_ref):
+			continue
+		var window: BattleWindow = window_ref as BattleWindow
+		if window == null:
+			continue
+		var is_running: bool = window.current_state == BattleWindow.BattleState.RUNNING
+		var is_reward_waiting: bool = window.current_state == BattleWindow.BattleState.VICTORY and window.is_waiting_reward_claim()
+		if not is_running and not is_reward_waiting:
+			continue
+		if window.is_event_mode:
+			continue
+		if window.is_enemy_entry_blocked():
+			continue
+		if window.get_enemy_count() >= MAX_ENEMIES_PER_WINDOW:
+			continue
+
+		if is_reward_waiting:
+			if bid > latest_reward_id:
+				latest_reward_id = bid
+				selected_reward = window
+		else:
+			if bid > latest_running_id:
+				latest_running_id = bid
+				selected_running = window
+
+	if selected_reward != null:
+		return selected_reward
+	return selected_running
+
+
+func _slice_enemy_ids(enemy_ids: Array, start_index: int) -> Array:
+	var result: Array = []
+	var start: int = maxi(0, start_index)
+	for i in range(start, enemy_ids.size()):
+		result.append(enemy_ids[i])
+	return result
 
 
 func _create_new_battle(enemy_ids: Array, parent_node: Node, is_elite: bool, is_boss: bool, _collision_pos: Vector2) -> int:
@@ -524,5 +596,26 @@ func set_battle_paused(paused: bool) -> void:
 		var window = battle_data.get("window")
 		if window != null and is_instance_valid(window):
 			window.set_battle_paused(paused)
+	if not paused:
+		clear_battle_group_hover()
 	battle_pause_changed.emit(paused)
+
+
+func set_battle_group_hovered(hovered: bool) -> void:
+	## 일시정지 중 전투창 묶음 호버 상태를 전체 동기화
+	for battle_id in active_battles:
+		var battle_data: Dictionary = active_battles[battle_id]
+		var window_ref: Variant = battle_data.get("window")
+		if window_ref == null or not is_instance_valid(window_ref):
+			continue
+		var window: BattleWindow = window_ref as BattleWindow
+		if window == null:
+			continue
+		if window.is_event_mode:
+			continue
+		window.set_pause_hover_focus(hovered)
+
+
+func clear_battle_group_hover() -> void:
+	set_battle_group_hovered(false)
 #endregion

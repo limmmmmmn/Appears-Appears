@@ -32,6 +32,7 @@ const FOLLOW_DISTANCE: float = 18.0  # 팔로워 간 거리
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_to_group("party")
 
 

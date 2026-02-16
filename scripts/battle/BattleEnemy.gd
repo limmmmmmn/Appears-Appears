@@ -29,6 +29,10 @@ var base_int: int = 0
 var base_dex: int = 0
 var base_luk: int = 0
 var damage_type: String = "physical"  # physical or magic
+var _origin_max_hp: int = 1
+var _origin_atk: int = 1
+var _grudge_atk_mult: float = 1.0
+var _grudge_hp_mult: float = 1.0
 
 # 보상
 var exp_reward: int = 0
@@ -86,6 +90,9 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 		base_str = int(base_str * 1.5)  # 공격력 1.5배
 		base_def = int(base_def * 1.5)  # 방어력 1.5배
 
+	_origin_max_hp = maxi(1, max_hp)
+	_origin_atk = maxi(1, base_str)
+
 	current_hp = max_hp
 	action_timer = 0.0
 	
@@ -119,11 +126,28 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 		modulate = Color(1.2, 0.9, 1.3)  # 보라빛 틴트
 		_add_elite_star()
 	elif enemy_type == "boss":
+		# 보스는 일반 슬라임 대비 3배 크기로 표시 (기본 scale=2 => 6)
+		if sprite:
+			sprite.scale = Vector2(6, 6)
 		if name_label:
 			name_label.add_theme_color_override("font_color", Color.ORANGE)
 	elif enemy_type == "elite":
 		if name_label:
 			name_label.add_theme_color_override("font_color", Color.PURPLE)
+
+
+func set_grudge_scaling(atk_mult: float, hp_mult: float) -> void:
+	## 전투창 로컬 원념 배율 적용
+	_grudge_atk_mult = maxf(1.0, atk_mult)
+	_grudge_hp_mult = maxf(1.0, hp_mult)
+
+	var old_max: int = maxi(1, max_hp)
+	var hp_ratio: float = float(current_hp) / float(old_max)
+
+	base_str = maxi(1, int(round(float(_origin_atk) * _grudge_atk_mult)))
+	max_hp = maxi(1, int(round(float(_origin_max_hp) * _grudge_hp_mult)))
+	current_hp = clampi(int(round(float(max_hp) * hp_ratio)), 1 if is_alive() else 0, max_hp)
+	_update_hp_display()
 
 
 func _add_elite_star() -> void:

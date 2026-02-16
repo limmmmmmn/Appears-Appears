@@ -5,7 +5,7 @@ class_name RewardWindow
 signal item_selected(item_id: String)
 
 const PANEL_SIZE := Vector2(360, 240)
-const CARD_SIZE := Vector2(108, 116)
+const CARD_SIZE := Vector2(108, 124)
 
 const TYPE_ICONS: Dictionary = {
 	"sword": "⚔",
@@ -58,10 +58,18 @@ var item_ids: Array[String] = []
 var selected_item_id: String = ""
 var selected_hero_id: String = ""
 var card_buttons: Array[Button] = []
+var _forced_pause_applied: bool = false
+var _prev_tree_paused: bool = false
+var _prev_battle_paused: bool = false
+var _is_shell_hovered: bool = false
+var _pause_anim_t: float = 0.0
 
 
 func _ready() -> void:
 	super._ready()
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group("reward_windows")
+	set_process(true)
 	title_text = "보상윈도우"
 	set_title(title_text)
 	set_window_size(PANEL_SIZE)
@@ -70,6 +78,13 @@ func _ready() -> void:
 	pause_policy = PausePolicy.NONE
 	if close_button:
 		close_button.visible = false
+	if shell_panel:
+		if not shell_panel.mouse_entered.is_connected(_on_shell_mouse_entered):
+			shell_panel.mouse_entered.connect(_on_shell_mouse_entered)
+		if not shell_panel.mouse_exited.is_connected(_on_shell_mouse_exited):
+			shell_panel.mouse_exited.connect(_on_shell_mouse_exited)
+	if not shell_closed.is_connected(_on_shell_closed):
+		shell_closed.connect(_on_shell_closed)
 	_build_ui()
 	visible = false
 
@@ -87,7 +102,39 @@ func show_loot_selection(items: Array[String]) -> void:
 	hero_pick_panel.visible = false
 	subtitle_label.text = "원하는 아이템 카드를 선택하세요."
 	_build_item_cards()
+	_apply_reward_auto_pause(true)
 	open_shell()
+
+
+func _process(delta: float) -> void:
+	if _forced_pause_applied:
+		if BattleManager and not BattleManager.is_battle_paused:
+			BattleManager.set_battle_paused(true)
+		if get_tree() and not get_tree().paused:
+			get_tree().paused = true
+
+	var paused_now: bool = false
+	if get_tree():
+		paused_now = get_tree().paused
+	if paused_now:
+		var dim := 1.0 if _is_shell_hovered else 0.62
+		modulate = Color(dim, dim, dim, 1.0)
+	else:
+		modulate = Color.WHITE
+
+	_pause_anim_t += delta
+	for i in range(card_buttons.size()):
+		var btn: Button = card_buttons[i]
+		if btn == null or not is_instance_valid(btn):
+			continue
+		if paused_now:
+			var pulse: float = 1.0 + 0.02 * sin(_pause_anim_t * 4.0 + float(i) * 0.7)
+			btn.scale = Vector2.ONE * pulse
+			var glow: float = 0.9 + 0.1 * (0.5 + 0.5 * sin(_pause_anim_t * 3.4 + float(i) * 1.1))
+			btn.modulate = Color(glow, glow, glow, 1.0)
+		else:
+			btn.scale = Vector2.ONE
+			btn.modulate = Color.WHITE
 
 
 func _build_ui() -> void:
@@ -118,13 +165,6 @@ func _build_ui() -> void:
 	var main_vbox := VBoxContainer.new()
 	main_vbox.add_theme_constant_override("separation", 6)
 	content_root.add_child(main_vbox)
-
-	header_label = Label.new()
-	header_label.text = "🎁 보물상자 보상 선택"
-	header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header_label.add_theme_font_size_override("font_size", 14)
-	header_label.add_theme_color_override("font_color", Color(1.0, 0.89, 0.56, 1.0))
-	main_vbox.add_child(header_label)
 
 	subtitle_label = Label.new()
 	subtitle_label.text = "원하는 아이템 카드를 선택하세요."
@@ -190,7 +230,7 @@ func _build_item_cards() -> void:
 		card_btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		card_btn.custom_minimum_size = CARD_SIZE # 카드 비율(세로형)
 		card_btn.focus_mode = Control.FOCUS_NONE
-		card_btn.clip_contents = true
+		card_btn.clip_contents = false
 		card_btn.pressed.connect(_on_item_card_pressed.bind(i))
 		_apply_card_style(card_btn, i == 0 and i < item_ids.size(), i)
 		cards_row.add_child(card_btn)
@@ -229,7 +269,7 @@ func _populate_item_card(card_btn: Button, item_id: String) -> void:
 	card_btn.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
+	vbox.add_theme_constant_override("separation", 3)
 	margin.add_child(vbox)
 
 	var rarity_label := Label.new()
@@ -239,57 +279,37 @@ func _populate_item_card(card_btn: Button, item_id: String) -> void:
 	rarity_label.add_theme_color_override("font_color", rarity_color)
 	vbox.add_child(rarity_label)
 
-	var icon_holder := PanelContainer.new()
-	icon_holder.custom_minimum_size = Vector2(0, 34)
-	var icon_style := StyleBoxFlat.new()
-	icon_style.bg_color = Color(0.12, 0.13, 0.2, 0.95)
-	icon_style.border_width_left = 1
-	icon_style.border_width_top = 1
-	icon_style.border_width_right = 1
-	icon_style.border_width_bottom = 1
-	icon_style.border_color = Color(0.5, 0.54, 0.72, 0.6)
-	icon_style.corner_radius_top_left = 6
-	icon_style.corner_radius_top_right = 6
-	icon_style.corner_radius_bottom_left = 6
-	icon_style.corner_radius_bottom_right = 6
-	icon_holder.add_theme_stylebox_override("panel", icon_style)
-	vbox.add_child(icon_holder)
-
-	var icon_center := CenterContainer.new()
-	icon_holder.add_child(icon_center)
+	var icon_name_row := HBoxContainer.new()
+	icon_name_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	icon_name_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(icon_name_row)
 
 	var icon_label := Label.new()
 	icon_label.text = _get_item_icon(data)
-	icon_label.add_theme_font_size_override("font_size", 18)
+	icon_label.add_theme_font_size_override("font_size", 16)
 	icon_label.add_theme_color_override("font_color", rarity_color)
-	icon_center.add_child(icon_label)
+	icon_name_row.add_child(icon_label)
 
 	var name_label := Label.new()
 	name_label.text = str(data.get("name", item_id))
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	name_label.add_theme_font_size_override("font_size", 10)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	name_label.clip_text = true
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.add_theme_font_size_override("font_size", 9)
 	name_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
-	vbox.add_child(name_label)
+	icon_name_row.add_child(name_label)
 
 	var stats_label := Label.new()
 	stats_label.text = _get_stats_text(data)
 	stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stats_label.add_theme_font_size_override("font_size", 8)
 	stats_label.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0, 0.95))
-	stats_label.custom_minimum_size = Vector2(0, 22)
+	stats_label.custom_minimum_size = Vector2(0, 18)
 	vbox.add_child(stats_label)
-
-	var equip_title := Label.new()
-	equip_title.text = "장착 가능 영웅"
-	equip_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	equip_title.add_theme_font_size_override("font_size", 8)
-	equip_title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6, 0.95))
-	vbox.add_child(equip_title)
 
 	var hero_row := HBoxContainer.new()
 	hero_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	hero_row.add_theme_constant_override("separation", 6)
+	hero_row.add_theme_constant_override("separation", 4)
 	vbox.add_child(hero_row)
 
 	var equipable: Array[Hero] = _get_equipable_heroes(item_id)
@@ -302,7 +322,36 @@ func _populate_item_card(card_btn: Button, item_id: String) -> void:
 		return
 
 	for hero in equipable:
-		hero_row.add_child(_create_hero_preview(hero))
+		hero_row.add_child(_create_hero_badge(hero))
+
+
+func _create_hero_badge(hero: Hero) -> Control:
+	var icon_holder := PanelContainer.new()
+	icon_holder.custom_minimum_size = Vector2(26, 26)
+	var holder_style := StyleBoxFlat.new()
+	holder_style.bg_color = Color(0.09, 0.1, 0.14, 1.0)
+	holder_style.border_width_left = 1
+	holder_style.border_width_top = 1
+	holder_style.border_width_right = 1
+	holder_style.border_width_bottom = 1
+	holder_style.border_color = Color(0.52, 0.56, 0.7, 0.75)
+	holder_style.corner_radius_top_left = 5
+	holder_style.corner_radius_top_right = 5
+	holder_style.corner_radius_bottom_left = 5
+	holder_style.corner_radius_bottom_right = 5
+	icon_holder.add_theme_stylebox_override("panel", holder_style)
+
+	var icon_center := CenterContainer.new()
+	icon_holder.add_child(icon_center)
+
+	var tex := TextureRect.new()
+	tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tex.custom_minimum_size = Vector2(20, 20)
+	tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	tex.texture = _get_hero_field_texture(hero)
+	icon_center.add_child(tex)
+	return icon_holder
 
 
 func _create_hero_preview(hero: Hero) -> Control:
@@ -440,8 +489,56 @@ func _on_hero_pick_pressed(hero_id: String) -> void:
 func _finalize_selection() -> void:
 	if selected_item_id.is_empty():
 		return
+	_apply_reward_auto_pause(false)
 	item_selected.emit(selected_item_id)
 	close_shell("reward_selected")
+
+
+func _on_shell_closed(_reason: String) -> void:
+	_apply_reward_auto_pause(false)
+
+
+func _on_shell_mouse_entered() -> void:
+	_is_shell_hovered = true
+
+
+func _on_shell_mouse_exited() -> void:
+	_is_shell_hovered = false
+
+
+func _apply_reward_auto_pause(enable: bool) -> void:
+	if enable:
+		if _forced_pause_applied:
+			return
+		_prev_tree_paused = false
+		if get_tree():
+			_prev_tree_paused = get_tree().paused
+		_prev_battle_paused = BattleManager != null and BattleManager.is_battle_paused
+		if BattleManager:
+			BattleManager.set_battle_paused(true)
+		if get_tree():
+			get_tree().paused = true
+		_forced_pause_applied = true
+		return
+
+	if not _forced_pause_applied:
+		return
+	if BattleManager:
+		BattleManager.set_battle_paused(_prev_battle_paused)
+	var restore_tree: bool = _prev_tree_paused or _prev_battle_paused
+	if get_tree():
+		get_tree().paused = restore_tree
+	_forced_pause_applied = false
+
+
+func _exit_tree() -> void:
+	_apply_reward_auto_pause(false)
+
+
+func release_pause_lock() -> void:
+	## 외부(전투창 클릭 재개)에서 호출: 창은 유지하고 전역 pause 강제만 해제
+	if _forced_pause_applied:
+		_forced_pause_applied = false
 
 
 func _apply_card_style(card_btn: Button, selected: bool, index: int) -> void:
