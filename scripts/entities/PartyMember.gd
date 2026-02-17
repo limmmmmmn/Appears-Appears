@@ -37,6 +37,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_apply_dead_visual()
+
 	# 보스전 중에는 이동 정지
 	if is_in_boss_battle:
 		velocity = Vector2.ZERO
@@ -230,6 +232,25 @@ func _update_hp_bar() -> void:
 		else:
 			fill_style.bg_color = Color(0.2, 0.8, 0.2)
 		hp_bar.add_theme_stylebox_override("fill", fill_style)
+
+
+func _apply_dead_visual() -> void:
+	if hero_id.is_empty():
+		return
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id) if PartyManager else null
+	var is_dead_now: bool = hero != null and hero.is_dead
+
+	if animated_sprite and is_instance_valid(animated_sprite):
+		if is_dead_now:
+			animated_sprite.modulate = Color(0.45, 0.45, 0.45, 0.9)
+		else:
+			animated_sprite.modulate = Color(1, 1, 1, 1)
+
+	if hp_bar and is_instance_valid(hp_bar):
+		if is_dead_now:
+			hp_bar.modulate = Color(0.6, 0.6, 0.6, 0.85)
+		else:
+			hp_bar.modulate = Color(1, 1, 1, 1)
 
 
 func get_current_direction() -> String:

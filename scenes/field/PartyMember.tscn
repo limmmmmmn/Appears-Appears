@@ -49,6 +49,7 @@ zoom = Vector2(2, 2)
 position_smoothing_enabled = true
 
 [node name="StatusBars" type="Control" parent="." unique_id=1042767789]
+visible = false
 z_index = 10
 layout_mode = 3
 anchors_preset = 0
@@ -58,6 +59,7 @@ offset_right = 12.0
 offset_bottom = -18.0
 
 [node name="HPBar" type="ProgressBar" parent="StatusBars" unique_id=1390359226]
+visible = false
 layout_mode = 0
 offset_right = 24.0
 offset_bottom = 4.0

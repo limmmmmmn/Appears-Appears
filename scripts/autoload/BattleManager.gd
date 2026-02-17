@@ -48,7 +48,7 @@ const WINDOW_SIZE := Vector2(280, 200)
 const BOSS_WINDOW_SIZE := Vector2(420, 300)  # 보스전 전투창 (약 2배 크기)
 const CENTER_SAFE_SIZE: float = 100.0
 const WINDOW_MARGIN: float = 20.0  # 화면 가장자리 여유
-const MAX_ENEMIES_PER_WINDOW: int = 3
+const BASE_ENEMIES_PER_WINDOW: int = 3
 
 var battle_container: CanvasLayer = null
 
@@ -83,7 +83,7 @@ func add_enemy_to_battle(enemy_ids: Array, parent_node: Node = null, is_elite: b
 	var pending_enemy_ids: Array = enemy_ids.duplicate()
 	var appended_battle_id: int = -1
 
-	# 기존 일반 전투창이 열려 있으면 우선 해당 창에 적 추가 (최대 3마리)
+	# 기존 일반 전투창이 열려 있으면 우선 해당 창에 적 추가 (최대: 3 + 원념레벨)
 	var append_target: BattleWindow = _find_append_target_window()
 	if append_target != null and is_instance_valid(append_target):
 		var added_count: int = append_target.add_field_enemies(pending_enemy_ids, is_elite)
@@ -140,7 +140,10 @@ func _find_append_target_window() -> BattleWindow:
 			continue
 		if window.is_enemy_entry_blocked():
 			continue
-		if window.get_enemy_count() >= MAX_ENEMIES_PER_WINDOW:
+		var max_enemies: int = BASE_ENEMIES_PER_WINDOW
+		if window.has_method("get_max_enemies_per_window"):
+			max_enemies = int(window.call("get_max_enemies_per_window"))
+		if window.get_enemy_count() >= max_enemies:
 			continue
 
 		if is_reward_waiting:

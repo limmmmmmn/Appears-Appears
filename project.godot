@@ -27,6 +27,7 @@ SaveManager="*res://scripts/autoload/SaveManager.gd"
 SoundManager="*res://scripts/autoload/SoundManager.gd"
 CooldownManager="*res://scripts/autoload/CooldownManager.gd"
 ATBManager="*res://scripts/autoload/ATBManager.gd"
+DialogueManager="*res://scripts/autoload/DialogueManager.gd"
 
 [display]
 

@@ -87,7 +87,7 @@ const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 const BASE_ESCAPE_RATE: float = 40.0
 const GRUDGE_KILLS_PER_LEVEL: int = 5
 const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
-const MAX_ENEMIES_PER_WINDOW: int = 3
+const BASE_ENEMIES_PER_WINDOW: int = 3
 const BATTLE_ATB_FILL_RATE: float = 0.85
 const ENEMY_ROW_GAP: int = 5
 
@@ -145,6 +145,10 @@ var event_right_face_panel: PanelContainer = null
 var event_speaker_label: Label = null
 var event_text_label: RichTextLabel = null
 var event_choice_panel: VBoxContainer = null
+var event_left_bubble: PanelContainer = null
+var event_right_bubble: PanelContainer = null
+var event_left_bubble_label: Label = null
+var event_right_bubble_label: Label = null
 
 
 func _ready() -> void:
@@ -489,7 +493,7 @@ func _spawn_single_enemy(enemy_id: String, make_elite: bool = false, refresh_lay
 
 
 func add_field_enemies(enemy_ids: Array, is_elite: bool = false) -> int:
-	## 필드 조우로 들어온 적을 현재 전투창에 추가 (최대 3)
+	## 필드 조우로 들어온 적을 현재 전투창에 추가 (최대: 3 + 원념레벨)
 	if entry_blocked:
 		return 0
 	if enemy_ids.is_empty():
@@ -510,7 +514,7 @@ func add_field_enemies(enemy_ids: Array, is_elite: bool = false) -> int:
 			block_entry_button.visible = true
 
 	var alive_count: int = get_enemy_count()
-	var space: int = MAX_ENEMIES_PER_WINDOW - alive_count
+	var space: int = get_max_enemies_per_window() - alive_count
 	if space <= 0:
 		return 0
 
@@ -538,7 +542,11 @@ func can_accept_field_enemies(additional_count: int = 1) -> bool:
 		return false
 	if additional_count <= 0:
 		return true
-	return get_enemy_count() + additional_count <= MAX_ENEMIES_PER_WINDOW
+	return get_enemy_count() + additional_count <= get_max_enemies_per_window()
+
+
+func get_max_enemies_per_window() -> int:
+	return BASE_ENEMIES_PER_WINDOW + maxi(0, local_grudge_level)
 
 
 func _refresh_enemy_layout() -> void:
@@ -827,6 +835,10 @@ func _refresh_top_bar_status() -> void:
 		top_right_status_label.text = "⭐%d" % local_reward_level
 
 
+func get_local_grudge_level() -> int:
+	return local_grudge_level
+
+
 func _refresh_reward_preview_ui() -> void:
 	if info_label == null:
 		return
@@ -843,12 +855,25 @@ func _on_local_grudge_kill() -> void:
 		_play_grudge_levelup_effect()
 		var msg := "⚠ 원념 레벨 %d! 적이 더 맹렬히 공격합니다." % local_grudge_level
 		_send_log(msg, Color(1.0, 0.42, 0.42, 1.0))
+		_sync_reward_level_with_grudge()
 
 	if leveled:
 		_apply_local_grudge_to_all_enemies()
 
 	_refresh_grudge_ui()
 	_refresh_top_bar_status()
+
+
+func _sync_reward_level_with_grudge() -> void:
+	# 원념/보상 레벨을 같은 값으로 동기화 (원념 기준)
+	if local_reward_level >= local_grudge_level:
+		return
+	while local_reward_level < local_grudge_level:
+		local_reward_level += 1
+		_apply_reward_level_bundle(local_reward_level)
+		_play_reward_levelup_effect(local_reward_level)
+	_refresh_top_bar_status()
+	_refresh_reward_preview_ui()
 
 
 func _apply_local_grudge_to_all_enemies() -> void:
@@ -919,11 +944,8 @@ func _play_grudge_levelup_effect() -> void:
 
 
 func _on_wave_cleared() -> void:
-	local_reward_level += 1
-	_apply_reward_level_bundle(local_reward_level)
-	_refresh_top_bar_status()
-	_refresh_reward_preview_ui()
-	_play_reward_levelup_effect(local_reward_level)
+	# 보상 레벨은 원념 레벨과 같은 경로로만 증가
+	_sync_reward_level_with_grudge()
 
 
 func _apply_reward_level_bundle(level: int) -> void:
@@ -1051,6 +1073,37 @@ func _build_event_overlay(left_hero_id: String, right_hero_id: String) -> void:
 		left_face.texture = SpriteManager.get_hero_face_sprite(left_hero_id)
 		right_face.texture = SpriteManager.get_hero_face_sprite(right_hero_id)
 
+	var bubble_row := HBoxContainer.new()
+	bubble_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	bubble_row.add_theme_constant_override("separation", 24)
+	vbox.add_child(bubble_row)
+
+	event_left_bubble = PanelContainer.new()
+	event_left_bubble.custom_minimum_size = Vector2(110, 44)
+	event_left_bubble.visible = false
+	_apply_event_bubble_style(event_left_bubble)
+	bubble_row.add_child(event_left_bubble)
+	event_left_bubble_label = Label.new()
+	event_left_bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	event_left_bubble_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	event_left_bubble_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	event_left_bubble_label.add_theme_font_size_override("font_size", 8)
+	event_left_bubble_label.add_theme_color_override("font_color", Color(0.98, 0.99, 1.0, 1.0))
+	event_left_bubble.add_child(event_left_bubble_label)
+
+	event_right_bubble = PanelContainer.new()
+	event_right_bubble.custom_minimum_size = Vector2(110, 44)
+	event_right_bubble.visible = false
+	_apply_event_bubble_style(event_right_bubble)
+	bubble_row.add_child(event_right_bubble)
+	event_right_bubble_label = Label.new()
+	event_right_bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	event_right_bubble_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	event_right_bubble_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	event_right_bubble_label.add_theme_font_size_override("font_size", 8)
+	event_right_bubble_label.add_theme_color_override("font_color", Color(0.98, 0.99, 1.0, 1.0))
+	event_right_bubble.add_child(event_right_bubble_label)
+
 	var dialog_panel := PanelContainer.new()
 	dialog_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(dialog_panel)
@@ -1072,6 +1125,7 @@ func _build_event_overlay(left_hero_id: String, right_hero_id: String) -> void:
 	event_speaker_label = Label.new()
 	event_speaker_label.add_theme_font_size_override("font_size", 10)
 	event_speaker_label.add_theme_color_override("font_color", Color(0.99, 0.93, 0.65, 1.0))
+	event_speaker_label.visible = false
 	dialog_vbox.add_child(event_speaker_label)
 
 	event_text_label = RichTextLabel.new()
@@ -1080,6 +1134,7 @@ func _build_event_overlay(left_hero_id: String, right_hero_id: String) -> void:
 	event_text_label.fit_content = true
 	event_text_label.bbcode_enabled = false
 	event_text_label.add_theme_font_size_override("normal_font_size", 9)
+	event_text_label.visible = false
 	dialog_vbox.add_child(event_text_label)
 
 	event_choice_panel = VBoxContainer.new()
@@ -1113,6 +1168,7 @@ func _advance_event_line() -> void:
 		event_speaker_label.text = speaker_name
 	if event_text_label:
 		event_text_label.text = text
+	_show_event_speech_bubble(speaker, speaker_name, text)
 	_set_event_speaker_highlight(speaker)
 
 	var choices: Array = line.get("choices", []) as Array
@@ -1201,6 +1257,46 @@ func _reset_event_mode_state() -> void:
 	event_speaker_label = null
 	event_text_label = null
 	event_choice_panel = null
+	event_left_bubble = null
+	event_right_bubble = null
+	event_left_bubble_label = null
+	event_right_bubble_label = null
+
+
+func _apply_event_bubble_style(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.10, 0.12, 0.18, 0.94)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.72, 0.78, 0.94, 0.95)
+	style.corner_radius_top_left = 5
+	style.corner_radius_top_right = 5
+	style.corner_radius_bottom_left = 5
+	style.corner_radius_bottom_right = 5
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _show_event_speech_bubble(speaker: String, speaker_name: String, text: String) -> void:
+	var left_active: bool = speaker != "right"
+	var bubble_text: String = text
+	if not speaker_name.is_empty():
+		bubble_text = "%s: %s" % [speaker_name, text]
+
+	if event_left_bubble and event_right_bubble:
+		event_left_bubble.visible = left_active
+		event_right_bubble.visible = not left_active
+	if event_left_bubble_label and left_active:
+		event_left_bubble_label.text = bubble_text
+	if event_right_bubble_label and not left_active:
+		event_right_bubble_label.text = bubble_text
 
 func get_alive_enemies() -> Array:
 	## 살아있는 적 목록 반환

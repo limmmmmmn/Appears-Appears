@@ -9,6 +9,7 @@ var equipment: Dictionary = {}
 var items: Dictionary = {}
 var traits: Dictionary = {}
 var runes: Dictionary = {}
+var dialogues: Dictionary = {}
 
 const DATA_PATH := "res://data/"
 
@@ -26,6 +27,7 @@ func _load_all_data() -> void:
 	items = _load_json("items.json")
 	traits = _load_json("traits.json")
 	runes = _load_json("runes.json")
+	dialogues = _load_json("dialogues.json")
 	
 
 
@@ -168,3 +170,38 @@ func get_rune_trait(rune_id: String) -> Dictionary:
 	if trait_id.is_empty():
 		return {}
 	return get_trait(trait_id)
+
+
+# 대사
+func get_dialogues() -> Dictionary:
+	return dialogues
+
+
+func get_dialogue_lines(category: String, trigger: String, hero_id: String = "") -> Array[String]:
+	var result: Array[String] = []
+	if category.is_empty() or trigger.is_empty():
+		return result
+	if dialogues.is_empty():
+		return result
+
+	var category_data: Dictionary = dialogues.get(category, {}) as Dictionary
+	if category_data.is_empty():
+		return result
+	var trigger_data: Dictionary = category_data.get(trigger, {}) as Dictionary
+	if trigger_data.is_empty():
+		return result
+
+	if not hero_id.is_empty():
+		var heroes_data: Dictionary = trigger_data.get("heroes", {}) as Dictionary
+		var hero_lines_variant: Variant = heroes_data.get(hero_id, [])
+		if hero_lines_variant is Array:
+			for v in hero_lines_variant:
+				result.append(str(v))
+			if not result.is_empty():
+				return result
+
+	var global_lines_variant: Variant = trigger_data.get("global", [])
+	if global_lines_variant is Array:
+		for v in global_lines_variant:
+			result.append(str(v))
+	return result

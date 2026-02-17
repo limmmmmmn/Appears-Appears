@@ -92,6 +92,11 @@ var recruit_event_active: bool = false
 var recruit_event_layer: CanvasLayer = null
 var recruit_event_window: BattleWindow = null
 var recruit_event_on_complete: Callable = Callable()
+var recruit_event_lines: Array[Dictionary] = []
+var recruit_event_line_index: int = 0
+var recruit_event_line_timer: float = 0.0
+var recruit_event_left_hero_id: String = ""
+var recruit_event_right_hero_id: String = ""
 
 # 보물상자
 var field_treasure_chests: Array[Dictionary] = []
@@ -99,6 +104,8 @@ var reward_window_layer: CanvasLayer = null
 var reward_window: RewardWindow = null
 var pause_dim_layer: CanvasLayer = null
 var pause_dim_rect: ColorRect = null
+var party_chatter_layer: CanvasLayer = null
+var party_chatter_root: Control = null
 var pending_treasure_chest_index: int = -1
 var treasure_interact_cooldown: float = 0.0
 var sanctuary_root: Node2D = null
@@ -110,6 +117,12 @@ var party_chatter_hit_cooldown: float = 0.0
 var party_chatter_enemy_seen_cooldown: float = 0.0
 var party_chatter_queue: Array[Dictionary] = []
 var party_chatter_is_showing: bool = false
+var active_party_chatter_speaker: Node2D = null
+var active_party_chatter_bubble: PanelContainer = null
+var active_party_chatter_time_left: float = 0.0
+var grudge_spawn_eval_timer: float = 0.0
+var grudge_extra_target: int = 0
+var grudge_extra_despawn_timer: float = 0.0
 
 const PARTY_CHATTER_ATTACK_LINES: Array[String] = [
 	"좋아, 밀어붙여!",
@@ -155,6 +168,14 @@ const PARTY_CHATTER_ENEMY_SEEN_REPLY_LINES: Array[String] = [
 	"거리 유지하면서 끊어내자.",
 	"서두르지 말고 각 맞추자.",
 ]
+const PARTY_CHATTER_LAYER: int = 220
+const PARTY_CHATTER_BUBBLE_EXTRA_LIFT: float = 24.0
+const PARTY_CHATTER_BUBBLE_HOLD_TIME: float = 1.65
+const PARTY_CHATTER_BUBBLE_FADE_TIME: float = 0.22
+const GRUDGE_EXTRA_ENEMY_PER_LEVEL: float = 0.5
+const GRUDGE_EXTRA_ENEMY_MAX: int = 8
+const GRUDGE_SPAWN_EVAL_INTERVAL: float = 0.45
+const GRUDGE_EXTRA_DESPAWN_INTERVAL: float = 0.85
 
 
 
@@ -172,6 +193,7 @@ func _ready() -> void:
 	_spawn_sanctuary()
 	_spawn_field_grass()
 	_ensure_pause_dim_overlay()
+	_ensure_party_chatter_overlay()
 	_setup_exit()
 	_connect_signals()
 	
@@ -181,14 +203,16 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_update_pause_dim_overlay()
-	party_chatter_cooldown = maxf(0.0, party_chatter_cooldown - _delta)
-	party_chatter_attack_cooldown = maxf(0.0, party_chatter_attack_cooldown - _delta)
-	party_chatter_hit_cooldown = maxf(0.0, party_chatter_hit_cooldown - _delta)
-	party_chatter_enemy_seen_cooldown = maxf(0.0, party_chatter_enemy_seen_cooldown - _delta)
+	_update_active_party_chatter_position()
 	if get_tree().paused:
 		# pause 중에는 필수 후속 처리만 유지
 		_update_recruit_followup_dialog(_delta)
 		return
+	party_chatter_cooldown = maxf(0.0, party_chatter_cooldown - _delta)
+	party_chatter_attack_cooldown = maxf(0.0, party_chatter_attack_cooldown - _delta)
+	party_chatter_hit_cooldown = maxf(0.0, party_chatter_hit_cooldown - _delta)
+	party_chatter_enemy_seen_cooldown = maxf(0.0, party_chatter_enemy_seen_cooldown - _delta)
+	_update_party_chatter_lifecycle(_delta)
 
 	treasure_interact_cooldown = maxf(0.0, treasure_interact_cooldown - _delta)
 
@@ -202,10 +226,13 @@ func _process(_delta: float) -> void:
 				enemy.player_contacted.connect(_on_field_enemy_contacted)
 
 	_update_recruit_npc(_delta)
+	_update_recruit_event_dialog(_delta)
 	_update_recruit_followup_dialog(_delta)
 	_poll_treasure_chest_interaction()
 	_update_sanctuary(_delta)
 	_update_field_grass(_delta)
+	_update_grudge_spawn_pressure(_delta)
+	_update_party_chatter_blocking_state()
 	_update_party_chatter(_delta)
 
 
@@ -298,6 +325,8 @@ func _setup_systems() -> void:
 func _connect_signals() -> void:
 	if PartyManager and not PartyManager.party_wiped.is_connected(_on_party_wiped):
 		PartyManager.party_wiped.connect(_on_party_wiped)
+	if PartyManager and not PartyManager.hero_died.is_connected(_on_party_hero_died):
+		PartyManager.hero_died.connect(_on_party_hero_died)
 
 	if GameManager and not GameManager.game_over.is_connected(_on_party_wiped):
 		GameManager.game_over.connect(_on_party_wiped)
@@ -542,6 +571,7 @@ func _start_recruit_dialog() -> void:
 	if recruit_dialog_active:
 		return
 	recruit_dialog_active = true
+	_clear_party_chatter_queue()
 	var leader_hero_id: String = _get_party_leader_hero_id()
 	var recruit_name: String = recruit_npc_hero_id
 	var recruit_hero_data: Dictionary = DataManager.get_hero(recruit_npc_hero_id) if DataManager else {}
@@ -559,7 +589,7 @@ func _start_recruit_dialog() -> void:
 		{"speaker": "right", "name": recruit_name, "text": "같이 가게 해줘. 나도 싸울 수 있어!"},
 	]
 	if recruit_npc_label and is_instance_valid(recruit_npc_label):
-		recruit_npc_label.text = "..."
+		recruit_npc_label.text = ""
 	_close_blocking_ui_for_recruit_followup()
 	_start_recruit_event_dialog(leader_hero_id, recruit_npc_hero_id, lines, Callable(self, "_on_recruit_intro_dialog_finished"))
 
@@ -711,28 +741,13 @@ func _start_recruit_event_dialog(left_hero_id: String, right_hero_id: String, li
 	_close_recruit_event_dialog()
 	recruit_event_on_complete = on_complete
 	recruit_event_active = true
-	recruit_event_window = EVENT_WINDOW_SCENE.instantiate() as BattleWindow
-	if recruit_event_window == null:
-		recruit_event_active = false
-		if on_complete.is_valid():
-			on_complete.call_deferred()
-		return
-
-	recruit_event_layer = CanvasLayer.new()
-	recruit_event_layer.layer = 180
-	recruit_event_layer.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(recruit_event_layer)
-	recruit_event_layer.add_child(recruit_event_window)
-
-	recruit_event_window.position = _get_event_window_spawn_position()
-	recruit_event_window.event_finished.connect(_on_recruit_event_window_finished, CONNECT_ONE_SHOT)
-	recruit_event_window.setup_event_dialog(
-		"동료 이벤트",
-		left_hero_id,
-		right_hero_id,
-		lines,
-		{"line_interval": RECRUIT_EVENT_LINE_INTERVAL}
-	)
+	recruit_event_left_hero_id = left_hero_id
+	recruit_event_right_hero_id = right_hero_id
+	recruit_event_lines = lines.duplicate(true)
+	recruit_event_line_index = 0
+	recruit_event_line_timer = 0.0
+	party_chatter_queue.clear()
+	_advance_recruit_event_dialog_line()
 
 
 func _on_recruit_event_window_finished(_result: Dictionary) -> void:
@@ -756,6 +771,96 @@ func _close_recruit_event_dialog() -> void:
 	recruit_event_layer = null
 	recruit_event_active = false
 	recruit_event_on_complete = Callable()
+	recruit_event_lines.clear()
+	recruit_event_line_index = 0
+	recruit_event_line_timer = 0.0
+	recruit_event_left_hero_id = ""
+	recruit_event_right_hero_id = ""
+
+
+func _update_recruit_event_dialog(delta: float) -> void:
+	if not recruit_event_active:
+		return
+	if recruit_event_line_timer > 0.0:
+		recruit_event_line_timer = maxf(0.0, recruit_event_line_timer - delta)
+		return
+	if party_chatter_is_showing:
+		return
+	_advance_recruit_event_dialog_line()
+
+
+func _advance_recruit_event_dialog_line() -> void:
+	if not recruit_event_active:
+		return
+	if recruit_event_line_index >= recruit_event_lines.size():
+		var finished_callback: Callable = recruit_event_on_complete
+		_close_recruit_event_dialog()
+		if finished_callback.is_valid():
+			finished_callback.call_deferred()
+		return
+
+	var line_data: Dictionary = recruit_event_lines[recruit_event_line_index]
+	recruit_event_line_index += 1
+	var speaker_side: String = str(line_data.get("speaker", "left"))
+	var speaker_hero_id: String = _get_recruit_event_speaker_hero_id(speaker_side)
+	if _is_party_hero_dead(speaker_hero_id):
+		var dead_speaker: PartyMember = _find_party_member_by_hero_id(speaker_hero_id)
+		if dead_speaker != null and is_instance_valid(dead_speaker):
+			_show_party_chatter_on_node(dead_speaker, "...", Color(0.8, 0.8, 0.8, 1.0))
+			recruit_event_line_timer = 0.85
+		else:
+			recruit_event_line_timer = 0.01
+		recruit_event_line_index = recruit_event_lines.size()
+		return
+
+	var text: String = str(line_data.get("text", "")).strip_edges()
+	if text.is_empty():
+		recruit_event_line_timer = 0.01
+		return
+
+	var speaker_node: Node2D = _resolve_recruit_event_speaker_node(speaker_side)
+	if speaker_node == null:
+		recruit_event_line_timer = 0.01
+		return
+
+	var bubble_color := Color(0.95, 0.95, 1.0, 1.0)
+	if speaker_side == "right":
+		bubble_color = Color(0.9, 0.98, 1.0, 1.0)
+	_show_party_chatter_on_node(speaker_node, text, bubble_color)
+	recruit_event_line_timer = maxf(RECRUIT_EVENT_LINE_INTERVAL, 0.55 + float(text.length()) * 0.05)
+
+
+func _get_recruit_event_speaker_hero_id(speaker_side: String) -> String:
+	var side := speaker_side.to_lower()
+	if side == "right":
+		return recruit_event_right_hero_id
+	return recruit_event_left_hero_id
+
+
+func _is_party_hero_dead(hero_id: String) -> bool:
+	if hero_id.is_empty() or PartyManager == null:
+		return false
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+	return hero != null and hero.is_dead
+
+
+func _resolve_recruit_event_speaker_node(speaker_side: String) -> Node2D:
+	var side := speaker_side.to_lower()
+	if side == "right":
+		if recruit_npc_root != null and is_instance_valid(recruit_npc_root):
+			return recruit_npc_root
+		if not recruit_event_right_hero_id.is_empty():
+			var right_member: PartyMember = _find_party_member_by_hero_id(recruit_event_right_hero_id)
+			if right_member != null and is_instance_valid(right_member):
+				return right_member
+	else:
+		if not recruit_event_left_hero_id.is_empty():
+			var left_member: PartyMember = _find_party_member_by_hero_id(recruit_event_left_hero_id)
+			if left_member != null and is_instance_valid(left_member):
+				return left_member
+	if party_leader != null and is_instance_valid(party_leader):
+		return party_leader
+	return null
 
 
 func _get_event_window_spawn_position() -> Vector2:
@@ -973,7 +1078,10 @@ func _ensure_pause_dim_overlay() -> void:
 func _update_pause_dim_overlay() -> void:
 	if pause_dim_rect == null or not is_instance_valid(pause_dim_rect):
 		return
-	pause_dim_rect.visible = get_tree().paused
+	var is_paused: bool = get_tree().paused
+	pause_dim_rect.visible = is_paused
+	if party_chatter_root != null and is_instance_valid(party_chatter_root):
+		party_chatter_root.modulate = Color(0.62, 0.62, 0.62, 1.0) if is_paused else Color(1, 1, 1, 1)
 
 
 func _ensure_reward_window() -> void:
@@ -1659,6 +1767,50 @@ func _on_party_wiped() -> void:
 		game_over_ui.show_game_over("파티가 전멸했습니다...\n타이틀로 이동합니다.")
 
 
+func _on_party_hero_died(_hero: Hero) -> void:
+	# 전멸은 기존 game over 플로우로 처리
+	if PartyManager and PartyManager.is_party_wiped():
+		return
+	# 사망자 후순위/리더 교체를 필드 파티 노드에 반영
+	call_deferred("_rebuild_field_party_formation")
+
+
+func _rebuild_field_party_formation() -> void:
+	if not PartyManager:
+		return
+	var party_members: Array = PartyManager.get_party()
+	if party_members.is_empty():
+		return
+
+	var start_pos: Vector2 = _get_start_position()
+	if party_leader and is_instance_valid(party_leader):
+		start_pos = party_leader.global_position
+
+	# 기존 노드 정리
+	if party_leader and is_instance_valid(party_leader):
+		party_leader.queue_free()
+	for follower in party_followers:
+		if follower and is_instance_valid(follower):
+			follower.queue_free()
+	party_followers.clear()
+
+	# 새 리더 (항상 생존자 우선 정렬된 party[0])
+	party_leader = party_leader_scene.instantiate() as PartyMember
+	add_child(party_leader)
+	party_leader.setup_as_leader(party_members[0], start_pos)
+
+	# 팔로워 재생성
+	if party_members.size() > 1:
+		for i in range(1, party_members.size()):
+			var follower: PartyMember = party_follower_scene.instantiate()
+			add_child(follower)
+			follower.setup_as_follower(party_members[i], party_leader, i)
+			party_followers.append(follower)
+
+	# 카메라 한 번 더 보정
+	_apply_camera_limits()
+
+
 func _on_restart_game() -> void:
 	var tree := get_tree()
 	if tree == null:
@@ -1732,6 +1884,10 @@ func _on_all_battles_ended() -> void:
 
 func _update_party_chatter(_delta: float) -> void:
 	## 필드에서 적 밀집 상황을 감지해 가끔 파티 대화 출력
+	if recruit_event_active:
+		return
+	if _is_external_event_blocking_party_chatter():
+		return
 	if party_chatter_enemy_seen_cooldown > 0.0:
 		return
 	if party_chatter_cooldown > 0.0:
@@ -1750,37 +1906,135 @@ func _update_party_chatter(_delta: float) -> void:
 	if randf() > 0.28:
 		return
 
-	var line: String = PARTY_CHATTER_ENEMY_SEEN_LINES[randi() % PARTY_CHATTER_ENEMY_SEEN_LINES.size()]
-	var reply: String = PARTY_CHATTER_ENEMY_SEEN_REPLY_LINES[randi() % PARTY_CHATTER_ENEMY_SEEN_REPLY_LINES.size()]
+	var speaker_member: PartyMember = _pick_random_party_member_for_chatter()
+	var speaker_id: String = speaker_member.hero_id if speaker_member != null else ""
+	var line: String = _get_field_chatter_line("enemy_many", speaker_id, PARTY_CHATTER_ENEMY_SEEN_LINES)
+	var reply: String = _get_field_chatter_line("enemy_many_reply", "", PARTY_CHATTER_ENEMY_SEEN_REPLY_LINES)
 	_show_party_chatter_exchange("", line, reply, Color(1.0, 0.95, 0.75, 1.0), Color(0.92, 0.98, 1.0, 1.0))
 	party_chatter_enemy_seen_cooldown = randf_range(4.0, 7.0)
 	party_chatter_cooldown = 1.1
 
 
+func _update_grudge_spawn_pressure(delta: float) -> void:
+	if FieldManager.is_boss_field():
+		return
+	if spawner == null:
+		return
+
+	grudge_spawn_eval_timer -= delta
+	if grudge_spawn_eval_timer <= 0.0:
+		grudge_spawn_eval_timer = GRUDGE_SPAWN_EVAL_INTERVAL
+		var total_grudge: int = _get_active_battle_total_grudge_level()
+		var target_bonus: int = clampi(
+			int(floor(float(total_grudge) * GRUDGE_EXTRA_ENEMY_PER_LEVEL)),
+			0,
+			GRUDGE_EXTRA_ENEMY_MAX
+		)
+		grudge_extra_target = target_bonus
+		spawner.set_dynamic_bonus_enemy_count(grudge_extra_target)
+
+	var desired_non_boss: int = spawner.get_target_enemy_count()
+	var current_non_boss: int = _get_current_non_boss_enemy_count()
+	if current_non_boss > desired_non_boss:
+		grudge_extra_despawn_timer -= delta
+		if grudge_extra_despawn_timer <= 0.0:
+			grudge_extra_despawn_timer = GRUDGE_EXTRA_DESPAWN_INTERVAL
+			_despawn_one_extra_field_enemy()
+	else:
+		grudge_extra_despawn_timer = 0.0
+
+
+func _get_active_battle_total_grudge_level() -> int:
+	if BattleManager == null:
+		return 0
+	if BattleManager.get_active_battle_count() <= 0:
+		return 0
+	var total: int = 0
+	for battle_id in BattleManager.active_battles:
+		var bd: Dictionary = BattleManager.active_battles.get(battle_id, {})
+		var window_ref: Node = bd.get("window_ref", null)
+		if window_ref == null or not is_instance_valid(window_ref):
+			continue
+		if window_ref.has_method("get_local_grudge_level"):
+			total += int(window_ref.call("get_local_grudge_level"))
+		else:
+			total += int(window_ref.get("local_grudge_level"))
+	return maxi(0, total)
+
+
+func _get_current_non_boss_enemy_count() -> int:
+	var count: int = 0
+	for enemy in field_enemies:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if enemy.is_boss:
+			continue
+		count += 1
+	return count
+
+
+func _despawn_one_extra_field_enemy() -> void:
+	if party_leader == null:
+		return
+	var candidate: FieldEnemy = null
+	var best_score: float = -1.0
+	for enemy in field_enemies:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if enemy.is_boss:
+			continue
+		if enemy.is_contacted:
+			continue
+		if enemy.is_despawning:
+			continue
+		var score: float = enemy.global_position.distance_to(party_leader.global_position)
+		if score > best_score:
+			best_score = score
+			candidate = enemy
+	if candidate == null:
+		return
+	field_enemies.erase(candidate)
+	candidate.freeze_and_despawn(0.25)
+
+
 func _on_battle_hero_attacked(hero_id: String) -> void:
+	if get_tree().paused:
+		return
+	if recruit_event_active:
+		return
+	if _is_external_event_blocking_party_chatter():
+		return
 	if party_chatter_attack_cooldown > 0.0 or party_chatter_cooldown > 0.0:
 		return
 	if randf() > 0.55:
 		return
-	var line_pool: Array[String] = PARTY_CHATTER_ATTACK_LINES
-	var reply_pool: Array[String] = PARTY_CHATTER_ATTACK_REPLY_LINES
+	var line_trigger: String = "attack"
+	var reply_trigger: String = "attack_reply"
 	if randf() < 0.35:
-		line_pool = PARTY_CHATTER_SKILL_LINES
-		reply_pool = PARTY_CHATTER_SKILL_REPLY_LINES
-	var line: String = line_pool[randi() % line_pool.size()]
-	var reply: String = reply_pool[randi() % reply_pool.size()]
+		line_trigger = "skill"
+		reply_trigger = "skill_reply"
+	var fallback_line_pool: Array[String] = PARTY_CHATTER_SKILL_LINES if line_trigger == "skill" else PARTY_CHATTER_ATTACK_LINES
+	var fallback_reply_pool: Array[String] = PARTY_CHATTER_SKILL_REPLY_LINES if reply_trigger == "skill_reply" else PARTY_CHATTER_ATTACK_REPLY_LINES
+	var line: String = _get_field_chatter_line(line_trigger, hero_id, fallback_line_pool)
+	var reply: String = _get_field_chatter_line(reply_trigger, "", fallback_reply_pool)
 	_show_party_chatter_exchange(hero_id, line, reply, Color(0.85, 1.0, 0.85, 1.0), Color(0.9, 0.96, 1.0, 1.0))
 	party_chatter_attack_cooldown = randf_range(0.9, 1.5)
 	party_chatter_cooldown = 0.7
 
 
 func _on_battle_hero_damaged(hero_id: String) -> void:
+	if get_tree().paused:
+		return
+	if recruit_event_active:
+		return
+	if _is_external_event_blocking_party_chatter():
+		return
 	if party_chatter_hit_cooldown > 0.0 or party_chatter_cooldown > 0.0:
 		return
 	if randf() > 0.72:
 		return
-	var line: String = PARTY_CHATTER_HIT_LINES[randi() % PARTY_CHATTER_HIT_LINES.size()]
-	var reply: String = PARTY_CHATTER_HIT_REPLY_LINES[randi() % PARTY_CHATTER_HIT_REPLY_LINES.size()]
+	var line: String = _get_field_chatter_line("damaged", hero_id, PARTY_CHATTER_HIT_LINES)
+	var reply: String = _get_field_chatter_line("damaged_reply", "", PARTY_CHATTER_HIT_REPLY_LINES)
 	_show_party_chatter_exchange(hero_id, line, reply, Color(1.0, 0.85, 0.85, 1.0), Color(0.9, 1.0, 0.9, 1.0))
 	party_chatter_hit_cooldown = randf_range(1.0, 1.8)
 	party_chatter_cooldown = 0.7
@@ -1794,6 +2048,8 @@ func _show_party_chatter_exchange(
 	second_color: Color = Color(0.95, 0.95, 1.0, 1.0)
 ) -> void:
 	var first_speaker: PartyMember = _find_party_member_by_hero_id(hero_id)
+	if not _is_party_member_alive_for_chatter(first_speaker):
+		first_speaker = null
 	if first_speaker == null:
 		var members: Array[PartyMember] = _get_alive_party_members_for_chatter()
 		if members.is_empty():
@@ -1813,6 +2069,8 @@ func _show_party_chatter(hero_id: String, text: String, color: Color = Color(0.9
 	if text.is_empty():
 		return
 	var speaker: PartyMember = _find_party_member_by_hero_id(hero_id)
+	if not _is_party_member_alive_for_chatter(speaker):
+		speaker = null
 	if speaker == null:
 		var members: Array[PartyMember] = _get_alive_party_members_for_chatter()
 		if members.is_empty():
@@ -1825,7 +2083,13 @@ func _show_party_chatter(hero_id: String, text: String, color: Color = Color(0.9
 
 
 func _enqueue_party_chatter(speaker: PartyMember, text: String, color: Color) -> void:
-	if speaker == null or not is_instance_valid(speaker):
+	if get_tree().paused:
+		return
+	if recruit_event_active:
+		return
+	if _is_external_event_blocking_party_chatter():
+		return
+	if not _is_party_member_alive_for_chatter(speaker):
 		return
 	if text.is_empty():
 		return
@@ -1838,12 +2102,21 @@ func _enqueue_party_chatter(speaker: PartyMember, text: String, color: Color) ->
 
 
 func _try_show_next_party_chatter() -> void:
+	if get_tree().paused:
+		return
+	if recruit_event_active:
+		return
+	if _is_external_event_blocking_party_chatter():
+		return
 	if party_chatter_is_showing:
 		return
 	while not party_chatter_queue.is_empty():
 		var entry: Dictionary = party_chatter_queue.pop_front()
-		var speaker: PartyMember = entry.get("speaker", null) as PartyMember
-		if speaker == null or not is_instance_valid(speaker):
+		var speaker_any: Variant = entry.get("speaker", null)
+		if speaker_any == null or not is_instance_valid(speaker_any):
+			continue
+		var speaker: PartyMember = speaker_any as PartyMember
+		if not _is_party_member_alive_for_chatter(speaker):
 			continue
 		var text: String = str(entry.get("text", ""))
 		if text.is_empty():
@@ -1858,6 +2131,16 @@ func _show_party_chatter_on_member(
 	text: String,
 	color: Color = Color(0.95, 0.95, 1.0, 1.0)
 ) -> void:
+	if not _is_party_member_alive_for_chatter(speaker):
+		return
+	_show_party_chatter_on_node(speaker, text, color)
+
+
+func _show_party_chatter_on_node(
+	speaker: Node2D,
+	text: String,
+	color: Color = Color(0.95, 0.95, 1.0, 1.0)
+) -> void:
 	if speaker == null or not is_instance_valid(speaker):
 		return
 	if text.is_empty():
@@ -1868,7 +2151,7 @@ func _show_party_chatter_on_member(
 	var bubble := PanelContainer.new()
 	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bubble.z_index = FIELD_WORLD_EFFECT_Z + 100
-	bubble.position = Vector2(-22.0, -50.0)
+	bubble.position = Vector2.ZERO
 
 	var bubble_style := StyleBoxFlat.new()
 	bubble_style.bg_color = Color(1.0, 1.0, 1.0, 0.96)
@@ -1881,35 +2164,198 @@ func _show_party_chatter_on_member(
 	bubble_style.corner_radius_top_right = 4
 	bubble_style.corner_radius_bottom_left = 4
 	bubble_style.corner_radius_bottom_right = 4
-	bubble_style.content_margin_left = 4
-	bubble_style.content_margin_right = 4
-	bubble_style.content_margin_top = 2
-	bubble_style.content_margin_bottom = 2
+	bubble_style.content_margin_left = 6
+	bubble_style.content_margin_right = 6
+	bubble_style.content_margin_top = 3
+	bubble_style.content_margin_bottom = 3
 	bubble.add_theme_stylebox_override("panel", bubble_style)
 
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 6)
+	label.add_theme_font_size_override("font_size", 11)
 	label.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 1.0))
-	label.add_theme_constant_override("line_spacing", -2)
+	label.add_theme_constant_override("line_spacing", 0)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	label.custom_minimum_size = Vector2(132.0, 0.0)
 	bubble.add_child(label)
 
-	speaker.add_child(bubble)
-
-	var tween := bubble.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(bubble, "modulate:a", 0.0, 0.35).set_delay(0.9)
-	tween.chain().tween_callback(Callable(self, "_on_party_chatter_bubble_finished").bind(bubble))
+	_ensure_party_chatter_overlay()
+	if party_chatter_root == null or not is_instance_valid(party_chatter_root):
+		return
+	party_chatter_root.add_child(bubble)
+	active_party_chatter_speaker = speaker
+	active_party_chatter_bubble = bubble
+	active_party_chatter_time_left = PARTY_CHATTER_BUBBLE_HOLD_TIME + PARTY_CHATTER_BUBBLE_FADE_TIME
+	_position_party_chatter_bubble(speaker, bubble)
+	call_deferred("_position_party_chatter_bubble", speaker, bubble)
+	bubble.modulate.a = 1.0
 
 
 func _on_party_chatter_bubble_finished(bubble: PanelContainer) -> void:
 	if bubble and is_instance_valid(bubble):
 		bubble.queue_free()
+	active_party_chatter_speaker = null
+	active_party_chatter_bubble = null
+	active_party_chatter_time_left = 0.0
 	party_chatter_is_showing = false
 	_try_show_next_party_chatter()
+
+
+func _position_party_chatter_bubble(speaker: Node2D, bubble: PanelContainer) -> void:
+	if speaker == null or not is_instance_valid(speaker):
+		return
+	if bubble == null or not is_instance_valid(bubble):
+		return
+
+	var sprite_top_y: float = -16.0
+	var sprite: AnimatedSprite2D = speaker.get_node_or_null("AnimatedSprite2D")
+	if sprite == null:
+		for child in speaker.get_children():
+			if child is AnimatedSprite2D:
+				sprite = child as AnimatedSprite2D
+				break
+	if sprite != null and is_instance_valid(sprite) and sprite.sprite_frames != null:
+		var anim_name: StringName = sprite.animation
+		var frame_idx: int = sprite.frame
+		if sprite.sprite_frames.has_animation(anim_name):
+			var tex: Texture2D = sprite.sprite_frames.get_frame_texture(anim_name, frame_idx)
+			if tex != null:
+				sprite_top_y = -float(tex.get_height()) * absf(sprite.scale.y) * 0.5
+
+	var gap: float = 10.0 + PARTY_CHATTER_BUBBLE_EXTRA_LIFT
+	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * speaker.global_position
+	var x: float = screen_pos.x - bubble.size.x * 0.5
+	var y: float = screen_pos.y + sprite_top_y - gap - bubble.size.y
+	bubble.position = Vector2(x, y)
+
+
+func _update_active_party_chatter_position() -> void:
+	if active_party_chatter_speaker == null or not is_instance_valid(active_party_chatter_speaker):
+		return
+	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
+		return
+	_position_party_chatter_bubble(active_party_chatter_speaker, active_party_chatter_bubble)
+	_resolve_battle_window_overlap_with_chatter()
+
+
+func _resolve_battle_window_overlap_with_chatter() -> void:
+	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
+		return
+	if BattleManager == null:
+		return
+	var bubble_size: Vector2 = active_party_chatter_bubble.size
+	if bubble_size.x <= 0.0 or bubble_size.y <= 0.0:
+		return
+	var bubble_rect := Rect2(active_party_chatter_bubble.position, bubble_size)
+	var viewport_size: Vector2 = get_viewport_rect().size
+	var threshold_w: float = bubble_rect.size.x * 0.5
+
+	for battle_id_any in BattleManager.active_battles.keys():
+		var battle_id: int = int(battle_id_any)
+		var battle_data: Dictionary = BattleManager.active_battles.get(battle_id, {})
+		var window_any: Variant = battle_data.get("window", null)
+		if window_any == null or not is_instance_valid(window_any):
+			continue
+		var window: Control = window_any as Control
+		if window == null:
+			continue
+		var window_size: Vector2 = window.size
+		if window_size.x <= 0.0 or window_size.y <= 0.0:
+			window_size = window.custom_minimum_size
+		if window_size.x <= 0.0 or window_size.y <= 0.0:
+			continue
+		var win_rect := Rect2(window.global_position, window_size)
+		var overlap: Rect2 = bubble_rect.intersection(win_rect)
+		if overlap.size.x <= threshold_w:
+			continue
+
+		var bubble_cx: float = bubble_rect.position.x + bubble_rect.size.x * 0.5
+		var win_cx: float = win_rect.position.x + win_rect.size.x * 0.5
+		var dir_sign: float = -1.0 if win_cx <= bubble_cx else 1.0
+		var shift_x: float = overlap.size.x + 18.0
+		var new_x: float = window.global_position.x + dir_sign * shift_x
+		new_x = clampf(new_x, -window_size.x + 40.0, viewport_size.x - 40.0)
+		var new_y: float = clampf(window.global_position.y, 0.0, viewport_size.y - 30.0)
+		var target_pos := Vector2(new_x, new_y)
+		if window.global_position.distance_to(target_pos) < 2.0:
+			continue
+
+		var prev_target: Vector2 = window.get_meta("chatter_push_target", Vector2.INF) as Vector2
+		if prev_target != Vector2.INF and prev_target.distance_to(target_pos) < 2.0:
+			continue
+		window.set_meta("chatter_push_target", target_pos)
+
+		var prev_tween: Variant = window.get_meta("chatter_push_tween", null)
+		if prev_tween != null and prev_tween is Tween:
+			var tw_prev: Tween = prev_tween as Tween
+			if tw_prev != null and tw_prev.is_valid():
+				tw_prev.kill()
+
+		var tw := window.create_tween()
+		tw.set_trans(Tween.TRANS_SINE)
+		tw.set_ease(Tween.EASE_OUT)
+		tw.tween_property(window, "global_position", target_pos, 0.16)
+		window.set_meta("chatter_push_tween", tw)
+
+
+func _update_party_chatter_lifecycle(delta: float) -> void:
+	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
+		return
+	if not party_chatter_is_showing:
+		return
+	active_party_chatter_time_left = maxf(0.0, active_party_chatter_time_left - delta)
+	if active_party_chatter_time_left <= PARTY_CHATTER_BUBBLE_FADE_TIME:
+		var alpha: float = active_party_chatter_time_left / PARTY_CHATTER_BUBBLE_FADE_TIME if PARTY_CHATTER_BUBBLE_FADE_TIME > 0.0 else 0.0
+		active_party_chatter_bubble.modulate.a = clampf(alpha, 0.0, 1.0)
+	else:
+		active_party_chatter_bubble.modulate.a = 1.0
+	if active_party_chatter_time_left <= 0.0:
+		_on_party_chatter_bubble_finished(active_party_chatter_bubble)
+
+
+func _update_party_chatter_blocking_state() -> void:
+	if recruit_event_active:
+		return
+	if not _is_external_event_blocking_party_chatter():
+		return
+	_clear_party_chatter_queue()
+
+
+func _clear_party_chatter_queue() -> void:
+	party_chatter_queue.clear()
+	if active_party_chatter_bubble != null and is_instance_valid(active_party_chatter_bubble):
+		active_party_chatter_bubble.queue_free()
+	active_party_chatter_speaker = null
+	active_party_chatter_bubble = null
+	active_party_chatter_time_left = 0.0
+	party_chatter_is_showing = false
+
+
+func _is_external_event_blocking_party_chatter() -> bool:
+	# recruit_event_active는 의도된 "동료 이벤트 대화" 자체이므로 여기서 막지 않는다.
+	if recruit_dialog_active and not recruit_event_active:
+		return true
+	if recruit_followup_active and not recruit_event_active:
+		return true
+	if reward_window != null and is_instance_valid(reward_window) and reward_window.visible:
+		return true
+	return false
+
+
+func _ensure_party_chatter_overlay() -> void:
+	if party_chatter_layer and is_instance_valid(party_chatter_layer):
+		return
+	party_chatter_layer = CanvasLayer.new()
+	party_chatter_layer.layer = PARTY_CHATTER_LAYER
+	party_chatter_layer.name = "PartyChatterLayer"
+	add_child(party_chatter_layer)
+
+	party_chatter_root = Control.new()
+	party_chatter_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	party_chatter_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	party_chatter_layer.add_child(party_chatter_root)
 
 
 func _find_party_member_by_hero_id(hero_id: String) -> PartyMember:
@@ -1927,13 +2373,25 @@ func _find_party_member_by_hero_id(hero_id: String) -> PartyMember:
 
 func _get_alive_party_members_for_chatter() -> Array[PartyMember]:
 	var members: Array[PartyMember] = []
-	if party_leader and is_instance_valid(party_leader):
+	if _is_party_member_alive_for_chatter(party_leader):
 		members.append(party_leader)
 	for follower in party_followers:
-		if follower == null or not is_instance_valid(follower):
-			continue
-		members.append(follower)
+		if _is_party_member_alive_for_chatter(follower):
+			members.append(follower)
 	return members
+
+
+func _is_party_member_alive_for_chatter(member: PartyMember) -> bool:
+	if member == null or not is_instance_valid(member):
+		return false
+	if member.hero_id.is_empty():
+		return true
+	if PartyManager == null:
+		return true
+	var hero: Hero = PartyManager.get_hero_by_id(member.hero_id)
+	if hero == null:
+		return true
+	return not hero.is_dead
 
 
 func _get_other_party_member_for_chatter(exclude_member: PartyMember) -> PartyMember:
@@ -1946,6 +2404,23 @@ func _get_other_party_member_for_chatter(exclude_member: PartyMember) -> PartyMe
 	if candidates.is_empty():
 		return null
 	return candidates[randi() % candidates.size()]
+
+
+func _pick_random_party_member_for_chatter() -> PartyMember:
+	var members: Array[PartyMember] = _get_alive_party_members_for_chatter()
+	if members.is_empty():
+		return null
+	return members[randi() % members.size()]
+
+
+func _get_field_chatter_line(trigger: String, hero_id: String, fallback_pool: Array[String]) -> String:
+	if DialogueManager and DialogueManager.has_method("get_field_line"):
+		var line: String = str(DialogueManager.call("get_field_line", trigger, hero_id))
+		if not line.is_empty():
+			return line
+	if fallback_pool.is_empty():
+		return ""
+	return fallback_pool[randi() % fallback_pool.size()]
 
 
 func _get_camera_rect() -> Rect2:
