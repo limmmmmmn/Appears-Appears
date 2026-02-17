@@ -1,4 +1,4 @@
-extends PanelContainer
+extends "res://scripts/ui/window/WindowShell.gd"
 class_name BattleWindow
 ## BattleWindow: 실시간 전투창
 ## - 행동 타이머: DEX 비례로 충전, 가득 차면 즉시 행동 (턴 없음)
@@ -7,6 +7,7 @@ signal battle_ended(battle_id: int, victory: bool)
 signal battle_log(message: String, color: Color)
 signal party_updated
 signal turn_started(unit_name: String, is_hero: bool)
+signal event_finished(result: Dictionary)
 
 enum BattleState { STARTING, RUNNING, VICTORY, DEFEAT, ESCAPED, ENDED }
 
@@ -37,10 +38,26 @@ enum WindowMode { NORMAL, HOLD, CLOSE_RESERVED }
 var window_mode: WindowMode = WindowMode.NORMAL
 
 # === UI 참조 ===
-@onready var enemy_container: HBoxContainer = $MainVBox/BattleArea/EnemyContainer
+@onready var enemy_container: Container = $MainVBox/BattleArea/EnemyContainer
 @onready var run_button: Button = %RunButton
-@onready var close_button: Button = $MainVBox/TopBar/CloseButton
+@onready var block_entry_button: Button = $MainVBox/ButtonBar/BlockEntryButton
+@onready var battle_close_button: Button = $MainVBox/TopBar/CloseButton
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
+@onready var main_vbox: VBoxContainer = $MainVBox
+@onready var top_bar: HBoxContainer = $MainVBox/TopBar
+@onready var info_bar: PanelContainer = $MainVBox/InfoBar
+@onready var info_label: Label = $MainVBox/InfoBar/InfoLabel
+var entry_blocked: bool = false
+var top_left_status_label: Label = null
+var top_right_status_label: Label = null
+var grudge_gauge_bar: ProgressBar = null
+var _wave_clear_processed: bool = false
+var local_grudge_level: int = 0
+var local_grudge_kill_gauge: int = 0
+var local_reward_level: int = 0
+var reward_hearts: int = 0
+var reward_chests: Array[String] = []
+var reward_preview_items: Array[String] = []
 
 
 # === 활성 특성 ===
@@ -53,6 +70,13 @@ var _knight_used_first: Dictionary = {}  # hero_id -> bool (전투창당 첫 공
 const ACTION_DELAY: float = 0.3  # 행동 사이 딜레이 (초)
 var is_processing_action: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
+var _event_step_mode: bool = false
+const MIN_BATTLE_VISIBLE_TIME: float = 0.4
+const VICTORY_POST_KILL_DELAY: float = 0.18
+var battle_started_ms: int = 0
+var pending_victory: bool = false
+var pending_victory_ready_ms: int = 0
+var waiting_reward_claim: bool = false
 
 # === 행동 타임아웃 안전장치 ===
 var _action_process_timer: float = 0.0
@@ -61,8 +85,11 @@ const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 
 # === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
-
+const GRUDGE_KILLS_PER_LEVEL: int = 5
 const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
+const BASE_ENEMIES_PER_WINDOW: int = 3
+const BATTLE_ATB_FILL_RATE: float = 0.85
+const ENEMY_ROW_GAP: int = 5
 
 # === Mother 2 스타일 배경 효과 ===
 var background: ColorRect = null
@@ -86,8 +113,8 @@ const EFFECT_CHANGE_INTERVAL: float = 4.0
 var effect_timer: float = 0.0
 
 # === 마우스 드래그 이동 ===
-var _is_dragging: bool = false
-var _drag_offset: Vector2 = Vector2.ZERO
+var _battle_is_dragging: bool = false
+var _battle_drag_offset: Vector2 = Vector2.ZERO
 
 # === 적 호버 툴팁 ===
 var _enemy_tooltip: PanelContainer = null
@@ -97,24 +124,51 @@ var _hovered_enemy: BattleEnemy = null
 var _is_window_hovered: bool = false
 var _normal_panel_style: StyleBoxFlat = null
 var _hover_panel_style: StyleBoxFlat = null
+var _pause_hover_focus: bool = false
+var _pause_overlay: ColorRect = null
 
 # === 전투창 드래그 머지 ===
 var _merge_target: BattleWindow = null
+
+# === 이벤트 모드 ===
+var is_event_mode: bool = false
+var event_context: Dictionary = {}
+var event_lines: Array[Dictionary] = []
+var event_line_index: int = -1
+var event_line_timer: float = 0.0
+var event_line_interval: float = 1.5
+var event_waiting_choice: bool = false
+var event_last_choice_id: String = ""
+var event_overlay_root: Control = null
+var event_left_face_panel: PanelContainer = null
+var event_right_face_panel: PanelContainer = null
+var event_speaker_label: Label = null
+var event_text_label: RichTextLabel = null
+var event_choice_panel: VBoxContainer = null
+var event_left_bubble: PanelContainer = null
+var event_right_bubble: PanelContainer = null
+var event_left_bubble_label: Label = null
+var event_right_bubble_label: Label = null
 
 
 func _ready() -> void:
 	visible = false
 	set_process(false)
 	process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 입력 받기
+	add_to_group("battle_windows")
 
-	# 도망 버튼: top_level로 PanelContainer 레이아웃에서 분리
 	if run_button:
 		run_button.visible = true
 		run_button.pressed.connect(_on_run_button_pressed)
-		run_button.set_as_top_level(true)
+		_apply_run_button_style()
+	if block_entry_button:
+		block_entry_button.visible = true
+		if not block_entry_button.toggled.is_connected(_on_block_entry_toggled):
+			block_entry_button.toggled.connect(_on_block_entry_toggled)
+		_update_block_entry_button_state()
 
-	if close_button:
-		close_button.pressed.connect(_on_close_pressed)
+	if battle_close_button:
+		battle_close_button.pressed.connect(_on_close_pressed)
 
 	# 마우스 GUI 입력 연결
 	gui_input.connect(_on_gui_input)
@@ -127,17 +181,35 @@ func _ready() -> void:
 
 	# 적 호버 툴팁 생성
 	_setup_enemy_tooltip()
+	_setup_battle_top_bar()
+	_setup_info_bar()
+	_setup_pause_controls()
+	_reset_local_progression()
 
 
 func _process(delta: float) -> void:
-	# 도주 버튼 위치 갱신 (top_level이므로 수동 배치)
-	_update_run_button_position()
+	_update_pause_visual(delta)
 
 	if get_tree().paused:
 		return
 
+	if is_event_mode:
+		if _event_step_mode:
+			return
+		_process_event_dialog(delta)
+		return
+
 	if current_state != BattleState.RUNNING:
 		return
+
+	if pending_victory:
+		var now_ms: int = Time.get_ticks_msec()
+		var min_visible_ms: int = int(MIN_BATTLE_VISIBLE_TIME * 1000.0)
+		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
+		if can_finish:
+			pending_victory = false
+			_show_claim_reward_button()
+			return
 
 	_update_background_effect(delta)
 
@@ -159,9 +231,170 @@ func _process(delta: float) -> void:
 
 
 func _update_run_button_position() -> void:
-	## 도주 버튼을 전투창 우측 하단에 배치 (top_level)
-	if run_button and run_button.visible:
-		run_button.global_position = global_position + size - run_button.size - Vector2(4, 4)
+	## 버튼은 ButtonBar 레이아웃으로 배치됨 (top_level 수동 이동 없음)
+	return
+
+
+func _setup_pause_controls() -> void:
+	var pause_parent: Control = battle_area
+	if pause_parent == null:
+		pause_parent = self
+	if _pause_overlay == null:
+		_pause_overlay = ColorRect.new()
+		_pause_overlay.name = "PauseOverlay"
+		_pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_pause_overlay.color = Color(0.0, 0.0, 0.0, 0.34)
+		_pause_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_pause_overlay.visible = false
+		pause_parent.add_child(_pause_overlay)
+
+
+func _update_pause_visual(delta: float) -> void:
+	var tree_paused: bool = false
+	if get_tree():
+		tree_paused = get_tree().paused
+	if is_event_mode and tree_paused:
+		_event_step_mode = true
+
+	var paused_context: bool = tree_paused or (is_event_mode and _event_step_mode)
+	if not paused_context:
+		if _pause_overlay:
+			_pause_overlay.visible = false
+		modulate = Color.WHITE
+		return
+
+	var focused: bool = false
+	if is_event_mode:
+		focused = _is_window_hovered
+	else:
+		focused = _pause_hover_focus
+
+	var dim: float = 1.0 if focused else 0.62
+	modulate = Color(dim, dim, dim, 1.0)
+
+	if _pause_overlay:
+		_pause_overlay.visible = true
+		_pause_overlay.color.a = 0.18 if focused else 0.34
+
+
+func _apply_run_button_style() -> void:
+	if run_button == null:
+		return
+	run_button.text = "도주 50%"
+	run_button.tooltip_text = "적이 살아있을 때 도주하면 보상 50%만 획득"
+	run_button.add_theme_font_size_override("font_size", 10)
+	run_button.custom_minimum_size = Vector2(104, 24)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.56, 0.44, 0.12, 0.95)
+	normal.border_width_left = 1
+	normal.border_width_top = 1
+	normal.border_width_right = 1
+	normal.border_width_bottom = 1
+	normal.border_color = Color(0.95, 0.78, 0.26, 0.95)
+	normal.corner_radius_top_left = 6
+	normal.corner_radius_top_right = 6
+	normal.corner_radius_bottom_left = 6
+	normal.corner_radius_bottom_right = 6
+	var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+	if hover:
+		hover.bg_color = Color(0.66, 0.52, 0.16, 0.98)
+	var pressed: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+	if pressed:
+		pressed.bg_color = Color(0.45, 0.35, 0.1, 0.98)
+	run_button.add_theme_stylebox_override("normal", normal)
+	if hover:
+		run_button.add_theme_stylebox_override("hover", hover)
+	if pressed:
+		run_button.add_theme_stylebox_override("pressed", pressed)
+
+
+func _apply_claim_button_style() -> void:
+	if run_button == null:
+		return
+	run_button.text = "보상받기"
+	run_button.tooltip_text = "적 전멸 보상 100% 획득"
+	run_button.add_theme_font_size_override("font_size", 10)
+	run_button.custom_minimum_size = Vector2(104, 24)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.14, 0.42, 0.2, 0.96)
+	normal.border_width_left = 1
+	normal.border_width_top = 1
+	normal.border_width_right = 1
+	normal.border_width_bottom = 1
+	normal.border_color = Color(0.38, 0.88, 0.48, 0.95)
+	normal.corner_radius_top_left = 6
+	normal.corner_radius_top_right = 6
+	normal.corner_radius_bottom_left = 6
+	normal.corner_radius_bottom_right = 6
+	var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+	if hover:
+		hover.bg_color = Color(0.2, 0.5, 0.26, 0.98)
+	var pressed: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+	if pressed:
+		pressed.bg_color = Color(0.12, 0.34, 0.17, 0.98)
+	run_button.add_theme_stylebox_override("normal", normal)
+	if hover:
+		run_button.add_theme_stylebox_override("hover", hover)
+	if pressed:
+		run_button.add_theme_stylebox_override("pressed", pressed)
+
+
+func _setup_info_bar() -> void:
+	if info_bar == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.04, 0.06, 0.74)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.22, 0.24, 0.32, 0.9)
+	info_bar.add_theme_stylebox_override("panel", style)
+	if info_label:
+		info_label.add_theme_font_size_override("font_size", 9)
+		info_label.add_theme_color_override("font_color", Color(0.9, 0.92, 0.95, 0.95))
+		info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		info_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+
+func _on_block_entry_toggled(pressed: bool) -> void:
+	entry_blocked = pressed
+	_update_block_entry_button_state()
+
+
+func _update_block_entry_button_state() -> void:
+	if block_entry_button == null or not is_instance_valid(block_entry_button):
+		return
+	block_entry_button.button_pressed = entry_blocked
+	block_entry_button.tooltip_text = "봉쇄 ON: 적 난입 차단" if entry_blocked else "봉쇄 OFF: 적 난입 허용"
+	block_entry_button.focus_mode = Control.FOCUS_NONE
+	block_entry_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	block_entry_button.custom_minimum_size = Vector2(104, 24)
+	block_entry_button.add_theme_font_size_override("font_size", 10)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.17, 0.19, 0.22, 0.96)
+	normal.border_width_left = 1
+	normal.border_width_top = 1
+	normal.border_width_right = 1
+	normal.border_width_bottom = 1
+	normal.border_color = Color(0.45, 0.46, 0.52, 0.9)
+	normal.corner_radius_top_left = 6
+	normal.corner_radius_top_right = 6
+	normal.corner_radius_bottom_left = 6
+	normal.corner_radius_bottom_right = 6
+	var active := normal.duplicate() as StyleBoxFlat
+	if active:
+		active.bg_color = Color(0.45, 0.15, 0.16, 0.96)
+		active.border_color = Color(0.95, 0.35, 0.38, 0.95)
+	block_entry_button.add_theme_stylebox_override("normal", active if entry_blocked and active else normal)
+	block_entry_button.add_theme_stylebox_override("hover", active if entry_blocked and active else normal)
+	block_entry_button.add_theme_stylebox_override("pressed", active if entry_blocked and active else normal)
+
+
+func is_enemy_entry_blocked() -> bool:
+	return entry_blocked
 
 
 #region 전투 초기화 (새 시스템)
@@ -170,6 +403,18 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	enemy_data_list = enemy_ids.duplicate()
 	is_elite_battle = p_is_elite
 	is_boss_battle = p_is_boss
+	_reset_local_progression()
+	waiting_reward_claim = false
+	_clear_reward_claim_button()
+	entry_blocked = false
+	_update_block_entry_button_state()
+	if block_entry_button and is_instance_valid(block_entry_button):
+		block_entry_button.visible = true
+	if run_button:
+		_apply_run_button_style()
+		run_button.visible = true
+	if top_bar:
+		top_bar.visible = true
 
 	# 보상 초기화
 	total_exp = 0
@@ -190,7 +435,9 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
 		var make_elite: bool = (i == 0 and is_elite_battle)
-		_spawn_single_enemy(enemy_id, make_elite)
+		_spawn_single_enemy(enemy_id, make_elite, false)
+
+	_refresh_enemy_layout()
 
 	if is_elite_battle:
 		_apply_elite_style()
@@ -209,18 +456,157 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 
 
 func _update_buttons_for_enemies() -> void:
-	## 적 존재 여부에 따라 버튼 상태 업데이트
-	if run_button:
-		run_button.disabled = not has_alive_enemies()
+	## 적 존재 여부에 따라 우측 버튼 상태 전환 (도주/보상받기)
+	if run_button == null:
+		return
+	_update_fold_layout_for_enemy_state()
+	if waiting_reward_claim:
+		_apply_claim_button_style()
+		run_button.disabled = false
+		return
+	_apply_run_button_style()
+	run_button.disabled = not has_alive_enemies()
 
 
-func _spawn_single_enemy(enemy_id: String, make_elite: bool = false) -> void:
+func _update_fold_layout_for_enemy_state() -> void:
+	## 접힘 기능 삭제: 항상 기본 레이아웃 유지
+	if battle_area and is_instance_valid(battle_area):
+		battle_area.visible = true
+	if info_bar and is_instance_valid(info_bar):
+		info_bar.visible = true
+
+
+func _set_folded_window_state(folded: bool) -> void:
+	return
+
+
+func _spawn_single_enemy(enemy_id: String, make_elite: bool = false, refresh_layout: bool = true) -> void:
 	var battle_enemy: BattleEnemy = BATTLE_ENEMY_SCENE.instantiate()
-	enemy_container.add_child(battle_enemy)
+	add_child(battle_enemy)
 	battle_enemy.setup(enemy_id, make_elite)
+	_apply_local_grudge_to_enemy(battle_enemy)
 	enemies.append(battle_enemy)
+	if refresh_layout:
+		_refresh_enemy_layout()
 	# 마우스 호버 이벤트 연결
 	_connect_enemy_hover(battle_enemy)
+
+
+func add_field_enemies(enemy_ids: Array, is_elite: bool = false) -> int:
+	## 필드 조우로 들어온 적을 현재 전투창에 추가 (최대: 3 + 원념레벨)
+	if entry_blocked:
+		return 0
+	if enemy_ids.is_empty():
+		return 0
+
+	# 보상 대기 상태였다면 전투 상태로 복귀
+	if waiting_reward_claim:
+		waiting_reward_claim = false
+		_clear_reward_claim_button()
+		current_state = BattleState.RUNNING
+		set_process(true)
+		if run_button:
+			_apply_run_button_style()
+			run_button.visible = true
+		if battle_close_button:
+			battle_close_button.visible = false
+		if block_entry_button and is_instance_valid(block_entry_button):
+			block_entry_button.visible = true
+
+	var alive_count: int = get_enemy_count()
+	var space: int = get_max_enemies_per_window() - alive_count
+	if space <= 0:
+		return 0
+
+	var added: int = 0
+	for i in range(enemy_ids.size()):
+		if added >= space:
+			break
+		var enemy_id: String = str(enemy_ids[i]).strip_edges()
+		if enemy_id.is_empty():
+			continue
+		_spawn_single_enemy(enemy_id, is_elite and added == 0, false)
+		added += 1
+
+	if added > 0:
+		pending_victory = false
+		pending_victory_ready_ms = 0
+		_wave_clear_processed = false
+		_refresh_enemy_layout()
+		_update_buttons_for_enemies()
+	return added
+
+
+func can_accept_field_enemies(additional_count: int = 1) -> bool:
+	if entry_blocked:
+		return false
+	if additional_count <= 0:
+		return true
+	return get_enemy_count() + additional_count <= get_max_enemies_per_window()
+
+
+func get_max_enemies_per_window() -> int:
+	return BASE_ENEMIES_PER_WINDOW + maxi(0, local_grudge_level)
+
+
+func _refresh_enemy_layout() -> void:
+	if enemy_container == null:
+		return
+
+	var living_nodes: Array = []
+	for e_any in enemies:
+		if e_any == null:
+			continue
+		if not is_instance_valid(e_any):
+			continue
+		if not (e_any is BattleEnemy):
+			continue
+		var e: BattleEnemy = e_any as BattleEnemy
+		if e == null:
+			continue
+		if not e.is_alive():
+			continue
+		living_nodes.append(e)
+
+	for e in living_nodes:
+		var enemy_node: BattleEnemy = e as BattleEnemy
+		if enemy_node == null:
+			continue
+		var p: Node = enemy_node.get_parent()
+		if p != null:
+			p.remove_child(enemy_node)
+
+	for child in enemy_container.get_children():
+		child.queue_free()
+
+	if living_nodes.is_empty():
+		return
+
+	var rows: Array = []
+	var count: int = living_nodes.size()
+	if count <= 3:
+		rows.append(living_nodes)
+	elif count == 4:
+		rows.append([living_nodes[0], living_nodes[1]])
+		rows.append([living_nodes[2], living_nodes[3]])
+	else:
+		rows.append([living_nodes[0], living_nodes[1]])
+		rows.append([living_nodes[2], living_nodes[3], living_nodes[4]])
+
+	for row_nodes in rows:
+		if not (row_nodes is Array):
+			continue
+		var row_list: Array = row_nodes as Array
+		var row := HBoxContainer.new()
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", ENEMY_ROW_GAP)
+		enemy_container.add_child(row)
+		for enemy_node_any in row_list:
+			var enemy_node: BattleEnemy = enemy_node_any as BattleEnemy
+			if enemy_node == null:
+				continue
+			row.add_child(enemy_node)
 
 
 func _shake_window() -> void:
@@ -269,11 +655,648 @@ func _check_is_boss_battle(enemy_ids: Array) -> bool:
 
 func _start_battle() -> void:
 	current_state = BattleState.RUNNING
+	battle_started_ms = Time.get_ticks_msec()
+	pending_victory = false
+	pending_victory_ready_ms = 0
+	waiting_reward_claim = false
+	_clear_reward_claim_button()
+	entry_blocked = false
+	_update_block_entry_button_state()
+	if block_entry_button and is_instance_valid(block_entry_button):
+		block_entry_button.visible = true
+	if top_left_status_label:
+		top_left_status_label.visible = true
+	if top_right_status_label:
+		top_right_status_label.visible = true
+	if grudge_gauge_bar:
+		grudge_gauge_bar.visible = true
+	_refresh_top_bar_status()
+	_clear_reward_claim_button()
 	_update_buttons_for_enemies()
 	set_process(true)
 	_reset_enemy_timers()
 #endregion
 
+
+func setup_event_dialog(
+		title: String,
+		left_hero_id: String,
+		right_hero_id: String,
+		lines: Array[Dictionary],
+		context: Dictionary = {}
+	) -> void:
+	## 전투창을 이벤트창으로 재사용
+	_reset_event_mode_state()
+	_set_folded_window_state(false)
+	is_event_mode = true
+	_event_step_mode = false
+	event_context = context.duplicate(true)
+	event_lines = lines.duplicate(true)
+	event_line_interval = float(event_context.get("line_interval", 1.5))
+	event_line_index = -1
+	event_line_timer = 0.0
+	event_waiting_choice = false
+	event_last_choice_id = ""
+
+	visible = true
+	modulate.a = 0.0
+	scale = Vector2(0.8, 0.8)
+	current_state = BattleState.RUNNING
+	set_process(true)
+
+	if run_button:
+		run_button.visible = false
+	if block_entry_button and is_instance_valid(block_entry_button):
+		block_entry_button.visible = false
+	if top_left_status_label:
+		top_left_status_label.visible = false
+	if top_right_status_label:
+		top_right_status_label.visible = false
+	if grudge_gauge_bar:
+		grudge_gauge_bar.visible = false
+
+	var top_bar := get_node_or_null("MainVBox/TopBar") as Control
+	if top_bar:
+		top_bar.visible = true
+	if battle_close_button:
+		battle_close_button.visible = true
+
+	var title_label := Label.new()
+	title_label.name = "EventTitleRuntime"
+	title_label.text = title
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title_label.add_theme_font_size_override("font_size", 11)
+	title_label.add_theme_color_override("font_color", Color(0.98, 0.92, 0.65, 1.0))
+	if top_bar:
+		top_bar.add_child(title_label)
+		top_bar.move_child(title_label, 0)
+
+	if background:
+		background.material = null
+		background.color = Color(0, 0, 0, 0.93)
+	if battle_area:
+		battle_area.visible = true
+	if info_bar:
+		info_bar.visible = true
+	if enemy_container:
+		enemy_container.visible = false
+
+	_build_event_overlay(left_hero_id, right_hero_id)
+
+	var appear := create_tween()
+	appear.set_parallel(true)
+	appear.set_ease(Tween.EASE_OUT)
+	appear.set_trans(Tween.TRANS_BACK)
+	appear.tween_property(self, "modulate:a", 1.0, 0.2)
+	appear.tween_property(self, "scale", Vector2.ONE, 0.25)
+
+	_advance_event_line()
+
+
+func _setup_battle_top_bar() -> void:
+	if top_bar == null:
+		return
+	top_bar.visible = true
+	top_bar.alignment = BoxContainer.ALIGNMENT_BEGIN
+	top_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_bar.custom_minimum_size.y = 22
+
+	for child in top_bar.get_children():
+		if child == battle_close_button:
+			continue
+		child.queue_free()
+
+	top_left_status_label = Label.new()
+	top_left_status_label.add_theme_font_size_override("font_size", 10)
+	top_left_status_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.42, 1.0))
+	top_bar.add_child(top_left_status_label)
+
+	grudge_gauge_bar = ProgressBar.new()
+	grudge_gauge_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grudge_gauge_bar.custom_minimum_size = Vector2(90, 8)
+	grudge_gauge_bar.show_percentage = false
+	grudge_gauge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grudge_gauge_bar.max_value = float(GRUDGE_KILLS_PER_LEVEL)
+	grudge_gauge_bar.value = 0.0
+	var gauge_bg := StyleBoxFlat.new()
+	gauge_bg.bg_color = Color(0.14, 0.08, 0.08, 0.92)
+	gauge_bg.corner_radius_top_left = 3
+	gauge_bg.corner_radius_top_right = 3
+	gauge_bg.corner_radius_bottom_left = 3
+	gauge_bg.corner_radius_bottom_right = 3
+	var gauge_fill := StyleBoxFlat.new()
+	gauge_fill.bg_color = Color(0.95, 0.22, 0.2, 0.95)
+	gauge_fill.corner_radius_top_left = 3
+	gauge_fill.corner_radius_top_right = 3
+	gauge_fill.corner_radius_bottom_left = 3
+	gauge_fill.corner_radius_bottom_right = 3
+	grudge_gauge_bar.add_theme_stylebox_override("background", gauge_bg)
+	grudge_gauge_bar.add_theme_stylebox_override("fill", gauge_fill)
+	top_bar.add_child(grudge_gauge_bar)
+
+	top_right_status_label = Label.new()
+	top_right_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	top_right_status_label.add_theme_font_size_override("font_size", 10)
+	top_right_status_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.55, 1.0))
+	top_bar.add_child(top_right_status_label)
+
+	if battle_close_button:
+		battle_close_button.visible = false
+
+
+func _init_reward_preview_ui() -> void:
+	return
+
+
+func _reset_local_progression() -> void:
+	local_grudge_level = 0
+	local_grudge_kill_gauge = 0
+	local_reward_level = 0
+	reward_hearts = 0
+	reward_chests.clear()
+	reward_preview_items.clear()
+	_wave_clear_processed = false
+	_refresh_grudge_ui()
+	_refresh_reward_preview_ui()
+	_refresh_top_bar_status()
+
+
+func _refresh_grudge_ui() -> void:
+	if grudge_gauge_bar:
+		grudge_gauge_bar.max_value = GRUDGE_KILLS_PER_LEVEL
+		grudge_gauge_bar.value = local_grudge_kill_gauge
+
+
+func _refresh_top_bar_status() -> void:
+	if top_left_status_label:
+		top_left_status_label.text = "🔥%d" % local_grudge_level
+	if top_right_status_label:
+		top_right_status_label.text = "⭐%d" % local_reward_level
+
+
+func get_local_grudge_level() -> int:
+	return local_grudge_level
+
+
+func _refresh_reward_preview_ui() -> void:
+	if info_label == null:
+		return
+	info_label.text = "💰%d  📦%d" % [total_gold, reward_preview_items.size()]
+
+
+func _on_local_grudge_kill() -> void:
+	local_grudge_kill_gauge += 1
+	var leveled: bool = false
+	while local_grudge_kill_gauge >= GRUDGE_KILLS_PER_LEVEL:
+		local_grudge_kill_gauge -= GRUDGE_KILLS_PER_LEVEL
+		local_grudge_level += 1
+		leveled = true
+		_play_grudge_levelup_effect()
+		var msg := "⚠ 원념 레벨 %d! 적이 더 맹렬히 공격합니다." % local_grudge_level
+		_send_log(msg, Color(1.0, 0.42, 0.42, 1.0))
+		_sync_reward_level_with_grudge()
+
+	if leveled:
+		_apply_local_grudge_to_all_enemies()
+
+	_refresh_grudge_ui()
+	_refresh_top_bar_status()
+
+
+func _sync_reward_level_with_grudge() -> void:
+	# 원념/보상 레벨을 같은 값으로 동기화 (원념 기준)
+	if local_reward_level >= local_grudge_level:
+		return
+	while local_reward_level < local_grudge_level:
+		local_reward_level += 1
+		_apply_reward_level_bundle(local_reward_level)
+		_play_reward_levelup_effect(local_reward_level)
+	_refresh_top_bar_status()
+	_refresh_reward_preview_ui()
+
+
+func _apply_local_grudge_to_all_enemies() -> void:
+	for e in enemies:
+		if e == null or not is_instance_valid(e):
+			continue
+		if not (e is BattleEnemy):
+			continue
+		_apply_local_grudge_to_enemy(e as BattleEnemy)
+
+
+func _apply_local_grudge_to_enemy(enemy: BattleEnemy) -> void:
+	if enemy == null:
+		return
+	var mults: Dictionary = _get_grudge_multipliers(local_grudge_level)
+	enemy.set_grudge_scaling(float(mults.get("atk", 1.0)), float(mults.get("hp", 1.0)))
+
+
+func _get_grudge_multipliers(level: int) -> Dictionary:
+	match level:
+		0:
+			return {"atk": 1.0, "hp": 1.0}
+		1:
+			return {"atk": 1.3, "hp": 1.05}
+		2:
+			return {"atk": 1.6, "hp": 1.1}
+		3:
+			return {"atk": 2.0, "hp": 1.15}
+		4:
+			return {"atk": 2.5, "hp": 1.2}
+		5:
+			return {"atk": 3.0, "hp": 1.25}
+		_:
+			var bonus_lv: int = maxi(0, level - 5)
+			return {
+				"atk": 3.0 + 0.5 * float(bonus_lv),
+				"hp": 1.25 + 0.05 * float(bonus_lv),
+			}
+
+
+func _play_grudge_levelup_effect() -> void:
+	# 전투창 테두리 붉은 번쩍임
+	var panel_style_variant: Variant = get_theme_stylebox("panel")
+	if panel_style_variant is StyleBoxFlat:
+		var original_style: StyleBoxFlat = panel_style_variant.duplicate() as StyleBoxFlat
+		var flash_style: StyleBoxFlat = original_style.duplicate() as StyleBoxFlat
+		flash_style.border_width_left = maxi(flash_style.border_width_left, 2)
+		flash_style.border_width_top = maxi(flash_style.border_width_top, 2)
+		flash_style.border_width_right = maxi(flash_style.border_width_right, 2)
+		flash_style.border_width_bottom = maxi(flash_style.border_width_bottom, 2)
+		flash_style.border_color = Color(1.0, 0.2, 0.2, 1.0)
+		add_theme_stylebox_override("panel", flash_style)
+		var restore_timer := get_tree().create_timer(0.3)
+		restore_timer.timeout.connect(func():
+			add_theme_stylebox_override("panel", original_style)
+		)
+
+	# 적 붉은 오라
+	for e in enemies:
+		if e == null or not is_instance_valid(e):
+			continue
+		var enemy: BattleEnemy = e as BattleEnemy
+		if enemy == null or enemy.sprite == null or not enemy.is_alive():
+			continue
+		var tw := create_tween()
+		tw.tween_property(enemy.sprite, "modulate", Color(1.8, 0.5, 0.5, 1.0), 0.12)
+		tw.tween_property(enemy.sprite, "modulate", Color.WHITE, 0.18)
+
+
+func _on_wave_cleared() -> void:
+	# 보상 레벨은 원념 레벨과 같은 경로로만 증가
+	_sync_reward_level_with_grudge()
+
+
+func _apply_reward_level_bundle(level: int) -> void:
+	var bonus_gold: int = 0
+	var item_ids: Array[String] = []
+	var hearts: int = 0
+	match level:
+		1:
+			bonus_gold = 18
+			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("common"))
+		2:
+			bonus_gold = 30
+			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("common"))
+			if randf() < 0.5:
+				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("common"))
+			if randf() < 0.6:
+				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("uncommon"))
+			reward_chests.append("🪵")
+		3:
+			bonus_gold = 42
+			if randf() < 0.45:
+				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
+			hearts = 1
+			reward_chests.append("🥈")
+		4:
+			bonus_gold = 58
+			if randf() < 0.75:
+				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
+			hearts = 1
+			reward_chests.append("🥇")
+		5:
+			bonus_gold = 76
+			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
+			hearts = 2
+			reward_chests.append("✨")
+		_:
+			bonus_gold = 76 + max(0, level - 5) * 12
+			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
+			if randf() < 0.35:
+				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("uncommon"))
+			if randf() < 0.25:
+				hearts = 1
+			reward_chests.append("✨")
+
+	total_gold += bonus_gold
+	drop_items.append_array(item_ids)
+	reward_preview_items.append_array(item_ids)
+	reward_hearts += hearts
+
+
+func _roll_reward_item_by_rarity(rarity: String) -> String:
+	if DataManager == null:
+		return ""
+	var pool: Array[String] = DataManager.get_equipment_by_rarity(rarity)
+	if pool.is_empty():
+		return ""
+	return pool[randi() % pool.size()]
+
+
+func _append_if_not_empty(arr: Array[String], value: String) -> void:
+	var v: String = value.strip_edges()
+	if not v.is_empty():
+		arr.append(v)
+
+
+func _play_reward_levelup_effect(level: int) -> void:
+	var msg := "⭐ 보상레벨 %d 상승!" % level
+	_show_msg_box(msg, Color(1.0, 0.92, 0.48, 1.0), 0.7)
+	if info_bar and is_instance_valid(info_bar):
+		var tw := create_tween()
+		tw.tween_property(info_bar, "modulate", Color(1.2, 1.2, 0.9, 1.0), 0.1)
+		tw.tween_property(info_bar, "modulate", Color.WHITE, 0.16)
+
+
+func _build_event_overlay(left_hero_id: String, right_hero_id: String) -> void:
+	if battle_area == null:
+		return
+	if event_overlay_root and is_instance_valid(event_overlay_root):
+		event_overlay_root.queue_free()
+	event_overlay_root = Control.new()
+	event_overlay_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	event_overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	battle_area.add_child(event_overlay_root)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 8)
+	margin.add_theme_constant_override("margin_top", 8)
+	margin.add_theme_constant_override("margin_right", 8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	event_overlay_root.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 6)
+	margin.add_child(vbox)
+
+	var face_row := HBoxContainer.new()
+	face_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	face_row.add_theme_constant_override("separation", 24)
+	vbox.add_child(face_row)
+
+	event_left_face_panel = PanelContainer.new()
+	event_left_face_panel.custom_minimum_size = Vector2(64, 64)
+	face_row.add_child(event_left_face_panel)
+
+	var left_face := TextureRect.new()
+	left_face.set_anchors_preset(Control.PRESET_FULL_RECT)
+	left_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	left_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	event_left_face_panel.add_child(left_face)
+
+	event_right_face_panel = PanelContainer.new()
+	event_right_face_panel.custom_minimum_size = Vector2(64, 64)
+	face_row.add_child(event_right_face_panel)
+
+	var right_face := TextureRect.new()
+	right_face.set_anchors_preset(Control.PRESET_FULL_RECT)
+	right_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	right_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	event_right_face_panel.add_child(right_face)
+
+	if SpriteManager:
+		left_face.texture = SpriteManager.get_hero_face_sprite(left_hero_id)
+		right_face.texture = SpriteManager.get_hero_face_sprite(right_hero_id)
+
+	var bubble_row := HBoxContainer.new()
+	bubble_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	bubble_row.add_theme_constant_override("separation", 24)
+	vbox.add_child(bubble_row)
+
+	event_left_bubble = PanelContainer.new()
+	event_left_bubble.custom_minimum_size = Vector2(110, 44)
+	event_left_bubble.visible = false
+	_apply_event_bubble_style(event_left_bubble)
+	bubble_row.add_child(event_left_bubble)
+	event_left_bubble_label = Label.new()
+	event_left_bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	event_left_bubble_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	event_left_bubble_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	event_left_bubble_label.add_theme_font_size_override("font_size", 8)
+	event_left_bubble_label.add_theme_color_override("font_color", Color(0.98, 0.99, 1.0, 1.0))
+	event_left_bubble.add_child(event_left_bubble_label)
+
+	event_right_bubble = PanelContainer.new()
+	event_right_bubble.custom_minimum_size = Vector2(110, 44)
+	event_right_bubble.visible = false
+	_apply_event_bubble_style(event_right_bubble)
+	bubble_row.add_child(event_right_bubble)
+	event_right_bubble_label = Label.new()
+	event_right_bubble_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	event_right_bubble_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	event_right_bubble_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	event_right_bubble_label.add_theme_font_size_override("font_size", 8)
+	event_right_bubble_label.add_theme_color_override("font_color", Color(0.98, 0.99, 1.0, 1.0))
+	event_right_bubble.add_child(event_right_bubble_label)
+
+	var dialog_panel := PanelContainer.new()
+	dialog_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(dialog_panel)
+
+	var dialog_margin := MarginContainer.new()
+	dialog_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog_margin.add_theme_constant_override("margin_left", 8)
+	dialog_margin.add_theme_constant_override("margin_top", 6)
+	dialog_margin.add_theme_constant_override("margin_right", 8)
+	dialog_margin.add_theme_constant_override("margin_bottom", 6)
+	dialog_panel.add_child(dialog_margin)
+
+	var dialog_vbox := VBoxContainer.new()
+	dialog_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dialog_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dialog_vbox.add_theme_constant_override("separation", 4)
+	dialog_margin.add_child(dialog_vbox)
+
+	event_speaker_label = Label.new()
+	event_speaker_label.add_theme_font_size_override("font_size", 10)
+	event_speaker_label.add_theme_color_override("font_color", Color(0.99, 0.93, 0.65, 1.0))
+	event_speaker_label.visible = false
+	dialog_vbox.add_child(event_speaker_label)
+
+	event_text_label = RichTextLabel.new()
+	event_text_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	event_text_label.scroll_active = false
+	event_text_label.fit_content = true
+	event_text_label.bbcode_enabled = false
+	event_text_label.add_theme_font_size_override("normal_font_size", 9)
+	event_text_label.visible = false
+	dialog_vbox.add_child(event_text_label)
+
+	event_choice_panel = VBoxContainer.new()
+	event_choice_panel.visible = false
+	event_choice_panel.add_theme_constant_override("separation", 3)
+	dialog_vbox.add_child(event_choice_panel)
+
+
+func _process_event_dialog(delta: float) -> void:
+	if not is_event_mode:
+		return
+	if event_waiting_choice:
+		return
+	event_line_timer -= delta
+	if event_line_timer <= 0.0:
+		_advance_event_line()
+
+
+func _advance_event_line() -> void:
+	event_line_index += 1
+	if event_line_index >= event_lines.size():
+		_finish_event_dialog({"choice_id": event_last_choice_id})
+		return
+
+	var line: Dictionary = event_lines[event_line_index]
+	var speaker: String = str(line.get("speaker", "left"))
+	var speaker_name: String = str(line.get("name", ""))
+	var text: String = str(line.get("text", ""))
+
+	if event_speaker_label:
+		event_speaker_label.text = speaker_name
+	if event_text_label:
+		event_text_label.text = text
+	_show_event_speech_bubble(speaker, speaker_name, text)
+	_set_event_speaker_highlight(speaker)
+
+	var choices: Array = line.get("choices", []) as Array
+	if not choices.is_empty():
+		event_waiting_choice = true
+		_show_event_choices(choices)
+		return
+
+	event_waiting_choice = false
+	_hide_event_choices()
+	event_line_timer = float(line.get("duration", event_line_interval))
+
+
+func _show_event_choices(choices: Array) -> void:
+	_hide_event_choices()
+	if event_choice_panel == null:
+		return
+	event_choice_panel.visible = true
+	for raw_choice in choices:
+		var choice: Dictionary = raw_choice as Dictionary
+		var button := Button.new()
+		button.text = str(choice.get("text", "선택"))
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_font_size_override("font_size", 9)
+		button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(_on_event_choice_pressed.bind(choice))
+		event_choice_panel.add_child(button)
+
+
+func _hide_event_choices() -> void:
+	if event_choice_panel == null:
+		return
+	for child in event_choice_panel.get_children():
+		child.queue_free()
+	event_choice_panel.visible = false
+
+
+func _on_event_choice_pressed(choice: Dictionary) -> void:
+	event_last_choice_id = str(choice.get("id", ""))
+	var line: Dictionary = {}
+	if event_line_index >= 0 and event_line_index < event_lines.size():
+		line = event_lines[event_line_index]
+	var branch_map: Dictionary = line.get("next_index_by_choice", {}) as Dictionary
+	if not branch_map.is_empty() and branch_map.has(event_last_choice_id):
+		event_line_index = int(branch_map.get(event_last_choice_id, event_line_index + 1)) - 1
+	event_waiting_choice = false
+	_hide_event_choices()
+	event_line_timer = 0.05
+
+
+func _set_event_speaker_highlight(speaker: String) -> void:
+	var left_active: bool = speaker != "right"
+	if event_left_face_panel:
+		event_left_face_panel.modulate = Color(1, 1, 1, 1.0 if left_active else 0.45)
+	if event_right_face_panel:
+		event_right_face_panel.modulate = Color(1, 1, 1, 1.0 if not left_active else 0.45)
+
+
+func _finish_event_dialog(result: Dictionary) -> void:
+	if not is_event_mode:
+		return
+	event_finished.emit(result)
+	_reset_event_mode_state()
+	_play_close_effect()
+
+
+func close_event_window_immediate() -> void:
+	_reset_event_mode_state()
+	queue_free()
+
+
+func _reset_event_mode_state() -> void:
+	is_event_mode = false
+	_event_step_mode = false
+	event_context.clear()
+	event_lines.clear()
+	event_line_index = -1
+	event_line_timer = 0.0
+	event_waiting_choice = false
+	event_last_choice_id = ""
+	if event_overlay_root and is_instance_valid(event_overlay_root):
+		event_overlay_root.queue_free()
+	event_overlay_root = null
+	event_left_face_panel = null
+	event_right_face_panel = null
+	event_speaker_label = null
+	event_text_label = null
+	event_choice_panel = null
+	event_left_bubble = null
+	event_right_bubble = null
+	event_left_bubble_label = null
+	event_right_bubble_label = null
+
+
+func _apply_event_bubble_style(panel: PanelContainer) -> void:
+	if panel == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.10, 0.12, 0.18, 0.94)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.72, 0.78, 0.94, 0.95)
+	style.corner_radius_top_left = 5
+	style.corner_radius_top_right = 5
+	style.corner_radius_bottom_left = 5
+	style.corner_radius_bottom_right = 5
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	panel.add_theme_stylebox_override("panel", style)
+
+
+func _show_event_speech_bubble(speaker: String, speaker_name: String, text: String) -> void:
+	var left_active: bool = speaker != "right"
+	var bubble_text: String = text
+	if not speaker_name.is_empty():
+		bubble_text = "%s: %s" % [speaker_name, text]
+
+	if event_left_bubble and event_right_bubble:
+		event_left_bubble.visible = left_active
+		event_right_bubble.visible = not left_active
+	if event_left_bubble_label and left_active:
+		event_left_bubble_label.text = bubble_text
+	if event_right_bubble_label and not left_active:
+		event_right_bubble_label.text = bubble_text
 
 func get_alive_enemies() -> Array:
 	## 살아있는 적 목록 반환
@@ -293,15 +1316,14 @@ func _reset_enemy_timers() -> void:
 
 
 func _update_enemy_timers(delta: float) -> void:
-	## 적 행동 타이머를 민첩에 비례하여 채움
+	## 적 행동 타이머를 액션 딜레이 기준으로 채움
 	if is_battle_paused:
 		return
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
 		if not enemy.is_action_ready():
-			var dex_mult: float = enemy.get_dex() / 10.0
-			enemy.action_timer = minf(enemy.action_timer + Hero.ACTION_FILL_RATE * dex_mult * delta, Hero.ACTION_INTERVAL)
+			enemy.action_timer = minf(enemy.action_timer + delta * BATTLE_ATB_FILL_RATE, enemy.get_action_delay())
 #endregion
 
 
@@ -309,6 +1331,14 @@ func _update_enemy_timers(delta: float) -> void:
 func set_battle_paused(paused: bool) -> void:
 	## 전투 정지/재개
 	is_battle_paused = paused
+	if not paused:
+		_pause_hover_focus = false
+	_update_hover_highlight()
+	_update_pause_visual(0.0)
+
+
+func set_pause_hover_focus(focused: bool) -> void:
+	_pause_hover_focus = focused
 	_update_hover_highlight()
 
 
@@ -367,6 +1397,8 @@ func _execute_hero_action(hero: Hero) -> void:
 
 	# 행동 타이머 리셋
 	hero.reset_action_timer()
+	if skill_id != "basic_attack":
+		hero.reset_skill_action_timer()
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -381,8 +1413,9 @@ func _execute_hero_action(hero: Hero) -> void:
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
 
-	# 스킬 쿨타임 시작
-	CooldownManager.start_cooldown(hero.id, skill_id)
+	# 액티브 스킬만 쿨타임 시작
+	if skill_id != "basic_attack":
+		CooldownManager.start_cooldown(hero.id, skill_id)
 
 
 func _execute_enemy_action(enemy: BattleEnemy) -> void:
@@ -400,7 +1433,7 @@ func _select_hero_skill(hero: Hero) -> String:
 	## 영웅의 스킬 선택 (클래스별 전투 AI)
 	var skills: Array = hero.get_available_skills()
 
-	# ── 성직자: 아군 HP 60% 이하면 힐 우선 ──
+	# ── 성직자: 아군 HP 70% 미만이면 힐 우선 ──
 	if hero.class_id == "cleric":
 		var wounded: Array = _get_wounded_heroes()
 		if not wounded.is_empty():
@@ -474,8 +1507,12 @@ func _has_ready_hero_action(hero: Hero) -> bool:
 
 
 func _can_use_skill(hero: Hero, skill_id: String) -> bool:
-	## 스킬 사용 가능 여부 확인 (토글 + 쿨다운)
+	## 스킬 사용 가능 여부 확인 (토글 + 일반/스킬 ATB + 쿨다운)
 	if not hero.is_skill_enabled(skill_id):
+		return false
+	if skill_id == "basic_attack":
+		return hero.is_action_ready()
+	if not hero.is_skill_action_ready():
 		return false
 	if not CooldownManager.is_skill_ready(hero.id, skill_id):
 		return false
@@ -491,35 +1528,33 @@ func _find_finisher_skill(hero: Hero, skill_ids: Array) -> String:
 		if target_type != "single_enemy":
 			continue
 		for enemy in alive:
-			var estimated_dmg: int = _estimate_skill_damage(hero, enemy, skill_data)
+			var estimated_dmg: int = _estimate_skill_damage(hero, enemy, skill_data, str(skill_id))
 			if estimated_dmg >= enemy.current_hp:
 				return skill_id
 	return ""
 
 
-func _estimate_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary) -> int:
+func _estimate_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, skill_id: String = "") -> int:
 	## 스킬 예상 데미지 (크리 제외, 방어 반영)
+	var resolved_skill_id: String = skill_id if not skill_id.is_empty() else str(skill_data.get("id", ""))
+	if resolved_skill_id == "power_strike":
+		var basic_damage: int = _calc_physical_damage(float(hero.get_atk()), target.get_p_def())
+		return maxi(1, basic_damage * 2)
+
 	var damage_base: int = int(skill_data.get("damage_base", 0))
 	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
-	var stat_name: String = scaling.get("stat", "str")
 	var multiplier: float = scaling.get("multiplier", 1.0)
-
-	var stat_value: int = 0
-	match stat_name:
-		"str": stat_value = hero.get_str()
-		"int": stat_value = hero.get_int()
-		"dex": stat_value = hero.get_dex()
-		"luk": stat_value = hero.get_luk()
-
-	var base_damage: int = damage_base + int(stat_value * multiplier)
 	var skill_type: String = skill_data.get("type", "physical")
-	var defense: int = 0
-	if skill_type == "physical":
-		defense = target.get_p_def()
-	elif skill_type == "magic":
-		defense = target.get_m_def()
+	if skill_type == "magic":
+		var int_stat: int = hero.get_base_stat("wis")
+		var equip_matk_bonus: int = hero.get_magic_attack() - int_stat
+		var matk: float = float(damage_base) + float(int_stat) * multiplier + float(equip_matk_bonus)
+		return _calc_magic_damage(matk, target.get_m_def())
 
-	return maxi(1, base_damage - int(defense / 2))
+	var skill_mult: float = float(skill_data.get("skill_multiplier", multiplier))
+	var skill_flat: int = int(skill_data.get("skill_flat_bonus", damage_base))
+	var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
+	return _calc_physical_damage(effective_atk, target.get_p_def())
 
 
 func _play_turn_effect() -> void:
@@ -547,6 +1582,10 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		skill_id = "basic_attack"
 		skill_data = DataManager.get_skill("basic_attack")
 
+	hero.reset_action_timer()
+	if skill_id != "basic_attack":
+		hero.reset_skill_action_timer()
+
 	var target_type: String = skill_data.get("target", "single_enemy")
 
 	# 타겟 타입에 따른 처리
@@ -558,15 +1597,16 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
 
-	# 스킬 쿨타임 시작
-	CooldownManager.start_cooldown(hero.id, skill_id)
+	# 액티브 스킬만 쿨타임 시작
+	if skill_id != "basic_attack":
+		CooldownManager.start_cooldown(hero.id, skill_id)
 
 
 func _get_wounded_heroes() -> Array:
-	## HP가 60% 이하인 아군 반환
+	## HP가 70% 미만인 아군 반환
 	var result: Array = []
 	for hero in PartyManager.get_alive_heroes():
-		if hero.get_hp_percent() < 0.6:
+		if hero.get_hp_percent() < 0.7:
 			result.append(hero)
 	return result
 
@@ -603,7 +1643,7 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var is_crit: bool = randf() * 100 < crit_chance
 
 	# 데미지 계산
-	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
+	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit, skill_id)
 
 	# 클래스별 공격 사운드
 	if SoundManager:
@@ -650,7 +1690,7 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 		var is_crit: bool = randf() * 100 < hero.get_crit()
 		if is_crit:
 			any_crit = true
-		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit)
+		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit, skill_id)
 
 		target.take_damage(damage)
 		target.play_hit_effect(is_crit)
@@ -745,51 +1785,45 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 		pass
 
 
-func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, is_crit: bool) -> int:
+func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, is_crit: bool, skill_id: String = "") -> int:
 	## 스킬 데미지 계산
+	var resolved_skill_id: String = skill_id if not skill_id.is_empty() else str(skill_data.get("id", ""))
 	var damage_base: int = int(skill_data.get("damage_base", 0))
 	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
-	var stat_name: String = scaling.get("stat", "str")
 	var multiplier: float = scaling.get("multiplier", 1.0)
-
-	var stat_value: int = 0
-	match stat_name:
-		"str": stat_value = hero.get_str()
-		"int": stat_value = hero.get_int()
-		"def": stat_value = hero.get_def()
-		"dex": stat_value = hero.get_dex()
-		"luk": stat_value = hero.get_luk()
-
-	var base_damage: int = damage_base + int(stat_value * multiplier)
-
-	# 방어력 적용
 	var skill_type: String = skill_data.get("type", "physical")
-	var defense: int = 0
-	if skill_type == "physical":
-		defense = target.get_p_def()
+	var damage: int = 1
+	var crit_attack_base: float = float(hero.get_atk())
+	if resolved_skill_id == "power_strike":
+		# 강타: 평타 강화가 아니라 액티브 스킬, 최종 데미지 = 평타 데미지의 2배
+		var basic_damage: int = _calc_physical_damage(float(hero.get_atk()), target.get_p_def())
+		damage = maxi(1, basic_damage * 2)
+		crit_attack_base = float(hero.get_atk()) * 2.0
 	elif skill_type == "magic":
-		defense = target.get_m_def()
+		var int_stat: int = hero.get_base_stat("wis")
+		var equip_matk_bonus: int = hero.get_magic_attack() - int_stat
+		var matk: float = float(damage_base) + float(int_stat) * multiplier + float(equip_matk_bonus)
+		damage = _calc_magic_damage(matk, target.get_m_def())
+		crit_attack_base = matk
+	else:
+		var skill_mult: float = float(skill_data.get("skill_multiplier", multiplier))
+		var skill_flat: int = int(skill_data.get("skill_flat_bonus", damage_base))
+		var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
+		damage = _calc_physical_damage(effective_atk, target.get_p_def())
+		crit_attack_base = effective_atk
 
 	if is_crit:
-		return maxi(1, base_damage)  # 크리티컬은 방어 무시
-
-	return maxi(1, base_damage - int(defense / 2))
+		damage = _calc_critical_damage_from_attack(crit_attack_base)
+	return maxi(1, damage)
 
 
 func _calc_heal_amount(hero: Hero, skill_data: Dictionary) -> int:
 	## 힐량 계산
-	var heal_base: int = int(skill_data.get("heal_base", 0))
-	var scaling: Dictionary = skill_data.get("heal_scaling", {"stat": "int", "multiplier": 0.5})
-	var stat_name: String = scaling.get("stat", "int")
-	var multiplier: float = scaling.get("multiplier", 0.5)
-
-	var stat_value: int = 0
-	match stat_name:
-		"str": stat_value = hero.get_str()
-		"int": stat_value = hero.get_int()
-		_: stat_value = hero.get_int()
-
-	return heal_base + int(stat_value * multiplier)
+	var heal_base: float = float(skill_data.get("heal_base", skill_data.get("base_damage", 0)))
+	var scaling: Dictionary = skill_data.get("heal_scaling", {"stat": "int", "multiplier": skill_data.get("scaling", 0.5)})
+	var multiplier: float = float(scaling.get("multiplier", skill_data.get("scaling", 0.5)))
+	var int_stat: int = hero.get_base_stat("wis")
+	return _round_half_up(heal_base + float(int_stat) * multiplier)
 
 
 func _get_skill_effect_value(skill_data: Dictionary, effect_type: String, default_value: float) -> float:
@@ -825,7 +1859,7 @@ func _select_smart_target(hero: Hero) -> BattleEnemy:
 	# 한 방에 죽일 수 있는 적 우선
 	var atk := hero.get_atk()
 	for enemy in alive:
-		var expected := maxi(1, atk - int(enemy.get_p_def() / 2))
+		var expected := _calc_physical_damage(float(atk), enemy.get_p_def())
 		if expected >= enemy.current_hp:
 			return enemy
 
@@ -856,7 +1890,11 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	# 도발 상태인 영웅이 있으면 우선 타겟
 	var target: Hero = _find_taunt_target(alive_heroes)
 	if target == null:
-		target = alive_heroes[randi() % alive_heroes.size()]
+		if enemy.enemy_type == "boss":
+			target = alive_heroes[randi() % alive_heroes.size()]
+		else:
+			alive_heroes.sort_custom(func(a, b): return a.get_hp_percent() < b.get_hp_percent())
+			target = alive_heroes[0]
 
 	enemy.play_attack_effect()
 
@@ -883,11 +1921,33 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 
 
 func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
-	var atk := enemy.get_atk()
-	var p_def := target.get_p_def()
-	if is_crit:
-		return maxi(1, atk)
-	return maxi(1, atk - int(p_def / 2))
+	var attack: int = enemy.get_atk()
+	if enemy.damage_type == "magic":
+		var magic_damage := _calc_magic_damage(float(attack), target.get_m_def())
+		return _calc_critical_damage_from_attack(float(attack)) if is_crit else magic_damage
+	else:
+		var physical_damage := _calc_physical_damage(float(attack), target.get_p_def())
+		return _calc_critical_damage_from_attack(float(attack)) if is_crit else physical_damage
+
+
+func _calc_physical_damage(atk: float, def_val: float) -> int:
+	return maxi(1, _round_half_up(atk / 2.0 - def_val / 4.0))
+
+
+func _calc_magic_damage(matk: float, mdef: float) -> int:
+	return maxi(1, _round_half_up(matk / 2.0 - mdef / 4.0))
+
+
+func _calc_critical_damage_from_attack(attack_value: float) -> int:
+	## 크리티컬: 방어 무시, ATK/2 그대로
+	return maxi(1, _round_half_up(attack_value / 2.0))
+
+
+func _round_half_up(value: float) -> int:
+	# Rules require 0.5 up.
+	if value >= 0.0:
+		return int(floor(value + 0.5))
+	return int(ceil(value - 0.5))
 
 
 func _find_taunt_target(alive_heroes: Array) -> Hero:
@@ -983,6 +2043,10 @@ func _build_encounter_message() -> String:
 
 #region 적 처치/전투 종료
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
+	if GameManager:
+		GameManager.add_kill_count(1)
+	_on_local_grudge_kill()
+
 	# 보상 계산 (특성 적용)
 	var exp_trait_mult: float = 1.0 + _get_trait_effect_float("exp_mult")
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
@@ -994,6 +2058,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	total_exp += exp_reward
 	total_gold += gold_reward
 	drop_items.append_array(items)
+	_refresh_reward_preview_ui()
 
 	# 경험치 분배 (골드 기반 간이 계산)
 	var per_kill_exp: int = maxi(5, gold_reward / 2)
@@ -1021,7 +2086,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 
 func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
-	## 엘리트 처치 특수 연출: 떨림 → 폭발 → 해산 → 자동 보상 (비동기, 전투 차단 없음)
+	## 엘리트 처치 특수 연출: 떨림 → 폭발 → 해산 → 보상 버튼 노출 (비동기, 전투 차단 없음)
 	var tween := create_tween()
 
 	# 1) 엘리트 떨림
@@ -1051,9 +2116,9 @@ func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
 				enemy.current_hp = 0
 	)
 
-	# 4) 짧은 대기 후 자동 보상 → 자동 닫기
+	# 4) 짧은 대기 후 보상 버튼 표시
 	tween.tween_interval(0.4)
-	tween.tween_callback(_end_battle_victory)
+	tween.tween_callback(_show_claim_reward_button)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -1140,18 +2205,8 @@ func _animate_popup(canvas_layer: CanvasLayer, bg: PanelContainer) -> void:
 
 func _check_all_enemies_dead() -> void:
 	## 모든 적이 처치되었는지 확인
-	_update_buttons_for_enemies()
-
-	if current_state == BattleState.VICTORY:
-		return
-
-	var alive_enemies: Array = []
-	for e in enemies:
-		if e != null and e.is_alive():
-			alive_enemies.append(e)
-
-	if alive_enemies.is_empty():
-		_show_claim_reward_button()
+	# 종료 판정 로직을 _check_battle_end로 일원화해서 최소 표시시간 규칙을 동일 적용
+	_check_battle_end()
 
 
 func _check_battle_end() -> bool:
@@ -1165,11 +2220,26 @@ func _check_battle_end() -> bool:
 	var alive_heroes: Array = PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
-		# 적이 모두 사라짐 - 보상 버튼 표시 (각 전투창 독립 보상)
-		_update_buttons_for_enemies()
-		_show_claim_reward_button()
-		return true
+		if not _wave_clear_processed:
+			_wave_clear_processed = true
+			_on_wave_cleared()
 
+		# 적이 모두 사라짐 - 너무 빠른 즉시 종료를 막고 최소 시간/사망 모션을 보장
+		_update_buttons_for_enemies()
+		var now_ms: int = Time.get_ticks_msec()
+		var min_visible_ms: int = int(MIN_BATTLE_VISIBLE_TIME * 1000.0)
+		var min_ready_ms: int = int(VICTORY_POST_KILL_DELAY * 1000.0)
+		if pending_victory_ready_ms <= 0:
+			pending_victory_ready_ms = now_ms + min_ready_ms
+		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
+		if can_finish:
+			_show_claim_reward_button()
+			return true
+		pending_victory = true
+		pending_victory_ready_ms = maxi(pending_victory_ready_ms, now_ms + min_ready_ms)
+		return false
+
+	_wave_clear_processed = false
 	if alive_heroes.is_empty():
 		_end_battle_defeat()
 		return true
@@ -1195,13 +2265,38 @@ func _update_buttons_for_no_enemies() -> void:
 
 
 func _show_claim_reward_button() -> void:
-	## 적이 모두 처치됨 - 바로 승리 처리
+	## 적이 모두 처치됨 - 우측 버튼을 '보상받기'로 전환
+	if waiting_reward_claim:
+		return
+	waiting_reward_claim = true
+	pending_victory = false
+	pending_victory_ready_ms = 0
+	current_state = BattleState.VICTORY
+	set_process(false)
+
+	_update_buttons_for_enemies()
+
+
+func is_waiting_reward_claim() -> bool:
+	return waiting_reward_claim
+
+
+func _on_reward_claim_pressed() -> void:
+	if not waiting_reward_claim:
+		return
 	_end_battle_victory()
 
 
+func _clear_reward_claim_button() -> void:
+	waiting_reward_claim = false
+	_update_buttons_for_enemies()
+
+
 func _end_battle_victory() -> void:
-	if current_state == BattleState.VICTORY:
+	if current_state == BattleState.VICTORY and not waiting_reward_claim:
 		return
+	waiting_reward_claim = false
+	_clear_reward_claim_button()
 	current_state = BattleState.VICTORY
 	set_process(false)
 
@@ -1234,6 +2329,8 @@ func _end_battle_victory() -> void:
 		if BattleManager and BattleManager.has_method("push_hud_notice"):
 			BattleManager.push_hud_notice("획득: %s" % ", ".join(item_names), 2.8, Color.LIGHT_BLUE)
 
+	_apply_heart_rewards(1.0)
+
 	# 보상 처리 및 전투창 닫기 (즉시)
 	_grant_exp_rewards()
 	call_deferred("_emit_party_updated")
@@ -1246,6 +2343,8 @@ func _play_close_effect() -> void:
 	# top_level 버튼 숨기기
 	if run_button:
 		run_button.visible = false
+	if block_entry_button and is_instance_valid(block_entry_button):
+		block_entry_button.visible = false
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(self, "modulate:a", 0.0, 0.3).set_ease(Tween.EASE_IN)
@@ -1278,15 +2377,21 @@ func _start_loot_animations() -> void:
 func _end_battle_defeat() -> void:
 	if current_state == BattleState.DEFEAT:
 		return
+	waiting_reward_claim = false
+	_clear_reward_claim_button()
 	current_state = BattleState.DEFEAT
 	set_process(false)
 
 	if run_button:
 		run_button.visible = false
+	if block_entry_button and is_instance_valid(block_entry_button):
+		block_entry_button.visible = false
 
 	# 패배 사운드 재생
 	if SoundManager != null:
 		SoundManager.play_defeat()
+
+	_apply_partial_rewards(0.3, "전멸! 보상 30%%")
 
 	battle_ended.emit(battle_id, false)
 	_play_close_effect()
@@ -1480,36 +2585,8 @@ func _close_with_rewards() -> void:
 
 
 func _run_with_partial_rewards() -> void:
-	## Run: 50% 보상만 받고 즉시 닫기 (엘리트 보상은 100% 보장)
-	# 일반 보상에서 엘리트 보상 분리
-	var normal_gold: int = total_gold - elite_gold
-	var partial_gold: int = int(normal_gold * 0.5) + elite_gold  # 엘리트 골드는 전액
-
-	if partial_gold > 0:
-		GameManager.add_gold(partial_gold)
-		if elite_gold > 0:
-			_send_log("도주! 보상 50%% + 엘리트 보상: Gold +%d" % partial_gold, Color.ORANGE)
-		else:
-			_send_log("도주! 보상 50%%만 획득: Gold +%d" % partial_gold, Color.ORANGE)
-	else:
-		_send_log("도주!", Color.ORANGE)
-
-	# 드랍 아이템: 일반은 50% 확률, 엘리트는 확정
-	var partial_drops: Array = []
-	# 엘리트 아이템 전부 확보
-	partial_drops.append_array(elite_items)
-	# 일반 아이템은 50% 확률
-	for item in drop_items:
-		if item in elite_items:
-			continue  # 이미 추가됨
-		if randf() < 0.5:
-			partial_drops.append(item)
-
-	if not partial_drops.is_empty():
-		drop_items = partial_drops
-		for item_id in drop_items:
-			if not InventoryManager.try_auto_equip(item_id):
-				InventoryManager.add_item(item_id)
+	## Run: 50% 보상만 받고 즉시 닫기
+	_apply_partial_rewards(0.5, "도주! 보상 50%")
 
 	call_deferred("_emit_party_updated")
 	current_state = BattleState.ESCAPED
@@ -1521,6 +2598,50 @@ func _run_with_partial_rewards() -> void:
 #endregion
 
 
+func _apply_partial_rewards(ratio: float, log_prefix: String) -> void:
+	var r: float = clampf(ratio, 0.0, 1.0)
+	var partial_gold: int = int(round(float(total_gold) * r))
+	if partial_gold > 0 and GameManager:
+		GameManager.add_gold(partial_gold)
+		_send_log("%s: Gold +%d" % [log_prefix, partial_gold], Color.ORANGE)
+	else:
+		_send_log(log_prefix, Color.ORANGE)
+
+	var partial_drops: Array = []
+	for item in drop_items:
+		if randf() < r:
+			partial_drops.append(item)
+	for item_id in partial_drops:
+		if InventoryManager:
+			if not InventoryManager.try_auto_equip(item_id):
+				InventoryManager.add_item(item_id)
+
+	_apply_heart_rewards(r)
+
+
+func _apply_heart_rewards(ratio: float) -> void:
+	if reward_hearts <= 0:
+		return
+	var hearts_to_apply: int = int(floor(float(reward_hearts) * clampf(ratio, 0.0, 1.0)))
+	if ratio >= 1.0:
+		hearts_to_apply = reward_hearts
+	if hearts_to_apply <= 0:
+		return
+
+	var heal_per_heart: int = 12
+	var healed_any: bool = false
+	for hero in PartyManager.get_party():
+		if hero == null or hero.is_dead:
+			continue
+		var heal_amount: int = hearts_to_apply * heal_per_heart
+		if heal_amount > 0:
+			var actual: int = hero.heal(heal_amount)
+			healed_any = healed_any or actual > 0
+
+	if healed_any and BattleManager and BattleManager.has_method("push_hud_notice"):
+		BattleManager.push_hud_notice("♥ 회복 +%d" % (hearts_to_apply * heal_per_heart), 1.5, Color(1.0, 0.5, 0.6, 1.0))
+
+
 #region 유틸리티
 func _bring_to_front() -> void:
 	var parent = get_parent()
@@ -1528,21 +2649,37 @@ func _bring_to_front() -> void:
 		parent.move_child(self, -1)
 
 
+func _exit_tree() -> void:
+	if BattleManager and BattleManager.has_method("clear_battle_group_hover"):
+		BattleManager.clear_battle_group_hover()
+
+
 func _emit_party_updated() -> void:
 	party_updated.emit()
 
 
 func _send_log(_msg: String, _color: Color = Color.WHITE) -> void:
-	pass
+	if _msg.is_empty():
+		return
+	battle_log.emit(_msg, _color)
+	_show_msg_box(_msg, _color, 0.65)
 
 
 func _on_close_pressed() -> void:
+	if is_event_mode:
+		_finish_event_dialog({"choice_id": event_last_choice_id, "closed": true})
+		return
+	waiting_reward_claim = false
+	_clear_reward_claim_button()
 	current_state = BattleState.ENDED
 	queue_free()
 
 
 func _on_run_button_pressed() -> void:
-	## 도망 버튼 클릭 - 50% 보상만 받고 즉시 종료
+	## 우측 버튼: 전투중=도주 / 전멸후=보상받기
+	if waiting_reward_claim:
+		_end_battle_victory()
+		return
 	if current_state != BattleState.RUNNING:
 		return
 	_run_with_partial_rewards()
@@ -1660,17 +2797,17 @@ func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				_is_dragging = true
-				_drag_offset = event.global_position - global_position
+				_battle_is_dragging = true
+				_battle_drag_offset = event.global_position - global_position
 				_bring_to_front()
 			else:
-				if _is_dragging and _merge_target != null:
+				if _battle_is_dragging and _merge_target != null:
 					_execute_merge(_merge_target)
 					return
-				_is_dragging = false
+				_battle_is_dragging = false
 				_clear_merge_highlight()
-	elif event is InputEventMouseMotion and _is_dragging:
-		global_position = event.global_position - _drag_offset
+	elif event is InputEventMouseMotion and _battle_is_dragging:
+		global_position = event.global_position - _battle_drag_offset
 		# 화면 밖으로 나가지 않도록 제한
 		var vp_size := get_viewport().get_visible_rect().size
 		global_position.x = clampf(global_position.x, -size.x + 40, vp_size.x - 40)
@@ -1678,6 +2815,14 @@ func _on_gui_input(event: InputEvent) -> void:
 		# 정지 중이면 머지 타겟 감지
 		if is_battle_paused:
 			_update_merge_target()
+
+
+func _release_reward_pause_locks() -> void:
+	if get_tree() == null:
+		return
+	for node in get_tree().get_nodes_in_group("reward_windows"):
+		if node != null and is_instance_valid(node) and node.has_method("release_pause_lock"):
+			node.call("release_pause_lock")
 
 
 func _setup_enemy_tooltip() -> void:
@@ -1823,12 +2968,30 @@ func _setup_hover_highlight() -> void:
 
 func _on_window_mouse_entered() -> void:
 	_is_window_hovered = true
+	if is_event_mode:
+		_update_hover_highlight()
+		_update_pause_visual(0.0)
+		return
+	if is_battle_paused and BattleManager and BattleManager.has_method("set_battle_group_hovered"):
+		BattleManager.set_battle_group_hovered(true)
+	else:
+		_pause_hover_focus = true
 	_update_hover_highlight()
+	_update_pause_visual(0.0)
 
 
 func _on_window_mouse_exited() -> void:
 	_is_window_hovered = false
+	if is_event_mode:
+		_update_hover_highlight()
+		_update_pause_visual(0.0)
+		return
+	if is_battle_paused and BattleManager and BattleManager.has_method("set_battle_group_hovered"):
+		BattleManager.set_battle_group_hovered(false)
+	else:
+		_pause_hover_focus = false
 	_update_hover_highlight()
+	_update_pause_visual(0.0)
 
 
 func _update_hover_highlight() -> void:
@@ -1837,7 +3000,15 @@ func _update_hover_highlight() -> void:
 	# 머지 하이라이트가 활성이면 무시 (머지가 우선)
 	if _merge_target != null:
 		return
-	if is_battle_paused and _is_window_hovered:
+	var tree_paused: bool = false
+	if get_tree():
+		tree_paused = get_tree().paused
+	var show_hover: bool = false
+	if is_event_mode:
+		show_hover = (tree_paused or _event_step_mode) and _is_window_hovered
+	elif is_battle_paused:
+		show_hover = _pause_hover_focus
+	if show_hover:
 		add_theme_stylebox_override("panel", _hover_panel_style)
 	else:
 		add_theme_stylebox_override("panel", _normal_panel_style)
@@ -1889,6 +3060,8 @@ func _find_merge_candidate() -> BattleWindow:
 			# 보스전은 머지 불가
 			if other.is_boss_battle:
 				continue
+			if other.is_enemy_entry_blocked():
+				continue
 			if other.current_state != BattleState.RUNNING and other.current_state != BattleState.STARTING:
 				continue
 			var other_rect := Rect2(other.global_position, other.size)
@@ -1911,13 +3084,17 @@ func _clear_merge_highlight() -> void:
 func _execute_merge(target: BattleWindow) -> void:
 	## 드래그한 전투창의 적들을 타겟 전투창으로 이전
 	if target == null or not is_instance_valid(target):
-		_is_dragging = false
+		_battle_is_dragging = false
 		_clear_merge_highlight()
 		return
 
 	# 보스전은 머지 불가
 	if is_boss_battle or target.is_boss_battle:
-		_is_dragging = false
+		_battle_is_dragging = false
+		_clear_merge_highlight()
+		return
+	if target.is_enemy_entry_blocked():
+		_battle_is_dragging = false
 		_clear_merge_highlight()
 		return
 
@@ -1933,9 +3110,13 @@ func _execute_merge(target: BattleWindow) -> void:
 	target.total_gold += total_gold
 	target.drop_items.append_array(drop_items)
 
-	# 타겟 턴 큐 재구성
-	if target.current_state == BattleState.RUNNING:
-		target._build_turn_order()
+	# 타겟 전투 상태/UI 갱신
+	target.pending_victory = false
+	target.pending_victory_ready_ms = 0
+	target._wave_clear_processed = false
+	target._update_buttons_for_enemies()
+	target._refresh_enemy_layout()
+	_refresh_enemy_layout()
 
 	# BattleManager에서 제거
 	BattleManager.active_battles.erase(battle_id)
@@ -1943,7 +3124,7 @@ func _execute_merge(target: BattleWindow) -> void:
 	# 하이라이트 정리
 	target.set_merge_highlight(false)
 	_merge_target = null
-	_is_dragging = false
+	_battle_is_dragging = false
 
 	# 머지 효과음
 	if SoundManager:

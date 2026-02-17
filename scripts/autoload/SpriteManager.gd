@@ -58,7 +58,7 @@ func get_hero_face_sprite(hero_id: String) -> Texture2D:
 	var cache_key: String = hero_id + "_face"
 	if _hero_sprites.has(cache_key):
 		return _hero_sprites[cache_key]
-	
+
 	var hero_data: Dictionary = DataManager.get_hero(hero_id)
 	var sprite_name: String = str(hero_data.get("sprite_face", hero_id + "_face"))
 	var path: String = HERO_PATH + sprite_name + ".png"

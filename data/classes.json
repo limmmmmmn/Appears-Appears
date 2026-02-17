@@ -4,12 +4,12 @@
 	"name": "전사",
 	"description": "균형 잡힌 근접 전투원",
 	"base_stats": {
-	  "hp": 50,
-	  "str": 12,
-	  "def": 10,
-	  "int": 4,
+	  "hp": 80,
+	  "str": 24,
+	  "def": 18,
+	  "int": 6,
 	  "dex": 12,
-	  "luk": 6
+	  "luk": 8
 	},
 	"growth": {
 	  "hp": 8,
@@ -31,12 +31,12 @@
 	"name": "마법사",
 	"description": "강력한 마법 공격 전문가",
 	"base_stats": {
-	  "hp": 30,
-	  "str": 4,
-	  "def": 4,
-	  "int": 14,
+	  "hp": 50,
+	  "str": 6,
+	  "def": 8,
+	  "int": 28,
 	  "dex": 11,
-	  "luk": 8
+	  "luk": 10
 	},
 	"growth": {
 	  "hp": 4,
@@ -58,12 +58,12 @@
 	"name": "성직자",
 	"description": "치유와 지원 전문가",
 	"base_stats": {
-	  "hp": 40,
-	  "str": 6,
-	  "def": 8,
-	  "int": 12,
+	  "hp": 65,
+	  "str": 12,
+	  "def": 14,
+	  "int": 24,
 	  "dex": 10,
-	  "luk": 8
+	  "luk": 10
 	},
 	"growth": {
 	  "hp": 5,
@@ -85,12 +85,12 @@
 	"name": "도적",
 	"description": "빠른 속도와 이도류 전문가",
 	"base_stats": {
-	  "hp": 35,
-	  "str": 8,
-	  "def": 6,
-	  "int": 6,
-	  "dex": 18,
-	  "luk": 12
+	  "hp": 55,
+	  "str": 16,
+	  "def": 10,
+	  "int": 8,
+	  "dex": 20,
+	  "luk": 14
 	},
 	"growth": {
 	  "hp": 5,
@@ -112,12 +112,12 @@
 	"name": "궁수",
 	"description": "원거리 물리 공격 전문가",
 	"base_stats": {
-	  "hp": 35,
-	  "str": 10,
-	  "def": 6,
-	  "int": 6,
-	  "dex": 16,
-	  "luk": 10
+	  "hp": 55,
+	  "str": 20,
+	  "def": 10,
+	  "int": 8,
+	  "dex": 18,
+	  "luk": 12
 	},
 	"growth": {
 	  "hp": 5,
@@ -139,12 +139,12 @@
 	"name": "기사",
 	"description": "중장갑 탱커",
 	"base_stats": {
-	  "hp": 60,
-	  "str": 10,
-	  "def": 14,
-	  "int": 4,
+	  "hp": 100,
+	  "str": 20,
+	  "def": 24,
+	  "int": 6,
 	  "dex": 8,
-	  "luk": 6
+	  "luk": 8
 	},
 	"growth": {
 	  "hp": 10,

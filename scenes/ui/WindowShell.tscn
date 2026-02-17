@@ -1,0 +1,64 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/window/WindowShell.gd" id="1_shell"]
+
+[sub_resource type="StyleBoxFlat" id="1_shell_style"]
+bg_color = Color(0.08, 0.09, 0.14, 0.97)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.62, 0.68, 0.88, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+
+[node name="WindowShell" type="Control"]
+offset_right = 1152.0
+offset_bottom = 648.0
+mouse_filter = 2
+script = ExtResource("1_shell")
+
+[node name="ShellPanel" type="PanelContainer" parent="." unique_name_in_owner=true]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 200)
+offset_right = 280.0
+offset_bottom = 200.0
+theme_override_styles/panel = SubResource("1_shell_style")
+
+[node name="RootVBox" type="VBoxContainer" parent="ShellPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="TopBar" type="HBoxContainer" parent="ShellPanel/RootVBox"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="ShellPanel/RootVBox/TopBar" unique_name_in_owner=true]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "윈도우쉘"
+theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.98, 0.93, 0.65, 1)
+
+[node name="CloseButton" type="Button" parent="ShellPanel/RootVBox/TopBar" unique_name_in_owner=true]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(22, 18)
+text = "x"
+theme_override_font_sizes/font_size = 10
+
+[node name="ContentRoot" type="MarginContainer" parent="ShellPanel/RootVBox" unique_name_in_owner=true]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 2
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 2
+theme_override_constants/margin_bottom = 2

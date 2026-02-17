@@ -32,7 +32,8 @@ const RARITY_COLORS: Dictionary = {
 	"legendary": Color(1.0, 0.8, 0.2),
 }
 
-const PICKUP_RADIUS := 12.0
+const OBJECT_SIZE := 16
+const PICKUP_RADIUS := 8.0
 const HP_PER_ORB := 10
 
 var drop_type: DropType = DropType.GOLD
@@ -44,8 +45,8 @@ var heal_amount: int = HP_PER_ORB
 var spawn_delay: float = 0.0
 
 var _collected: bool = false
-var _label: Label
-var _shadow: Label
+var _icon_sprite: Sprite2D
+var _shadow_sprite: Sprite2D
 
 
 func _ready() -> void:
@@ -59,38 +60,19 @@ func _ready() -> void:
 	shape.shape = circle
 	add_child(shape)
 
-	# 그림자
-	_shadow = Label.new()
-	_shadow.text = "●"
-	_shadow.add_theme_font_size_override("font_size", 6)
-	_shadow.add_theme_color_override("font_color", Color(0, 0, 0, 0.3))
-	_shadow.position = Vector2(-3, -2)
-	_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_shadow)
+	_shadow_sprite = Sprite2D.new()
+	_shadow_sprite.texture = _make_rect_texture(10, 3, Color(0.0, 0.0, 0.0, 0.28))
+	_shadow_sprite.centered = true
+	_shadow_sprite.position = Vector2(0, 5)
+	_shadow_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(_shadow_sprite)
 
-	# 아이콘
-	_label = Label.new()
-	_label.add_theme_font_size_override("font_size", 12)
-	_label.position = Vector2(-8, -18)
-	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	# 드롭 타입별 아이콘 및 색상 설정
-	match drop_type:
-		DropType.GOLD:
-			_label.text = "🪙"
-		DropType.ITEM:
-			if not item_type.is_empty():
-				_label.text = ITEM_TYPE_ICONS.get(item_type, "📦")
-			else:
-				_label.text = "📦"
-			if not item_rarity.is_empty():
-				_label.self_modulate = RARITY_COLORS.get(item_rarity, Color.WHITE)
-		DropType.HP_ORB:
-			_label.text = "💗"
-		_:
-			_label.text = "?"
-
-	add_child(_label)
+	_icon_sprite = Sprite2D.new()
+	_icon_sprite.texture = _build_drop_texture()
+	_icon_sprite.centered = true
+	_icon_sprite.position = Vector2.ZERO
+	_icon_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(_icon_sprite)
 
 	body_entered.connect(_on_body_entered)
 
@@ -103,11 +85,13 @@ func _ready() -> void:
 
 
 func _start_float_anim() -> void:
-	var base_y := _label.position.y
+	if _icon_sprite == null:
+		return
+	var base_y := _icon_sprite.position.y
 	var tween := create_tween().set_loops()
-	tween.tween_property(_label, "position:y", base_y - 3, 0.5) \
+	tween.tween_property(_icon_sprite, "position:y", base_y - 3, 0.5) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(_label, "position:y", base_y, 0.5) \
+	tween.tween_property(_icon_sprite, "position:y", base_y, 0.5) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 
@@ -178,15 +162,13 @@ func _collect_hp() -> void:
 		)
 
 
-
-
 func _spawn_heal_popups() -> void:
 	## 필드 파티원 머리 위에 "+10" 초록색 팝업 연출
 	_spawn_restore_popups("+%d" % heal_amount, Color(0.3, 1.0, 0.3))
 
 
 func _spawn_restore_popups(text: String, color: Color) -> void:
-	## 필드 파티원 머리 위에 팝업 연출 (HP/MP 공통)
+	## 필드 파티원 머리 위에 팝업 연출
 	var field_members: Array = get_tree().get_nodes_in_group("party")
 
 	for member in field_members:
@@ -222,3 +204,47 @@ func _play_collect_anim() -> void:
 	tween.tween_property(self, "modulate:a", 0.0, 0.25)
 	tween.tween_property(self, "scale", Vector2(1.5, 1.5), 0.25)
 	tween.chain().tween_callback(queue_free)
+
+
+func _build_drop_texture() -> Texture2D:
+	var color: Color = DROP_COLORS.get(drop_type, Color.WHITE)
+	if drop_type == DropType.ITEM and not item_rarity.is_empty():
+		color = RARITY_COLORS.get(item_rarity, color)
+
+	var img := Image.create(OBJECT_SIZE, OBJECT_SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+
+	for y in range(OBJECT_SIZE):
+		for x in range(OBJECT_SIZE):
+			var px: int = x - OBJECT_SIZE / 2
+			var py: int = y - OBJECT_SIZE / 2
+			var inside: bool = false
+			match drop_type:
+				DropType.GOLD, DropType.HP_ORB:
+					inside = float(px * px + py * py) <= 36.0
+				DropType.ITEM:
+					inside = x >= 3 and x <= 12 and y >= 3 and y <= 12
+				_:
+					inside = x >= 4 and x <= 11 and y >= 4 and y <= 11
+
+			if not inside:
+				continue
+
+			var edge: bool = false
+			match drop_type:
+				DropType.GOLD, DropType.HP_ORB:
+					edge = float(px * px + py * py) >= 28.0
+				DropType.ITEM:
+					edge = x == 3 or x == 12 or y == 3 or y == 12
+				_:
+					edge = false
+
+			img.set_pixel(x, y, color.darkened(0.25) if edge else color)
+
+	return ImageTexture.create_from_image(img)
+
+
+func _make_rect_texture(w: int, h: int, color: Color) -> Texture2D:
+	var img := Image.create(maxi(1, w), maxi(1, h), false, Image.FORMAT_RGBA8)
+	img.fill(color)
+	return ImageTexture.create_from_image(img)

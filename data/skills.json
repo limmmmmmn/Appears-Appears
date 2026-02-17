@@ -36,10 +36,10 @@
 	"type": "magic",
 	"target": "all_enemies",
 	"cooldown": 8.0,
-	"damage_base": 10,
+	"damage_base": 15,
 	"damage_scaling": {
 	  "stat": "int",
-	  "multiplier": 0.8
+	  "multiplier": 1.0
 	},
 	"effects": [],
 	"default_on": true
@@ -50,9 +50,9 @@
 	"description": "아군 한 명의 HP를 회복한다 (필드에서도 사용 가능)",
 	"type": "heal",
 	"target": "single_ally",
-	"cooldown": 10.0,
-	"base_damage": 25,
-	"scaling": 1.2,
+	"cooldown": 4.0,
+	"base_damage": 12,
+	"scaling": 0.8,
 	"effects": [],
 	"default_on": true,
 	"usable_on_field": true

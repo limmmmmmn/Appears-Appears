@@ -4,6 +4,7 @@ extends Node
 ## - 적의 행동 타이머는 각 전투창이 독립적으로 관리
 
 signal action_executed  # 액션 실행됨 (RightPartyPanel 쿨다운 업데이트용)
+const BATTLE_ATB_FILL_RATE: float = 0.85
 
 
 func _ready() -> void:
@@ -18,13 +19,27 @@ func _process(delta: float) -> void:
 
 
 func _update_hero_timers(delta: float) -> void:
-	## 살아있는 영웅의 행동 타이머를 민첩에 비례하여 충전
+	## 살아있는 영웅의 행동 타이머를 액션 딜레이 기준으로 충전
 	if not PartyManager:
 		return
+	var has_active_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
 	for hero in PartyManager.get_alive_heroes():
-		if not hero.is_action_ready():
-			var dex_mult: float = hero.get_dex() / 10.0
-			hero.action_timer = minf(hero.action_timer + Hero.ACTION_FILL_RATE * dex_mult * delta, Hero.ACTION_INTERVAL)
+		var delay: float = maxf(0.001, hero.get_action_delay())
+		var skill_delay: float = maxf(0.001, hero.get_skill_action_delay())
+		if has_active_battle:
+			var battle_delta: float = delta * BATTLE_ATB_FILL_RATE
+			if not hero.is_action_ready():
+				hero.action_timer = minf(hero.action_timer + battle_delta, delay)
+			if not hero.is_skill_action_ready():
+				hero.skill_action_timer = minf(hero.skill_action_timer + battle_delta, skill_delay)
+		else:
+			# 필드에서는 UI 표현용으로 ATB를 순환시킨다.
+			hero.action_timer += delta
+			if hero.action_timer >= delay:
+				hero.action_timer = fmod(hero.action_timer, delay)
+			hero.skill_action_timer += delta
+			if hero.skill_action_timer >= skill_delay:
+				hero.skill_action_timer = fmod(hero.skill_action_timer, skill_delay)
 
 
 func initialize_battle() -> void:

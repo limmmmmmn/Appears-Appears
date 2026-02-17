@@ -61,7 +61,7 @@ func _build_ui() -> void:
 
 	# 메시지
 	message_label = Label.new()
-	message_label.text = "파티가 전멸했습니다...\n기지로 이동합니다."
+	message_label.text = "파티가 전멸했습니다...\n타이틀로 이동합니다."
 	message_label.add_theme_font_size_override("font_size", 14)
 	message_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.85))
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -72,7 +72,7 @@ func _build_ui() -> void:
 	spacer.custom_minimum_size = Vector2(0, 10)
 	inner_vbox.add_child(spacer)
 
-	# 확인 버튼 (기지로 이동)
+	# 확인 버튼 (타이틀 이동)
 	var button_container := HBoxContainer.new()
 	button_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	inner_vbox.add_child(button_container)
@@ -85,7 +85,7 @@ func _build_ui() -> void:
 	button_container.add_child(restart_button)
 
 
-func show_game_over(message: String = "파티가 전멸했습니다...\n기지로 이동합니다.") -> void:
+func show_game_over(message: String = "파티가 전멸했습니다...\n타이틀로 이동합니다.") -> void:
 	message_label.text = message
 	show()
 
@@ -94,7 +94,9 @@ func show_game_over(message: String = "파티가 전멸했습니다...\n기지�
 
 
 func _on_restart_pressed() -> void:
-	get_tree().paused = false
+	var tree := get_tree()
+	if tree == null:
+		return
+	tree.paused = false
 	restart_pressed.emit()
 	hide()
-	GameManager.go_to_den()
