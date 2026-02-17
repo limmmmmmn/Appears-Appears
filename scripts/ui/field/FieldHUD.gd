@@ -682,14 +682,10 @@ func show_pause_menu() -> void:
 	)
 	full_screen.add_child(dimmer)
 
-	# 중앙 패널
+	# 중앙 패널 (앵커 없이 직접 위치/크기 고정)
 	var center_panel := PanelContainer.new()
-	center_panel.set_anchors_preset(Control.PRESET_CENTER)
-	center_panel.offset_left = -120
-	center_panel.offset_right = 120
-	center_panel.offset_top = -100
-	center_panel.offset_bottom = 100
 	center_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	center_panel.custom_minimum_size = Vector2(280, 0)
 
 	var panel_style := _make_flat_style(STYLE.bg_popup, STYLE.border_accent, 8, 2)
 	panel_style.content_margin_left = 24
@@ -718,6 +714,16 @@ func show_pause_menu() -> void:
 	resume_btn.pressed.connect(hide_pause_menu)
 	vbox.add_child(resume_btn)
 
+	# 마을로 버튼
+	var town_btn := _create_menu_button("🏘️ 마을로", Color(0.2, 0.25, 0.15))
+	town_btn.pressed.connect(func():
+		hide_pause_menu()
+		if BattleManager:
+			BattleManager.close_all_battles()
+		GameManager.go_to_town()
+	)
+	vbox.add_child(town_btn)
+
 	# 타이틀로 버튼
 	var title_btn := _create_menu_button("🏠 타이틀 화면", Color(0.15, 0.15, 0.25))
 	title_btn.pressed.connect(func():
@@ -727,6 +733,19 @@ func show_pause_menu() -> void:
 		get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
 	)
 	vbox.add_child(title_btn)
+
+	# 크기 결정 후 화면 중앙으로 이동 (deferred)
+	_center_panel_deferred.call_deferred(center_panel)
+
+
+func _center_panel_deferred(panel: PanelContainer) -> void:
+	if not is_instance_valid(panel):
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var vp_size: Vector2 = vp.get_visible_rect().size
+	panel.position = (vp_size - panel.size) * 0.5
 
 
 func hide_pause_menu() -> void:

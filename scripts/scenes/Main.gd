@@ -27,6 +27,9 @@ func _continue_game() -> void:
 	## 저장된 게임 불러오기
 	if SaveManager.load_game():
 		match GameManager.current_state:
+			GameManager.GameState.TOWN:
+				_clear_current_scene()
+				GameManager.go_to_town()
 			_:
 				# 기본은 필드 복귀
 				_go_to_field_from_save()
