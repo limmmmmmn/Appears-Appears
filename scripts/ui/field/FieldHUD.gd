@@ -714,13 +714,19 @@ func show_pause_menu() -> void:
 	resume_btn.pressed.connect(hide_pause_menu)
 	vbox.add_child(resume_btn)
 
-	# 마을로 버튼
-	var town_btn := _create_menu_button("🏘️ 마을로", Color(0.2, 0.25, 0.15))
+	# 마을 이동 버튼
+	var town_btn := _create_menu_button("🏘 마을", Color(0.18, 0.2, 0.34))
 	town_btn.pressed.connect(func():
 		hide_pause_menu()
 		if BattleManager:
 			BattleManager.close_all_battles()
-		GameManager.go_to_town()
+		if GameManager and GameManager.has_method("go_to_town"):
+			GameManager.go_to_town()
+		else:
+			var town_scene: String = "res://scenes/town/Town.tscn"
+			if not ResourceLoader.exists(town_scene):
+				town_scene = "res://scenes/main/Town.tscn"
+			get_tree().change_scene_to_file(town_scene)
 	)
 	vbox.add_child(town_btn)
 

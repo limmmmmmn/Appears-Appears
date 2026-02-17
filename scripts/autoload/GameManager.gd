@@ -6,7 +6,7 @@ signal gold_changed(new_gold: int)
 signal game_over
 signal game_clear
 
-enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER, DEN, TOWN }
+enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER, TOWN }
 var current_state: GameState = GameState.TITLE
 
 var current_stage: int = 1
@@ -168,15 +168,19 @@ func go_to_ending() -> void:
 	get_tree().change_scene_to_file("res://scenes/main/Ending.tscn")
 
 
-func go_to_den() -> void:
-	## 기지 시스템 제거: 호출 시 마을로 이동
-	go_to_town()
-
-
 func go_to_town() -> void:
-	## 마을로 이동
+	## 마을 화면으로 이동
 	change_state(GameState.TOWN)
 	if SaveManager:
-		SaveManager.auto_save("마을 진입")
-	get_tree().change_scene_to_file("res://scenes/main/Town.tscn")
+		SaveManager.auto_save("마을 이동")
+	get_tree().paused = false
+	var town_scene: String = "res://scenes/town/Town.tscn"
+	if not ResourceLoader.exists(town_scene):
+		town_scene = "res://scenes/main/Town.tscn"
+	get_tree().change_scene_to_file(town_scene)
+
+
+func go_to_den() -> void:
+	## 레거시 호환: 기존 호출은 마을로 연결
+	go_to_town()
 #endregion

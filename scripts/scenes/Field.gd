@@ -2320,6 +2320,7 @@ func _update_party_chatter_blocking_state() -> void:
 		return
 	if not _is_external_event_blocking_party_chatter():
 		return
+
 	_clear_party_chatter_queue()
 
 
