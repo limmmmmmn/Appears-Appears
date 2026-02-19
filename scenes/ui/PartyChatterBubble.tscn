@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://gcenvky08h81"]
+
+[ext_resource type="Script" uid="uid://cpy1utwoqr0d1" path="res://scripts/ui/PartyChatterBubble.gd" id="1_script"]
+
+[node name="PartyChatterBubble" type="PanelContainer" unique_id=704906998]
+offset_right = 1.0
+offset_bottom = 23.0
+mouse_filter = 2
+script = ExtResource("1_script")
+min_width = 0.0
+
+[node name="TextLabel" type="Label" parent="." unique_id=1141388996]
+layout_mode = 2
+text = "전열을 유지해"

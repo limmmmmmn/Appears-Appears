@@ -1,8 +1,10 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://b3xv5kpj4kfld"]
 
-[ext_resource type="Script" path="res://scripts/ui/field/HeroCard.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://baxosjwox60ow" path="res://scripts/ui/field/HeroCard.gd" id="1_script"]
 
-[node name="HeroCard" type="Control"]
+[node name="HeroCard" type="Control" unique_id=2049406407]
 custom_minimum_size = Vector2(170, 48)
+layout_mode = 3
+anchors_preset = 0
 mouse_filter = 1
 script = ExtResource("1_script")

@@ -723,10 +723,7 @@ func show_pause_menu() -> void:
 		if GameManager and GameManager.has_method("go_to_town"):
 			GameManager.go_to_town()
 		else:
-			var town_scene: String = "res://scenes/town/Town.tscn"
-			if not ResourceLoader.exists(town_scene):
-				town_scene = "res://scenes/main/Town.tscn"
-			get_tree().change_scene_to_file(town_scene)
+			get_tree().change_scene_to_file("res://scenes/town/Town.tscn")
 	)
 	vbox.add_child(town_btn)
 

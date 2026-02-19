@@ -9,7 +9,6 @@ const TEST_FIELD_ID := "field_1_1"
 const TEST_MAP_TILES := Vector2i(60, 34) # 960x544 (tile 16 기준)
 const TEST_TILE_SIZE := 16
 const TEST_CAMERA_MARGIN_TILES := 0
-const FIELD_OBJECT_SIZE := 16
 const TEST_FLOOR_SOURCE_ID := 0
 const TEST_WALL_SOURCE_ID := 2
 const FIELD_TILE_TYPE_MAP := {
@@ -28,8 +27,6 @@ const TREASURE_CHEST_RATIOS: Array[Vector2] = [
 	Vector2(0.56, 0.46),
 ]
 const TREASURE_LOCKED_CHEST_INDEX: int = -1
-const TREASURE_KEY_ITEM_ID: String = "treasure_key"
-const TREASURE_REWARD_RARITIES: Array[String] = ["uncommon", "magic", "rare"]
 const SANCTUARY_SPAWN_RATIO := Vector2(0.5, 0.58)
 const SANCTUARY_HEAL_RADIUS: float = 34.0
 const SANCTUARY_HEAL_INTERVAL: float = 0.28
@@ -41,6 +38,12 @@ const WINDOW_SHELL_SCRIPT := preload("res://scripts/ui/window/WindowShell.gd")
 const TEST_FIELD_OVERLAY_TEXTURE := preload("res://assets/sprites/maps/fieldmap_1.png")
 const FIELD_LAYOUT_HELPER_SCRIPT := preload("res://scripts/scenes/field/FieldLayoutHelper.gd")
 const FIELD_GRASS_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldGrassController.gd")
+const FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPartyChatterController.gd")
+const FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPauseOverlayController.gd")
+const FIELD_DROP_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldDropController.gd")
+const FIELD_TREASURE_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldTreasureController.gd")
+const FIELD_BOSS_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldBossController.gd")
+const RECRUIT_NPC_SCENE := preload("res://scenes/field/RecruitNPC.tscn")
 const EVENT_WINDOW_MARGIN: float = 20.0
 const EVENT_CENTER_SAFE_SIZE: float = 100.0
 const EVENT_HUD_TOP_HEIGHT: float = 32.0
@@ -60,9 +63,6 @@ var hud = null
 var game_over_ui: GameOverUI
 
 # 보스전 대기 데이터
-var pending_boss_data: Dictionary = {}
-var boss_reward_popup: CanvasLayer = null
-
 # 씬 리소스
 var party_leader_scene: PackedScene
 var party_follower_scene: PackedScene
@@ -73,16 +73,17 @@ var hud_scene: PackedScene
 var spawner: EnemySpawner
 var layout_helper = FIELD_LAYOUT_HELPER_SCRIPT.new()
 var grass_controller = FIELD_GRASS_CONTROLLER_SCRIPT.new()
+var party_chatter_controller = FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT.new()
+var pause_overlay_controller = FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT.new()
+var drop_controller = FIELD_DROP_CONTROLLER_SCRIPT.new()
+var treasure_controller = FIELD_TREASURE_CONTROLLER_SCRIPT.new()
+var boss_controller = FIELD_BOSS_CONTROLLER_SCRIPT.new()
 var test_field_bounds: Rect2 = Rect2()
 
 # 필드 동료 NPC
-var recruit_npc_root: Node2D = null
-var recruit_npc_label: Label = null
-var recruit_npc_bubble: PanelContainer = null
-var recruit_npc_bubble_base_y: float = -52.0
+var recruit_npc_root: RecruitNPC = null
 var recruit_npc_hero_id: String = ""
 var recruit_dialog_active: bool = false
-var recruit_float_t: float = 0.0
 var recruit_retry_cooldown: float = 0.0
 var recruit_followup_pending: bool = false
 var recruit_followup_active: bool = false
@@ -100,74 +101,11 @@ var recruit_event_right_hero_id: String = ""
 
 # 보물상자
 var field_treasure_chests: Array[Dictionary] = []
-var reward_window_layer: CanvasLayer = null
-var reward_window: RewardWindow = null
-var pause_dim_layer: CanvasLayer = null
-var pause_dim_rect: ColorRect = null
-var party_chatter_layer: CanvasLayer = null
-var party_chatter_root: Control = null
-var pending_treasure_chest_index: int = -1
-var treasure_interact_cooldown: float = 0.0
 var sanctuary_root: Node2D = null
-var sanctuary_area: Area2D = null
-var sanctuary_tick_timer: float = 0.0
-var party_chatter_cooldown: float = 0.0
-var party_chatter_attack_cooldown: float = 0.0
-var party_chatter_hit_cooldown: float = 0.0
-var party_chatter_enemy_seen_cooldown: float = 0.0
-var party_chatter_queue: Array[Dictionary] = []
-var party_chatter_is_showing: bool = false
-var active_party_chatter_speaker: Node2D = null
-var active_party_chatter_bubble: PanelContainer = null
-var active_party_chatter_time_left: float = 0.0
 var grudge_spawn_eval_timer: float = 0.0
 var grudge_extra_target: int = 0
 var grudge_extra_despawn_timer: float = 0.0
 
-const PARTY_CHATTER_ATTACK_LINES: Array[String] = [
-	"좋아, 밀어붙여!",
-	"간다!",
-	"지금이다!",
-	"연계 들어간다!",
-]
-const PARTY_CHATTER_SKILL_LINES: Array[String] = [
-	"기술 간다!",
-	"받아라!",
-	"이걸로 끝내자!",
-	"특기 발동!",
-]
-const PARTY_CHATTER_HIT_LINES: Array[String] = [
-	"윽...!",
-	"괜찮아, 버틸 수 있어!",
-	"힐 좀 부탁해!",
-	"아직 안 끝났어!",
-]
-const PARTY_CHATTER_ENEMY_SEEN_LINES: Array[String] = [
-	"적이 엄청 많아 보이는데?",
-	"포위당하기 전에 정리하자.",
-	"슬슬 위험해, 각자 조심!",
-	"침착하게 하나씩 끊자.",
-]
-const PARTY_CHATTER_ATTACK_REPLY_LINES: Array[String] = [
-	"좋아, 그대로 밀어!",
-	"각 잡혔어, 이어간다!",
-	"좋은 타이밍이야!",
-]
-const PARTY_CHATTER_SKILL_REPLY_LINES: Array[String] = [
-	"오, 기술 잘 들어갔어!",
-	"지금 흐름 좋아!",
-	"그대로 몰아붙여!",
-]
-const PARTY_CHATTER_HIT_REPLY_LINES: Array[String] = [
-	"버텨! 바로 커버할게!",
-	"괜찮아, 뒤는 내가 본다!",
-	"집중! 아직 할 만해!",
-]
-const PARTY_CHATTER_ENEMY_SEEN_REPLY_LINES: Array[String] = [
-	"응, 한쪽부터 정리하자.",
-	"거리 유지하면서 끊어내자.",
-	"서두르지 말고 각 맞추자.",
-]
 const PARTY_CHATTER_LAYER: int = 220
 const PARTY_CHATTER_BUBBLE_EXTRA_LIFT: float = 24.0
 const PARTY_CHATTER_BUBBLE_HOLD_TIME: float = 1.65
@@ -202,19 +140,17 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	_update_party_chatter_runtime_context()
 	_update_pause_dim_overlay()
 	_update_active_party_chatter_position()
 	if get_tree().paused:
 		# pause 중에는 필수 후속 처리만 유지
 		_update_recruit_followup_dialog(_delta)
 		return
-	party_chatter_cooldown = maxf(0.0, party_chatter_cooldown - _delta)
-	party_chatter_attack_cooldown = maxf(0.0, party_chatter_attack_cooldown - _delta)
-	party_chatter_hit_cooldown = maxf(0.0, party_chatter_hit_cooldown - _delta)
-	party_chatter_enemy_seen_cooldown = maxf(0.0, party_chatter_enemy_seen_cooldown - _delta)
-	_update_party_chatter_lifecycle(_delta)
+	if party_chatter_controller != null:
+		party_chatter_controller.update_cooldowns_and_lifecycle(_delta)
 
-	treasure_interact_cooldown = maxf(0.0, treasure_interact_cooldown - _delta)
+	_update_treasure_system(_delta)
 
 	# 이동 기반 적 스폰 체크
 	if spawner and not FieldManager.is_boss_field():
@@ -228,8 +164,6 @@ func _process(_delta: float) -> void:
 	_update_recruit_npc(_delta)
 	_update_recruit_event_dialog(_delta)
 	_update_recruit_followup_dialog(_delta)
-	_poll_treasure_chest_interaction()
-	_update_sanctuary(_delta)
 	_update_field_grass(_delta)
 	_update_grudge_spawn_pressure(_delta)
 	_update_party_chatter_blocking_state()
@@ -318,6 +252,33 @@ func _setup_systems() -> void:
 	# 스포너
 	spawner = EnemySpawner.new()
 	spawner.setup(self, tilemap)
+	if party_chatter_controller != null:
+		party_chatter_controller.setup(
+			self,
+			FIELD_WORLD_EFFECT_Z,
+			PARTY_CHATTER_LAYER,
+			PARTY_CHATTER_BUBBLE_EXTRA_LIFT,
+			PARTY_CHATTER_BUBBLE_HOLD_TIME,
+			PARTY_CHATTER_BUBBLE_FADE_TIME
+		)
+	if pause_overlay_controller != null:
+		pause_overlay_controller.setup(self)
+	if drop_controller != null:
+		drop_controller.setup(self)
+	if treasure_controller != null:
+		treasure_controller.setup(
+			self,
+			REWARD_WINDOW_SCENE,
+			Callable(self, "_close_blocking_ui_for_recruit_followup"),
+			Callable(self, "_show_field_notice")
+		)
+	if boss_controller != null:
+		boss_controller.setup(
+			self,
+			Callable(self, "_start_boss_battle"),
+			Callable(self, "_log_system"),
+			Callable(self, "_has_unclaimed_battle_rewards")
+		)
 	
 
 
@@ -427,58 +388,26 @@ func _spawn_recruit_npc() -> void:
 		return
 	if PartyManager.get_party().size() >= 4:
 		return
-
 	var hero_id: String = _pick_random_recruit_hero_id()
 	if hero_id.is_empty():
 		return
-
 	var spawn_pos: Vector2 = _find_recruit_spawn_position()
 	if spawn_pos == Vector2.ZERO:
 		return
-
+	var recruit_scene: PackedScene = RECRUIT_NPC_SCENE
+	if recruit_scene == null:
+		return
+	var npc: RecruitNPC = recruit_scene.instantiate() as RecruitNPC
+	if npc == null:
+		return
 	recruit_npc_hero_id = hero_id
-	recruit_npc_root = Node2D.new()
+	recruit_npc_root = npc
 	recruit_npc_root.name = "RecruitNPC"
 	recruit_npc_root.position = spawn_pos
 	recruit_npc_root.z_index = FIELD_WORLD_OBJECT_Z
 	add_child(recruit_npc_root)
-
-	var sprite := AnimatedSprite2D.new()
-	sprite.name = "Sprite"
-	sprite.position = Vector2(0, -12)
-	if SpriteManager:
-		sprite.sprite_frames = SpriteManager.get_hero_sprite_frames(hero_id)
-		sprite.animation = "walk_down"
-		sprite.frame = 1
-		sprite.stop()
-	recruit_npc_root.add_child(sprite)
-
-	recruit_npc_bubble = PanelContainer.new()
-	recruit_npc_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	recruit_npc_bubble.position = Vector2(-44, recruit_npc_bubble_base_y)
-	var bubble_style := StyleBoxFlat.new()
-	bubble_style.bg_color = Color(0.96, 0.96, 1.0, 0.95)
-	bubble_style.border_width_left = 1
-	bubble_style.border_width_top = 1
-	bubble_style.border_width_right = 1
-	bubble_style.border_width_bottom = 1
-	bubble_style.border_color = Color(0.25, 0.28, 0.38, 1.0)
-	bubble_style.corner_radius_top_left = 6
-	bubble_style.corner_radius_top_right = 6
-	bubble_style.corner_radius_bottom_left = 6
-	bubble_style.corner_radius_bottom_right = 6
-	bubble_style.content_margin_left = 8
-	bubble_style.content_margin_right = 8
-	bubble_style.content_margin_top = 4
-	bubble_style.content_margin_bottom = 4
-	recruit_npc_bubble.add_theme_stylebox_override("panel", bubble_style)
-	recruit_npc_root.add_child(recruit_npc_bubble)
-
-	recruit_npc_label = Label.new()
-	recruit_npc_label.text = "도와줘!"
-	recruit_npc_label.add_theme_font_size_override("font_size", 11)
-	recruit_npc_label.add_theme_color_override("font_color", Color(0.08, 0.08, 0.12, 1.0))
-	recruit_npc_bubble.add_child(recruit_npc_label)
+	recruit_npc_root.setup_recruit(hero_id)
+	recruit_npc_root.set_bubble_text("도와줘!", Color(0.96, 0.96, 1.0, 1.0))
 
 
 func _pick_random_recruit_hero_id() -> String:
@@ -550,18 +479,12 @@ func _can_place_recruit_npc_at(pos: Vector2) -> bool:
 func _update_recruit_npc(delta: float) -> void:
 	if recruit_npc_root == null or not is_instance_valid(recruit_npc_root):
 		return
-
-	recruit_float_t += delta
 	recruit_retry_cooldown = maxf(0.0, recruit_retry_cooldown - delta)
-	if recruit_npc_bubble and is_instance_valid(recruit_npc_bubble):
-		recruit_npc_bubble.position.y = recruit_npc_bubble_base_y + sin(recruit_float_t * 2.6) * 2.0
-
+	recruit_npc_root.tick_bubble_float(delta)
 	if recruit_dialog_active or recruit_event_active:
 		return
-
 	if not party_leader:
 		return
-
 	var distance: float = party_leader.global_position.distance_to(recruit_npc_root.global_position)
 	if distance <= RECRUIT_TRIGGER_DISTANCE and recruit_retry_cooldown <= 0.0:
 		_start_recruit_dialog()
@@ -582,14 +505,13 @@ func _start_recruit_dialog() -> void:
 		var leader_hero: Hero = PartyManager.get_hero_by_id(leader_hero_id)
 		if leader_hero != null:
 			leader_name = leader_hero.hero_name
-
 	var lines: Array[Dictionary] = [
-		{"speaker": "right", "name": recruit_name, "text": "도, 도와줘...! 여기 너무 위험해!"},
+		{"speaker": "right", "name": recruit_name, "text": "앗... 도와줘..! 여긴 너무 위험해!"},
 		{"speaker": "left", "name": leader_name, "text": "괜찮아. 진정하고 상황부터 말해줘."},
-		{"speaker": "right", "name": recruit_name, "text": "같이 가게 해줘. 나도 싸울 수 있어!"},
+		{"speaker": "right", "name": recruit_name, "text": "같이 가게 해줘. 혼자론 못 버티겠어!"},
 	]
-	if recruit_npc_label and is_instance_valid(recruit_npc_label):
-		recruit_npc_label.text = ""
+	if recruit_npc_root != null and is_instance_valid(recruit_npc_root):
+		recruit_npc_root.set_bubble_text("")
 	_close_blocking_ui_for_recruit_followup()
 	_start_recruit_event_dialog(leader_hero_id, recruit_npc_hero_id, lines, Callable(self, "_on_recruit_intro_dialog_finished"))
 
@@ -604,12 +526,10 @@ func _complete_recruit_dialog() -> void:
 		return
 	if not PartyManager:
 		return
-
 	var hero_name: String = recruit_npc_hero_id
 	var hero_data: Dictionary = DataManager.get_hero(recruit_npc_hero_id)
 	if not hero_data.is_empty():
 		hero_name = str(hero_data.get("name", recruit_npc_hero_id))
-
 	if PartyManager.add_hero_by_id(recruit_npc_hero_id):
 		var recruited_id: String = recruit_npc_hero_id
 		_on_hero_recruited(recruit_npc_hero_id)
@@ -617,13 +537,11 @@ func _complete_recruit_dialog() -> void:
 		if is_instance_valid(recruit_npc_root):
 			recruit_npc_root.queue_free()
 		recruit_npc_root = null
-		recruit_npc_bubble = null
-		recruit_npc_label = null
 		recruit_npc_hero_id = ""
 		_schedule_recruit_followup_dialog(recruited_id, hero_name)
 	else:
-		if recruit_npc_label and is_instance_valid(recruit_npc_label):
-			recruit_npc_label.text = "파티가 가득 찼어..."
+		if recruit_npc_root != null and is_instance_valid(recruit_npc_root):
+			recruit_npc_root.set_bubble_text("파티가 가득 찼어...", Color(1.0, 0.90, 0.90, 1.0))
 		_show_field_notice("파티가 가득 차서 동료를 받을 수 없다.", 1.8, Color(1.0, 0.75, 0.75))
 		recruit_retry_cooldown = 2.0
 
@@ -746,7 +664,7 @@ func _start_recruit_event_dialog(left_hero_id: String, right_hero_id: String, li
 	recruit_event_lines = lines.duplicate(true)
 	recruit_event_line_index = 0
 	recruit_event_line_timer = 0.0
-	party_chatter_queue.clear()
+	_clear_party_chatter_queue()
 	_advance_recruit_event_dialog_line()
 
 
@@ -784,7 +702,7 @@ func _update_recruit_event_dialog(delta: float) -> void:
 	if recruit_event_line_timer > 0.0:
 		recruit_event_line_timer = maxf(0.0, recruit_event_line_timer - delta)
 		return
-	if party_chatter_is_showing:
+	if party_chatter_controller != null and party_chatter_controller.is_showing():
 		return
 	_advance_recruit_event_dialog_line()
 
@@ -937,457 +855,69 @@ func _close_blocking_ui_for_recruit_followup() -> void:
 #=============================================================================
 # 보물상자
 #=============================================================================
-func _spawn_field_treasure_chests() -> void:
-	field_treasure_chests.clear()
-	if not _is_test_field():
-		return
-	if FieldManager.is_boss_field():
-		return
-
-	var bounds: Rect2 = _get_map_bounds()
-	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
-		return
-
-	_ensure_reward_window()
-
-	for i in range(TREASURE_CHEST_RATIOS.size()):
-		var ratio: Vector2 = TREASURE_CHEST_RATIOS[i]
-		var locked: bool = (i == TREASURE_LOCKED_CHEST_INDEX)
-		var pos := bounds.position + bounds.size * ratio
-		_create_treasure_chest(i, pos, locked)
-
-	_show_field_notice("보물상자 1개가 배치되었다.", 1.6, Color(0.98, 0.9, 0.65))
-
-
-func _spawn_sanctuary() -> void:
-	if not _is_test_field():
-		return
-	if sanctuary_root != null and is_instance_valid(sanctuary_root):
-		return
-
-	var bounds: Rect2 = _get_map_bounds()
-	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
-		return
-
-	sanctuary_root = Node2D.new()
-	sanctuary_root.name = "Sanctuary"
-	sanctuary_root.position = bounds.position + bounds.size * SANCTUARY_SPAWN_RATIO
-	sanctuary_root.z_index = FIELD_WORLD_OBJECT_Z
-	add_child(sanctuary_root)
-
-	var sprite := Sprite2D.new()
-	sprite.centered = true
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.texture = _build_field_object_texture("sanctuary")
-	sanctuary_root.add_child(sprite)
-
-	sanctuary_area = Area2D.new()
-	sanctuary_area.name = "SanctuaryArea"
-	sanctuary_area.monitoring = true
-	sanctuary_area.monitorable = true
-	sanctuary_area.collision_layer = 1
-	sanctuary_area.collision_mask = 2
-	sanctuary_root.add_child(sanctuary_area)
-
-	var shape := CollisionShape2D.new()
-	var circle := CircleShape2D.new()
-	circle.radius = SANCTUARY_HEAL_RADIUS
-	shape.shape = circle
-	sanctuary_area.add_child(shape)
-
-	sanctuary_tick_timer = SANCTUARY_HEAL_INTERVAL
-	_show_field_notice("성소를 발견했다. 가까이 가면 HP/MP가 회복된다.", 1.5, Color(0.64, 0.9, 1.0))
-
-
-func _build_field_object_texture(kind: String) -> Texture2D:
-	var img := Image.create(FIELD_OBJECT_SIZE, FIELD_OBJECT_SIZE, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-
-	match kind:
-		"treasure", "treasure_locked", "treasure_opened":
-			for y in range(5, 14):
-				for x in range(2, 14):
-					var c := Color(0.62, 0.38, 0.12, 1.0)
-					if y <= 7:
-						c = Color(0.74, 0.46, 0.16, 1.0)
-					if x == 2 or x == 13 or y == 5 or y == 13:
-						c = c.darkened(0.22)
-					img.set_pixel(x, y, c)
-			if kind == "treasure_locked":
-				for y in range(8, 11):
-					for x in range(7, 9):
-						img.set_pixel(x, y, Color(1.0, 0.86, 0.3, 1.0))
-			elif kind == "treasure_opened":
-				for y in range(3, 6):
-					for x in range(2, 14):
-						var oc := Color(0.72, 0.44, 0.16, 1.0)
-						if x == 2 or x == 13 or y == 3 or y == 5:
-							oc = oc.darkened(0.25)
-						img.set_pixel(x, y, oc)
-				for y in range(8, 12):
-					for x in range(6, 10):
-						img.set_pixel(x, y, Color(0.67, 1.0, 0.78, 1.0))
-		"sanctuary":
-			for y in range(3, 14):
-				for x in range(6, 10):
-					var c := Color(0.56, 0.78, 0.88, 1.0)
-					if x == 6 or x == 9 or y == 3 or y == 13:
-						c = c.darkened(0.22)
-					img.set_pixel(x, y, c)
-			for y in range(12, 15):
-				for x in range(3, 13):
-					var b := Color(0.45, 0.6, 0.68, 1.0)
-					if x == 3 or x == 12 or y == 12 or y == 14:
-						b = b.darkened(0.25)
-					img.set_pixel(x, y, b)
-			for y in range(1, 4):
-				for x in range(6, 10):
-					img.set_pixel(x, y, Color(0.35, 0.9, 1.0, 1.0))
-		_:
-			for y in range(2, 14):
-				for x in range(2, 14):
-					img.set_pixel(x, y, Color(0.9, 0.9, 0.9, 1.0))
-
-	return ImageTexture.create_from_image(img)
-
-
-func _make_colored_rect_texture(w: int, h: int, color: Color) -> Texture2D:
-	var img := Image.create(maxi(1, w), maxi(1, h), false, Image.FORMAT_RGBA8)
-	img.fill(color)
-	return ImageTexture.create_from_image(img)
-
-
 func _ensure_pause_dim_overlay() -> void:
-	if pause_dim_layer != null and is_instance_valid(pause_dim_layer):
+	if pause_overlay_controller == null:
 		return
-	pause_dim_layer = CanvasLayer.new()
-	pause_dim_layer.name = "PauseDimLayer"
-	pause_dim_layer.layer = 9
-	pause_dim_layer.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(pause_dim_layer)
-
-	pause_dim_rect = ColorRect.new()
-	pause_dim_rect.name = "PauseDimRect"
-	pause_dim_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	pause_dim_rect.color = Color(0.0, 0.0, 0.0, 0.28)
-	pause_dim_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pause_dim_rect.visible = false
-	pause_dim_layer.add_child(pause_dim_rect)
+	pause_overlay_controller.ensure_overlay()
 
 
 func _update_pause_dim_overlay() -> void:
-	if pause_dim_rect == null or not is_instance_valid(pause_dim_rect):
+	if pause_overlay_controller == null:
 		return
-	var is_paused: bool = get_tree().paused
-	pause_dim_rect.visible = is_paused
-	if party_chatter_root != null and is_instance_valid(party_chatter_root):
-		party_chatter_root.modulate = Color(0.62, 0.62, 0.62, 1.0) if is_paused else Color(1, 1, 1, 1)
+	var chatter_root: Control = null
+	if party_chatter_controller != null:
+		chatter_root = party_chatter_controller.get_overlay_root()
+	pause_overlay_controller.update_overlay(get_tree().paused, chatter_root)
 
 
-func _ensure_reward_window() -> void:
-	if reward_window != null and is_instance_valid(reward_window):
+func _spawn_field_treasure_chests() -> void:
+	if treasure_controller == null:
 		return
-
-	if reward_window_layer == null or not is_instance_valid(reward_window_layer):
-		reward_window_layer = CanvasLayer.new()
-		reward_window_layer.layer = 170
-		reward_window_layer.process_mode = Node.PROCESS_MODE_ALWAYS
-		add_child(reward_window_layer)
-
-	reward_window = REWARD_WINDOW_SCENE.instantiate() as RewardWindow
-	if reward_window == null:
-		return
-	reward_window.name = "RewardWindow"
-	if not reward_window.item_selected.is_connected(_on_treasure_loot_selected):
-		reward_window.item_selected.connect(_on_treasure_loot_selected)
-	if reward_window_layer:
-		reward_window_layer.add_child(reward_window)
-	else:
-		add_child(reward_window)
-
-
-func _create_treasure_chest(chest_index: int, world_pos: Vector2, is_locked: bool) -> void:
-	var root := Node2D.new()
-	root.name = "TreasureChest_%d" % chest_index
-	root.position = world_pos
-	root.z_index = FIELD_WORLD_OBJECT_Z
-	add_child(root)
-
-	var icon := Sprite2D.new()
-	icon.name = "Icon"
-	icon.centered = true
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	icon.texture = _build_field_object_texture("treasure_locked" if is_locked else "treasure")
-	root.add_child(icon)
-
-	var area := Area2D.new()
-	area.name = "ContactArea"
-	area.monitoring = true
-	area.monitorable = true
-	# PartyMember는 collision_layer=2 이므로 마스크를 맞춰야 body_entered가 동작한다.
-	area.collision_layer = 1
-	area.collision_mask = 2
-	root.add_child(area)
-
-	var shape := CollisionShape2D.new()
-	var circle := CircleShape2D.new()
-	circle.radius = 10.0
-	shape.shape = circle
-	shape.position = Vector2.ZERO
-	area.add_child(shape)
-
-	if not area.body_entered.is_connected(_on_treasure_chest_body_entered.bind(chest_index)):
-		area.body_entered.connect(_on_treasure_chest_body_entered.bind(chest_index))
-
-	field_treasure_chests.append({
-		"index": chest_index,
-		"root": root,
-		"icon": icon,
-		"area": area,
-		"locked": is_locked,
-		"opened": false,
-	})
-
-
-func _on_treasure_chest_body_entered(body: Node2D, chest_index: int) -> void:
-	if body == null or not body.is_in_group("party_leader"):
-		return
-	if chest_index < 0 or chest_index >= field_treasure_chests.size():
-		return
-	if pending_treasure_chest_index >= 0:
-		return
-	if reward_window != null and is_instance_valid(reward_window) and reward_window.visible:
-		return
-
-	var chest: Dictionary = field_treasure_chests[chest_index]
-	if bool(chest.get("opened", false)):
-		return
-
-	if bool(chest.get("locked", false)):
-		if InventoryManager == null or not InventoryManager.has_item(TREASURE_KEY_ITEM_ID, 1):
-			_show_field_notice("잠겨 있다. 보물상자 열쇠가 필요하다.", 1.5, Color(1.0, 0.72, 0.72))
-			return
-		InventoryManager.remove_item(TREASURE_KEY_ITEM_ID, 1)
-		_show_field_notice("열쇠를 사용해 잠긴 상자를 열었다!", 1.4, Color(0.82, 1.0, 0.86))
-
-	_open_treasure_chest(chest_index)
-
-
-func _poll_treasure_chest_interaction() -> void:
-	if party_leader == null:
-		return
-	if treasure_interact_cooldown > 0.0:
-		return
-	if field_treasure_chests.is_empty():
-		return
-
-	for i in range(field_treasure_chests.size()):
-		var chest: Dictionary = field_treasure_chests[i]
-		if bool(chest.get("opened", false)):
-			continue
-		var root: Node2D = chest.get("root") as Node2D
-		if root == null:
-			continue
-		if party_leader.global_position.distance_to(root.global_position) <= 24.0:
-			treasure_interact_cooldown = 0.25
-			_on_treasure_chest_body_entered(party_leader, i)
-			return
-
-
-func _open_treasure_chest(chest_index: int) -> void:
-	if chest_index < 0 or chest_index >= field_treasure_chests.size():
-		return
-
-	_close_blocking_ui_for_recruit_followup()
-
-	var chest: Dictionary = field_treasure_chests[chest_index]
-	if bool(chest.get("opened", false)):
-		return
-
-	chest["opened"] = true
-	field_treasure_chests[chest_index] = chest
-
-	var icon: Sprite2D = chest.get("icon") as Sprite2D
-	if icon:
-		icon.texture = _build_field_object_texture("treasure_opened")
-	var area: Area2D = chest.get("area") as Area2D
-	if area:
-		area.set_deferred("monitoring", false)
-
-	var choices: Array[String] = _roll_treasure_reward_choices(3)
-	if choices.is_empty():
-		_show_field_notice("보상 풀이 비어 있다.", 1.2, Color(1.0, 0.75, 0.75))
-		return
-
-	pending_treasure_chest_index = chest_index
-	_ensure_reward_window()
-	if reward_window and is_instance_valid(reward_window):
-		reward_window.set_title("보상윈도우")
-		reward_window.call_deferred("show_loot_selection", choices)
-	else:
-		# UI 생성 실패 시 첫 번째 보상 지급
-		_grant_treasure_reward(choices[0])
-		pending_treasure_chest_index = -1
-
-
-func _roll_treasure_reward_choices(count: int) -> Array[String]:
-	var pool: Array[String] = DataManager.get_equipment_by_rarities(TREASURE_REWARD_RARITIES)
-	if pool.is_empty():
-		return []
-
-	pool.shuffle()
-	var result: Array[String] = []
-	for equip_id in pool:
-		result.append(str(equip_id))
-		if result.size() >= count:
-			break
-
-	while result.size() < count:
-		result.append(str(pool[randi() % pool.size()]))
-
-	return result
-
-
-func _on_treasure_loot_selected(item_id: String) -> void:
-	var target_hero_id: String = ""
-	if reward_window != null and is_instance_valid(reward_window) and reward_window.has_method("get_selected_hero_id"):
-		target_hero_id = str(reward_window.call("get_selected_hero_id"))
-	_grant_treasure_reward(item_id, target_hero_id)
-	pending_treasure_chest_index = -1
-
-	if _are_all_treasure_chests_opened():
-		_show_field_notice("필드의 보물상자를 모두 열었다!", 1.6, Color(1.0, 0.9, 0.65))
-
-
-func _grant_treasure_reward(item_id: String, target_hero_id: String = "") -> void:
-	if item_id.is_empty():
-		return
-
-	var added: bool = false
-	if InventoryManager:
-		added = InventoryManager.add_item(item_id, 1)
-	else:
-		return
-
-	var data: Dictionary = DataManager.get_equipment(item_id)
-	var item_name: String = str(data.get("name", item_id))
-	if not added:
-		_show_field_notice("보상을 획득하지 못했다: 인벤토리 확인 필요", 1.4, Color(1.0, 0.75, 0.75))
-		return
-
-	var equipped: bool = false
-	var hero_name: String = ""
-	if not target_hero_id.is_empty() and PartyManager:
-		var hero: Hero = PartyManager.get_hero_by_id(target_hero_id)
-		if hero != null and InventoryManager:
-			hero_name = hero.hero_name
-			equipped = InventoryManager.equip_item(hero, item_id, "")
-
-	# 명시 장착 실패/미선택 시: 더 좋은 장비면 자동장착
-	if not equipped and InventoryManager:
-		equipped = InventoryManager.try_auto_equip(item_id)
-		if equipped and PartyManager:
-			var equipped_hero: Hero = _find_hero_equipped_item(item_id)
-			if equipped_hero != null:
-				hero_name = equipped_hero.hero_name
-
-	if equipped:
-		if hero_name.is_empty():
-			_show_field_notice("획득: %s → 자동 장착 완료" % item_name, 1.5, Color(0.82, 1.0, 0.86))
-		else:
-			_show_field_notice("획득: %s → %s 자동 장착" % [item_name, hero_name], 1.5, Color(0.82, 1.0, 0.86))
-	else:
-		_show_field_notice("획득: %s" % item_name, 1.4, Color(0.88, 0.96, 1.0))
-	if SaveManager:
-		SaveManager.auto_save("보물상자 개봉")
-
-
-func _find_hero_equipped_item(item_id: String) -> Hero:
-	if item_id.is_empty() or not PartyManager:
-		return null
-	for hero_any in PartyManager.get_party():
-		var hero: Hero = hero_any as Hero
-		if hero == null:
-			continue
-		for slot in ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]:
-			if str(hero.equipment.get(slot, "")) == item_id:
-				return hero
-	return null
-
-
-func _are_all_treasure_chests_opened() -> bool:
-	if field_treasure_chests.is_empty():
-		return false
-	for chest in field_treasure_chests:
-		var chest_dict: Dictionary = chest as Dictionary
-		if not bool(chest_dict.get("opened", false)):
-			return false
-	return true
-
-
-func _update_sanctuary(delta: float) -> void:
-	if sanctuary_root == null or not is_instance_valid(sanctuary_root):
-		return
-	if party_leader == null:
-		return
-
-	var dist: float = party_leader.global_position.distance_to(sanctuary_root.global_position)
-	if dist > SANCTUARY_HEAL_RADIUS:
-		sanctuary_tick_timer = SANCTUARY_HEAL_INTERVAL
-		return
-
-	sanctuary_tick_timer -= delta
-	if sanctuary_tick_timer > 0.0:
-		return
-	sanctuary_tick_timer = SANCTUARY_HEAL_INTERVAL
-
-	var healed_total: int = 0
-	if PartyManager:
-		var party: Array = PartyManager.get_party()
-		for hero_any in party:
-			var hero: Hero = hero_any as Hero
-			if hero == null or hero.is_dead:
-				continue
-			healed_total += hero.heal(SANCTUARY_HP_PER_TICK)
-		PartyManager.party_changed.emit()
-
-	_spawn_sanctuary_particle(Color(1.0, 0.45, 0.65, 0.95))
-	_spawn_sanctuary_particle(Color(0.35, 0.75, 1.0, 0.95))
-
-	if healed_total > 0 and BattleManager:
-		BattleManager.party_hp_changed.emit()
-
-
-func _spawn_sanctuary_particle(color: Color) -> void:
-	if sanctuary_root == null or not is_instance_valid(sanctuary_root):
-		return
-	var particle := Sprite2D.new()
-	particle.centered = true
-	particle.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	particle.texture = _make_colored_rect_texture(4, 4, color)
-	particle.global_position = sanctuary_root.global_position + Vector2(
-		randf_range(-6.0, 6.0),
-		randf_range(-6.0, 2.0)
+	treasure_controller.spawn_field_treasure_chests(
+		_is_test_field(),
+		FieldManager.is_boss_field(),
+		_get_map_bounds(),
+		TREASURE_CHEST_RATIOS,
+		TREASURE_LOCKED_CHEST_INDEX,
+		FIELD_WORLD_OBJECT_Z
 	)
-	particle.z_index = FIELD_WORLD_EFFECT_Z
-	add_child(particle)
-
-	var start_pos: Vector2 = particle.global_position
-	var tween := particle.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(
-		particle,
-		"global_position",
-		start_pos + Vector2(randf_range(-4.0, 4.0), -12.0),
-		0.45
-	).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(particle, "modulate:a", 0.0, 0.45)
-	tween.chain().tween_callback(particle.queue_free)
+	_sync_treasure_runtime_refs()
 
 
-#=============================================================================
-# 필드 풀(Grass) 배치/업데이트
-#=============================================================================
+func _spawn_sanctuary() -> void:
+	if treasure_controller == null:
+		return
+	treasure_controller.spawn_sanctuary(
+		_is_test_field(),
+		_get_map_bounds(),
+		SANCTUARY_SPAWN_RATIO,
+		FIELD_WORLD_OBJECT_Z,
+		SANCTUARY_HEAL_INTERVAL,
+		SANCTUARY_HEAL_RADIUS
+	)
+	_sync_treasure_runtime_refs()
+
+
+func _update_treasure_system(delta: float) -> void:
+	if treasure_controller == null:
+		return
+	treasure_controller.update(
+		delta,
+		party_leader,
+		SANCTUARY_HEAL_RADIUS,
+		SANCTUARY_HEAL_INTERVAL,
+		SANCTUARY_HP_PER_TICK,
+		FIELD_WORLD_EFFECT_Z
+	)
+	_sync_treasure_runtime_refs()
+
+
+func _sync_treasure_runtime_refs() -> void:
+	if treasure_controller == null:
+		return
+	field_treasure_chests = treasure_controller.get_treasure_chests()
+	sanctuary_root = treasure_controller.get_sanctuary_root()
+
 func _spawn_field_grass() -> void:
 	if grass_controller == null:
 		return
@@ -1497,217 +1027,50 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 # 보스 접촉 처리
 #=============================================================================
 func _handle_boss_contact(enemy_id: String, is_elite: bool, collision_pos: Vector2, field_enemy: FieldEnemy) -> void:
-	## 보스 접촉 시 처리
-	# 플레이어 이동 정지
+	if boss_controller != null:
+		boss_controller.handle_boss_contact(enemy_id, is_elite, collision_pos, field_enemy, party_leader)
+		return
 	if party_leader:
 		party_leader.set_boss_battle_mode(true)
+	if BattleManager != null:
+		BattleManager.close_all_battles()
+		BattleManager.start_boss_battle(enemy_id, self, is_elite, collision_pos)
+	battle_triggered.emit([enemy_id])
 
-	# 보스 데이터 저장
-	pending_boss_data = {
-		"enemy_id": enemy_id,
-		"is_elite": is_elite,
-		"collision_pos": collision_pos,
-		"field_enemy": field_enemy
-	}
 
-	# 누적 보상이 있으면 확인 팝업 표시
-	var has_rewards: bool = false
-	if hud and hud.has_method("has_unclaimed_rewards"):
-		has_rewards = bool(hud.call("has_unclaimed_rewards"))
-	elif BattleManager:
+func _has_unclaimed_battle_rewards() -> bool:
+	if hud != null and hud.has_method("has_unclaimed_rewards"):
+		return bool(hud.call("has_unclaimed_rewards"))
+	if BattleManager != null:
 		var rewards: Dictionary = BattleManager.get_accumulated_rewards()
-		has_rewards = int(rewards.get("gold", 0)) > 0 or int(rewards.get("exp", 0)) > 0 or not (rewards.get("items", []) as Array).is_empty()
-
-	if has_rewards:
-		_show_boss_reward_popup()
-	else:
-		# 보상이 없으면 바로 보스전 시작
-		_start_boss_battle()
+		return int(rewards.get("gold", 0)) > 0 or int(rewards.get("exp", 0)) > 0 or not (rewards.get("items", []) as Array).is_empty()
+	return false
 
 
-func _show_boss_reward_popup() -> void:
-	## 보스전 전 보상 확인 팝업 표시
-	if boss_reward_popup:
-		boss_reward_popup.queue_free()
-
-	boss_reward_popup = CanvasLayer.new()
-	boss_reward_popup.layer = 100
-	boss_reward_popup.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(boss_reward_popup)
-
-	get_tree().paused = true
-
-	# 전체 화면 컨테이너
-	var full_screen := Control.new()
-	full_screen.set_anchors_preset(Control.PRESET_FULL_RECT)
-	full_screen.process_mode = Node.PROCESS_MODE_ALWAYS
-	boss_reward_popup.add_child(full_screen)
-
-	# 어둡게 처리
-	var dimmer := ColorRect.new()
-	dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dimmer.color = Color(0, 0, 0, 0.7)
-	full_screen.add_child(dimmer)
-
-	# 중앙 패널
-	var center_panel := PanelContainer.new()
-	center_panel.set_anchors_preset(Control.PRESET_CENTER)
-	center_panel.offset_left = -160
-	center_panel.offset_right = 160
-	center_panel.offset_top = -100
-	center_panel.offset_bottom = 100
-	center_panel.process_mode = Node.PROCESS_MODE_ALWAYS
-
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.15, 0.1, 0.2, 0.95)
-	panel_style.border_width_left = 3
-	panel_style.border_width_top = 3
-	panel_style.border_width_right = 3
-	panel_style.border_width_bottom = 3
-	panel_style.border_color = Color(1.0, 0.5, 0.3)
-	panel_style.corner_radius_top_left = 8
-	panel_style.corner_radius_top_right = 8
-	panel_style.corner_radius_bottom_left = 8
-	panel_style.corner_radius_bottom_right = 8
-	panel_style.content_margin_left = 20
-	panel_style.content_margin_right = 20
-	panel_style.content_margin_top = 15
-	panel_style.content_margin_bottom = 15
-	center_panel.add_theme_stylebox_override("panel", panel_style)
-	full_screen.add_child(center_panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	center_panel.add_child(vbox)
-
-	# 제목
-	var title := Label.new()
-	title.text = "👑 보스 발견!"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 14)
-	title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.4))
-	vbox.add_child(title)
-
-	# 설명
-	var desc := Label.new()
-	desc.text = "누적된 보상이 있습니다.\n보상을 받고 보스전에 돌입하시겠습니까?"
-	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc.add_theme_font_size_override("font_size", 11)
-	desc.add_theme_color_override("font_color", Color.WHITE)
-	vbox.add_child(desc)
-
-	# 보상 정보
-	var rewards: Dictionary = BattleManager.get_accumulated_rewards()
-	var reward_hbox := HBoxContainer.new()
-	reward_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	reward_hbox.add_theme_constant_override("separation", 20)
-	vbox.add_child(reward_hbox)
-
-	var gold_lbl := Label.new()
-	gold_lbl.text = "Gold: %d" % rewards.gold
-	gold_lbl.add_theme_font_size_override("font_size", 11)
-	gold_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	reward_hbox.add_child(gold_lbl)
-
-	# 버튼
-	var btn_hbox := HBoxContainer.new()
-	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_hbox.add_theme_constant_override("separation", 20)
-	vbox.add_child(btn_hbox)
-
-	var claim_btn := Button.new()
-	claim_btn.text = "보상 받기"
-	claim_btn.custom_minimum_size = Vector2(100, 35)
-	claim_btn.add_theme_font_size_override("font_size", 12)
-	claim_btn.focus_mode = Control.FOCUS_NONE
-	var claim_style := StyleBoxFlat.new()
-	claim_style.bg_color = Color(0.3, 0.5, 0.3)
-	claim_style.corner_radius_top_left = 4
-	claim_style.corner_radius_top_right = 4
-	claim_style.corner_radius_bottom_left = 4
-	claim_style.corner_radius_bottom_right = 4
-	claim_style.border_width_left = 2
-	claim_style.border_width_top = 2
-	claim_style.border_width_right = 2
-	claim_style.border_width_bottom = 2
-	claim_style.border_color = Color.WHITE
-	claim_btn.add_theme_stylebox_override("normal", claim_style)
-	claim_btn.pressed.connect(_on_boss_reward_claim)
-	btn_hbox.add_child(claim_btn)
-
-	var skip_btn := Button.new()
-	skip_btn.text = "포기하고 전투"
-	skip_btn.custom_minimum_size = Vector2(100, 35)
-	skip_btn.add_theme_font_size_override("font_size", 12)
-	skip_btn.focus_mode = Control.FOCUS_NONE
-	var skip_style := StyleBoxFlat.new()
-	skip_style.bg_color = Color(0.4, 0.2, 0.2)
-	skip_style.corner_radius_top_left = 4
-	skip_style.corner_radius_top_right = 4
-	skip_style.corner_radius_bottom_left = 4
-	skip_style.corner_radius_bottom_right = 4
-	skip_btn.add_theme_stylebox_override("normal", skip_style)
-	skip_btn.add_theme_color_override("font_color", Color(0.8, 0.6, 0.6))
-	skip_btn.pressed.connect(_on_boss_reward_skip)
-	btn_hbox.add_child(skip_btn)
-
-
-func _on_boss_reward_claim() -> void:
-	## 보상 받고 보스전 시작
-	get_tree().paused = false
-	if boss_reward_popup:
-		boss_reward_popup.queue_free()
-		boss_reward_popup = null
-
-	# 보상 수령
-	BattleManager.claim_accumulated_rewards()
-	if hud:
-		hud.add_system_log("보상을 획득했다!")
-
-	_start_boss_battle()
-
-
-func _on_boss_reward_skip() -> void:
-	## 보상 포기하고 보스전 시작
-	get_tree().paused = false
-	if boss_reward_popup:
-		boss_reward_popup.queue_free()
-		boss_reward_popup = null
-
-	# 보상 초기화
-	BattleManager.reset_accumulated_rewards()
-	if hud:
-		hud.add_system_log("보상을 포기했다...")
-
-	_start_boss_battle()
+func _log_system(text: String) -> void:
+	if hud != null:
+		hud.add_system_log(text)
 
 
 func _start_boss_battle() -> void:
-	## 실제 보스전 시작
-	if pending_boss_data.is_empty():
+	if boss_controller == null:
 		return
-
-	var enemy_id: String = pending_boss_data.get("enemy_id", "")
-	var is_elite: bool = pending_boss_data.get("is_elite", false)
-	var collision_pos: Vector2 = pending_boss_data.get("collision_pos", Vector2.ZERO)
-
-	# 로그
-	var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
-	var enemy_name: String = str(enemy_data.get("name", enemy_id))
-	if hud:
-		hud.add_system_log("👑 %s와(과)의 보스전 시작!" % enemy_name)
-
-	# 보스는 전투 시작 시 필드에서 제거하지 않음.
-	# (도주 시에도 맵에 남아있어야 하므로 승리 시점에만 제거)
-
-	# 기존 전투창 모두 닫기
-	BattleManager.close_all_battles()
-
-	# 보스 전투 시작
-	if BattleManager:
+	var boss_data: Dictionary = boss_controller.get_pending_boss_data()
+	if boss_data.is_empty():
+		return
+	var enemy_id: String = str(boss_data.get("enemy_id", ""))
+	var is_elite: bool = bool(boss_data.get("is_elite", false))
+	var collision_pos: Vector2 = boss_data.get("collision_pos", Vector2.ZERO)
+	if enemy_id.is_empty():
+		return
+	if DataManager != null and hud != null:
+		var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
+		var enemy_name: String = str(enemy_data.get("name", enemy_id))
+		hud.add_system_log("👑 %s(과) 보스전 시작!" % enemy_name)
+	if BattleManager != null:
+		BattleManager.close_all_battles()
 		BattleManager.start_boss_battle(enemy_id, self, is_elite, collision_pos)
-
-	pending_boss_data.clear()
+	boss_controller.clear_pending_boss_data()
 	battle_triggered.emit([enemy_id])
 
 
@@ -1745,6 +1108,8 @@ func _on_menu_pressed() -> void:
 func _on_title_pressed() -> void:
 	if recruit_event_active:
 		_close_recruit_event_dialog()
+	if boss_controller != null:
+		boss_controller.clear_popup()
 	if party_leader:
 		SaveManager.save_field_position(
 			party_leader.global_position,
@@ -1758,6 +1123,8 @@ func _on_title_pressed() -> void:
 func _on_party_wiped() -> void:
 	if recruit_event_active:
 		_close_recruit_event_dialog()
+	if boss_controller != null:
+		boss_controller.clear_popup()
 	spawner.stop_respawn()
 
 	if BattleManager:
@@ -1883,36 +1250,9 @@ func _on_all_battles_ended() -> void:
 
 
 func _update_party_chatter(_delta: float) -> void:
-	## 필드에서 적 밀집 상황을 감지해 가끔 파티 대화 출력
-	if recruit_event_active:
+	if party_chatter_controller == null:
 		return
-	if _is_external_event_blocking_party_chatter():
-		return
-	if party_chatter_enemy_seen_cooldown > 0.0:
-		return
-	if party_chatter_cooldown > 0.0:
-		return
-
-	var camera_rect: Rect2 = _get_camera_rect()
-	var visible_enemy_count: int = 0
-	for enemy in field_enemies:
-		if enemy == null or not is_instance_valid(enemy):
-			continue
-		if camera_rect.has_point(enemy.global_position):
-			visible_enemy_count += 1
-
-	if visible_enemy_count < 4:
-		return
-	if randf() > 0.28:
-		return
-
-	var speaker_member: PartyMember = _pick_random_party_member_for_chatter()
-	var speaker_id: String = speaker_member.hero_id if speaker_member != null else ""
-	var line: String = _get_field_chatter_line("enemy_many", speaker_id, PARTY_CHATTER_ENEMY_SEEN_LINES)
-	var reply: String = _get_field_chatter_line("enemy_many_reply", "", PARTY_CHATTER_ENEMY_SEEN_REPLY_LINES)
-	_show_party_chatter_exchange("", line, reply, Color(1.0, 0.95, 0.75, 1.0), Color(0.92, 0.98, 1.0, 1.0))
-	party_chatter_enemy_seen_cooldown = randf_range(4.0, 7.0)
-	party_chatter_cooldown = 1.1
+	party_chatter_controller.update_enemy_seen_chatter(field_enemies, _get_camera_rect())
 
 
 func _update_grudge_spawn_pressure(delta: float) -> void:
@@ -1998,46 +1338,15 @@ func _despawn_one_extra_field_enemy() -> void:
 
 
 func _on_battle_hero_attacked(hero_id: String) -> void:
-	if get_tree().paused:
+	if party_chatter_controller == null:
 		return
-	if recruit_event_active:
-		return
-	if _is_external_event_blocking_party_chatter():
-		return
-	if party_chatter_attack_cooldown > 0.0 or party_chatter_cooldown > 0.0:
-		return
-	if randf() > 0.55:
-		return
-	var line_trigger: String = "attack"
-	var reply_trigger: String = "attack_reply"
-	if randf() < 0.35:
-		line_trigger = "skill"
-		reply_trigger = "skill_reply"
-	var fallback_line_pool: Array[String] = PARTY_CHATTER_SKILL_LINES if line_trigger == "skill" else PARTY_CHATTER_ATTACK_LINES
-	var fallback_reply_pool: Array[String] = PARTY_CHATTER_SKILL_REPLY_LINES if reply_trigger == "skill_reply" else PARTY_CHATTER_ATTACK_REPLY_LINES
-	var line: String = _get_field_chatter_line(line_trigger, hero_id, fallback_line_pool)
-	var reply: String = _get_field_chatter_line(reply_trigger, "", fallback_reply_pool)
-	_show_party_chatter_exchange(hero_id, line, reply, Color(0.85, 1.0, 0.85, 1.0), Color(0.9, 0.96, 1.0, 1.0))
-	party_chatter_attack_cooldown = randf_range(0.9, 1.5)
-	party_chatter_cooldown = 0.7
+	party_chatter_controller.on_hero_attacked(hero_id)
 
 
 func _on_battle_hero_damaged(hero_id: String) -> void:
-	if get_tree().paused:
+	if party_chatter_controller == null:
 		return
-	if recruit_event_active:
-		return
-	if _is_external_event_blocking_party_chatter():
-		return
-	if party_chatter_hit_cooldown > 0.0 or party_chatter_cooldown > 0.0:
-		return
-	if randf() > 0.72:
-		return
-	var line: String = _get_field_chatter_line("damaged", hero_id, PARTY_CHATTER_HIT_LINES)
-	var reply: String = _get_field_chatter_line("damaged_reply", "", PARTY_CHATTER_HIT_REPLY_LINES)
-	_show_party_chatter_exchange(hero_id, line, reply, Color(1.0, 0.85, 0.85, 1.0), Color(0.9, 1.0, 0.9, 1.0))
-	party_chatter_hit_cooldown = randf_range(1.0, 1.8)
-	party_chatter_cooldown = 0.7
+	party_chatter_controller.on_hero_damaged(hero_id)
 
 
 func _show_party_chatter_exchange(
@@ -2047,93 +1356,15 @@ func _show_party_chatter_exchange(
 	first_color: Color = Color(0.95, 0.95, 1.0, 1.0),
 	second_color: Color = Color(0.95, 0.95, 1.0, 1.0)
 ) -> void:
-	var first_speaker: PartyMember = _find_party_member_by_hero_id(hero_id)
-	if not _is_party_member_alive_for_chatter(first_speaker):
-		first_speaker = null
-	if first_speaker == null:
-		var members: Array[PartyMember] = _get_alive_party_members_for_chatter()
-		if members.is_empty():
-			return
-		first_speaker = members[randi() % members.size()]
-	_enqueue_party_chatter(first_speaker, first_text, first_color)
-
-	if second_text.is_empty():
+	if party_chatter_controller == null:
 		return
-	var second_speaker: PartyMember = _get_other_party_member_for_chatter(first_speaker)
-	if second_speaker == null:
-		return
-	_enqueue_party_chatter(second_speaker, second_text, second_color)
+	party_chatter_controller.show_party_chatter_exchange(hero_id, first_text, second_text, first_color, second_color)
 
 
 func _show_party_chatter(hero_id: String, text: String, color: Color = Color(0.95, 0.95, 1.0, 1.0)) -> void:
-	if text.is_empty():
+	if party_chatter_controller == null:
 		return
-	var speaker: PartyMember = _find_party_member_by_hero_id(hero_id)
-	if not _is_party_member_alive_for_chatter(speaker):
-		speaker = null
-	if speaker == null:
-		var members: Array[PartyMember] = _get_alive_party_members_for_chatter()
-		if members.is_empty():
-			return
-		speaker = members[randi() % members.size()]
-	if speaker == null or not is_instance_valid(speaker):
-		return
-
-	_enqueue_party_chatter(speaker, text, color)
-
-
-func _enqueue_party_chatter(speaker: PartyMember, text: String, color: Color) -> void:
-	if get_tree().paused:
-		return
-	if recruit_event_active:
-		return
-	if _is_external_event_blocking_party_chatter():
-		return
-	if not _is_party_member_alive_for_chatter(speaker):
-		return
-	if text.is_empty():
-		return
-	party_chatter_queue.append({
-		"speaker": speaker,
-		"text": text,
-		"color": color,
-	})
-	_try_show_next_party_chatter()
-
-
-func _try_show_next_party_chatter() -> void:
-	if get_tree().paused:
-		return
-	if recruit_event_active:
-		return
-	if _is_external_event_blocking_party_chatter():
-		return
-	if party_chatter_is_showing:
-		return
-	while not party_chatter_queue.is_empty():
-		var entry: Dictionary = party_chatter_queue.pop_front()
-		var speaker_any: Variant = entry.get("speaker", null)
-		if speaker_any == null or not is_instance_valid(speaker_any):
-			continue
-		var speaker: PartyMember = speaker_any as PartyMember
-		if not _is_party_member_alive_for_chatter(speaker):
-			continue
-		var text: String = str(entry.get("text", ""))
-		if text.is_empty():
-			continue
-		var color: Color = entry.get("color", Color(0.95, 0.95, 1.0, 1.0)) as Color
-		_show_party_chatter_on_member(speaker, text, color)
-		return
-
-
-func _show_party_chatter_on_member(
-	speaker: PartyMember,
-	text: String,
-	color: Color = Color(0.95, 0.95, 1.0, 1.0)
-) -> void:
-	if not _is_party_member_alive_for_chatter(speaker):
-		return
-	_show_party_chatter_on_node(speaker, text, color)
+	party_chatter_controller.show_party_chatter(hero_id, text, color)
 
 
 func _show_party_chatter_on_node(
@@ -2141,222 +1372,58 @@ func _show_party_chatter_on_node(
 	text: String,
 	color: Color = Color(0.95, 0.95, 1.0, 1.0)
 ) -> void:
-	if speaker == null or not is_instance_valid(speaker):
+	if party_chatter_controller == null:
 		return
-	if text.is_empty():
-		return
-
-	party_chatter_is_showing = true
-
-	var bubble := PanelContainer.new()
-	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bubble.z_index = FIELD_WORLD_EFFECT_Z + 100
-	bubble.position = Vector2.ZERO
-
-	var bubble_style := StyleBoxFlat.new()
-	bubble_style.bg_color = Color(1.0, 1.0, 1.0, 0.96)
-	bubble_style.border_width_left = 1
-	bubble_style.border_width_top = 1
-	bubble_style.border_width_right = 1
-	bubble_style.border_width_bottom = 1
-	bubble_style.border_color = Color(0.0, 0.0, 0.0, 1.0)
-	bubble_style.corner_radius_top_left = 4
-	bubble_style.corner_radius_top_right = 4
-	bubble_style.corner_radius_bottom_left = 4
-	bubble_style.corner_radius_bottom_right = 4
-	bubble_style.content_margin_left = 6
-	bubble_style.content_margin_right = 6
-	bubble_style.content_margin_top = 3
-	bubble_style.content_margin_bottom = 3
-	bubble.add_theme_stylebox_override("panel", bubble_style)
-
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 11)
-	label.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 1.0))
-	label.add_theme_constant_override("line_spacing", 0)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	label.custom_minimum_size = Vector2(132.0, 0.0)
-	bubble.add_child(label)
-
-	_ensure_party_chatter_overlay()
-	if party_chatter_root == null or not is_instance_valid(party_chatter_root):
-		return
-	party_chatter_root.add_child(bubble)
-	active_party_chatter_speaker = speaker
-	active_party_chatter_bubble = bubble
-	active_party_chatter_time_left = PARTY_CHATTER_BUBBLE_HOLD_TIME + PARTY_CHATTER_BUBBLE_FADE_TIME
-	_position_party_chatter_bubble(speaker, bubble)
-	call_deferred("_position_party_chatter_bubble", speaker, bubble)
-	bubble.modulate.a = 1.0
-
-
-func _on_party_chatter_bubble_finished(bubble: PanelContainer) -> void:
-	if bubble and is_instance_valid(bubble):
-		bubble.queue_free()
-	active_party_chatter_speaker = null
-	active_party_chatter_bubble = null
-	active_party_chatter_time_left = 0.0
-	party_chatter_is_showing = false
-	_try_show_next_party_chatter()
-
-
-func _position_party_chatter_bubble(speaker: Node2D, bubble: PanelContainer) -> void:
-	if speaker == null or not is_instance_valid(speaker):
-		return
-	if bubble == null or not is_instance_valid(bubble):
-		return
-
-	var sprite_top_y: float = -16.0
-	var sprite: AnimatedSprite2D = speaker.get_node_or_null("AnimatedSprite2D")
-	if sprite == null:
-		for child in speaker.get_children():
-			if child is AnimatedSprite2D:
-				sprite = child as AnimatedSprite2D
-				break
-	if sprite != null and is_instance_valid(sprite) and sprite.sprite_frames != null:
-		var anim_name: StringName = sprite.animation
-		var frame_idx: int = sprite.frame
-		if sprite.sprite_frames.has_animation(anim_name):
-			var tex: Texture2D = sprite.sprite_frames.get_frame_texture(anim_name, frame_idx)
-			if tex != null:
-				sprite_top_y = -float(tex.get_height()) * absf(sprite.scale.y) * 0.5
-
-	var gap: float = 10.0 + PARTY_CHATTER_BUBBLE_EXTRA_LIFT
-	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * speaker.global_position
-	var x: float = screen_pos.x - bubble.size.x * 0.5
-	var y: float = screen_pos.y + sprite_top_y - gap - bubble.size.y
-	bubble.position = Vector2(x, y)
+	party_chatter_controller.show_party_chatter_on_node(speaker, text, color)
 
 
 func _update_active_party_chatter_position() -> void:
-	if active_party_chatter_speaker == null or not is_instance_valid(active_party_chatter_speaker):
+	if party_chatter_controller == null:
 		return
-	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
-		return
-	_position_party_chatter_bubble(active_party_chatter_speaker, active_party_chatter_bubble)
-	_resolve_battle_window_overlap_with_chatter()
-
-
-func _resolve_battle_window_overlap_with_chatter() -> void:
-	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
-		return
-	if BattleManager == null:
-		return
-	var bubble_size: Vector2 = active_party_chatter_bubble.size
-	if bubble_size.x <= 0.0 or bubble_size.y <= 0.0:
-		return
-	var bubble_rect := Rect2(active_party_chatter_bubble.position, bubble_size)
-	var viewport_size: Vector2 = get_viewport_rect().size
-	var threshold_w: float = bubble_rect.size.x * 0.5
-
-	for battle_id_any in BattleManager.active_battles.keys():
-		var battle_id: int = int(battle_id_any)
-		var battle_data: Dictionary = BattleManager.active_battles.get(battle_id, {})
-		var window_any: Variant = battle_data.get("window", null)
-		if window_any == null or not is_instance_valid(window_any):
-			continue
-		var window: Control = window_any as Control
-		if window == null:
-			continue
-		var window_size: Vector2 = window.size
-		if window_size.x <= 0.0 or window_size.y <= 0.0:
-			window_size = window.custom_minimum_size
-		if window_size.x <= 0.0 or window_size.y <= 0.0:
-			continue
-		var win_rect := Rect2(window.global_position, window_size)
-		var overlap: Rect2 = bubble_rect.intersection(win_rect)
-		if overlap.size.x <= threshold_w:
-			continue
-
-		var bubble_cx: float = bubble_rect.position.x + bubble_rect.size.x * 0.5
-		var win_cx: float = win_rect.position.x + win_rect.size.x * 0.5
-		var dir_sign: float = -1.0 if win_cx <= bubble_cx else 1.0
-		var shift_x: float = overlap.size.x + 18.0
-		var new_x: float = window.global_position.x + dir_sign * shift_x
-		new_x = clampf(new_x, -window_size.x + 40.0, viewport_size.x - 40.0)
-		var new_y: float = clampf(window.global_position.y, 0.0, viewport_size.y - 30.0)
-		var target_pos := Vector2(new_x, new_y)
-		if window.global_position.distance_to(target_pos) < 2.0:
-			continue
-
-		var prev_target: Vector2 = window.get_meta("chatter_push_target", Vector2.INF) as Vector2
-		if prev_target != Vector2.INF and prev_target.distance_to(target_pos) < 2.0:
-			continue
-		window.set_meta("chatter_push_target", target_pos)
-
-		var prev_tween: Variant = window.get_meta("chatter_push_tween", null)
-		if prev_tween != null and prev_tween is Tween:
-			var tw_prev: Tween = prev_tween as Tween
-			if tw_prev != null and tw_prev.is_valid():
-				tw_prev.kill()
-
-		var tw := window.create_tween()
-		tw.set_trans(Tween.TRANS_SINE)
-		tw.set_ease(Tween.EASE_OUT)
-		tw.tween_property(window, "global_position", target_pos, 0.16)
-		window.set_meta("chatter_push_tween", tw)
-
-
-func _update_party_chatter_lifecycle(delta: float) -> void:
-	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
-		return
-	if not party_chatter_is_showing:
-		return
-	active_party_chatter_time_left = maxf(0.0, active_party_chatter_time_left - delta)
-	if active_party_chatter_time_left <= PARTY_CHATTER_BUBBLE_FADE_TIME:
-		var alpha: float = active_party_chatter_time_left / PARTY_CHATTER_BUBBLE_FADE_TIME if PARTY_CHATTER_BUBBLE_FADE_TIME > 0.0 else 0.0
-		active_party_chatter_bubble.modulate.a = clampf(alpha, 0.0, 1.0)
-	else:
-		active_party_chatter_bubble.modulate.a = 1.0
-	if active_party_chatter_time_left <= 0.0:
-		_on_party_chatter_bubble_finished(active_party_chatter_bubble)
+	var battles: Dictionary = {}
+	if BattleManager != null:
+		battles = BattleManager.active_battles
+	party_chatter_controller.update_active_bubble_position(battles)
 
 
 func _update_party_chatter_blocking_state() -> void:
-	if recruit_event_active:
+	if party_chatter_controller == null:
 		return
-	if not _is_external_event_blocking_party_chatter():
-		return
-
-	_clear_party_chatter_queue()
+	party_chatter_controller.update_blocking_state()
 
 
 func _clear_party_chatter_queue() -> void:
-	party_chatter_queue.clear()
-	if active_party_chatter_bubble != null and is_instance_valid(active_party_chatter_bubble):
-		active_party_chatter_bubble.queue_free()
-	active_party_chatter_speaker = null
-	active_party_chatter_bubble = null
-	active_party_chatter_time_left = 0.0
-	party_chatter_is_showing = false
+	if party_chatter_controller == null:
+		return
+	party_chatter_controller.clear_queue()
 
 
 func _is_external_event_blocking_party_chatter() -> bool:
-	# recruit_event_active는 의도된 "동료 이벤트 대화" 자체이므로 여기서 막지 않는다.
 	if recruit_dialog_active and not recruit_event_active:
 		return true
 	if recruit_followup_active and not recruit_event_active:
 		return true
-	if reward_window != null and is_instance_valid(reward_window) and reward_window.visible:
+	if treasure_controller != null and treasure_controller.is_reward_window_visible():
 		return true
 	return false
 
 
 func _ensure_party_chatter_overlay() -> void:
-	if party_chatter_layer and is_instance_valid(party_chatter_layer):
+	if party_chatter_controller == null:
 		return
-	party_chatter_layer = CanvasLayer.new()
-	party_chatter_layer.layer = PARTY_CHATTER_LAYER
-	party_chatter_layer.name = "PartyChatterLayer"
-	add_child(party_chatter_layer)
+	party_chatter_controller.ensure_overlay()
 
-	party_chatter_root = Control.new()
-	party_chatter_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	party_chatter_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	party_chatter_layer.add_child(party_chatter_root)
+
+func _update_party_chatter_runtime_context() -> void:
+	if party_chatter_controller == null:
+		return
+	party_chatter_controller.set_runtime_context(
+		get_tree().paused,
+		recruit_event_active,
+		_is_external_event_blocking_party_chatter(),
+		party_leader,
+		party_followers
+	)
 
 
 func _find_party_member_by_hero_id(hero_id: String) -> PartyMember:
@@ -2372,68 +1439,13 @@ func _find_party_member_by_hero_id(hero_id: String) -> PartyMember:
 	return null
 
 
-func _get_alive_party_members_for_chatter() -> Array[PartyMember]:
-	var members: Array[PartyMember] = []
-	if _is_party_member_alive_for_chatter(party_leader):
-		members.append(party_leader)
-	for follower in party_followers:
-		if _is_party_member_alive_for_chatter(follower):
-			members.append(follower)
-	return members
-
-
-func _is_party_member_alive_for_chatter(member: PartyMember) -> bool:
-	if member == null or not is_instance_valid(member):
-		return false
-	if member.hero_id.is_empty():
-		return true
-	if PartyManager == null:
-		return true
-	var hero: Hero = PartyManager.get_hero_by_id(member.hero_id)
-	if hero == null:
-		return true
-	return not hero.is_dead
-
-
-func _get_other_party_member_for_chatter(exclude_member: PartyMember) -> PartyMember:
-	var members: Array[PartyMember] = _get_alive_party_members_for_chatter()
-	var candidates: Array[PartyMember] = []
-	for member in members:
-		if member == exclude_member:
-			continue
-		candidates.append(member)
-	if candidates.is_empty():
-		return null
-	return candidates[randi() % candidates.size()]
-
-
-func _pick_random_party_member_for_chatter() -> PartyMember:
-	var members: Array[PartyMember] = _get_alive_party_members_for_chatter()
-	if members.is_empty():
-		return null
-	return members[randi() % members.size()]
-
-
-func _get_field_chatter_line(trigger: String, hero_id: String, fallback_pool: Array[String]) -> String:
-	if DialogueManager and DialogueManager.has_method("get_field_line"):
-		var line: String = str(DialogueManager.call("get_field_line", trigger, hero_id))
-		if not line.is_empty():
-			return line
-	if fallback_pool.is_empty():
-		return ""
-	return fallback_pool[randi() % fallback_pool.size()]
-
-
 func _get_camera_rect() -> Rect2:
-	## 현재 카메라 뷰 영역 반환
 	var viewport_size: Vector2 = get_viewport_rect().size
 	var camera: Camera2D = get_viewport().get_camera_2d()
 	var player_pos: Vector2 = party_leader.global_position if party_leader else Vector2.ZERO
-
 	if camera:
 		var view_size: Vector2 = viewport_size / camera.zoom
 		return Rect2(camera.global_position - view_size / 2, view_size)
-
 	return Rect2(player_pos - viewport_size / 2, viewport_size)
 
 
@@ -2441,48 +1453,9 @@ func _get_camera_rect() -> Rect2:
 # 필드 드롭 시스템
 #=============================================================================
 func _on_field_drops_requested(hp_orbs: int, world_pos: Vector2, window_rect: Rect2) -> void:
-	## 전투 종료 시 필드에 HP 오브 드롭 스폰
-	var drops: Array[Dictionary] = []
-	var delay: float = 0.0
-	var delay_step: float = 0.08
-
-	# HP 오브
-	for i in range(hp_orbs):
-		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
-		delay += delay_step
-
-	# 전투창 스크린 영역 → 월드 좌표 변환
-	var scatter_rect: Rect2
-	if window_rect.size != Vector2.ZERO:
-		var canvas_xform: Transform2D = get_viewport().get_canvas_transform()
-		var inv_xform: Transform2D = canvas_xform.affine_inverse()
-		var world_tl: Vector2 = inv_xform * window_rect.position
-		var world_br: Vector2 = inv_xform * (window_rect.position + window_rect.size)
-		scatter_rect = Rect2(world_tl, world_br - world_tl)
-	else:
-		# Fallback: 플레이어 위치 주변
-		if world_pos == Vector2.ZERO and party_leader:
-			world_pos = party_leader.global_position
-		scatter_rect = Rect2(world_pos - Vector2(40, 30), Vector2(80, 60))
-
-	# 드롭 스폰 (전투창 영역 내 랜덤 산개)
-	for i in range(drops.size()):
-		var data: Dictionary = drops[i]
-		var drop := FieldDrop.new()
-		drop.drop_type = data.type
-		drop.spawn_delay = data.delay
-
-		match data.type:
-			FieldDrop.DropType.HP_ORB:
-				drop.heal_amount = FieldDrop.HP_PER_ORB
-
-		# 전투창 영역 내 랜덤 위치
-		var rand_x: float = randf_range(scatter_rect.position.x, scatter_rect.end.x)
-		var rand_y: float = randf_range(scatter_rect.position.y, scatter_rect.end.y)
-		drop.position = Vector2(rand_x, rand_y)
-		drop.z_index = FIELD_WORLD_EFFECT_Z
-
-		add_child(drop)
+	if drop_controller == null:
+		return
+	drop_controller.spawn_battle_drops(hp_orbs, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z)
 
 
 #=============================================================================

@@ -129,10 +129,6 @@ var _pause_overlay: ColorRect = null
 
 # === 전투창 드래그 머지 ===
 var _merge_target: BattleWindow = null
-static var _global_face_chip_owner_window_id: int = -1
-var _face_chip_last_ms: Dictionary = {}  # key: "<hero_id>" -> last_ms
-var _face_chip_panels: Dictionary = {}  # key: "<hero_id>" -> PanelContainer
-var _face_chip_order: Array[String] = []
 
 # === 이벤트 모드 ===
 var is_event_mode: bool = false
@@ -1623,7 +1619,6 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var target: BattleEnemy = _select_smart_target(hero)
 	if target == null:
 		return
-	_show_hero_face_chip(hero.id, false, 0, false, 0.95)
 	_show_skill_particle(target, skill_id, skill_data)
 
 	var skill_name: String = skill_data.get("name", "공격")
@@ -1657,7 +1652,6 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	target.take_damage(damage)
 	target.play_hit_effect(is_crit)
 	target.show_damage_number(damage, is_crit)
-	_show_hero_face_chip(hero.id, false, 0, is_crit, 1.15)
 
 	# 크리티컬 시 진동 효과
 	if is_crit:
@@ -1682,7 +1676,6 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 
 	if alive_enemies.is_empty():
 		return
-	_show_hero_face_chip(hero.id, false, 0, false, 1.0)
 
 	# 전체 공격 플래시 효과
 	play_aoe_flash()
@@ -1709,7 +1702,6 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 	# 크리티컬이 하나라도 있으면 진동
 	if any_crit:
 		play_critical_shake()
-	_show_hero_face_chip(hero.id, false, 0, any_crit, 1.2)
 
 
 func _show_skill_particle(target: BattleEnemy, skill_id: String, skill_data: Dictionary) -> void:
@@ -1903,7 +1895,6 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 		else:
 			alive_heroes.sort_custom(func(a, b): return a.get_hp_percent() < b.get_hp_percent())
 			target = alive_heroes[0]
-	_show_hero_face_chip(target.id, true, 0, false, 0.95)
 
 	enemy.play_attack_effect()
 
@@ -1922,7 +1913,6 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	var was_taunting := target.consume_taunt()
 
 	PartyManager.on_hero_damaged(target, damage)
-	_show_hero_face_chip(target.id, true, damage, is_crit, 1.25)
 	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
 
@@ -1966,241 +1956,6 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 		if hero.has_taunt():
 			return hero
 	return null
-
-
-func _show_hero_face_chip(
-	hero_id: String,
-	is_damaged: bool,
-	damage_number: int = 0,
-	is_crit: bool = false,
-	_hold_time: float = 0.95
-) -> void:
-	if hero_id.is_empty():
-		return
-	if battle_area == null:
-		return
-	if SpriteManager == null or not SpriteManager.has_method("get_hero_face_sprite"):
-		return
-
-	var key: String = hero_id
-	var now_ms: int = Time.get_ticks_msec()
-	var prev_ms: int = int(_face_chip_last_ms.get(key, 0))
-	var bypass_throttle: bool = is_damaged and damage_number > 0
-	if not bypass_throttle and now_ms - prev_ms < 60:
-		return
-	_face_chip_last_ms[key] = now_ms
-	_claim_global_face_chip_owner()
-
-	var face_tex: Texture2D = SpriteManager.get_hero_face_sprite(hero_id)
-	if face_tex == null:
-		return
-
-	var panel: PanelContainer = _face_chip_panels.get(key, null) as PanelContainer
-	var is_new_panel: bool = panel == null or not is_instance_valid(panel)
-	if is_new_panel:
-		panel = PanelContainer.new()
-		panel.name = "PersistentFaceChip_%s" % key
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		panel.z_index = 70
-		panel.custom_minimum_size = Vector2(42, 42)
-		var face := TextureRect.new()
-		face.name = "Face"
-		face.set_anchors_preset(Control.PRESET_FULL_RECT)
-		face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		panel.add_child(face)
-		add_child(panel)
-		panel.set_as_top_level(true)
-		_face_chip_panels[key] = panel
-		if not _face_chip_order.has(key):
-			_face_chip_order.append(key)
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.02, 0.03, 0.04, 0.92) if is_damaged else Color(0.04, 0.06, 0.04, 0.92)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(1.0, 0.55, 0.55, 0.95) if is_damaged else Color(0.55, 1.0, 0.65, 0.95)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 3
-	style.content_margin_right = 3
-	style.content_margin_top = 3
-	style.content_margin_bottom = 3
-	panel.add_theme_stylebox_override("panel", style)
-
-	var face_node: TextureRect = panel.get_node_or_null("Face") as TextureRect
-	if face_node != null:
-		face_node.texture = face_tex
-
-	if is_new_panel:
-		panel.modulate.a = 0.0
-		panel.scale = Vector2(0.9, 0.9)
-	else:
-		panel.modulate.a = 1.0
-		panel.scale = Vector2.ONE
-
-	_layout_persistent_face_chips(is_new_panel)
-
-	if damage_number > 0:
-		_spawn_face_chip_damage_number(panel, damage_number, is_crit)
-
-	if is_new_panel:
-		var show_tw := create_tween()
-		show_tw.set_parallel(true)
-		show_tw.tween_property(panel, "modulate:a", 1.0, 0.1)
-		show_tw.tween_property(panel, "scale", Vector2.ONE, 0.14).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
-	else:
-		_play_face_chip_pulse(panel)
-	if is_damaged and damage_number > 0:
-		_play_face_chip_hit_effect(panel, is_crit)
-
-	if _face_chip_order.size() >= 2:
-		_play_face_chip_overlap_effect(panel)
-
-
-func _layout_persistent_face_chips(animated: bool) -> void:
-	if battle_area == null:
-		return
-
-	var valid_keys: Array[String] = []
-	var panels: Array[PanelContainer] = []
-	for key in _face_chip_order:
-		var panel: PanelContainer = _face_chip_panels.get(key, null) as PanelContainer
-		if panel == null or not is_instance_valid(panel):
-			continue
-		if panel.size.x <= 0.0 or panel.size.y <= 0.0:
-			panel.size = panel.custom_minimum_size
-		valid_keys.append(key)
-		panels.append(panel)
-	_face_chip_order = valid_keys
-	if panels.is_empty():
-		return
-
-	var spacing: float = 8.0
-	var total_width: float = 0.0
-	for i in range(panels.size()):
-		total_width += panels[i].size.x
-		if i > 0:
-			total_width += spacing
-
-	var area_pos: Vector2 = battle_area.global_position
-	var area_size: Vector2 = battle_area.size
-	var start_x: float = area_pos.x + (area_size.x - total_width) * 0.5
-	var max_h: float = 0.0
-	for panel in panels:
-		max_h = maxf(max_h, panel.size.y)
-	var y: float = area_pos.y + area_size.y - max_h - 8.0
-	var cursor_x: float = start_x
-
-	for panel in panels:
-		var target_pos := Vector2(cursor_x, y)
-		if animated:
-			var tw := create_tween()
-			tw.tween_property(panel, "global_position", target_pos, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		else:
-			panel.global_position = target_pos
-		cursor_x += panel.size.x + spacing
-
-
-func _spawn_face_chip_damage_number(panel: PanelContainer, damage: int, is_crit: bool) -> void:
-	if panel == null or not is_instance_valid(panel):
-		return
-	var label := Label.new()
-	label.text = ("CRIT %d" % damage) if is_crit else str(damage)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 12 if is_crit else 11)
-	label.add_theme_constant_override("outline_size", 2)
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45, 1.0) if is_crit else Color(1.0, 0.78, 0.78, 1.0))
-	label.z_index = 120
-	panel.add_child(label)
-	label.custom_minimum_size = Vector2(34, 14)
-	label.position = Vector2(2, -6)
-	label.modulate.a = 0.0
-
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(label, "modulate:a", 1.0, 0.08)
-	tw.tween_property(label, "position:y", -12.0, 0.42).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
-	tw.chain().tween_property(label, "modulate:a", 0.0, 0.2)
-	tw.tween_callback(label.queue_free)
-
-
-func _claim_global_face_chip_owner() -> void:
-	var my_id: int = get_instance_id()
-	if _global_face_chip_owner_window_id == my_id:
-		return
-	if _global_face_chip_owner_window_id != -1:
-		var prev_obj: Object = instance_from_id(_global_face_chip_owner_window_id)
-		if prev_obj != null and is_instance_valid(prev_obj) and prev_obj is BattleWindow:
-			var prev_win: BattleWindow = prev_obj as BattleWindow
-			if prev_win != null and prev_win.has_method("_deactivate_persistent_face_chip"):
-				prev_win.call("_deactivate_persistent_face_chip")
-	_global_face_chip_owner_window_id = my_id
-
-
-func _deactivate_persistent_face_chip() -> void:
-	for key in _face_chip_panels.keys():
-		var panel: PanelContainer = _face_chip_panels[key] as PanelContainer
-		if panel != null and is_instance_valid(panel):
-			panel.queue_free()
-	_face_chip_panels.clear()
-	_face_chip_order.clear()
-
-
-func _play_face_chip_pulse(panel: PanelContainer) -> void:
-	if panel == null or not is_instance_valid(panel):
-		return
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(panel, "scale", Vector2(1.08, 1.08), 0.08).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(panel, "modulate:a", 1.0, 0.08)
-	tw.chain().tween_property(panel, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-
-
-func _play_face_chip_overlap_effect(panel: PanelContainer) -> void:
-	if panel == null or not is_instance_valid(panel):
-		return
-	var style := panel.get_theme_stylebox("panel")
-	if style is StyleBoxFlat:
-		var sb: StyleBoxFlat = style as StyleBoxFlat
-		sb.border_color = Color(1.0, 1.0, 0.35, 1.0)
-		panel.add_theme_stylebox_override("panel", sb)
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(panel, "rotation_degrees", 4.0, 0.06)
-	tw.chain().tween_property(panel, "rotation_degrees", -4.0, 0.09)
-	tw.chain().tween_property(panel, "rotation_degrees", 0.0, 0.1)
-
-
-func _play_face_chip_hit_effect(panel: PanelContainer, is_crit: bool) -> void:
-	if panel == null or not is_instance_valid(panel):
-		return
-	var flash: ColorRect = panel.get_node_or_null("HitFlash") as ColorRect
-	if flash == null:
-		flash = ColorRect.new()
-		flash.name = "HitFlash"
-		flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		flash.set_anchors_preset(Control.PRESET_FULL_RECT)
-		flash.color = Color(1.0, 0.2, 0.2, 0.0)
-		flash.z_index = 130
-		panel.add_child(flash)
-
-	flash.color = Color(1.0, 0.25, 0.25, 0.0) if is_crit else Color(1.0, 0.45, 0.45, 0.0)
-	var base_pos: Vector2 = panel.global_position
-
-	var flash_tw := create_tween()
-	flash_tw.tween_property(flash, "color:a", 0.82 if is_crit else 0.62, 0.045)
-	flash_tw.chain().tween_property(flash, "color:a", 0.0, 0.17)
-
-	var hit_tw := create_tween()
-	hit_tw.tween_property(panel, "global_position:x", base_pos.x + (5.0 if is_crit else 3.5), 0.045).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	hit_tw.chain().tween_property(panel, "global_position:x", base_pos.x - (4.0 if is_crit else 2.8), 0.07).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	hit_tw.chain().tween_property(panel, "global_position:x", base_pos.x, 0.08).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 #endregion
 
 
@@ -2895,9 +2650,6 @@ func _bring_to_front() -> void:
 
 
 func _exit_tree() -> void:
-	if _global_face_chip_owner_window_id == get_instance_id():
-		_global_face_chip_owner_window_id = -1
-	_deactivate_persistent_face_chip()
 	if BattleManager and BattleManager.has_method("clear_battle_group_hover"):
 		BattleManager.clear_battle_group_hover()
 

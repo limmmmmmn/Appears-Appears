@@ -1,8 +1,9 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://bb513eup5x5ha"]
 
-[ext_resource type="Script" path="res://scripts/ui/field/PartyPanel.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://nvslr4cif2qn" path="res://scripts/ui/field/PartyPanel.gd" id="1_script"]
 
-[node name="PartyPanel" type="Control"]
+[node name="PartyPanel" type="Control" unique_id=577728166]
+layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -11,15 +12,12 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_script")
 
-[node name="CardsContainer" type="VBoxContainer" parent="."]
+[node name="CardsContainer" type="VBoxContainer" parent="." unique_id=1503105012]
 unique_name_in_owner = true
 layout_mode = 1
-anchor_top = 0.0
-anchor_bottom = 0.0
 offset_left = 6.0
-offset_right = 178.0
 offset_top = 44.0
+offset_right = 178.0
 offset_bottom = 620.0
-alignment = 0
-theme_override_constants/separation = 4
 mouse_filter = 2
+theme_override_constants/separation = 4

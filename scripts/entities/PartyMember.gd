@@ -4,6 +4,10 @@ class_name PartyMember
 ## JRPG 스네이크 무브먼트 - 리더가 지나간 길을 따라감
 
 @export var move_speed: float = 60.0
+@export_group("Chatter Bubble")
+@export var chatter_bubble_scene: PackedScene = preload("res://scenes/ui/PartyChatterBubble.tscn")
+@export var chatter_bubble_extra_lift: float = 24.0
+@export var chatter_bubble_offset: Vector2 = Vector2.ZERO
 
 var is_leader: bool = false
 var member_index: int = 0  # 0=리더, 1,2,3=팔로워
@@ -259,6 +263,44 @@ func get_current_direction() -> String:
 
 func get_facing_right() -> bool:
 	return facing_right
+
+
+func get_chatter_bubble_extra_lift() -> float:
+	return chatter_bubble_extra_lift
+
+
+func get_chatter_bubble_offset() -> Vector2:
+	return chatter_bubble_offset
+
+
+func create_chatter_bubble(text: String, tint_color: Color) -> PanelContainer:
+	var scene: PackedScene = chatter_bubble_scene
+	if scene == null:
+		scene = load("res://scenes/ui/PartyChatterBubble.tscn")
+	if scene == null:
+		return null
+
+	var instance: Node = scene.instantiate()
+	var bubble: PanelContainer = instance as PanelContainer
+	if bubble == null:
+		if instance != null and is_instance_valid(instance):
+			instance.queue_free()
+		return null
+
+	var chatter_bubble: PartyChatterBubble = bubble as PartyChatterBubble
+	if chatter_bubble != null:
+		chatter_bubble.configure(text, tint_color)
+	elif bubble.has_method("configure"):
+		bubble.call("configure", text, tint_color)
+	else:
+		var label: Label = bubble.get_node_or_null("TextLabel") as Label
+		if label != null:
+			label.text = text
+			label.add_theme_font_size_override("font_size", 11)
+			label.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 1.0))
+			label.custom_minimum_size = Vector2(132.0, 0.0)
+
+	return bubble
 
 
 #=============================================================================

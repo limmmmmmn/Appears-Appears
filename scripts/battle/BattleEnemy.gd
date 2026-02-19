@@ -365,16 +365,16 @@ func play_slash_effect(is_crit: bool = false) -> void:
 	tween.set_parallel(true)
 	
 	# 나타나면서 회전하며 이동
-	tween.tween_property(slash, "modulate:a", 1.0, 0.03)
-	tween.tween_property(slash, "position", Vector2(20, 0), 0.12).set_ease(Tween.EASE_OUT)
-	tween.tween_property(slash, "rotation_degrees", 45.0, 0.12).set_ease(Tween.EASE_OUT)
+	tween.tween_property(slash, "modulate:a", 1.0, 0.05)
+	tween.tween_property(slash, "position", Vector2(20, 0), 0.18).set_ease(Tween.EASE_OUT)
+	tween.tween_property(slash, "rotation_degrees", 45.0, 0.18).set_ease(Tween.EASE_OUT)
 	
 	# 크리티컬이면 스케일 커짐
 	if is_crit:
-		tween.tween_property(slash, "scale", Vector2(1.0, 1.0), 0.08)
+		tween.tween_property(slash, "scale", Vector2(1.0, 1.0), 0.12)
 	
 	# 페이드아웃
-	tween.chain().tween_property(slash, "modulate:a", 0.0, 0.08)
+	tween.chain().tween_property(slash, "modulate:a", 0.0, 0.12)
 	tween.chain().tween_callback(func(): slash.queue_free())
 
 
@@ -401,31 +401,31 @@ func play_hit_effect(is_crit: bool = false) -> void:
 		_hit_tween.set_parallel(true)
 		
 		# 빨간색 플래시
-		_hit_tween.tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.03)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 3, 3), 0.03)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.03)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.05)
+		_hit_tween.tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.05)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 3, 3), 0.05)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.05)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.08)
 		
 		# 강한 흔들림 (스프라이트)
 		var shake_tween := create_tween()
 		for i in range(4):
 			var offset := Vector2(randf_range(-6, 6), randf_range(-4, 4))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.03)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.04)
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.05)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.07)
 	else:
 		# 일반: 깜빡임 + 약한 흔들림
 		_hit_tween.set_parallel(true)
 		
 		# 흰색 플래시
-		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.04)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.06)
+		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.06)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.1)
 		
 		# 약한 흔들림 (스프라이트)
 		var shake_tween := create_tween()
 		for i in range(2):
 			var offset := Vector2(randf_range(-3, 3), randf_range(-2, 2))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.03)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.04)
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.05)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.07)
 
 
 func play_attack_effect() -> void:
@@ -434,8 +434,8 @@ func play_attack_effect() -> void:
 		return
 	var original_pos := sprite.position
 	var tween := create_tween()
-	tween.tween_property(sprite, "position:y", sprite.position.y + 10, 0.08)
-	tween.tween_property(sprite, "position:y", original_pos.y, 0.1)
+	tween.tween_property(sprite, "position:y", sprite.position.y + 10, 0.13)
+	tween.tween_property(sprite, "position:y", original_pos.y, 0.16)
 
 
 func play_evade_effect() -> void:
@@ -661,9 +661,9 @@ func show_attack_particle(emoji: String, burst_count: int = 1) -> void:
 		var tween := create_tween()
 		tween.set_parallel(true)
 		tween.tween_property(particle, "modulate:a", 1.0, 0.06)
-		tween.tween_property(particle, "scale", Vector2(1.0, 1.0), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tween.tween_property(particle, "position", particle.position + move_offset, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tween.chain().tween_property(particle, "modulate:a", 0.0, 0.2)
+		tween.tween_property(particle, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(particle, "position", particle.position + move_offset, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.chain().tween_property(particle, "modulate:a", 0.0, 0.26)
 		tween.finished.connect(func(): particle.queue_free())
 
 

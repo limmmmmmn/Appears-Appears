@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://ly3qxa1t3hy3"]
 
-[ext_resource type="Script" uid="uid://cg0ifpvwdeg6u" path="res://scripts/entities/PartyMember.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://dieegtoopyi03" path="res://scripts/entities/PartyMember.gd" id="1_script"]
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_member"]
 
@@ -25,6 +25,8 @@ corner_radius_bottom_left = 1
 collision_layer = 2
 collision_mask = 5
 script = ExtResource("1_script")
+move_speed = 80.0
+chatter_bubble_offset = Vector2(0, -11)
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1085471415]
 position = Vector2(0, -12)

@@ -174,10 +174,7 @@ func go_to_town() -> void:
 	if SaveManager:
 		SaveManager.auto_save("마을 이동")
 	get_tree().paused = false
-	var town_scene: String = "res://scenes/town/Town.tscn"
-	if not ResourceLoader.exists(town_scene):
-		town_scene = "res://scenes/main/Town.tscn"
-	get_tree().change_scene_to_file(town_scene)
+	get_tree().change_scene_to_file("res://scenes/town/Town.tscn")
 
 
 func go_to_den() -> void:
