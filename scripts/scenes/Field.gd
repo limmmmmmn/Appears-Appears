@@ -3,15 +3,22 @@ extends Node2D
 
 signal battle_triggered(battle_enemies: Array)
 signal exit_reached(next_destination: String)
+signal town_entrance_entered(next_town_area_id: String)
 signal field_cleared
 
 const FIELD_TILE_SIZE := 16
 const FIELD_TILE_TYPE_MAP := {
 	0: "grass",
-	1: "forest",
-	2: "mountain",
-	3: "water",
-	4: "cave",
+	1: "desert",
+	2: "forest",
+	3: "hill",
+	4: "mountain",
+	5: "water",
+	6: "bridge",
+	7: "cave",
+	8: "shiren",
+	9: "castle",
+	10: "town",
 }
 const RECRUIT_TRIGGER_DISTANCE: float = 46.0
 const RECRUIT_MIN_DIST_FROM_PLAYER: float = 170.0
@@ -29,7 +36,7 @@ const EVENT_WINDOW_SCENE := preload("res://scenes/event/EventWindow.tscn")
 const REWARD_WINDOW_SCENE := preload("res://scenes/ui/RewardWindow.tscn")
 const WINDOW_SHELL_SCRIPT := preload("res://scripts/ui/window/WindowShell.gd")
 const FIELD_LAYOUT_HELPER_SCRIPT := preload("res://scripts/scenes/field/FieldLayoutHelper.gd")
-const FIELD_GRASS_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldGrassController.gd")
+const FIELD_TILE_GENERATOR_SCRIPT := preload("res://scripts/scenes/field/FieldTileGenerator.gd")
 const FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPartyChatterController.gd")
 const FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPauseOverlayController.gd")
 const FIELD_DROP_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldDropController.gd")
@@ -47,12 +54,15 @@ const FIELD_WORLD_EFFECT_Z: int = 52
 @export var spawn_point: Marker2D
 @export var boss_spawn_point: Marker2D
 @export var exit_area: Area2D
+@export var tilemap_bg: TileMapLayer
 @export var tilemap: TileMapLayer
 @export var enemy_spawner_node: EnemySpawner
 @export var enemy_spawner_scene: PackedScene = preload("res://scenes/field/EnemySpawner.tscn")
 @export var field_template: FieldTemplate
 @export var default_start_position: Vector2 = Vector2(100.0, 100.0)
 @export var enable_runtime_field_content: bool = false
+@export var play_area_origin: Vector2 = Vector2.ZERO
+@export var play_area_size: Vector2 = Vector2.ZERO
 
 var party_leader: PartyMember
 var party_followers: Array[PartyMember] = []
@@ -69,7 +79,7 @@ var hud_scene: PackedScene
 # 분리된 시스템들
 var spawner: EnemySpawner
 var layout_helper = FIELD_LAYOUT_HELPER_SCRIPT.new()
-var grass_controller = FIELD_GRASS_CONTROLLER_SCRIPT.new()
+var tile_generator = FIELD_TILE_GENERATOR_SCRIPT.new()
 var party_chatter_controller = FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT.new()
 var pause_overlay_controller = FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT.new()
 var drop_controller = FIELD_DROP_CONTROLLER_SCRIPT.new()
@@ -101,6 +111,8 @@ var sanctuary_root: Node2D = null
 var grudge_spawn_eval_timer: float = 0.0
 var grudge_extra_target: int = 0
 var grudge_extra_despawn_timer: float = 0.0
+var town_tile_trigger_cooldown: float = 0.0
+var shiren_tick_timer: float = SANCTUARY_HEAL_INTERVAL
 
 const PARTY_CHATTER_LAYER: int = 220
 const PARTY_CHATTER_BUBBLE_EXTRA_LIFT: float = 24.0
@@ -115,10 +127,13 @@ const GRUDGE_EXTRA_DESPAWN_INTERVAL: float = 0.85
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	town_tile_trigger_cooldown = 0.0
+	shiren_tick_timer = SANCTUARY_HEAL_INTERVAL
 	_apply_field_template_fallback()
 	_resolve_scene_nodes()
 	_load_scenes()
 	_find_tilemap()
+	_generate_runtime_field_tiles()
 	_setup_systems()
 	_spawn_party()
 	_apply_camera_limits()
@@ -126,7 +141,6 @@ func _ready() -> void:
 	_spawn_recruit_npc()
 	_spawn_field_treasure_chests()
 	_spawn_sanctuary()
-	_spawn_field_grass()
 	_ensure_pause_dim_overlay()
 	_ensure_party_chatter_overlay()
 	_setup_exit()
@@ -192,18 +206,21 @@ func _process(_delta: float) -> void:
 	_update_recruit_npc(_delta)
 	_update_recruit_event_dialog(_delta)
 	_update_recruit_followup_dialog(_delta)
-	_update_field_grass(_delta)
+	_update_shiren_tile_effect(_delta)
+	_update_town_tile_transition(_delta)
 	_update_grudge_spawn_pressure(_delta)
 	_update_party_chatter_blocking_state()
 	_update_party_chatter(_delta)
+
+
+func _physics_process(_delta: float) -> void:
+	_clamp_party_members_to_bounds()
 
 
 func _load_scenes() -> void:
 	party_leader_scene = load("res://scenes/field/PartyMember.tscn")
 	party_follower_scene = load("res://scenes/field/PartyMember.tscn")
 	hud_scene = load("res://scenes/ui/FieldHUD.tscn")
-	if grass_controller != null:
-		grass_controller.load_textures()
 
 
 func _resolve_scene_nodes() -> void:
@@ -211,6 +228,8 @@ func _resolve_scene_nodes() -> void:
 		spawn_point = get_node_or_null("SpawnPoint") as Marker2D
 	if boss_spawn_point == null:
 		boss_spawn_point = get_node_or_null("BossSpawnPoint") as Marker2D
+	if tilemap_bg == null:
+		tilemap_bg = get_node_or_null("TileMapLayerBg") as TileMapLayer
 	if enemy_spawner_node == null:
 		enemy_spawner_node = get_node_or_null("EnemySpawner") as EnemySpawner
 
@@ -219,6 +238,73 @@ func _find_tilemap() -> void:
 	if layout_helper == null:
 		return
 	tilemap = layout_helper.find_tilemap(self, tilemap)
+	if tilemap_bg == null:
+		tilemap_bg = get_node_or_null("TileMapLayerBg") as TileMapLayer
+
+
+func _generate_runtime_field_tiles() -> void:
+	if not enable_runtime_field_content:
+		return
+	if tile_generator == null:
+		return
+	if tilemap == null:
+		return
+
+	var grid_w: int = maxi(8, int(round(play_area_size.x / float(FIELD_TILE_SIZE))))
+	var grid_h: int = maxi(8, int(round(play_area_size.y / float(FIELD_TILE_SIZE))))
+	if grid_w <= 8 or grid_h <= 8:
+		grid_w = 32
+		grid_h = 18
+		play_area_size = Vector2(float(grid_w * FIELD_TILE_SIZE), float(grid_h * FIELD_TILE_SIZE))
+		play_area_origin = Vector2.ZERO
+
+	var runtime_area_id: String = str(FieldManager.current_area_data.get("id", "")) if FieldManager != null else ""
+	var seed_key: String = runtime_area_id
+	if seed_key.is_empty() and field_template != null:
+		seed_key = str(field_template.id)
+	if seed_key.is_empty():
+		seed_key = str(name)
+	if seed_key.is_empty():
+		seed_key = str(FieldManager.current_area_id)
+	var seed_value: int = int(hash("%s:%s" % [seed_key, str(FieldManager.runtime_act_seed)]))
+	var has_next_town: bool = _has_immediate_next_town_area()
+	var result: Dictionary = tile_generator.generate(
+		tilemap_bg,
+		tilemap,
+		Vector2i(grid_w, grid_h),
+		seed_value,
+		has_next_town
+	)
+
+	var spawn_cell: Vector2i = result.get("spawn_cell", Vector2i(1, grid_h / 2))
+	var boss_cell: Vector2i = result.get("boss_cell", Vector2i(grid_w - 2, grid_h / 2))
+	_set_marker_to_cell(spawn_point, spawn_cell)
+	_set_marker_to_cell(boss_spawn_point, boss_cell)
+
+	var marker_cells: Array = result.get("enemy_spawn_cells", [])
+	var markers_root: Node2D = get_node_or_null("EnemySpawnPoints") as Node2D
+	if markers_root != null:
+		var marker_nodes: Array[Marker2D] = []
+		for child in markers_root.get_children():
+			if child is Marker2D:
+				marker_nodes.append(child as Marker2D)
+		while marker_nodes.size() < marker_cells.size():
+			var marker := Marker2D.new()
+			marker.name = "Point%d" % (marker_nodes.size() + 1)
+			markers_root.add_child(marker)
+			marker_nodes.append(marker)
+		for i in range(mini(marker_cells.size(), marker_nodes.size())):
+			var cell: Vector2i = Vector2i(marker_cells[i])
+			_set_marker_to_cell(marker_nodes[i], cell)
+
+
+func _set_marker_to_cell(marker: Marker2D, cell: Vector2i) -> void:
+	if marker == null:
+		return
+	marker.position = Vector2(
+		(float(cell.x) + 0.5) * FIELD_TILE_SIZE,
+		(float(cell.y) + 0.5) * FIELD_TILE_SIZE
+	)
 
 
 func get_field_boss_spawn_position() -> Vector2:
@@ -231,12 +317,86 @@ func _apply_camera_limits() -> void:
 	if layout_helper == null:
 		return
 	layout_helper.apply_camera_limits(party_leader)
+	if party_leader == null:
+		return
+	var camera := party_leader.get_node_or_null("Camera2D") as Camera2D
+	if camera == null:
+		return
+	var bounds: Rect2 = _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		camera.limit_enabled = false
+		return
+	camera.limit_enabled = true
+	camera.limit_left = int(floor(bounds.position.x))
+	camera.limit_top = int(floor(bounds.position.y))
+	camera.limit_right = int(ceil(bounds.end.x))
+	camera.limit_bottom = int(ceil(bounds.end.y))
 
 
 func _get_map_bounds() -> Rect2:
-	if layout_helper == null:
+	var fg_bounds := Rect2()
+	var bg_bounds := Rect2()
+	if layout_helper != null:
+		fg_bounds = layout_helper.get_map_bounds(tilemap, Rect2(), FIELD_TILE_SIZE)
+		bg_bounds = layout_helper.get_map_bounds(tilemap_bg, Rect2(), FIELD_TILE_SIZE)
+	if fg_bounds.size.x > 0.0 and fg_bounds.size.y > 0.0 and bg_bounds.size.x > 0.0 and bg_bounds.size.y > 0.0:
+		return fg_bounds.merge(bg_bounds)
+	if bg_bounds.size.x > 0.0 and bg_bounds.size.y > 0.0:
+		return bg_bounds
+	if fg_bounds.size.x > 0.0 and fg_bounds.size.y > 0.0:
+		return fg_bounds
+	return get_play_area_bounds()
+
+
+func get_play_area_bounds() -> Rect2:
+	if play_area_size.x <= 0.0 or play_area_size.y <= 0.0:
 		return Rect2()
-	return layout_helper.get_map_bounds(tilemap, Rect2(), FIELD_TILE_SIZE)
+	return Rect2(play_area_origin, play_area_size)
+
+
+func get_tile_type_at_world(world_pos: Vector2) -> String:
+	if tile_generator != null:
+		return tile_generator.get_tile_type_at_world(tilemap_bg, tilemap, world_pos)
+
+	if tilemap == null:
+		return "grass"
+	var cell: Vector2i = tilemap.local_to_map(tilemap.to_local(world_pos))
+	var source_id: int = tilemap.get_cell_source_id(cell)
+	if source_id == -1:
+		return "grass"
+	return str(FIELD_TILE_TYPE_MAP.get(source_id, "grass"))
+
+
+func is_world_position_walkable(world_pos: Vector2) -> bool:
+	var tile_type: String = get_tile_type_at_world(world_pos)
+	if FieldManager == null:
+		return true
+	return FieldManager.is_tile_walkable(tile_type)
+
+
+func _clamp_party_members_to_bounds() -> void:
+	var bounds: Rect2 = _get_map_bounds()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+
+	var min_x: float = bounds.position.x + 8.0
+	var max_x: float = bounds.end.x - 8.0
+	var min_y: float = bounds.position.y + 8.0
+	var max_y: float = bounds.end.y - 8.0
+
+	if party_leader != null and is_instance_valid(party_leader):
+		party_leader.global_position = Vector2(
+			clampf(party_leader.global_position.x, min_x, max_x),
+			clampf(party_leader.global_position.y, min_y, max_y)
+		)
+
+	for follower in party_followers:
+		if follower == null or not is_instance_valid(follower):
+			continue
+		follower.global_position = Vector2(
+			clampf(follower.global_position.x, min_x, max_x),
+			clampf(follower.global_position.y, min_y, max_y)
+		)
 
 
 func _setup_systems() -> void:
@@ -336,6 +496,9 @@ func _connect_signals() -> void:
 		if not BattleManager.hero_damaged.is_connected(_on_battle_hero_damaged):
 			BattleManager.hero_damaged.connect(_on_battle_hero_damaged)
 
+	if not town_entrance_entered.is_connected(_on_town_entrance_entered):
+		town_entrance_entered.connect(_on_town_entrance_entered)
+
 
 #=============================================================================
 # 파티 스폰
@@ -372,9 +535,16 @@ func _spawn_party() -> void:
 
 
 func _get_start_position() -> Vector2:
-	var saved_pos: Vector2 = SaveManager.get_saved_field_position()
-	if saved_pos != Vector2.ZERO:
-		return saved_pos
+	if SaveManager != null:
+		var saved_info: Dictionary = SaveManager.get_saved_field_info()
+		var saved_act_id: String = str(saved_info.get("act_id", ""))
+		var saved_area_id: String = str(saved_info.get("area_id", ""))
+		var current_act_id: String = FieldManager.current_act_id if FieldManager != null else ""
+		var current_area_id: String = FieldManager.current_area_id if FieldManager != null else ""
+		if saved_act_id == current_act_id and saved_area_id == current_area_id:
+			var saved_pos: Vector2 = SaveManager.get_saved_field_position()
+			if saved_pos != Vector2.ZERO:
+				return saved_pos
 	if spawn_point:
 		return spawn_point.global_position
 	return default_start_position
@@ -481,16 +651,7 @@ func _find_recruit_spawn_position() -> Vector2:
 
 
 func _can_place_recruit_npc_at(pos: Vector2) -> bool:
-	if not tilemap:
-		return true
-
-	var cell: Vector2i = tilemap.local_to_map(pos)
-	var source_id: int = tilemap.get_cell_source_id(cell)
-	if source_id == -1:
-		return true
-
-	var tile_type: String = str(FIELD_TILE_TYPE_MAP.get(source_id, "grass"))
-	return FieldManager.is_tile_walkable(tile_type)
+	return is_world_position_walkable(pos)
 
 
 func _update_recruit_npc(delta: float) -> void:
@@ -624,6 +785,76 @@ func _try_start_recruit_followup_dialog() -> void:
 func _update_recruit_followup_dialog(_delta: float) -> void:
 	if recruit_followup_pending:
 		_try_start_recruit_followup_dialog()
+
+
+func _update_shiren_tile_effect(delta: float) -> void:
+	if not enable_runtime_field_content:
+		return
+	if party_leader == null or PartyManager == null:
+		return
+	if get_tile_type_at_world(party_leader.global_position) != "shiren":
+		shiren_tick_timer = SANCTUARY_HEAL_INTERVAL
+		return
+
+	shiren_tick_timer -= delta
+	if shiren_tick_timer > 0.0:
+		return
+	shiren_tick_timer = SANCTUARY_HEAL_INTERVAL
+
+	var healed_total: int = 0
+	var revived_count: int = 0
+	for hero_any in PartyManager.get_party():
+		var hero: Hero = hero_any as Hero
+		if hero == null:
+			continue
+		if hero.is_dead:
+			hero.revive(0.35)
+			revived_count += 1
+			continue
+		healed_total += hero.heal(SANCTUARY_HP_PER_TICK)
+
+	if revived_count > 0 or healed_total > 0:
+		PartyManager.party_changed.emit()
+	if healed_total > 0 and BattleManager != null:
+		BattleManager.party_hp_changed.emit()
+	if revived_count > 0 and hud != null:
+		hud.add_system_log("⛩ 시렌의 가호로 동료가 부활했다.")
+
+
+func _update_town_tile_transition(delta: float) -> void:
+	town_tile_trigger_cooldown = maxf(0.0, town_tile_trigger_cooldown - delta)
+	if town_tile_trigger_cooldown > 0.0:
+		return
+	if party_leader == null:
+		return
+	if get_tile_type_at_world(party_leader.global_position) != "town":
+		return
+	if BattleManager != null and BattleManager.get_active_battle_count() > 0:
+		return
+
+	var next_town_area_id: String = _find_next_town_area_id()
+	if next_town_area_id.is_empty():
+		return
+
+	town_tile_trigger_cooldown = 0.9
+	town_entrance_entered.emit(next_town_area_id)
+
+
+func _find_next_town_area_id() -> String:
+	if FieldManager == null:
+		return ""
+	var next_ids: Array[String] = FieldManager.get_next_area_ids()
+	for next_id in next_ids:
+		if next_id.is_empty():
+			continue
+		var area: Dictionary = FieldManager.get_runtime_area(FieldManager.current_act_id, next_id)
+		if str(area.get("type", "")) == "town":
+			return next_id
+	return ""
+
+
+func _has_immediate_next_town_area() -> bool:
+	return not _find_next_town_area_id().is_empty()
 
 
 func _on_recruit_followup_dialog_finished() -> void:
@@ -914,6 +1145,10 @@ func _spawn_field_treasure_chests() -> void:
 func _spawn_sanctuary() -> void:
 	if treasure_controller == null:
 		return
+	if enable_runtime_field_content:
+		# runtime 타일에서 shiren 타일이 성소 역할을 담당한다.
+		sanctuary_root = null
+		return
 	treasure_controller.spawn_sanctuary(
 		enable_runtime_field_content,
 		_get_map_bounds(),
@@ -944,29 +1179,6 @@ func _sync_treasure_runtime_refs() -> void:
 		return
 	field_treasure_chests = treasure_controller.get_treasure_chests()
 	sanctuary_root = treasure_controller.get_sanctuary_root()
-
-func _spawn_field_grass() -> void:
-	if grass_controller == null:
-		return
-	grass_controller.spawn(
-		self,
-		enable_runtime_field_content,
-		FieldManager.is_boss_field(),
-		_get_map_bounds(),
-		tilemap,
-		party_leader,
-		field_enemies,
-		field_treasure_chests,
-		recruit_npc_root,
-		sanctuary_root
-	)
-
-
-func _update_field_grass(delta: float) -> void:
-	if grass_controller == null:
-		return
-	grass_controller.update(delta, tilemap, party_leader, field_enemies)
-
 
 #=============================================================================
 # 출구/마을 설정
@@ -1102,7 +1314,7 @@ func _start_boss_battle() -> void:
 
 
 func _on_exit_body_entered(body: Node2D) -> void:
-	if not body.is_in_group("party_leader"):
+	if not _is_party_leader_body(body):
 		return
 	
 	if BattleManager and BattleManager.get_active_battle_count() > 0:
@@ -1121,7 +1333,45 @@ func _on_exit_body_entered(body: Node2D) -> void:
 	
 	exit_reached.emit(next)
 	if GameManager:
-		GameManager.go_to_next_from_area()
+		var next_town_area_id: String = _find_next_town_area_id()
+		if not next_town_area_id.is_empty():
+			GameManager.queue_node_travel(FieldManager.current_act_id, FieldManager.current_area_id, next_town_area_id)
+		else:
+			GameManager.go_to_next_from_area()
+
+
+func _is_party_leader_body(body: Node2D) -> bool:
+	if body == null:
+		return false
+	if body.is_in_group("party_leader"):
+		return true
+	if party_leader == null or not is_instance_valid(party_leader):
+		return false
+	if body == party_leader:
+		return true
+	if party_leader.is_ancestor_of(body):
+		return true
+	var parent: Node = body.get_parent()
+	while parent != null:
+		if parent == party_leader:
+			return true
+		parent = parent.get_parent()
+	return false
+
+
+func _on_town_entrance_entered(next_town_area_id: String) -> void:
+	if hud != null:
+		hud.add_system_log("🏘️ 마을 입구에 도착했다.")
+
+	if GameManager == null:
+		return
+
+	if not next_town_area_id.is_empty():
+		GameManager.queue_node_travel(FieldManager.current_act_id, FieldManager.current_area_id, next_town_area_id)
+		return
+
+	if hud != null:
+		hud.add_system_log("연결된 다음 마을이 없다.")
 
 
 #=============================================================================
@@ -1477,10 +1727,22 @@ func _find_party_member_by_hero_id(hero_id: String) -> PartyMember:
 
 func _get_camera_rect() -> Rect2:
 	var viewport_size: Vector2 = get_viewport_rect().size
-	var camera: Camera2D = get_viewport().get_camera_2d()
-	var player_pos: Vector2 = party_leader.global_position if party_leader else Vector2.ZERO
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		var bounds: Rect2 = _get_map_bounds()
+		return bounds if bounds.size.x > 0.0 and bounds.size.y > 0.0 else Rect2()
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		var fallback_rect: Rect2 = viewport.get_visible_rect()
+		if fallback_rect.size.x > 0.0 and fallback_rect.size.y > 0.0:
+			viewport_size = fallback_rect.size
+		else:
+			viewport_size = Vector2(512.0, 288.0)
+	var camera: Camera2D = viewport.get_camera_2d()
+	var player_pos: Vector2 = party_leader.global_position if party_leader else _get_map_bounds().get_center()
 	if camera:
-		var view_size: Vector2 = viewport_size / camera.zoom
+		var zoom_x: float = maxf(0.001, camera.zoom.x)
+		var zoom_y: float = maxf(0.001, camera.zoom.y)
+		var view_size: Vector2 = Vector2(viewport_size.x / zoom_x, viewport_size.y / zoom_y)
 		return Rect2(camera.global_position - view_size / 2, view_size)
 	return Rect2(player_pos - viewport_size / 2, viewport_size)
 

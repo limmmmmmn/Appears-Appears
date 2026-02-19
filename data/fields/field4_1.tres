@@ -4,16 +4,18 @@
 
 [resource]
 script = ExtResource("1_field_template")
-id = "a3_start"
-name = "Act3 Start Field"
-scene = "res://scenes/field/A1Start.tscn"
+id = "field4_1"
+name = "Field4_1"
+scene = "res://scenes/field/Field4_1.tscn"
 weight = 1.0
+enemy_count = {
+"max": 7,
+"min": 5
+}
 enemy_pool = {
 "default": {
-"dark_mage": 30,
-"dark_sorcerer": 15,
-"dragon": 30,
-"golem": 25
+"dark_mage": 52,
+"orc_warrior": 48
 }
 }
 field_boss_id = "boss_goblin_king"

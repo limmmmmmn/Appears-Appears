@@ -7,8 +7,8 @@ class_name EnemySpawner
 # -----------------------------------------------------------------------------
 # Spawn config
 # -----------------------------------------------------------------------------
-var DEFAULT_MAX_ENEMIES: int = 6
-var FIELD_ENEMY_COUNT_MULTIPLIER: float = 1.35
+var DEFAULT_MAX_ENEMIES: int = 4
+var FIELD_ENEMY_COUNT_MULTIPLIER: float = 1.0
 var MIN_SPAWN_DISTANCE_BETWEEN: float = 24.0
 var EDGE_SPAWN_PADDING: float = 32.0
 var MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER: float = 120.0
@@ -36,10 +36,16 @@ var PROACTIVE_SPAWN_INTERVAL: float = 0.45
 @export_group("Tile Mapping")
 @export var tile_type_map: Dictionary = {
 	0: "grass",
-	1: "forest",
-	2: "mountain",
-	3: "water",
-	4: "cave",
+	1: "desert",
+	2: "forest",
+	3: "hill",
+	4: "mountain",
+	5: "water",
+	6: "bridge",
+	7: "cave",
+	8: "shiren",
+	9: "castle",
+	10: "town",
 }
 
 var field: Node2D
@@ -159,9 +165,6 @@ func spawn_initial_enemies(field_enemies: Array) -> void:
 			_spawn_enemy_at({"position": pos, "tile_type": tile_type}, field_enemies)
 			spawned_positions.append(pos)
 
-	spawn_field_boss(field_enemies)
-
-
 func setup_respawn_timer(_parent: Node) -> void:
 	pass
 
@@ -253,12 +256,23 @@ func stop_respawn() -> void:
 # Map data
 # -----------------------------------------------------------------------------
 func _calculate_map_data() -> void:
+	if field != null and field.has_method("get_play_area_bounds"):
+		var custom_bounds: Rect2 = field.call("get_play_area_bounds")
+		if custom_bounds.size.x > 0.0 and custom_bounds.size.y > 0.0:
+			map_bounds = custom_bounds
+			bounds_calculated = true
+			return
+
 	if not tilemap:
 		map_bounds = Rect2(0, 0, 800, 600)
 		bounds_calculated = true
 		return
 
 	var used_rect: Rect2i = tilemap.get_used_rect()
+	if used_rect.size.x <= 0 or used_rect.size.y <= 0:
+		map_bounds = Rect2(0, 0, 800, 600)
+		bounds_calculated = true
+		return
 	var tile_size: Vector2 = Vector2(16, 16)
 	map_bounds = Rect2(Vector2(used_rect.position) * tile_size, Vector2(used_rect.size) * tile_size)
 	bounds_calculated = true
@@ -366,12 +380,23 @@ func _get_camera_rect() -> Rect2:
 		return Rect2()
 
 	var viewport_size: Vector2 = field.get_viewport_rect().size
-	var camera: Camera2D = field.get_viewport().get_camera_2d()
+	var viewport: Viewport = field.get_viewport()
+	if viewport == null:
+		return Rect2()
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		var fallback_rect: Rect2 = viewport.get_visible_rect()
+		if fallback_rect.size.x > 0.0 and fallback_rect.size.y > 0.0:
+			viewport_size = fallback_rect.size
+		else:
+			viewport_size = Vector2(512.0, 288.0)
+	var camera: Camera2D = viewport.get_camera_2d()
 	var player_pos: Vector2 = _get_player_position()
 	var margin: float = 32.0
 
 	if camera:
-		var view_size: Vector2 = viewport_size / camera.zoom
+		var zoom_x: float = maxf(0.001, camera.zoom.x)
+		var zoom_y: float = maxf(0.001, camera.zoom.y)
+		var view_size: Vector2 = Vector2(viewport_size.x / zoom_x, viewport_size.y / zoom_y)
 		var rect := Rect2(camera.global_position - view_size / 2, view_size)
 		return rect.grow(margin)
 
@@ -473,10 +498,12 @@ func _get_player_position() -> Vector2:
 
 
 func _get_tile_type_at(pos: Vector2) -> String:
+	if field != null and field.has_method("get_tile_type_at_world"):
+		return str(field.call("get_tile_type_at_world", pos))
 	if not tilemap:
 		return "grass"
 
-	var cell: Vector2i = tilemap.local_to_map(pos)
+	var cell: Vector2i = tilemap.local_to_map(tilemap.to_local(pos))
 	var source_id: int = tilemap.get_cell_source_id(cell)
 	if source_id == -1:
 		return "grass"

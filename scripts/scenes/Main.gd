@@ -3,7 +3,6 @@ extends Control
 
 const TITLE_SCENE := preload("res://scenes/main/Title.tscn")
 const ACT_NODE_SELECT_SCENE := "res://scenes/main/ActNodeSelect.tscn"
-const TRINKET_SELECT_SCENE := "res://scenes/main/TrinketSelect.tscn"
 
 var current_scene: Node = null
 
@@ -70,8 +69,8 @@ func _start_new_game() -> void:
 
 	# 시작 아이템 없음 (장비는 파밍)
 
-	# 시작 트링켓 선택 화면 진입
-	get_tree().change_scene_to_file(TRINKET_SELECT_SCENE)
+	# 시작 시 액트 노드 선택 화면 진입
+	get_tree().change_scene_to_file(ACT_NODE_SELECT_SCENE)
 
 
 func _clear_current_scene() -> void:

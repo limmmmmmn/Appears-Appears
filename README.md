@@ -24,7 +24,7 @@ hyperquest_full/
 		├── PartyLeader.tscn
 		├── PartyFollower.tscn
 		├── FieldEnemy.tscn
-		└── A1Start.tscn       # 테스트 필드
+		└── Field1_1.tscn       # 테스트 필드
 ```
 
 ## ⚙️ 설치 방법
@@ -59,7 +59,7 @@ FieldManager → res://scripts/autoload/FieldManager.gd
 2. 버튼 → `GameManager.go_to_area()` 호출
 
 ### Field 직접 테스트
-1. `A1Start.tscn`을 메인 씬으로 설정
+1. `Field1_1.tscn`을 메인 씬으로 설정
 2. 실행 전 FieldManager 초기화:
 ```gdscript
 # Main.gd 또는 테스트 스크립트에서

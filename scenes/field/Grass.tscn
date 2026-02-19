@@ -1,18 +1,15 @@
-[gd_scene load_steps=2 format=4]
+[gd_scene format=3 uid="uid://cnnf4ao4htfn8"]
 
-[ext_resource type="Script" path="res://scripts/entities/FieldGrass.gd" id="1_7u6yb"]
+[node name="Grass" type="Node2D" unique_id=2044561235]
 
-[node name="Grass" type="Node2D"]
-script = ExtResource("1_7u6yb")
+[node name="PivotA" type="Node2D" parent="." unique_id=1334003048]
 
-[node name="PivotA" type="Node2D" parent="."]
-
-[node name="SpriteA" type="Sprite2D" parent="PivotA"]
-centered = false
+[node name="SpriteA" type="Sprite2D" parent="PivotA" unique_id=785473224]
 texture_filter = 1
-
-[node name="PivotB" type="Node2D" parent="."]
-
-[node name="SpriteB" type="Sprite2D" parent="PivotB"]
 centered = false
+
+[node name="PivotB" type="Node2D" parent="." unique_id=2007768795]
+
+[node name="SpriteB" type="Sprite2D" parent="PivotB" unique_id=1563049267]
 texture_filter = 1
+centered = false

@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="ClassTemplate" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="ClassTemplate" format=3 uid="uid://cr0tttng156ak"]
 
-[ext_resource type="Script" path="res://scripts/resources/ClassTemplate.gd" id="1_class_template"]
+[ext_resource type="Script" uid="uid://bdyn1qmw4iml" path="res://scripts/resources/ClassTemplate.gd" id="1_class_template"]
 
 [resource]
 script = ExtResource("1_class_template")
@@ -27,5 +27,5 @@ equip_restrictions = {
 "can_equip": ["sword", "axe", "shield", "heavy_armor", "medium_armor", "helmet", "acc"],
 "dual_wield": false
 }
-tags = ["melee", "physical", "tank"]
-skills = ["basic_attack", "power_strike"]
+tags = Array[String](["melee", "physical", "tank"])
+skills = Array[String](["basic_attack", "power_strike"])

@@ -91,10 +91,16 @@ func _process_leader(_delta: float) -> void:
 
 	# 키보드 입력이 있으면 이동
 	if input_dir != Vector2.ZERO:
+		var prev_pos: Vector2 = global_position
 		velocity = input_dir * move_speed
 		_update_direction(input_dir)
 		_play_walk_animation()
 		move_and_slide()
+		if not _is_position_walkable(global_position):
+			global_position = prev_pos
+			velocity = Vector2.ZERO
+			_play_idle_animation()
+			return
 		_record_path()
 		return
 
@@ -168,11 +174,15 @@ func _process_follower(_delta: float) -> void:
 	var target_pos: Vector2 = leader_ref.get_path_position(target_distance)
 	
 	# 현재 위치에서 목표까지 얼마나 이동해야 하는지
+	var prev_pos: Vector2 = global_position
 	var to_target: Vector2 = target_pos - global_position
 	var move_distance: float = to_target.length()
 	
 	# 목표 위치로 이동
 	global_position = target_pos
+	if not _is_position_walkable(global_position):
+		global_position = prev_pos
+		move_distance = 0.0
 	
 	# 움직였으면 걷기 애니메이션
 	if move_distance > 0.5:
@@ -180,6 +190,13 @@ func _process_follower(_delta: float) -> void:
 		_play_walk_animation()
 	else:
 		_play_idle_animation()
+
+
+func _is_position_walkable(world_pos: Vector2) -> bool:
+	var host := get_parent()
+	if host != null and host.has_method("is_world_position_walkable"):
+		return bool(host.call("is_world_position_walkable", world_pos))
+	return true
 
 
 #=============================================================================

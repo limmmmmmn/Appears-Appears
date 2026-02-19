@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TownTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/TownTemplate.gd" id="1_town_template"]
+
+[resource]
+script = ExtResource("1_town_template")
+id = "town1_1"
+name = "Town1_1"
+scene = "res://scenes/town/Town1_1.tscn"
+weight = 1.0

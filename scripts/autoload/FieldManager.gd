@@ -9,20 +9,28 @@ const ACT_TEMPLATE_DIR := "res://data/acts"
 
 const DEFAULT_TILE_TYPES: Dictionary = {
 	"grass": {"can_spawn": true, "walkable": true},
+	"desert": {"can_spawn": true, "walkable": true},
 	"forest": {"can_spawn": true, "walkable": true},
+	"hill": {"can_spawn": true, "walkable": true},
 	"mountain": {"can_spawn": false, "walkable": false},
-	"cave": {"can_spawn": true, "walkable": true},
+	"cave": {"can_spawn": false, "walkable": true, "is_exit": true, "exit_type": "dungeon"},
+	"bridge": {"can_spawn": false, "walkable": true},
+	"shiren": {"can_spawn": false, "walkable": true},
+	"castle": {"can_spawn": false, "walkable": true, "is_exit": true, "exit_type": "castle"},
+	"town": {"can_spawn": false, "walkable": true, "is_exit": true, "exit_type": "town"},
 	"stone": {"can_spawn": true, "walkable": true},
 	"water": {"can_spawn": false, "walkable": false},
 	"road": {"can_spawn": false, "walkable": true},
 	"wall": {"can_spawn": false, "walkable": false},
 }
 const DEFAULT_BATTLE_CONFIG: Dictionary = {"min_enemies": 1, "max_enemies": 3}
-const DEFAULT_ENEMY_COUNT: Dictionary = {"min": 4, "max": 6}
+const DEFAULT_ENEMY_COUNT: Dictionary = {"min": 2, "max": 4}
 const DEFAULT_ENEMY_POOL: Dictionary = {"default": {"slime": 55, "bat": 45}}
 const DEFAULT_TERRAIN_ENEMIES: Dictionary = {
 	"grass": {"slime": 55, "bat": 45},
+	"desert": {"slime": 45, "bat": 55},
 	"forest": {"slime": 55, "bat": 45},
+	"hill": {"slime": 45, "bat": 55},
 	"cave": {"slime": 55, "bat": 45},
 	"stone": {"slime": 55, "bat": 45},
 }
@@ -128,6 +136,9 @@ func get_next_runtime_area_ids(act_id: String, area_id: String) -> Array[String]
 	for entry in next_any:
 		var next_id: String = str(entry)
 		if next_id.is_empty():
+			continue
+		var next_area: Dictionary = get_runtime_area(act_id, next_id)
+		if str(next_area.get("type", "")) == "boss":
 			continue
 		result.append(next_id)
 	return result

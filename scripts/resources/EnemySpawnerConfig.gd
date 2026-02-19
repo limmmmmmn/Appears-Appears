@@ -5,8 +5,8 @@ class_name EnemySpawnerConfig
 @export var field_enemy_scene: PackedScene = preload("res://scenes/field/FieldEnemy.tscn")
 
 @export_group("Counts")
-@export var default_max_enemies: int = 6
-@export var field_enemy_count_multiplier: float = 1.35
+@export var default_max_enemies: int = 4
+@export var field_enemy_count_multiplier: float = 1.0
 
 @export_group("Initial Spawn")
 @export var use_spawn_markers_for_initial_spawn: bool = true
@@ -25,8 +25,14 @@ class_name EnemySpawnerConfig
 @export_group("Tile Mapping")
 @export var tile_type_map: Dictionary = {
 	0: "grass",
-	1: "forest",
-	2: "mountain",
-	3: "water",
-	4: "cave",
+	1: "desert",
+	2: "forest",
+	3: "hill",
+	4: "mountain",
+	5: "water",
+	6: "bridge",
+	7: "cave",
+	8: "shiren",
+	9: "castle",
+	10: "town",
 }

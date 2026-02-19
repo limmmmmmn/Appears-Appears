@@ -29,73 +29,65 @@ func _build_single_act(template: ActTemplate, act_seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = act_seed
 
-	var min_count: int = maxi(1, template.min_regular_areas)
-	var max_count: int = maxi(min_count, template.max_regular_areas)
-	var regular_area_count: int = rng.randi_range(min_count, max_count)
-
 	var picks: Array[Dictionary] = []
 	var picks_types: Array[String] = []
 
-	var start_entry: Dictionary = _pick_start_entry(template, rng)
-	if start_entry.is_empty():
-		return {}
-	picks.append(start_entry)
-	picks_types.append(str(start_entry.get("type", "field")))
+	if not template.fixed_area_path.is_empty():
+		_build_fixed_path_picks(template, picks, picks_types)
+	elif not template.fixed_area_sequence.is_empty():
+		_build_fixed_sequence_picks(template, rng, picks, picks_types)
+	else:
+		var min_count: int = maxi(1, template.min_regular_areas)
+		var max_count: int = maxi(min_count, template.max_regular_areas)
+		var regular_area_count: int = rng.randi_range(min_count, max_count)
 
-	var remaining: int = regular_area_count - 1
-	if remaining > 0:
-		var forced_types: Array[String] = []
-		for _i in range(template.guaranteed_town_count):
-			forced_types.append("town")
-		for _i in range(template.guaranteed_event_count):
-			forced_types.append("event")
-		for _i in range(template.guaranteed_dungeon_count):
-			forced_types.append("dungeon")
-		_shuffle_strings(forced_types, rng)
+		var start_entry: Dictionary = _pick_start_entry(template, rng)
+		if start_entry.is_empty():
+			return {}
+		picks.append(start_entry)
+		picks_types.append(str(start_entry.get("type", "field")))
 
-		for forced_type in forced_types:
-			if remaining <= 0:
-				break
-			var forced_entry: Dictionary = _pick_from_pool(template, forced_type, rng)
-			if forced_entry.is_empty():
-				continue
-			picks.append(forced_entry)
-			picks_types.append(forced_type)
-			remaining -= 1
+		var remaining: int = regular_area_count - 1
+		if remaining > 0:
+			var forced_types: Array[String] = []
+			for _i in range(template.guaranteed_town_count):
+				forced_types.append("town")
+			for _i in range(template.guaranteed_event_count):
+				forced_types.append("event")
+			for _i in range(template.guaranteed_dungeon_count):
+				forced_types.append("dungeon")
+			_shuffle_strings(forced_types, rng)
 
-		for _i in range(remaining):
-			var weighted_type: String = _pick_weighted_type(template, rng)
-			var entry: Dictionary = _pick_from_pool(template, weighted_type, rng)
-			if entry.is_empty():
-				entry = _pick_any_non_empty_area(template, rng)
-			if entry.is_empty():
-				continue
-			picks.append(entry)
-			picks_types.append(str(entry.get("type", weighted_type)))
+			for forced_type in forced_types:
+				if remaining <= 0:
+					break
+				var forced_entry: Dictionary = _pick_from_pool(template, forced_type, rng)
+				if forced_entry.is_empty():
+					continue
+				picks.append(forced_entry)
+				picks_types.append(forced_type)
+				remaining -= 1
+
+			for _i in range(remaining):
+				var weighted_type: String = _pick_weighted_type(template, rng)
+				var entry: Dictionary = _pick_from_pool(template, weighted_type, rng)
+				if entry.is_empty():
+					entry = _pick_any_non_empty_area(template, rng)
+				if entry.is_empty():
+					continue
+				picks.append(entry)
+				picks_types.append(str(entry.get("type", weighted_type)))
+
+		_shuffle_middle_sections(picks, picks_types, rng)
 
 	if picks.size() <= 0:
 		return {}
-
-	_shuffle_middle_sections(picks, picks_types, rng)
 
 	var areas: Array[Dictionary] = []
 	for i in range(picks.size()):
 		var base_entry: Dictionary = picks[i]
 		var area_id: String = "%s_area_%02d" % [template.act_id, i + 1]
 		areas.append(_make_runtime_area(area_id, base_entry, false))
-
-	var boss_entry: Dictionary = _pick_boss_entry(template, rng)
-	if boss_entry.is_empty():
-		var fallback_boss_scene: String = _resolve_fallback_field_scene(template)
-		boss_entry = {
-			"id": "%s_boss" % template.act_id,
-			"name": "%s 보스" % template.act_name,
-			"scene": fallback_boss_scene,
-			"type": "boss",
-			"weight": 1.0,
-		}
-	var boss_area_id: String = "%s_boss" % template.act_id
-	areas.append(_make_runtime_area(boss_area_id, boss_entry, true))
 
 	_apply_branch_links(areas, template, rng)
 
@@ -111,9 +103,134 @@ func _build_single_act(template: ActTemplate, act_seed: int) -> Dictionary:
 		"default_enemy_count": template.default_enemy_count.duplicate(true),
 		"default_elite_chance": template.default_elite_chance,
 		"start_area_id": str(areas[0].get("id", "")),
-		"boss_area_id": boss_area_id,
+		"boss_area_id": "",
 		"areas": areas,
 	}
+
+
+func _build_fixed_path_picks(
+	template: ActTemplate,
+	picks: Array[Dictionary],
+	picks_types: Array[String]
+) -> void:
+	for raw in template.fixed_area_path:
+		var entry: Dictionary = _to_entry_dict(raw)
+		if entry.is_empty():
+			continue
+		var area_type: String = str(entry.get("type", "")).strip_edges().to_lower()
+		if area_type.is_empty():
+			var scene_path: String = str(entry.get("scene", ""))
+			if scene_path.find("/town/") >= 0:
+				area_type = "town"
+			else:
+				area_type = "field"
+		if area_type not in ["field", "town", "event", "dungeon"]:
+			area_type = "field"
+		entry["type"] = area_type
+		picks.append(entry)
+		picks_types.append(area_type)
+
+
+func _build_fixed_sequence_picks(
+	template: ActTemplate,
+	rng: RandomNumberGenerator,
+	picks: Array[Dictionary],
+	picks_types: Array[String]
+) -> void:
+	var used_ids_by_type: Dictionary = {}
+	for i in range(template.fixed_area_sequence.size()):
+		var requested_type: String = str(template.fixed_area_sequence[i]).strip_edges().to_lower()
+		var area_type: String = requested_type
+		if area_type not in ["field", "town", "event", "dungeon"]:
+			area_type = "field"
+
+		var entry: Dictionary = {}
+		if i == 0 and area_type == "field":
+			entry = _pick_start_entry(template, rng)
+		if entry.is_empty():
+			entry = _pick_next_from_pool_order(template, area_type, used_ids_by_type)
+		if entry.is_empty() and area_type == "field":
+			entry = _pick_start_entry(template, rng)
+		if entry.is_empty():
+			entry = _pick_any_non_empty_area(template, rng)
+		if entry.is_empty():
+			continue
+
+		entry["type"] = area_type
+		picks.append(entry)
+		picks_types.append(area_type)
+		var entry_id: String = str(entry.get("id", ""))
+		if not entry_id.is_empty():
+			var used: Array = used_ids_by_type.get(area_type, []) as Array
+			used.append(entry_id)
+			used_ids_by_type[area_type] = used
+
+	if picks.is_empty():
+		var fallback_start: Dictionary = _pick_start_entry(template, rng)
+		if not fallback_start.is_empty():
+			picks.append(fallback_start)
+			picks_types.append(str(fallback_start.get("type", "field")))
+
+
+func _pick_next_from_pool_order(
+	template: ActTemplate,
+	area_type: String,
+	used_ids_by_type: Dictionary
+) -> Dictionary:
+	var pool: Array[Dictionary] = []
+	match area_type:
+		"field":
+			pool = _with_type(template.field_pool, "field")
+		"dungeon":
+			pool = _with_type(template.dungeon_pool, "dungeon")
+		"event":
+			pool = _with_type(template.event_pool, "event")
+		"town":
+			pool = _with_type(template.town_pool, "town")
+		_:
+			pool = []
+	if pool.is_empty():
+		return {}
+
+	var used: Array = used_ids_by_type.get(area_type, []) as Array
+	for entry in pool:
+		var entry_id: String = str(entry.get("id", ""))
+		if entry_id.is_empty() or not used.has(entry_id):
+			return entry.duplicate(true)
+	return pool[0].duplicate(true)
+
+
+func _pick_non_repeating_from_pool(
+	template: ActTemplate,
+	area_type: String,
+	rng: RandomNumberGenerator,
+	used_ids_by_type: Dictionary
+) -> Dictionary:
+	var pool: Array[Dictionary] = []
+	match area_type:
+		"field":
+			pool = _with_type(template.field_pool, "field")
+		"dungeon":
+			pool = _with_type(template.dungeon_pool, "dungeon")
+		"event":
+			pool = _with_type(template.event_pool, "event")
+		"town":
+			pool = _with_type(template.town_pool, "town")
+		_:
+			pool = []
+	if pool.is_empty():
+		return {}
+
+	var used: Array = used_ids_by_type.get(area_type, []) as Array
+	var filtered: Array[Dictionary] = []
+	for entry in pool:
+		var entry_id: String = str(entry.get("id", ""))
+		if entry_id.is_empty() or not used.has(entry_id):
+			filtered.append(entry)
+
+	if not filtered.is_empty():
+		return _pick_weighted_entry(filtered, rng)
+	return _pick_weighted_entry(pool, rng)
 
 
 func _apply_branch_links(areas: Array[Dictionary], template: ActTemplate, rng: RandomNumberGenerator) -> void:
@@ -290,6 +407,17 @@ func _to_entry_dict(raw: Variant) -> Dictionary:
 		if field_template == null:
 			return {}
 		return field_template.to_runtime_dict()
+	if raw is TownTemplate:
+		var town_template: TownTemplate = raw as TownTemplate
+		if town_template == null:
+			return {}
+		return town_template.to_runtime_dict()
+	if raw is Resource:
+		var resource: Resource = raw as Resource
+		if resource != null and resource.has_method("to_runtime_dict"):
+			var converted: Variant = resource.call("to_runtime_dict")
+			if converted is Dictionary:
+				return (converted as Dictionary).duplicate(true)
 	return {}
 
 

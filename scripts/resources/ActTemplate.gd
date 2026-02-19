@@ -37,7 +37,9 @@ class_name ActTemplate
 @export var field_pool: Array[FieldTemplate] = []
 @export var dungeon_pool: Array[Dictionary] = []
 @export var event_pool: Array[Dictionary] = []
-@export var town_pool: Array[Dictionary] = []
+@export var town_pool: Array = []
+@export var fixed_area_path: Array = []
+@export var fixed_area_sequence: Array[String] = []
 
 @export_group("Boss")
 @export var boss_area: Dictionary = {}

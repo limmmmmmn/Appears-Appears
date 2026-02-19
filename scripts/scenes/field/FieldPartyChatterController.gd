@@ -390,8 +390,12 @@ func _position_party_chatter_bubble(speaker: Node2D, bubble: PanelContainer) -> 
 		if member != null:
 			lift = member.get_chatter_bubble_extra_lift()
 			extra_offset = member.get_chatter_bubble_offset()
+
 	var gap: float = 10.0 + lift
-	var screen_pos: Vector2 = host.get_viewport().get_canvas_transform() * speaker.global_position
+	var viewport: Viewport = host.get_viewport()
+	if viewport == null:
+		return
+	var screen_pos: Vector2 = viewport.get_canvas_transform() * speaker.global_position
 	var x: float = screen_pos.x - bubble.size.x * 0.5 + extra_offset.x
 	var y: float = screen_pos.y + sprite_top_y - gap - bubble.size.y + extra_offset.y
 	bubble.position = Vector2(x, y)

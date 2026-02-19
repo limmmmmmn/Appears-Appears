@@ -4,19 +4,17 @@
 
 [resource]
 script = ExtResource("1_field_template")
-id = "a1_start"
-name = "A1Start"
-scene = "res://scenes/field/A1Start.tscn"
+id = "field1_1"
+name = "Field1_1"
+scene = "res://scenes/field/Field1_1.tscn"
 enemy_count = {
-"max": 20,
-"min": 20
+"max": 4,
+"min": 3
 }
 enemy_pool = {
 "default": {
-"bat": 30,
-"dark_sorcerer": 20,
-"golem": 15,
-"slime": 35
+"bat": 45,
+"slime": 55
 }
 }
 elite_chance = 0.1

@@ -1,4 +1,5 @@
 extends Control
+@export var town_label: String = ""
 
 const GRID_COLS: int = 3
 const GRID_ROWS: int = 3
@@ -60,6 +61,7 @@ var event_trinket_granted_this_visit: bool = false
 func _ready() -> void:
 	randomize()
 	_build_ui()
+	_apply_town_title()
 	_generate_building_layout()
 	_render_grid()
 	_spawn_party_walkers()
@@ -113,7 +115,7 @@ func _build_ui() -> void:
 	top_h.add_child(title_label)
 
 	back_button = Button.new()
-	back_button.text = "필드로"
+	back_button.text = "나가기"
 	back_button.custom_minimum_size = Vector2(120, 36)
 	back_button.add_theme_font_size_override("font_size", 14)
 	back_button.add_theme_stylebox_override("normal", _make_style(Color(0.2, 0.35, 0.22, 0.95), Color(0.45, 0.7, 0.5, 1.0), 6, 2))
@@ -233,6 +235,16 @@ func _build_ui() -> void:
 	street_runway.move_child(street_bg, 0)
 
 	_update_layout_sizes()
+
+
+func _apply_town_title() -> void:
+	var resolved: String = town_label.strip_edges()
+	if resolved.is_empty() and FieldManager != null:
+		resolved = str(FieldManager.get_current_area_name()).strip_edges()
+	if resolved.is_empty():
+		resolved = "마을"
+	if title_label != null:
+		title_label.text = resolved
 
 
 func _update_layout_sizes() -> void:

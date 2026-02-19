@@ -9,9 +9,11 @@ signal game_clear
 
 enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER, TOWN, NODE_SELECT }
 var current_state: GameState = GameState.TITLE
+const ACT_NODE_SELECT_SCENE_PATH: String = "res://scenes/main/ActNodeSelect.tscn"
 
 var current_act_id: String = "act_1"
 var current_area_id: String = ""
+var pending_node_travel: Dictionary = {}
 
 var gold: int = 0
 var kill_count: int = 0
@@ -37,6 +39,7 @@ func start_new_game() -> void:
 	obtained_legendaries.clear()
 	obtained_trinkets.clear()
 	starting_trinket_id = ""
+	pending_node_travel.clear()
 
 	PartyManager.party.clear()
 	PartyManager.inventory.clear()
@@ -230,6 +233,7 @@ func go_to_area(act_id: String = "", area_id: String = "") -> void:
 
 	current_act_id = FieldManager.current_act_id
 	current_area_id = FieldManager.current_area_id
+	pending_node_travel.clear()
 	_emit_progress_changed()
 
 	var scene_path: String = FieldManager.get_current_area_scene()
@@ -237,7 +241,11 @@ func go_to_area(act_id: String = "", area_id: String = "") -> void:
 		push_error("[GameManager] 에어리어 씬 경로를 찾을 수 없음: " + act_id + "/" + area_id)
 		return
 
-	change_state(GameState.FIELD)
+	var area_type: String = FieldManager.get_current_area_type()
+	if area_type == "town":
+		change_state(GameState.TOWN)
+	else:
+		change_state(GameState.FIELD)
 	if SaveManager:
 		SaveManager.auto_save("에어리어 진입")
 	get_tree().change_scene_to_file(scene_path)
@@ -246,30 +254,34 @@ func go_to_area(act_id: String = "", area_id: String = "") -> void:
 func go_to_next_from_area() -> void:
 	var next_ids: Array[String] = FieldManager.get_next_area_ids()
 	if not next_ids.is_empty():
-		go_to_area(current_act_id, next_ids[0])
+		queue_node_travel(current_act_id, current_area_id, next_ids[0])
 		return
 
-	if FieldManager.is_boss_field():
-		var next_act_id: String = FieldManager.get_next_act_id(current_act_id)
-		if next_act_id.is_empty():
-			game_clear.emit()
-			go_to_ending()
-			return
+	# 임시 규칙: Act 1 마지막 노드 이후 바로 엔딩으로 이동
+	if current_act_id == "act_1":
+		game_clear.emit()
+		go_to_ending()
+		return
+
+	var next_act_id: String = FieldManager.get_next_act_id(current_act_id)
+	if not next_act_id.is_empty():
 		var next_area_id: String = FieldManager.get_first_area_id(next_act_id)
-		go_to_area(next_act_id, next_area_id)
+		queue_node_travel(next_act_id, current_area_id, next_area_id)
 		return
 
-	# 비보스인데 next가 없으면 클리어로 처리
+	# 다음 노드/다음 액트가 없으면 게임 클리어
 	game_clear.emit()
 	go_to_ending()
 
 
 func go_to_ending() -> void:
+	pending_node_travel.clear()
 	change_state(GameState.GAME_OVER)
 	get_tree().change_scene_to_file("res://scenes/main/Ending.tscn")
 
 
 func go_to_town() -> void:
+	pending_node_travel.clear()
 	change_state(GameState.TOWN)
 	if SaveManager:
 		SaveManager.auto_save("마을 이동")
@@ -280,6 +292,36 @@ func go_to_town() -> void:
 func go_to_den() -> void:
 	go_to_town()
 #endregion
+
+
+func queue_node_travel(act_id: String, from_area_id: String, to_area_id: String) -> void:
+	if to_area_id.is_empty():
+		return
+	var resolved_act_id: String = act_id
+	if resolved_act_id.is_empty():
+		resolved_act_id = current_act_id
+	if resolved_act_id.is_empty():
+		resolved_act_id = "act_1"
+
+	pending_node_travel = {
+		"act_id": resolved_act_id,
+		"from_area_id": from_area_id,
+		"to_area_id": to_area_id,
+	}
+	change_state(GameState.NODE_SELECT)
+	get_tree().change_scene_to_file(ACT_NODE_SELECT_SCENE_PATH)
+
+
+func has_pending_node_travel() -> bool:
+	return not pending_node_travel.is_empty()
+
+
+func get_pending_node_travel() -> Dictionary:
+	return pending_node_travel.duplicate(true)
+
+
+func clear_pending_node_travel() -> void:
+	pending_node_travel.clear()
 
 
 func _emit_progress_changed() -> void:
