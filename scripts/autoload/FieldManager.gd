@@ -42,6 +42,7 @@ var tile_types: Dictionary = DEFAULT_TILE_TYPES.duplicate(true)
 var battle_config: Dictionary = DEFAULT_BATTLE_CONFIG.duplicate(true)
 
 var auto_generate_runtime_acts: bool = true
+var balance_only_act_1: bool = true
 var runtime_act_seed: int = 0
 var runtime_acts: Array[Dictionary] = []
 var runtime_acts_by_id: Dictionary = {}
@@ -464,6 +465,8 @@ func _load_act_templates() -> Array[ActTemplate]:
 		var template: ActTemplate = load(res_path) as ActTemplate
 		if template == null:
 			push_warning("[FieldManager] 액트 템플릿 로드 실패: " + res_path)
+			continue
+		if balance_only_act_1 and template.act_id != "act_1":
 			continue
 		templates.append(template)
 	dir.list_dir_end()

@@ -335,6 +335,8 @@ func setup_as_leader(hero: RefCounted, start_pos: Vector2) -> void:
 	var camera := get_node_or_null("Camera2D") as Camera2D
 	if camera:
 		camera.enabled = true
+		camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
+		camera.make_current()
 	
 	# 초기 경로 히스토리 (뒤쪽으로 줄 세우기)
 	for i in range(100):
@@ -348,9 +350,13 @@ func setup_as_follower(hero: RefCounted, leader: PartyMember, index: int) -> voi
 	member_index = index
 	leader_ref = leader
 	z_index = 100 - index
-	
+
 	add_to_group("party_follower")
-	
+
+	var camera := get_node_or_null("Camera2D") as Camera2D
+	if camera:
+		camera.enabled = false
+
 	# 초기 위치
 	global_position = leader.get_path_position(FOLLOW_DISTANCE * index)
 	

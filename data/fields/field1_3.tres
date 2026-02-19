@@ -9,13 +9,15 @@ name = "Field1_3"
 scene = "res://scenes/field/Field1_3.tscn"
 weight = 0.8
 enemy_count = {
-"max": 4,
-"min": 3
+"max": 8,
+"min": 6
 }
 enemy_pool = {
 "default": {
-"bat": 50,
-"dark_sorcerer": 50
+"bat": 30,
+"dark_sorcerer": 25,
+"golem": 25,
+"slime": 20
 }
 }
 field_boss_id = "boss_slime"

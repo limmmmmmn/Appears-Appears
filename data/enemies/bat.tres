@@ -8,13 +8,13 @@ id = "bat"
 name = "박쥐"
 type = "normal"
 stats = {
-"atk": 18,
-"def": 4,
-"dex": 16,
-"hp": 22
+"atk": 11,
+"def": 2,
+"dex": 12,
+"hp": 16
 }
 rewards = {
-"exp": 8,
+"exp": 16,
 "gold_max": 8,
 "gold_min": 3
 }

@@ -21,6 +21,7 @@ field_weight = 0.9
 dungeon_weight = 0.0
 event_weight = 0.0
 town_weight = 0.1
+default_elite_chance = 0.02
 skip_link_chance = 0.0
 side_branch_chance = 0.0
 start_area_pool = [ExtResource("2_a1_start")]

@@ -8,14 +8,14 @@ id = "boss_slime"
 name = "슬라임 킹"
 type = "boss"
 stats = {
-"atk": 44,
-"def": 36,
+"atk": 20,
+"def": 10,
 "dex": 12,
-"hp": 900,
+"hp": 280,
 "int": 6
 }
 rewards = {
-"exp": 120,
+"exp": 220,
 "gold_max": 95,
 "gold_min": 55
 }

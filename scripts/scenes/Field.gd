@@ -36,7 +36,6 @@ const EVENT_WINDOW_SCENE := preload("res://scenes/event/EventWindow.tscn")
 const REWARD_WINDOW_SCENE := preload("res://scenes/ui/RewardWindow.tscn")
 const WINDOW_SHELL_SCRIPT := preload("res://scripts/ui/window/WindowShell.gd")
 const FIELD_LAYOUT_HELPER_SCRIPT := preload("res://scripts/scenes/field/FieldLayoutHelper.gd")
-const FIELD_TILE_GENERATOR_SCRIPT := preload("res://scripts/scenes/field/FieldTileGenerator.gd")
 const FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPartyChatterController.gd")
 const FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPauseOverlayController.gd")
 const FIELD_DROP_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldDropController.gd")
@@ -79,7 +78,6 @@ var hud_scene: PackedScene
 # 분리된 시스템들
 var spawner: EnemySpawner
 var layout_helper = FIELD_LAYOUT_HELPER_SCRIPT.new()
-var tile_generator = FIELD_TILE_GENERATOR_SCRIPT.new()
 var party_chatter_controller = FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT.new()
 var pause_overlay_controller = FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT.new()
 var drop_controller = FIELD_DROP_CONTROLLER_SCRIPT.new()
@@ -133,7 +131,6 @@ func _ready() -> void:
 	_resolve_scene_nodes()
 	_load_scenes()
 	_find_tilemap()
-	_generate_runtime_field_tiles()
 	_setup_systems()
 	_spawn_party()
 	_apply_camera_limits()
@@ -242,71 +239,6 @@ func _find_tilemap() -> void:
 		tilemap_bg = get_node_or_null("TileMapLayerBg") as TileMapLayer
 
 
-func _generate_runtime_field_tiles() -> void:
-	if not enable_runtime_field_content:
-		return
-	if tile_generator == null:
-		return
-	if tilemap == null:
-		return
-
-	var grid_w: int = maxi(8, int(round(play_area_size.x / float(FIELD_TILE_SIZE))))
-	var grid_h: int = maxi(8, int(round(play_area_size.y / float(FIELD_TILE_SIZE))))
-	if grid_w <= 8 or grid_h <= 8:
-		grid_w = 32
-		grid_h = 18
-		play_area_size = Vector2(float(grid_w * FIELD_TILE_SIZE), float(grid_h * FIELD_TILE_SIZE))
-		play_area_origin = Vector2.ZERO
-
-	var runtime_area_id: String = str(FieldManager.current_area_data.get("id", "")) if FieldManager != null else ""
-	var seed_key: String = runtime_area_id
-	if seed_key.is_empty() and field_template != null:
-		seed_key = str(field_template.id)
-	if seed_key.is_empty():
-		seed_key = str(name)
-	if seed_key.is_empty():
-		seed_key = str(FieldManager.current_area_id)
-	var seed_value: int = int(hash("%s:%s" % [seed_key, str(FieldManager.runtime_act_seed)]))
-	var has_next_town: bool = _has_immediate_next_town_area()
-	var result: Dictionary = tile_generator.generate(
-		tilemap_bg,
-		tilemap,
-		Vector2i(grid_w, grid_h),
-		seed_value,
-		has_next_town
-	)
-
-	var spawn_cell: Vector2i = result.get("spawn_cell", Vector2i(1, grid_h / 2))
-	var boss_cell: Vector2i = result.get("boss_cell", Vector2i(grid_w - 2, grid_h / 2))
-	_set_marker_to_cell(spawn_point, spawn_cell)
-	_set_marker_to_cell(boss_spawn_point, boss_cell)
-
-	var marker_cells: Array = result.get("enemy_spawn_cells", [])
-	var markers_root: Node2D = get_node_or_null("EnemySpawnPoints") as Node2D
-	if markers_root != null:
-		var marker_nodes: Array[Marker2D] = []
-		for child in markers_root.get_children():
-			if child is Marker2D:
-				marker_nodes.append(child as Marker2D)
-		while marker_nodes.size() < marker_cells.size():
-			var marker := Marker2D.new()
-			marker.name = "Point%d" % (marker_nodes.size() + 1)
-			markers_root.add_child(marker)
-			marker_nodes.append(marker)
-		for i in range(mini(marker_cells.size(), marker_nodes.size())):
-			var cell: Vector2i = Vector2i(marker_cells[i])
-			_set_marker_to_cell(marker_nodes[i], cell)
-
-
-func _set_marker_to_cell(marker: Marker2D, cell: Vector2i) -> void:
-	if marker == null:
-		return
-	marker.position = Vector2(
-		(float(cell.x) + 0.5) * FIELD_TILE_SIZE,
-		(float(cell.y) + 0.5) * FIELD_TILE_SIZE
-	)
-
-
 func get_field_boss_spawn_position() -> Vector2:
 	if boss_spawn_point != null and is_instance_valid(boss_spawn_point):
 		return boss_spawn_point.global_position
@@ -314,23 +246,12 @@ func get_field_boss_spawn_position() -> Vector2:
 
 
 func _apply_camera_limits() -> void:
-	if layout_helper == null:
-		return
-	layout_helper.apply_camera_limits(party_leader)
 	if party_leader == null:
 		return
 	var camera := party_leader.get_node_or_null("Camera2D") as Camera2D
 	if camera == null:
 		return
-	var bounds: Rect2 = _get_map_bounds()
-	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
-		camera.limit_enabled = false
-		return
-	camera.limit_enabled = true
-	camera.limit_left = int(floor(bounds.position.x))
-	camera.limit_top = int(floor(bounds.position.y))
-	camera.limit_right = int(ceil(bounds.end.x))
-	camera.limit_bottom = int(ceil(bounds.end.y))
+	camera.limit_enabled = false
 
 
 func _get_map_bounds() -> Rect2:
@@ -355,10 +276,9 @@ func get_play_area_bounds() -> Rect2:
 
 
 func get_tile_type_at_world(world_pos: Vector2) -> String:
-	if tile_generator != null:
-		return tile_generator.get_tile_type_at_world(tilemap_bg, tilemap, world_pos)
-
 	if tilemap == null:
+		return "grass"
+	if tilemap.tile_set == null:
 		return "grass"
 	var cell: Vector2i = tilemap.local_to_map(tilemap.to_local(world_pos))
 	var source_id: int = tilemap.get_cell_source_id(cell)

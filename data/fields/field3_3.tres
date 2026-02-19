@@ -9,13 +9,16 @@ name = "Field3_3"
 scene = "res://scenes/field/Field3_3.tscn"
 weight = 0.9
 enemy_count = {
-"max": 6,
-"min": 4
+"max": 9,
+"min": 7
 }
 enemy_pool = {
 "default": {
-"dark_mage": 58,
-"dark_sorcerer": 42
+"dark_mage": 50,
+"dragon": 20,
+"orc_warrior": 30
 }
 }
+elite_chance = 0.22
+elite_pool = ["orc_warrior", "dark_mage"]
 field_boss_id = "boss_goblin_king"
