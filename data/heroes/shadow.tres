@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="HeroTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/HeroTemplate.gd" id="1_hero_template"]
+
+[resource]
+script = ExtResource("1_hero_template")
+id = "shadow"
+name = "섀도우"
+class_id = "thief"
+sprite_field = "shadow_field"
+sprite_face = "shadow_face"
+tags = ["human", "assassin", "loner"]
+description = "과거를 숨긴 도적. 빠른 손과 이도류가 특기."

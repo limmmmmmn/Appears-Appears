@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="ClassTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ClassTemplate.gd" id="1_class_template"]
+
+[resource]
+script = ExtResource("1_class_template")
+id = "archer"
+name = "궁수"
+description = "원거리 물리 공격 전문가"
+base_stats = {
+"def": 10,
+"dex": 18,
+"hp": 55,
+"int": 8,
+"luk": 12,
+"str": 20
+}
+growth = {
+"def": 1,
+"dex": 3,
+"hp": 5,
+"int": 1,
+"luk": 2,
+"str": 3
+}
+equip_restrictions = {
+"can_equip": ["bow", "crossbow", "light_armor", "cloth_armor", "acc"],
+"dual_wield": false
+}
+tags = ["ranged", "physical", "speed"]
+skills = ["basic_attack", "aimed_shot"]

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="ActTemplate" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ActTemplate.gd" id="1_act_template"]
+[ext_resource type="Resource" path="res://data/fields/a2_start.tres" id="2_a2_start"]
+[ext_resource type="Resource" path="res://data/fields/a2_field_a.tres" id="3_a2_field_a"]
+[ext_resource type="Resource" path="res://data/fields/a2_field_b.tres" id="4_a2_field_b"]
+
+[resource]
+script = ExtResource("1_act_template")
+act_id = "act_2"
+act_name = "Act 2"
+act_order = 2
+min_regular_areas = 6
+max_regular_areas = 8
+guaranteed_town_count = 1
+guaranteed_event_count = 1
+guaranteed_dungeon_count = 2
+field_weight = 0.45
+dungeon_weight = 0.32
+event_weight = 0.13
+town_weight = 0.1
+skip_link_chance = 0.3
+side_branch_chance = 0.12
+start_area_pool = [ExtResource("2_a2_start")]
+field_pool = [ExtResource("3_a2_field_a"), ExtResource("4_a2_field_b")]
+dungeon_pool = [{"id":"a2_dungeon_a","name":"Act2 Catacomb","scene":"res://scenes/field/A1Start.tscn","weight":1.0},{"id":"a2_dungeon_b","name":"Act2 Mine","scene":"res://scenes/field/A1Start.tscn","weight":0.8}]
+event_pool = [{"id":"a2_event_a","name":"Act2 Event","scene":"res://scenes/field/A1Start.tscn","weight":1.0}]
+town_pool = [{"id":"a2_town_a","name":"Act2 Town","scene":"res://scenes/town/Town.tscn","weight":1.0}]
+boss_area = {"id":"a2_boss","name":"Act2 Boss","scene":"res://scenes/field/A1Start.tscn","weight":1.0}

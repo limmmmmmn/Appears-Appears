@@ -1,4 +1,4 @@
-extends RefCounted
+extends Node
 class_name EnemySpawner
 ## Field enemy spawn controller
 ## - initial scattered spawn
@@ -7,24 +7,34 @@ class_name EnemySpawner
 # -----------------------------------------------------------------------------
 # Spawn config
 # -----------------------------------------------------------------------------
-const DEFAULT_MAX_ENEMIES: int = 6
-const FIELD_ENEMY_COUNT_MULTIPLIER: float = 1.35
-const MIN_SPAWN_DISTANCE_BETWEEN: float = 24.0
-const EDGE_SPAWN_PADDING: float = 32.0
-const MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER: float = 120.0
-const ELITE_SPAWN_CHANCE: float = 0.15
-const MAX_SPAWN_ATTEMPTS: int = 50
+var DEFAULT_MAX_ENEMIES: int = 6
+var FIELD_ENEMY_COUNT_MULTIPLIER: float = 1.35
+var MIN_SPAWN_DISTANCE_BETWEEN: float = 24.0
+var EDGE_SPAWN_PADDING: float = 32.0
+var MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER: float = 120.0
+var ELITE_SPAWN_CHANCE: float = 0.15
+var MAX_SPAWN_ATTEMPTS: int = 50
 
 # Respawn config
-const RESPAWN_DELAY_MIN: float = 1.0
-const RESPAWN_DELAY_MAX: float = 2.5
-const FIELD_ENEMY_Z: int = 48
+var RESPAWN_DELAY_MIN: float = 1.0
+var RESPAWN_DELAY_MAX: float = 2.5
+var FIELD_ENEMY_Z: int = 48
 
 # Dynamic bonus spawn (grudge-driven)
-const PROACTIVE_SPAWN_INTERVAL: float = 0.45
+var PROACTIVE_SPAWN_INTERVAL: float = 0.45
 
-# Tile source -> tile type
-var tile_type_map: Dictionary = {
+@export_group("Config")
+@export var config: EnemySpawnerConfig
+
+@export_group("Fallback / Override")
+@export var field_enemy_scene: PackedScene = preload("res://scenes/field/FieldEnemy.tscn")
+
+@export_group("Initial Spawn")
+@export var use_spawn_markers_for_initial_spawn: bool = true
+@export var spawn_markers_root_path: NodePath = NodePath("EnemySpawnPoints")
+
+@export_group("Tile Mapping")
+@export var tile_type_map: Dictionary = {
 	0: "grass",
 	1: "forest",
 	2: "mountain",
@@ -34,7 +44,6 @@ var tile_type_map: Dictionary = {
 
 var field: Node2D
 var tilemap: TileMapLayer
-var field_enemy_scene: PackedScene
 
 # Cached map data
 var map_bounds: Rect2 = Rect2()
@@ -42,6 +51,7 @@ var bounds_calculated: bool = false
 var target_enemy_count_cached: int = -1
 var dynamic_bonus_enemy_count: int = 0
 var proactive_spawn_cooldown: float = 0.0
+var cached_spawn_markers: Array[Marker2D] = []
 
 # Respawn queue
 # [{"tile_type": String, "delay_timer": float, "original_pos": Vector2}]
@@ -51,15 +61,47 @@ signal enemy_spawned(enemy: Node2D)
 signal enemy_respawned(enemy: Node2D)
 
 
+func _ready() -> void:
+	_apply_config_overrides()
+
+
 func setup(p_field: Node2D, p_tilemap: TileMapLayer) -> void:
+	_apply_config_overrides()
 	field = p_field
 	tilemap = p_tilemap
-	field_enemy_scene = load("res://scenes/field/FieldEnemy.tscn")
+	if field_enemy_scene == null:
+		field_enemy_scene = load("res://scenes/field/FieldEnemy.tscn") as PackedScene
 	bounds_calculated = false
 	target_enemy_count_cached = -1
 	dynamic_bonus_enemy_count = 0
 	proactive_spawn_cooldown = 0.0
 	respawn_queue.clear()
+	cached_spawn_markers.clear()
+
+
+func _apply_config_overrides() -> void:
+	if config == null:
+		return
+
+	if config.field_enemy_scene != null:
+		field_enemy_scene = config.field_enemy_scene
+	DEFAULT_MAX_ENEMIES = maxi(1, config.default_max_enemies)
+	FIELD_ENEMY_COUNT_MULTIPLIER = maxf(0.1, config.field_enemy_count_multiplier)
+	MIN_SPAWN_DISTANCE_BETWEEN = maxf(0.0, config.min_spawn_distance_between)
+	EDGE_SPAWN_PADDING = maxf(0.0, config.edge_spawn_padding)
+	MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER = maxf(0.0, config.min_initial_spawn_distance_from_player)
+	MAX_SPAWN_ATTEMPTS = maxi(1, config.max_spawn_attempts)
+
+	RESPAWN_DELAY_MIN = maxf(0.0, config.respawn_delay_min)
+	RESPAWN_DELAY_MAX = maxf(RESPAWN_DELAY_MIN, config.respawn_delay_max)
+	FIELD_ENEMY_Z = config.field_enemy_z
+	PROACTIVE_SPAWN_INTERVAL = maxf(0.05, config.proactive_spawn_interval)
+
+	use_spawn_markers_for_initial_spawn = config.use_spawn_markers_for_initial_spawn
+	if not config.spawn_markers_root_path.is_empty():
+		spawn_markers_root_path = config.spawn_markers_root_path
+	if not config.tile_type_map.is_empty():
+		tile_type_map = config.tile_type_map.duplicate(true)
 
 
 func spawn_initial_enemies(field_enemies: Array) -> void:
@@ -80,7 +122,23 @@ func spawn_initial_enemies(field_enemies: Array) -> void:
 		if is_instance_valid(enemy):
 			spawned_positions.append(enemy.global_position)
 
-	for _i in range(target_enemy_count):
+	var current_non_boss: int = _get_non_boss_enemy_count(field_enemies)
+	var spawn_needed: int = maxi(0, target_enemy_count - current_non_boss)
+
+	if use_spawn_markers_for_initial_spawn:
+		var marker_positions: Array[Vector2] = _get_spawn_marker_positions()
+		marker_positions.shuffle()
+		for marker_pos in marker_positions:
+			if spawn_needed <= 0:
+				break
+			if not _is_spawn_position_valid(marker_pos, spawned_positions, player_pos, MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER):
+				continue
+			var marker_tile_type: String = _get_tile_type_at(marker_pos)
+			_spawn_enemy_at({"position": marker_pos, "tile_type": marker_tile_type}, field_enemies)
+			spawned_positions.append(marker_pos)
+			spawn_needed -= 1
+
+	for _i in range(spawn_needed):
 		var pos: Vector2 = _find_spawn_position_on_map(
 			spawned_positions,
 			Rect2(),
@@ -270,14 +328,17 @@ func _get_non_boss_enemy_count(field_enemies: Array) -> int:
 
 
 func _roll_target_enemy_count() -> int:
-	if FieldManager and not FieldManager.current_field_data.is_empty():
-		var enemy_count: Dictionary = FieldManager.current_field_data.get("enemy_count", {}) as Dictionary
+	if FieldManager and not FieldManager.current_area_data.is_empty():
+		var enemy_count: Dictionary = FieldManager.current_area_data.get("enemy_count", {}) as Dictionary
 		var min_count: int = int(enemy_count.get("min", DEFAULT_MAX_ENEMIES))
 		var max_count: int = int(enemy_count.get("max", min_count))
 		if max_count < min_count:
 			max_count = min_count
 		var rolled: int = randi_range(min_count, max_count)
 		var boosted: int = int(round(float(rolled) * FIELD_ENEMY_COUNT_MULTIPLIER))
+		if GameManager != null and GameManager.has_method("get_trinket_field_enemy_count_multiplier"):
+			var trinket_mult: float = float(GameManager.call("get_trinket_field_enemy_count_multiplier"))
+			boosted = int(round(float(boosted) * trinket_mult))
 		return maxi(1, boosted)
 	return DEFAULT_MAX_ENEMIES
 
@@ -326,7 +387,9 @@ func _spawn_boss(field_enemies: Array) -> void:
 		push_error("[EnemySpawner] boss id missing")
 		return
 
-	var enemy: Node2D = field_enemy_scene.instantiate()
+	var enemy: Node2D = _instantiate_enemy()
+	if enemy == null:
+		return
 	enemy.z_index = FIELD_ENEMY_Z
 	field.add_child(enemy)
 
@@ -347,13 +410,15 @@ func spawn_field_boss(field_enemies: Array) -> void:
 	if boss_id.is_empty():
 		boss_id = "slime"
 
-	var enemy: Node2D = field_enemy_scene.instantiate()
+	var enemy: Node2D = _instantiate_enemy()
+	if enemy == null:
+		return
 	enemy.z_index = FIELD_ENEMY_Z
 	field.add_child(enemy)
 
 	var boss_pos: Vector2 = map_bounds.get_center() if bounds_calculated else Vector2(480, 270)
-	if field and field.has_method("get_test_field_boss_position"):
-		var custom_pos: Variant = field.call("get_test_field_boss_position")
+	if field and field.has_method("get_field_boss_spawn_position"):
+		var custom_pos: Variant = field.call("get_field_boss_spawn_position")
 		if custom_pos is Vector2 and custom_pos != Vector2.ZERO:
 			boss_pos = custom_pos as Vector2
 
@@ -380,7 +445,9 @@ func spawn_field_boss(field_enemies: Array) -> void:
 
 
 func _spawn_enemy_at(tile_data: Dictionary, field_enemies: Array, force_elite: bool = false, is_respawn: bool = false) -> void:
-	var enemy: Node2D = field_enemy_scene.instantiate()
+	var enemy: Node2D = _instantiate_enemy()
+	if enemy == null:
+		return
 	enemy.z_index = FIELD_ENEMY_Z
 	field.add_child(enemy)
 
@@ -414,3 +481,27 @@ func _get_tile_type_at(pos: Vector2) -> String:
 	if source_id == -1:
 		return "grass"
 	return str(tile_type_map.get(source_id, "grass"))
+
+
+func _get_spawn_marker_positions() -> Array[Vector2]:
+	var positions: Array[Vector2] = []
+	if field == null or spawn_markers_root_path.is_empty():
+		return positions
+	var root: Node = field.get_node_or_null(spawn_markers_root_path)
+	if root == null:
+		return positions
+	if cached_spawn_markers.is_empty():
+		for child in root.get_children():
+			if child is Marker2D:
+				cached_spawn_markers.append(child as Marker2D)
+	for marker in cached_spawn_markers:
+		if marker != null and is_instance_valid(marker):
+			positions.append(marker.global_position)
+	return positions
+
+
+func _instantiate_enemy() -> Node2D:
+	if field_enemy_scene == null:
+		push_error("[EnemySpawner] field_enemy_scene is not assigned")
+		return null
+	return field_enemy_scene.instantiate() as Node2D

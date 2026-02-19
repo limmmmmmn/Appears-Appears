@@ -1,21 +1,23 @@
 extends Node
-## GameManager: 게임 상태 및 스테이지 진행 관리
+## GameManager: 게임 상태 및 액트 진행 관리
 
-signal stage_changed(stage: int, field: int)
+signal act_changed(act_id: String, area_id: String)
 signal gold_changed(new_gold: int)
+signal trinkets_changed(ids: Array)
 signal game_over
 signal game_clear
 
-enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER, TOWN }
+enum GameState { TITLE, FIELD, BATTLE, PAUSED, GAME_OVER, TOWN, NODE_SELECT }
 var current_state: GameState = GameState.TITLE
 
-var current_stage: int = 1
-var current_field: int = 1
-var max_fields_per_stage: int = 3
+var current_act_id: String = "act_1"
+var current_area_id: String = ""
 
 var gold: int = 0
 var kill_count: int = 0
 var obtained_legendaries: Array = []
+var obtained_trinkets: Array[String] = []
+var starting_trinket_id: String = ""
 var is_paused: bool = false
 
 
@@ -28,20 +30,23 @@ func change_state(new_state: GameState) -> void:
 
 
 func start_new_game() -> void:
-	current_stage = 1
-	current_field = 1
+	current_act_id = "act_1"
+	current_area_id = ""
 	gold = 2000
 	kill_count = 0
 	obtained_legendaries.clear()
-	
-	# 파티 및 인벤토리 초기화
+	obtained_trinkets.clear()
+	starting_trinket_id = ""
+
 	PartyManager.party.clear()
 	PartyManager.inventory.clear()
 	InventoryManager.clear()
-	
-	change_state(GameState.FIELD)
-	stage_changed.emit(current_stage, current_field)
+
+	FieldManager.generate_runtime_acts()
+	change_state(GameState.NODE_SELECT)
+	_emit_progress_changed()
 	gold_changed.emit(gold)
+	trinkets_changed.emit(obtained_trinkets.duplicate())
 
 
 func add_gold(amount: int) -> void:
@@ -53,7 +58,6 @@ func add_kill_count(amount: int = 1) -> void:
 	if amount <= 0:
 		return
 	kill_count += amount
-	
 
 
 func spend_gold(amount: int) -> bool:
@@ -61,7 +65,6 @@ func spend_gold(amount: int) -> bool:
 		return false
 	gold -= amount
 	gold_changed.emit(gold)
-
 	return true
 
 
@@ -69,29 +72,15 @@ func can_afford(amount: int) -> bool:
 	return gold >= amount
 
 
-func advance_to_next_field() -> void:
-	current_field += 1
-	stage_changed.emit(current_stage, current_field)
-
-
-func complete_stage() -> void:
-	current_stage += 1
-	current_field = 1
-	if current_stage > 5:
-		game_clear.emit()
-		change_state(GameState.GAME_OVER)
-		return
-	stage_changed.emit(current_stage, current_field)
-
-
 func is_boss_field() -> bool:
-	return current_field > max_fields_per_stage
+	return FieldManager.is_boss_field()
 
 
-func get_stage_display() -> String:
-	if is_boss_field():
-		return "Stage %d - BOSS" % current_stage
-	return "Stage %d-%d" % [current_stage, current_field]
+func get_act_display() -> String:
+	var act_num: String = _extract_numeric_suffix(current_act_id)
+	if act_num.is_empty():
+		act_num = "1"
+	return "Act %s" % act_num
 
 
 func has_legendary(item_id: String) -> bool:
@@ -103,73 +92,184 @@ func register_legendary(item_id: String) -> void:
 		obtained_legendaries.append(item_id)
 
 
+func choose_starting_trinket(trinket_id: String) -> bool:
+	if trinket_id.is_empty():
+		return false
+	if not starting_trinket_id.is_empty():
+		return false
+	if not obtain_trinket(trinket_id, "start"):
+		return false
+	starting_trinket_id = trinket_id
+	return true
+
+
+func obtain_trinket(trinket_id: String, source: String) -> bool:
+	if trinket_id.is_empty():
+		return false
+	if trinket_id in obtained_trinkets:
+		return false
+	var data: Dictionary = DataManager.get_trinket(trinket_id)
+	if data.is_empty():
+		return false
+	if source != "start":
+		var allowed_sources: Array = data.get("sources", []) as Array
+		if source not in allowed_sources:
+			return false
+
+	obtained_trinkets.append(trinket_id)
+	trinkets_changed.emit(obtained_trinkets.duplicate())
+	if SaveManager != null:
+		SaveManager.auto_save("트링켓 획득")
+	return true
+
+
+func grant_random_trinket(source: String) -> String:
+	var candidates: Array[String] = DataManager.get_trinkets_for_source(source)
+	var available: Array[String] = []
+	for tid in candidates:
+		if tid not in obtained_trinkets:
+			available.append(tid)
+	if available.is_empty():
+		return ""
+	available.shuffle()
+	var picked: String = available[0]
+	if obtain_trinket(picked, source):
+		return picked
+	return ""
+
+
+func get_obtained_trinkets() -> Array[String]:
+	return obtained_trinkets.duplicate()
+
+
+func get_trinket_enemy_stat_multiplier() -> float:
+	var mult: float = 1.0
+	for tid in obtained_trinkets:
+		var data: Dictionary = DataManager.get_trinket(tid)
+		mult *= float(data.get("enemy_stat_multiplier", 1.0))
+	return maxf(0.1, mult)
+
+
+func get_trinket_reward_gold_multiplier() -> float:
+	var mult: float = 1.0
+	for tid in obtained_trinkets:
+		var data: Dictionary = DataManager.get_trinket(tid)
+		mult *= float(data.get("reward_gold_multiplier", 1.0))
+	return maxf(0.1, mult)
+
+
+func get_trinket_reward_exp_multiplier() -> float:
+	var mult: float = 1.0
+	for tid in obtained_trinkets:
+		var data: Dictionary = DataManager.get_trinket(tid)
+		mult *= float(data.get("reward_exp_multiplier", 1.0))
+	return maxf(0.1, mult)
+
+
+func get_trinket_field_enemy_count_multiplier() -> float:
+	var mult: float = 1.0
+	for tid in obtained_trinkets:
+		var data: Dictionary = DataManager.get_trinket(tid)
+		mult *= float(data.get("field_enemy_count_multiplier", 1.0))
+	return maxf(0.1, mult)
+
+
+func get_trinket_battle_enemy_bonus() -> int:
+	var bonus: int = 0
+	for tid in obtained_trinkets:
+		var data: Dictionary = DataManager.get_trinket(tid)
+		bonus += int(data.get("battle_enemy_bonus", 0))
+	return maxi(0, bonus)
+
+
+func get_trinket_max_enemies_per_window_bonus() -> int:
+	var bonus: int = 0
+	for tid in obtained_trinkets:
+		var data: Dictionary = DataManager.get_trinket(tid)
+		bonus += int(data.get("max_enemies_per_window_bonus", 0))
+	return maxi(0, bonus)
+
+
 func trigger_game_over() -> void:
 	game_over.emit()
 	change_state(GameState.GAME_OVER)
 
 
 #region 씬 전환
-func go_to_field(stage_id: String = "", field_id: String = "") -> void:
-	## 필드로 이동
-	if stage_id.is_empty():
-		stage_id = "stage_" + str(current_stage)
-	if field_id.is_empty():
-		# 현재 필드 ID 사용
-		field_id = "field_%d_%d" % [current_stage, current_field]
-	
-	# 필드 존재 확인
-	FieldManager.set_current_stage(stage_id)
-	if not FieldManager.set_current_field(field_id):
-		# 필드가 없으면 첫 번째 필드로
-		field_id = FieldManager.get_first_field_id(stage_id)
-		FieldManager.set_current_field(field_id)
-	
-	var scene_path: String = FieldManager.get_current_field_scene()
+func go_to_area(act_id: String = "", area_id: String = "") -> void:
+	if act_id.is_empty():
+		act_id = current_act_id
+	if act_id.is_empty():
+		act_id = "act_1"
+
+	if FieldManager.ensure_runtime_acts().is_empty():
+		push_error("[GameManager] runtime acts 가 비어 있음")
+		return
+
+	if not FieldManager.set_current_act(act_id):
+		var first_acts: Array[Dictionary] = FieldManager.get_runtime_acts()
+		if first_acts.is_empty():
+			push_error("[GameManager] 이동 가능한 액트가 없음")
+			return
+		act_id = str((first_acts[0] as Dictionary).get("id", ""))
+		if not FieldManager.set_current_act(act_id):
+			push_error("[GameManager] 액트 설정 실패: " + act_id)
+			return
+
+	if area_id.is_empty():
+		if not current_area_id.is_empty() and FieldManager.get_runtime_area(act_id, current_area_id).size() > 0:
+			area_id = current_area_id
+		else:
+			area_id = FieldManager.get_first_area_id(act_id)
+
+	if not FieldManager.set_current_area(area_id):
+		area_id = FieldManager.get_first_area_id(act_id)
+		if area_id.is_empty() or not FieldManager.set_current_area(area_id):
+			push_error("[GameManager] 에어리어 설정 실패: " + act_id + "/" + area_id)
+			return
+
+	current_act_id = FieldManager.current_act_id
+	current_area_id = FieldManager.current_area_id
+	_emit_progress_changed()
+
+	var scene_path: String = FieldManager.get_current_area_scene()
 	if scene_path.is_empty():
-		scene_path = "res://scenes/field/Field_1_1.tscn"
-	
+		push_error("[GameManager] 에어리어 씬 경로를 찾을 수 없음: " + act_id + "/" + area_id)
+		return
+
 	change_state(GameState.FIELD)
-	
-	# 자동 저장
 	if SaveManager:
-		SaveManager.auto_save("필드 진입")
-	
+		SaveManager.auto_save("에어리어 진입")
 	get_tree().change_scene_to_file(scene_path)
 
 
-func go_to_next_from_field() -> void:
-	## 필드 출구 도달 시 호출
-	var next: String = FieldManager.get_next_destination()
+func go_to_next_from_area() -> void:
+	var next_ids: Array[String] = FieldManager.get_next_area_ids()
+	if not next_ids.is_empty():
+		go_to_area(current_act_id, next_ids[0])
+		return
 
-	if next.begins_with("stage_"):
-		# 다음 스테이지
-		current_stage += 1
-		current_field = 1
-		go_to_field(next)
-	elif next == "ending":
-		game_clear.emit()
-		go_to_ending()
-	elif next.begins_with("field_"):
-		# 같은 스테이지 다음 필드
-		current_field += 1
-		var new_stage_id: String = "stage_" + str(current_stage)
-		go_to_field(new_stage_id, next)
-	else:
-		# 기본: 다음 필드로 진행
-		current_field += 1
-		var new_stage_id: String = "stage_" + str(current_stage)
-		var new_field_id: String = "field_%d_%d" % [current_stage, current_field]
-		go_to_field(new_stage_id, new_field_id)
+	if FieldManager.is_boss_field():
+		var next_act_id: String = FieldManager.get_next_act_id(current_act_id)
+		if next_act_id.is_empty():
+			game_clear.emit()
+			go_to_ending()
+			return
+		var next_area_id: String = FieldManager.get_first_area_id(next_act_id)
+		go_to_area(next_act_id, next_area_id)
+		return
+
+	# 비보스인데 next가 없으면 클리어로 처리
+	game_clear.emit()
+	go_to_ending()
 
 
 func go_to_ending() -> void:
-	## 엔딩 화면으로 이동
-	change_state(GameState.GAME_OVER)  # 게임 종료 상태
+	change_state(GameState.GAME_OVER)
 	get_tree().change_scene_to_file("res://scenes/main/Ending.tscn")
 
 
 func go_to_town() -> void:
-	## 마을 화면으로 이동
 	change_state(GameState.TOWN)
 	if SaveManager:
 		SaveManager.auto_save("마을 이동")
@@ -178,6 +278,22 @@ func go_to_town() -> void:
 
 
 func go_to_den() -> void:
-	## 레거시 호환: 기존 호출은 마을로 연결
 	go_to_town()
 #endregion
+
+
+func _emit_progress_changed() -> void:
+	act_changed.emit(current_act_id, current_area_id)
+
+
+func _extract_numeric_suffix(raw_id: String) -> String:
+	if raw_id.is_empty():
+		return ""
+	var digits: String = ""
+	for i in range(raw_id.length() - 1, -1, -1):
+		var ch: String = raw_id.substr(i, 1)
+		if ch >= "0" and ch <= "9":
+			digits = ch + digits
+		elif not digits.is_empty():
+			break
+	return digits

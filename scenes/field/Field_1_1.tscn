@@ -1,9 +1,11 @@
-[gd_scene format=4 uid="uid://c008tqwu8n251"]
+[gd_scene format=4 uid="uid://dgebsocgqueyy"]
 
-[ext_resource type="Script" uid="uid://rfdeqsdabhqc" path="res://scripts/scenes/Field.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://ca5o0lipqprv7" path="res://scripts/scenes/Field.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://w64om3yc6rup" path="res://assets/sprites/tilesets/grass.png" id="2_4afwf"]
 [ext_resource type="Texture2D" uid="uid://cidwgh8l8espo" path="res://assets/sprites/tilesets/forest.png" id="3_c8nu2"]
 [ext_resource type="Texture2D" uid="uid://dyx34ojd6pmj3" path="res://assets/sprites/tilesets/mountain.png" id="4_ptagh"]
+[ext_resource type="Resource" uid="uid://b057llkyd0qv2" path="res://data/fields/a1_start.tres" id="a1_start_template"]
+[ext_resource type="PackedScene" path="res://scenes/field/EnemySpawner.tscn" id="enemy_spawner_scene"]
 [ext_resource type="PackedScene" uid="uid://c2cjb4efakggb" path="res://scenes/ui/FieldHUD.tscn" id="hud_scene"]
 [ext_resource type="PackedScene" uid="uid://ly3qxa1t3hy3" path="res://scenes/field/PartyMember.tscn" id="player_scene"]
 
@@ -26,8 +28,14 @@ sources/0 = SubResource("TileSetAtlasSource_c8nu2")
 sources/1 = SubResource("TileSetAtlasSource_ptagh")
 sources/2 = SubResource("TileSetAtlasSource_qul3a")
 
-[node name="Field_1_1" type="Node2D" unique_id=12312697]
+[node name="a1_start" type="Node2D" unique_id=12312697]
 script = ExtResource("1_script")
+spawn_point = NodePath("SpawnPoint")
+boss_spawn_point = NodePath("BossSpawnPoint")
+tilemap = NodePath("TileMapLayer")
+enemy_spawner_node = NodePath("EnemySpawner")
+field_template = ExtResource("a1_start_template")
+enable_runtime_field_content = true
 
 [node name="Background" type="ColorRect" parent="." unique_id=1825468973]
 offset_right = 480.0
@@ -46,6 +54,10 @@ tile_set = SubResource("TileSet_ptagh")
 visible = false
 position = Vector2(240, 135)
 
+[node name="BossSpawnPoint" type="Marker2D" parent="." unique_id=117503944]
+visible = false
+position = Vector2(787.2, 152.32)
+
 [node name="EnemySpawnPoints" type="Node2D" parent="." unique_id=1079645584]
 
 [node name="Point1" type="Marker2D" parent="EnemySpawnPoints" unique_id=871670815]
@@ -59,6 +71,8 @@ position = Vector2(100, 170)
 
 [node name="Point4" type="Marker2D" parent="EnemySpawnPoints" unique_id=1663613165]
 position = Vector2(380, 170)
+
+[node name="EnemySpawner" parent="." unique_id=1342084965 instance=ExtResource("enemy_spawner_scene")]
 
 [node name="HUD" parent="." unique_id=1370225558 instance=ExtResource("hud_scene")]
 

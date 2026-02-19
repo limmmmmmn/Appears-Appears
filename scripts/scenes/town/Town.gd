@@ -54,6 +54,8 @@ var street_runway: Control
 var street_bg: ColorRect
 
 var walkers: Array[Dictionary] = []
+var shop_trinket_granted_this_visit: bool = false
+var event_trinket_granted_this_visit: bool = false
 
 func _ready() -> void:
 	randomize()
@@ -423,13 +425,69 @@ func _get_hero_field_texture(hero_id: String) -> Texture2D:
 
 func _on_grid_pressed(index: int) -> void:
 	_set_selected_building(index)
+	_try_grant_town_trinket(index)
 
 
 func _on_back_pressed() -> void:
-	if GameManager != null and GameManager.has_method("go_to_field"):
-		GameManager.go_to_field()
+	if GameManager != null and GameManager.has_method("go_to_area"):
+		if FieldManager != null and FieldManager.get_current_area_type() == "town":
+			GameManager.go_to_next_from_area()
+		else:
+			GameManager.go_to_area()
 	else:
-		get_tree().change_scene_to_file("res://scenes/field/Field_1_1.tscn")
+		if FieldManager != null:
+			if FieldManager.current_act_id.is_empty():
+				FieldManager.set_current_act("act_1")
+			if FieldManager.current_area_id.is_empty():
+				var first_area_id: String = FieldManager.get_first_area_id(FieldManager.current_act_id)
+				if not first_area_id.is_empty():
+					FieldManager.set_current_area(first_area_id)
+			var fallback_scene: String = FieldManager.get_current_area_scene()
+			if not fallback_scene.is_empty():
+				get_tree().change_scene_to_file(fallback_scene)
+			else:
+				push_error("[Town] 돌아갈 에어리어 씬을 찾을 수 없습니다.")
+
+
+func _try_grant_town_trinket(index: int) -> void:
+	if index < 0 or index >= layout_data.size():
+		return
+	if GameManager == null or not GameManager.has_method("grant_random_trinket"):
+		return
+
+	var data: Dictionary = layout_data[index]
+	var kind: String = str(data.get("kind", ""))
+	var source: String = ""
+	var source_name: String = ""
+
+	if kind == "상가":
+		if shop_trinket_granted_this_visit:
+			return
+		source = "shop"
+		source_name = "상점"
+	elif kind == "이벤트":
+		if event_trinket_granted_this_visit:
+			return
+		source = "event"
+		source_name = "이벤트"
+	else:
+		return
+
+	var gained_trinket_id: String = str(GameManager.call("grant_random_trinket", source))
+	if gained_trinket_id.is_empty():
+		return
+
+	if source == "shop":
+		shop_trinket_granted_this_visit = true
+	else:
+		event_trinket_granted_this_visit = true
+
+	var tdata: Dictionary = DataManager.get_trinket(gained_trinket_id) if DataManager != null else {}
+	var tname: String = str(tdata.get("name", gained_trinket_id))
+	var temoji: String = str(tdata.get("emoji", "🧿"))
+	var append_msg: String = "\n\n%s [%s] 트링켓 획득: %s" % [temoji, source_name, tname]
+	if popup_desc != null:
+		popup_desc.text += append_msg
 
 
 func _make_style(bg: Color, border: Color, radius: int = 6, width: int = 1) -> StyleBoxFlat:

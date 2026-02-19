@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "bow_epic"
+name = "월광 활"
+slot = "main_hand"
+type = "bow"
+rarity = "epic"
+two_handed = true
+stats = {
+  "atk": 38,
+  "spd": 12,
+  "luk": 8,
+  "int": 5
+}
+special_effect = {
+  "type": "piercing",
+  "value": 0.3
+}
+gear_score = 75

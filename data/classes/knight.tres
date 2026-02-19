@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="ClassTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ClassTemplate.gd" id="1_class_template"]
+
+[resource]
+script = ExtResource("1_class_template")
+id = "knight"
+name = "기사"
+description = "중장갑 탱커"
+base_stats = {
+"def": 24,
+"dex": 8,
+"hp": 100,
+"int": 6,
+"luk": 8,
+"str": 20
+}
+growth = {
+"def": 4,
+"dex": 1,
+"hp": 10,
+"int": 1,
+"luk": 1,
+"str": 2
+}
+equip_restrictions = {
+"can_equip": ["sword", "lance", "shield", "heavy_armor", "helmet", "acc"],
+"dual_wield": false
+}
+tags = ["melee", "physical", "tank", "heavy"]
+skills = ["basic_attack", "shield_bash"]

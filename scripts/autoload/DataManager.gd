@@ -1,5 +1,5 @@
 extends Node
-## DataManager: JSON 데이터 로드 및 접근 담당
+## DataManager: 데이터 로드 및 접근 담당
 
 var classes: Dictionary = {}
 var heroes: Dictionary = {}
@@ -8,10 +8,18 @@ var skills: Dictionary = {}
 var equipment: Dictionary = {}
 var items: Dictionary = {}
 var traits: Dictionary = {}
-var runes: Dictionary = {}
 var dialogues: Dictionary = {}
+var trinkets: Dictionary = {}
 
-const DATA_PATH := "res://data/"
+const CLASS_RESOURCE_PATH := "res://data/classes"
+const HERO_RESOURCE_PATH := "res://data/heroes"
+const ENEMY_RESOURCE_PATH := "res://data/enemies"
+const SKILL_RESOURCE_PATH := "res://data/skills"
+const EQUIPMENT_RESOURCE_PATH := "res://data/equipment"
+const ITEM_RESOURCE_PATH := "res://data/items"
+const TRAIT_RESOURCE_PATH := "res://data/traits"
+const DIALOGUE_JSON_DIR_PATH := "res://data/dialogues"
+const TRINKET_RESOURCE_PATH := "res://data/trinkets"
 
 
 func _ready() -> void:
@@ -19,33 +27,180 @@ func _ready() -> void:
 
 
 func _load_all_data() -> void:
-	classes = _load_json("classes.json")
-	heroes = _load_json("heroes.json")
-	enemies = _load_json("enemies.json")
-	skills = _load_json("skills.json")
-	equipment = _load_json("equipment.json")
-	items = _load_json("items.json")
-	traits = _load_json("traits.json")
-	runes = _load_json("runes.json")
-	dialogues = _load_json("dialogues.json")
+	classes = _load_class_data()
+	heroes = _load_hero_data()
+	enemies = _load_enemy_data()
+	skills = _load_skill_data()
+	equipment = _load_equipment_data()
+	items = _load_item_data()
+	traits = _load_trait_data()
+	dialogues = _load_dialogue_data()
+	trinkets = _load_trinket_data()
 	
 
 
-func _load_json(filename: String) -> Dictionary:
-	var path := DATA_PATH + filename
+func _load_enemy_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(ENEMY_RESOURCE_PATH, "Enemy")
+	if loaded.is_empty():
+		push_error("[DataManager] Enemy resources are empty: " + ENEMY_RESOURCE_PATH)
+	return loaded
+
+
+func _load_class_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(CLASS_RESOURCE_PATH, "Class")
+	if loaded.is_empty():
+		push_error("[DataManager] Class resources are empty: " + CLASS_RESOURCE_PATH)
+	return loaded
+
+
+func _load_hero_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(HERO_RESOURCE_PATH, "Hero")
+	if loaded.is_empty():
+		push_error("[DataManager] Hero resources are empty: " + HERO_RESOURCE_PATH)
+	return loaded
+
+
+func _load_skill_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(SKILL_RESOURCE_PATH, "Skill")
+	if loaded.is_empty():
+		push_error("[DataManager] Skill resources are empty: " + SKILL_RESOURCE_PATH)
+	return loaded
+
+
+func _load_equipment_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(EQUIPMENT_RESOURCE_PATH, "Equipment")
+	if loaded.is_empty():
+		push_error("[DataManager] Equipment resources are empty: " + EQUIPMENT_RESOURCE_PATH)
+	return loaded
+
+
+func _load_item_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(ITEM_RESOURCE_PATH, "Item")
+	if loaded.is_empty():
+		push_error("[DataManager] Item resources are empty: " + ITEM_RESOURCE_PATH)
+	return loaded
+
+
+func _load_trait_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(TRAIT_RESOURCE_PATH, "Trait")
+	if loaded.is_empty():
+		push_error("[DataManager] Trait resources are empty: " + TRAIT_RESOURCE_PATH)
+	return loaded
+
+
+func _load_trinket_data() -> Dictionary:
+	var loaded: Dictionary = _load_resource_dict(TRINKET_RESOURCE_PATH, "Trinket")
+	if loaded.is_empty():
+		push_error("[DataManager] Trinket resources are empty: " + TRINKET_RESOURCE_PATH)
+	return loaded
+
+
+func _load_dialogue_data() -> Dictionary:
+	var out: Dictionary = {}
+	var dir := DirAccess.open(DIALOGUE_JSON_DIR_PATH)
+	if dir == null:
+		push_error("[DataManager] Dialogue directory not found: " + DIALOGUE_JSON_DIR_PATH)
+		return out
+
+	dir.list_dir_begin()
+	while true:
+		var filename: String = dir.get_next()
+		if filename.is_empty():
+			break
+		if dir.current_is_dir() or not filename.ends_with(".json"):
+			continue
+
+		var file_path: String = DIALOGUE_JSON_DIR_PATH.path_join(filename)
+		var parsed: Dictionary = _load_json_dictionary(file_path)
+		if parsed.is_empty():
+			continue
+
+		var category_id: String = filename.get_basename()
+		var entries: Dictionary = parsed
+		var has_entries_container: bool = parsed.has("entries") and parsed.get("entries", {}) is Dictionary
+		if has_entries_container:
+			category_id = str(parsed.get("category", category_id))
+			entries = parsed.get("entries", {}) as Dictionary
+		if entries.is_empty():
+			continue
+
+		var cleaned: Dictionary = {}
+		for trigger_key in entries.keys():
+			var trigger_id: String = str(trigger_key)
+			if trigger_id.begins_with("_"):
+				continue
+			cleaned[trigger_id] = entries[trigger_key]
+		if cleaned.is_empty():
+			continue
+
+		var current: Dictionary = out.get(category_id, {}) as Dictionary
+		for trigger_id in cleaned.keys():
+			current[trigger_id] = cleaned[trigger_id]
+		out[category_id] = current
+
+	dir.list_dir_end()
+	if out.is_empty():
+		push_error("[DataManager] Dialogue JSON files are empty: " + DIALOGUE_JSON_DIR_PATH)
+	return out
+
+
+func _load_json_dictionary(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
-		push_error("[DataManager] 파일 없음: " + path)
+		push_error("[DataManager] JSON file not found: " + path)
 		return {}
-	
+
 	var file := FileAccess.open(path, FileAccess.READ)
-	var json := JSON.new()
-	var error := json.parse(file.get_as_text())
-	file.close()
-	
-	if error != OK:
-		push_error("[DataManager] JSON 파싱 실패: " + path)
+	if file == null:
+		push_error("[DataManager] Failed to open JSON file: " + path)
 		return {}
-	return json.data
+
+	var text: String = file.get_as_text()
+	file.close()
+
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		push_error("[DataManager] JSON parse failed: " + path)
+		return {}
+	if not (json.data is Dictionary):
+		push_error("[DataManager] JSON root must be Dictionary: " + path)
+		return {}
+	return json.data as Dictionary
+
+
+func _load_resource_dict(dir_path: String, label: String) -> Dictionary:
+	var out: Dictionary = {}
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return out
+
+	dir.list_dir_begin()
+	while true:
+		var filename: String = dir.get_next()
+		if filename.is_empty():
+			break
+		if dir.current_is_dir() or not filename.ends_with(".tres"):
+			continue
+
+		var resource_path: String = dir_path.path_join(filename)
+		var loaded: Resource = load(resource_path)
+		if loaded == null:
+			push_error("[DataManager] %s resource load failed: %s" % [label, resource_path])
+			continue
+		if not loaded.has_method("to_dict"):
+			push_warning("[DataManager] %s resource missing to_dict(): %s" % [label, resource_path])
+			continue
+
+		var entry_data: Dictionary = loaded.call("to_dict") as Dictionary
+		if entry_data.is_empty():
+			continue
+		var entry_id: String = str(entry_data.get("id", ""))
+		if entry_id.is_empty():
+			entry_id = filename.get_basename()
+			entry_data["id"] = entry_id
+		out[entry_id] = entry_data
+
+	dir.list_dir_end()
+	return out
 
 
 # 직업 (get_class -> get_class_data로 변경, Godot 내장 함수와 충돌 방지)
@@ -156,20 +311,29 @@ func get_hero_traits(hero_id: String) -> Array:
 	return hero_data.get("traits", [])
 
 
-# 룬
-func get_rune(rune_id: String) -> Dictionary:
-	return runes.get(rune_id, {})
+# 트링켓
+func get_trinket(trinket_id: String) -> Dictionary:
+	return trinkets.get(trinket_id, {})
 
-func get_all_rune_ids() -> Array:
-	return runes.keys()
 
-func get_rune_trait(rune_id: String) -> Dictionary:
-	## 룬에 부여된 특성 반환
-	var rune_data: Dictionary = get_rune(rune_id)
-	var trait_id: String = rune_data.get("trait_id", "")
-	if trait_id.is_empty():
-		return {}
-	return get_trait(trait_id)
+func get_all_trinket_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for tid in trinkets.keys():
+		ids.append(str(tid))
+	ids.sort()
+	return ids
+
+
+func get_trinkets_for_source(source: String) -> Array[String]:
+	var result: Array[String] = []
+	if source.is_empty():
+		return result
+	for tid in get_all_trinket_ids():
+		var data: Dictionary = get_trinket(tid)
+		var sources: Array = data.get("sources", []) as Array
+		if source in sources:
+			result.append(tid)
+	return result
 
 
 # 대사
@@ -177,7 +341,7 @@ func get_dialogues() -> Dictionary:
 	return dialogues
 
 
-func get_dialogue_lines(category: String, trigger: String, hero_id: String = "") -> Array[String]:
+func get_dialogue_lines(category: String, trigger: String, speaker_id: String = "") -> Array[String]:
 	var result: Array[String] = []
 	if category.is_empty() or trigger.is_empty():
 		return result
@@ -191,11 +355,11 @@ func get_dialogue_lines(category: String, trigger: String, hero_id: String = "")
 	if trigger_data.is_empty():
 		return result
 
-	if not hero_id.is_empty():
-		var heroes_data: Dictionary = trigger_data.get("heroes", {}) as Dictionary
-		var hero_lines_variant: Variant = heroes_data.get(hero_id, [])
-		if hero_lines_variant is Array:
-			for v in hero_lines_variant:
+	if not speaker_id.is_empty():
+		var speakers_data: Dictionary = trigger_data.get("speakers", trigger_data.get("heroes", {})) as Dictionary
+		var speaker_lines_variant: Variant = speakers_data.get(speaker_id, [])
+		if speaker_lines_variant is Array:
+			for v in speaker_lines_variant:
 				result.append(str(v))
 			if not result.is_empty():
 				return result

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "chainmail_uncommon"
+name = "강화 사슬 갑옷"
+slot = "body"
+type = "medium_armor"
+rarity = "uncommon"
+two_handed = false
+stats = {
+  "def": 14,
+  "hp": 10
+}
+gear_score = 18

@@ -398,7 +398,7 @@ func _position_party_chatter_bubble(speaker: Node2D, bubble: PanelContainer) -> 
 
 
 func _create_party_chatter_bubble(_speaker: Node2D, text: String, color: Color) -> PanelContainer:
-	var bubble_scene_res: PackedScene = load("res://scenes/ui/PartyChatterBubble.tscn") as PackedScene
+	var bubble_scene_res: PackedScene = load("res://scenes/ui/SpeechBubble.tscn") as PackedScene
 	if bubble_scene_res != null:
 		var node: Node = bubble_scene_res.instantiate()
 		var bubble_scene: PanelContainer = node as PanelContainer
@@ -588,4 +588,3 @@ func _is_battle_chatter_context() -> bool:
 	if BattleManager == null:
 		return false
 	return BattleManager.get_active_battle_count() > 0
-

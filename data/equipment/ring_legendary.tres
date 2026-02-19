@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "ring_legendary"
+name = "전능의 반지"
+slot = "ring"
+type = "ring"
+rarity = "legendary"
+two_handed = false
+stats = {
+  "str": 15,
+  "int": 15,
+  "spd": 10,
+  "luk": 15,
+  "hp": 50
+}
+special_effect = {
+  "type": "all_stats",
+  "value": 0.1
+}
+gear_score = 200

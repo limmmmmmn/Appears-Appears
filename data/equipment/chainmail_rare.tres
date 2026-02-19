@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "chainmail_rare"
+name = "드워프제 갑옷"
+slot = "body"
+type = "medium_armor"
+rarity = "rare"
+two_handed = false
+stats = {
+  "def": 24,
+  "hp": 35,
+  "str": 4
+}
+gear_score = 48

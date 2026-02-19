@@ -75,7 +75,7 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	# 기본 스탯
 	var stats: Dictionary = data.get("stats", {})
 	max_hp = int(int(stats.get("hp", 10)) * HP_MULTIPLIER)
-	base_str = int(stats.get("atk", 5))  # enemies.json uses "atk" not "str"
+	base_str = int(stats.get("atk", 5))
 	base_def = int(stats.get("def", 2))
 	base_int = int(stats.get("int", 1))
 	base_dex = int(stats.get("dex", 5))
@@ -89,6 +89,15 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 		max_hp = int(max_hp * 2.0)  # HP 2배
 		base_str = int(base_str * 1.5)  # 공격력 1.5배
 		base_def = int(base_def * 1.5)  # 방어력 1.5배
+
+	# 트링켓 난이도 배율 적용 (적 스탯 강화)
+	if GameManager != null and GameManager.has_method("get_trinket_enemy_stat_multiplier"):
+		var trinket_mult: float = float(GameManager.call("get_trinket_enemy_stat_multiplier"))
+		max_hp = maxi(1, int(round(float(max_hp) * trinket_mult)))
+		base_str = maxi(1, int(round(float(base_str) * trinket_mult)))
+		base_def = maxi(0, int(round(float(base_def) * trinket_mult)))
+		base_int = maxi(0, int(round(float(base_int) * trinket_mult)))
+		base_dex = maxi(1, int(round(float(base_dex) * trinket_mult)))
 
 	_origin_max_hp = maxi(1, max_hp)
 	_origin_atk = maxi(1, base_str)
@@ -265,6 +274,11 @@ func roll_drops() -> Array:
 		var final_chance: float = clampf(base_chance * luk_multiplier * DROP_RATE_MULTIPLIER, 0.0, 0.95)
 		
 		if randf() < final_chance:
+			# 트링켓은 일반 드랍에서 제외 (보스/상점/이벤트 획득 전용)
+			if DataManager != null and DataManager.has_method("get_trinket"):
+				var trinket_data: Dictionary = DataManager.get_trinket(item_id)
+				if not trinket_data.is_empty():
+					continue
 			drops.append(item_id)
 	
 	# 2. 일반몹 추가 장비 드랍 (common 등급만)

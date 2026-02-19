@@ -26,7 +26,7 @@ func _collect_stats() -> void:
 	## 플레이 통계 수집
 	stats = {
 		"gold": GameManager.gold,
-		"stage": GameManager.current_stage,
+		"act": GameManager.get_act_display(),
 		"party_size": PartyManager.get_party().size(),
 		"legendaries": GameManager.obtained_legendaries.size()
 	}

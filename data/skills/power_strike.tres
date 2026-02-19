@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SkillTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/SkillTemplate.gd" id="1_skill_template"]
+
+[resource]
+script = ExtResource("1_skill_template")
+id = "power_strike"
+name = "강타"
+description = "공격력의 2배 데미지 (크리티컬 적용)"
+type = "physical"
+target = "single_enemy"
+cooldown = 5.0
+damage_base = 0
+damage_scaling = {
+  "stat": "str",
+  "multiplier": 2.0
+}
+effects = []
+default_on = true

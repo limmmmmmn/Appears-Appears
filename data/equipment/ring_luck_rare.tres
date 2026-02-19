@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "ring_luck_rare"
+name = "도박꾼의 반지"
+slot = "ring"
+type = "ring"
+rarity = "rare"
+two_handed = false
+stats = {
+  "luk": 12,
+  "spd": 3
+}
+gear_score = 25

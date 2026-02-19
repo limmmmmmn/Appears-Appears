@@ -5,7 +5,7 @@ class_name PartyMember
 
 @export var move_speed: float = 60.0
 @export_group("Chatter Bubble")
-@export var chatter_bubble_scene: PackedScene = preload("res://scenes/ui/PartyChatterBubble.tscn")
+@export var chatter_bubble_scene: PackedScene = preload("res://scenes/ui/SpeechBubble.tscn")
 @export var chatter_bubble_extra_lift: float = 24.0
 @export var chatter_bubble_offset: Vector2 = Vector2.ZERO
 
@@ -276,7 +276,7 @@ func get_chatter_bubble_offset() -> Vector2:
 func create_chatter_bubble(text: String, tint_color: Color) -> PanelContainer:
 	var scene: PackedScene = chatter_bubble_scene
 	if scene == null:
-		scene = load("res://scenes/ui/PartyChatterBubble.tscn")
+		scene = load("res://scenes/ui/SpeechBubble.tscn")
 	if scene == null:
 		return null
 
@@ -287,7 +287,7 @@ func create_chatter_bubble(text: String, tint_color: Color) -> PanelContainer:
 			instance.queue_free()
 		return null
 
-	var chatter_bubble: PartyChatterBubble = bubble as PartyChatterBubble
+	var chatter_bubble: SpeechBubble = bubble as SpeechBubble
 	if chatter_bubble != null:
 		chatter_bubble.configure(text, tint_color)
 	elif bubble.has_method("configure"):

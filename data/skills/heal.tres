@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/SkillTemplate.gd" id="1_skill_template"]
+
+[resource]
+script = ExtResource("1_skill_template")
+id = "heal"
+name = "힐"
+description = "아군 한 명의 HP를 회복한다 (필드에서도 사용 가능)"
+type = "heal"
+target = "single_ally"
+cooldown = 4.0
+effects = []
+default_on = true
+base_damage = 12
+scaling = 0.8
+usable_on_field = true

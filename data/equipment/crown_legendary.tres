@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "crown_legendary"
+name = "고블린 왕의 왕관"
+slot = "head"
+type = "helmet"
+rarity = "legendary"
+two_handed = false
+stats = {
+  "def": 15,
+  "luk": 15,
+  "hp": 50
+}
+special_effect = {
+  "type": "gold_bonus",
+  "value": 0.25
+}
+gear_score = 80

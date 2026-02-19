@@ -5,12 +5,7 @@ signal battle_triggered(battle_enemies: Array)
 signal exit_reached(next_destination: String)
 signal field_cleared
 
-const TEST_FIELD_ID := "field_1_1"
-const TEST_MAP_TILES := Vector2i(60, 34) # 960x544 (tile 16 기준)
-const TEST_TILE_SIZE := 16
-const TEST_CAMERA_MARGIN_TILES := 0
-const TEST_FLOOR_SOURCE_ID := 0
-const TEST_WALL_SOURCE_ID := 2
+const FIELD_TILE_SIZE := 16
 const FIELD_TILE_TYPE_MAP := {
 	0: "grass",
 	1: "forest",
@@ -18,8 +13,6 @@ const FIELD_TILE_TYPE_MAP := {
 	3: "water",
 	4: "cave",
 }
-const TEST_PLAYER_SPAWN_RATIO := Vector2(0.18, 0.72)
-const TEST_BOSS_SPAWN_RATIO := Vector2(0.82, 0.28)
 const RECRUIT_TRIGGER_DISTANCE: float = 46.0
 const RECRUIT_MIN_DIST_FROM_PLAYER: float = 170.0
 const RECRUIT_MIN_DIST_FROM_BOSS: float = 130.0
@@ -35,7 +28,6 @@ const RECRUIT_EVENT_LINE_INTERVAL: float = 1.55
 const EVENT_WINDOW_SCENE := preload("res://scenes/event/EventWindow.tscn")
 const REWARD_WINDOW_SCENE := preload("res://scenes/ui/RewardWindow.tscn")
 const WINDOW_SHELL_SCRIPT := preload("res://scripts/ui/window/WindowShell.gd")
-const TEST_FIELD_OVERLAY_TEXTURE := preload("res://assets/sprites/maps/fieldmap_1.png")
 const FIELD_LAYOUT_HELPER_SCRIPT := preload("res://scripts/scenes/field/FieldLayoutHelper.gd")
 const FIELD_GRASS_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldGrassController.gd")
 const FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPartyChatterController.gd")
@@ -53,8 +45,14 @@ const FIELD_WORLD_OBJECT_Z: int = 48
 const FIELD_WORLD_EFFECT_Z: int = 52
 
 @export var spawn_point: Marker2D
+@export var boss_spawn_point: Marker2D
 @export var exit_area: Area2D
 @export var tilemap: TileMapLayer
+@export var enemy_spawner_node: EnemySpawner
+@export var enemy_spawner_scene: PackedScene = preload("res://scenes/field/EnemySpawner.tscn")
+@export var field_template: FieldTemplate
+@export var default_start_position: Vector2 = Vector2(100.0, 100.0)
+@export var enable_runtime_field_content: bool = false
 
 var party_leader: PartyMember
 var party_followers: Array[PartyMember] = []
@@ -66,7 +64,6 @@ var game_over_ui: GameOverUI
 # 씬 리소스
 var party_leader_scene: PackedScene
 var party_follower_scene: PackedScene
-var field_enemy_scene: PackedScene
 var hud_scene: PackedScene
 
 # 분리된 시스템들
@@ -78,7 +75,6 @@ var pause_overlay_controller = FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT.new()
 var drop_controller = FIELD_DROP_CONTROLLER_SCRIPT.new()
 var treasure_controller = FIELD_TREASURE_CONTROLLER_SCRIPT.new()
 var boss_controller = FIELD_BOSS_CONTROLLER_SCRIPT.new()
-var test_field_bounds: Rect2 = Rect2()
 
 # 필드 동료 NPC
 var recruit_npc_root: RecruitNPC = null
@@ -119,9 +115,10 @@ const GRUDGE_EXTRA_DESPAWN_INTERVAL: float = 0.85
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_apply_field_template_fallback()
+	_resolve_scene_nodes()
 	_load_scenes()
 	_find_tilemap()
-	_setup_test_field_layout()
 	_setup_systems()
 	_spawn_party()
 	_apply_camera_limits()
@@ -137,6 +134,37 @@ func _ready() -> void:
 	
 	if hud:
 		hud.add_system_log("필드에 입장했다.")
+
+
+func _apply_field_template_fallback() -> void:
+	# 씬 단독 실행 시(현재 area 데이터가 비어있을 때) 내장 필드 템플릿을 적용한다.
+	if field_template == null or FieldManager == null:
+		return
+	if not FieldManager.current_area_data.is_empty():
+		return
+
+	FieldManager.ensure_runtime_acts()
+	if FieldManager.current_act_id.is_empty():
+		var act_id: String = "act_1"
+		if FieldManager.get_runtime_act(act_id).is_empty():
+			var acts: Array[Dictionary] = FieldManager.get_runtime_acts()
+			if not acts.is_empty():
+				act_id = str((acts[0] as Dictionary).get("id", "act_1"))
+		if not act_id.is_empty():
+			FieldManager.set_current_act(act_id)
+
+	var area_data: Dictionary = field_template.to_runtime_dict("field")
+	if area_data.is_empty():
+		return
+	var area_id: String = field_template.id
+	if area_id.is_empty():
+		area_id = String(name).to_snake_case()
+	if area_id.is_empty():
+		area_id = "field_start"
+	area_data["id"] = area_id
+
+	FieldManager.current_area_id = area_id
+	FieldManager.current_area_data = area_data
 
 
 func _process(_delta: float) -> void:
@@ -173,10 +201,18 @@ func _process(_delta: float) -> void:
 func _load_scenes() -> void:
 	party_leader_scene = load("res://scenes/field/PartyMember.tscn")
 	party_follower_scene = load("res://scenes/field/PartyMember.tscn")
-	field_enemy_scene = load("res://scenes/field/FieldEnemy.tscn")
 	hud_scene = load("res://scenes/ui/FieldHUD.tscn")
 	if grass_controller != null:
 		grass_controller.load_textures()
+
+
+func _resolve_scene_nodes() -> void:
+	if spawn_point == null:
+		spawn_point = get_node_or_null("SpawnPoint") as Marker2D
+	if boss_spawn_point == null:
+		boss_spawn_point = get_node_or_null("BossSpawnPoint") as Marker2D
+	if enemy_spawner_node == null:
+		enemy_spawner_node = get_node_or_null("EnemySpawner") as EnemySpawner
 
 
 func _find_tilemap() -> void:
@@ -185,33 +221,10 @@ func _find_tilemap() -> void:
 	tilemap = layout_helper.find_tilemap(self, tilemap)
 
 
-func _is_test_field() -> bool:
-	return FieldManager != null and FieldManager.current_field_id == TEST_FIELD_ID
-
-
-func _setup_test_field_layout() -> void:
-	if layout_helper == null:
-		return
-	var layout_result: Dictionary = layout_helper.setup_test_field_layout(
-		self,
-		tilemap,
-		spawn_point,
-		_is_test_field(),
-		TEST_MAP_TILES,
-		TEST_TILE_SIZE,
-		TEST_FLOOR_SOURCE_ID,
-		TEST_WALL_SOURCE_ID,
-		TEST_FIELD_OVERLAY_TEXTURE,
-		TEST_PLAYER_SPAWN_RATIO
-	)
-	tilemap = layout_result.get("tilemap", tilemap) as TileMapLayer
-	test_field_bounds = layout_result.get("bounds", Rect2())
-
-
-func get_test_field_boss_position() -> Vector2:
-	if layout_helper == null:
-		return Vector2.ZERO
-	return layout_helper.get_boss_position_from_bounds(_is_test_field(), _get_map_bounds(), TEST_BOSS_SPAWN_RATIO)
+func get_field_boss_spawn_position() -> Vector2:
+	if boss_spawn_point != null and is_instance_valid(boss_spawn_point):
+		return boss_spawn_point.global_position
+	return Vector2.ZERO
 
 
 func _apply_camera_limits() -> void:
@@ -223,7 +236,7 @@ func _apply_camera_limits() -> void:
 func _get_map_bounds() -> Rect2:
 	if layout_helper == null:
 		return Rect2()
-	return layout_helper.get_map_bounds(tilemap, test_field_bounds, TEST_TILE_SIZE)
+	return layout_helper.get_map_bounds(tilemap, Rect2(), FIELD_TILE_SIZE)
 
 
 func _setup_systems() -> void:
@@ -250,7 +263,18 @@ func _setup_systems() -> void:
 	game_over_ui.quit_pressed.connect(_on_quit_game)
 	
 	# 스포너
-	spawner = EnemySpawner.new()
+	spawner = enemy_spawner_node
+	if spawner == null and enemy_spawner_scene != null:
+		var node: Node = enemy_spawner_scene.instantiate()
+		if node is EnemySpawner:
+			spawner = node as EnemySpawner
+			spawner.name = "EnemySpawner"
+			add_child(spawner)
+	if spawner == null:
+		var fallback_spawner := EnemySpawner.new()
+		fallback_spawner.name = "EnemySpawner"
+		add_child(fallback_spawner)
+		spawner = fallback_spawner
 	spawner.setup(self, tilemap)
 	if party_chatter_controller != null:
 		party_chatter_controller.setup(
@@ -348,18 +372,12 @@ func _spawn_party() -> void:
 
 
 func _get_start_position() -> Vector2:
-	if _is_test_field():
-		if spawn_point:
-			return spawn_point.global_position
-		var bounds := _get_map_bounds()
-		return bounds.position + bounds.size * TEST_PLAYER_SPAWN_RATIO if bounds.size.x > 0.0 else Vector2(180, 390)
-
 	var saved_pos: Vector2 = SaveManager.get_saved_field_position()
 	if saved_pos != Vector2.ZERO:
 		return saved_pos
 	if spawn_point:
 		return spawn_point.global_position
-	return Vector2(100, 100)
+	return default_start_position
 
 
 #=============================================================================
@@ -407,7 +425,6 @@ func _spawn_recruit_npc() -> void:
 	recruit_npc_root.z_index = FIELD_WORLD_OBJECT_Z
 	add_child(recruit_npc_root)
 	recruit_npc_root.setup_recruit(hero_id)
-	recruit_npc_root.set_bubble_text("도와줘!", Color(0.96, 0.96, 1.0, 1.0))
 
 
 func _pick_random_recruit_hero_id() -> String:
@@ -505,8 +522,13 @@ func _start_recruit_dialog() -> void:
 		var leader_hero: Hero = PartyManager.get_hero_by_id(leader_hero_id)
 		if leader_hero != null:
 			leader_name = leader_hero.hero_name
+	var recruit_help_text: String = "앗... 도와줘..! 여긴 너무 위험해!"
+	if DialogueManager != null and DialogueManager.has_method("get_speech_bubble_line"):
+		var loaded_line: String = str(DialogueManager.call("get_speech_bubble_line", "recruit_npc", "help", recruit_npc_hero_id))
+		if not loaded_line.is_empty():
+			recruit_help_text = loaded_line
 	var lines: Array[Dictionary] = [
-		{"speaker": "right", "name": recruit_name, "text": "앗... 도와줘..! 여긴 너무 위험해!"},
+		{"speaker": "right", "name": recruit_name, "text": recruit_help_text},
 		{"speaker": "left", "name": leader_name, "text": "괜찮아. 진정하고 상황부터 말해줘."},
 		{"speaker": "right", "name": recruit_name, "text": "같이 가게 해줘. 혼자론 못 버티겠어!"},
 	]
@@ -540,8 +562,13 @@ func _complete_recruit_dialog() -> void:
 		recruit_npc_hero_id = ""
 		_schedule_recruit_followup_dialog(recruited_id, hero_name)
 	else:
+		var recruit_full_text: String = "파티가 가득 찼어..."
+		if DialogueManager != null and DialogueManager.has_method("get_speech_bubble_line"):
+			var loaded_line: String = str(DialogueManager.call("get_speech_bubble_line", "recruit_npc", "party_full", recruit_npc_hero_id))
+			if not loaded_line.is_empty():
+				recruit_full_text = loaded_line
 		if recruit_npc_root != null and is_instance_valid(recruit_npc_root):
-			recruit_npc_root.set_bubble_text("파티가 가득 찼어...", Color(1.0, 0.90, 0.90, 1.0))
+			recruit_npc_root.set_bubble_text(recruit_full_text, Color(1.0, 0.90, 0.90, 1.0))
 		_show_field_notice("파티가 가득 차서 동료를 받을 수 없다.", 1.8, Color(1.0, 0.75, 0.75))
 		recruit_retry_cooldown = 2.0
 
@@ -874,7 +901,7 @@ func _spawn_field_treasure_chests() -> void:
 	if treasure_controller == null:
 		return
 	treasure_controller.spawn_field_treasure_chests(
-		_is_test_field(),
+		enable_runtime_field_content,
 		FieldManager.is_boss_field(),
 		_get_map_bounds(),
 		TREASURE_CHEST_RATIOS,
@@ -888,7 +915,7 @@ func _spawn_sanctuary() -> void:
 	if treasure_controller == null:
 		return
 	treasure_controller.spawn_sanctuary(
-		_is_test_field(),
+		enable_runtime_field_content,
 		_get_map_bounds(),
 		SANCTUARY_SPAWN_RATIO,
 		FIELD_WORLD_OBJECT_Z,
@@ -923,7 +950,7 @@ func _spawn_field_grass() -> void:
 		return
 	grass_controller.spawn(
 		self,
-		_is_test_field(),
+		enable_runtime_field_content,
 		FieldManager.is_boss_field(),
 		_get_map_bounds(),
 		tilemap,
@@ -963,8 +990,8 @@ func _save_field_position() -> void:
 	if party_leader and SaveManager:
 		SaveManager.save_field_position(
 			party_leader.global_position,
-			FieldManager.current_stage_id,
-			FieldManager.current_field_id
+			FieldManager.current_act_id,
+			FieldManager.current_area_id
 		)
 		SaveManager.auto_save("필드 위치 저장")
 
@@ -1094,7 +1121,7 @@ func _on_exit_body_entered(body: Node2D) -> void:
 	
 	exit_reached.emit(next)
 	if GameManager:
-		GameManager.go_to_next_from_field()
+		GameManager.go_to_next_from_area()
 
 
 #=============================================================================
@@ -1113,8 +1140,8 @@ func _on_title_pressed() -> void:
 	if party_leader:
 		SaveManager.save_field_position(
 			party_leader.global_position,
-			FieldManager.current_stage_id,
-			FieldManager.current_field_id
+			FieldManager.current_act_id,
+			FieldManager.current_area_id
 		)
 	SaveManager.save_game()
 	get_tree().change_scene_to_file("res://scenes/main/Main.tscn")
@@ -1202,6 +1229,15 @@ func _on_boss_victory(_battle_id: int) -> void:
 	if hud:
 		hud.add_system_log("🎉 보스를 처치했다!")
 		hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
+
+	if GameManager != null and GameManager.has_method("grant_random_trinket"):
+		var gained_trinket_id: String = str(GameManager.call("grant_random_trinket", "boss"))
+		if not gained_trinket_id.is_empty():
+			var tdata: Dictionary = DataManager.get_trinket(gained_trinket_id) if DataManager else {}
+			var tname: String = str(tdata.get("name", gained_trinket_id))
+			var temoji: String = str(tdata.get("emoji", "🧿"))
+			if hud:
+				hud.add_system_log("%s 트링켓 획득: %s" % [temoji, tname])
 
 	# 보스 처치 확정 시에만 필드 보스 제거
 	for i in range(field_enemies.size() - 1, -1, -1):

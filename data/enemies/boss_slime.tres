@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="EnemyTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTemplate.gd" id="1_enemy_template"]
+
+[resource]
+script = ExtResource("1_enemy_template")
+id = "boss_slime"
+name = "슬라임 킹"
+type = "boss"
+stats = {
+"atk": 44,
+"def": 36,
+"dex": 12,
+"hp": 900,
+"int": 6
+}
+rewards = {
+"exp": 120,
+"gold_max": 95,
+"gold_min": 55
+}
+drop_table = [{
+"item_id": "ring_hp",
+"chance": 0.2
+}, {
+"item_id": "shield_common",
+"chance": 0.12
+}]
+skills = ["basic_attack", "power_strike"]
+sprite = "slime"
+tags = ["monster", "slime", "boss"]
+damage_type = "physical"

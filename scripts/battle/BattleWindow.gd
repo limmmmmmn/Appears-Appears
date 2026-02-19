@@ -550,7 +550,10 @@ func can_accept_field_enemies(additional_count: int = 1) -> bool:
 
 
 func get_max_enemies_per_window() -> int:
-	return BASE_ENEMIES_PER_WINDOW + maxi(0, local_grudge_level)
+	var trinket_bonus: int = 0
+	if GameManager != null and GameManager.has_method("get_trinket_max_enemies_per_window_bonus"):
+		trinket_bonus = int(GameManager.call("get_trinket_max_enemies_per_window_bonus"))
+	return BASE_ENEMIES_PER_WINDOW + maxi(0, local_grudge_level) + maxi(0, trinket_bonus)
 
 
 func _refresh_enemy_layout() -> void:
@@ -2295,9 +2298,16 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	# 보상 계산 (특성 적용)
 	var exp_trait_mult: float = 1.0 + _get_trait_effect_float("exp_mult")
 	var gold_trait_mult: float = 1.0 + _get_trait_effect_float("gold_mult")
+	var trinket_exp_mult: float = 1.0
+	var trinket_gold_mult: float = 1.0
+	if GameManager != null:
+		if GameManager.has_method("get_trinket_reward_exp_multiplier"):
+			trinket_exp_mult = float(GameManager.call("get_trinket_reward_exp_multiplier"))
+		if GameManager.has_method("get_trinket_reward_gold_multiplier"):
+			trinket_gold_mult = float(GameManager.call("get_trinket_reward_gold_multiplier"))
 
-	var exp_reward: int = int(enemy.get_exp_reward() * exp_trait_mult)
-	var gold_reward: int = int(enemy.get_gold_reward() * gold_trait_mult)
+	var exp_reward: int = int(enemy.get_exp_reward() * exp_trait_mult * trinket_exp_mult)
+	var gold_reward: int = int(enemy.get_gold_reward() * gold_trait_mult * trinket_gold_mult)
 	var items: Array = enemy.roll_drops()
 
 	total_exp += exp_reward

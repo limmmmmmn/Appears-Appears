@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "shadow_cloak"
+name = "그림자 망토"
+slot = "body"
+type = "light_armor"
+rarity = "legendary"
+two_handed = false
+stats = {
+  "def": 20,
+  "spd": 20,
+  "luk": 20,
+  "hp": 40
+}
+special_effect = {
+  "type": "invisibility",
+  "value": 0.2
+}
+gear_score = 140

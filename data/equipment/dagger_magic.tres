@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "dagger_magic"
+name = "암살자의 단검"
+slot = "main_hand"
+type = "dagger"
+rarity = "magic"
+two_handed = false
+stats = {
+  "atk": 10,
+  "spd": 6,
+  "luk": 3
+}
+gear_score = 22

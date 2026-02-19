@@ -2,7 +2,7 @@ extends Node2D
 class_name RecruitNPC
 
 @export var sprite_offset: Vector2 = Vector2(0.0, -12.0)
-@export var bubble_scene: PackedScene = preload("res://scenes/ui/PartyChatterBubble.tscn")
+@export var bubble_scene: PackedScene = preload("res://scenes/ui/SpeechBubble.tscn")
 @export var bubble_offset: Vector2 = Vector2(0.0, -52.0)
 @export var bubble_tint: Color = Color(0.96, 0.96, 1.0, 1.0)
 @export var bubble_float_amplitude: float = 2.0
@@ -73,7 +73,7 @@ func _ensure_bubble() -> void:
 		return
 	var scene: PackedScene = bubble_scene
 	if scene == null:
-		scene = load("res://scenes/ui/PartyChatterBubble.tscn")
+		scene = load("res://scenes/ui/SpeechBubble.tscn")
 	if scene == null:
 		return
 	var node: Node = scene.instantiate()
@@ -105,7 +105,7 @@ func _apply_bubble_style_defaults() -> void:
 	if bubble_node == null or not is_instance_valid(bubble_node):
 		return
 	bubble_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var chatter_bubble: PartyChatterBubble = bubble_node as PartyChatterBubble
+	var chatter_bubble: SpeechBubble = bubble_node as SpeechBubble
 	if chatter_bubble != null:
 		if bubble_min_width >= 0.0:
 			chatter_bubble.min_width = bubble_min_width

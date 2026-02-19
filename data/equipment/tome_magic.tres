@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "tome_magic"
+name = "마법서"
+slot = "off_hand"
+type = "tome"
+rarity = "magic"
+two_handed = false
+stats = {
+  "int": 8
+}
+gear_score = 18

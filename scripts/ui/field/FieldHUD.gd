@@ -39,6 +39,7 @@ const STYLE := {
 
 #region 노드 참조
 # TopBar
+@onready var trinket_container: HBoxContainer = %TrinketContainer
 @onready var stage_label: Label = %StageLabel
 @onready var gold_label: Label = %GoldLabel
 @onready var speed_button: Button = %SpeedButton
@@ -140,6 +141,7 @@ const SLOT_ICONS: Dictionary = {
 const SLOT_ORDER: Array[String] = [
 	"main_hand", "off_hand", "head", "body", "acc1", "acc2"
 ]
+const TRINKET_BADGE_SCENE := preload("res://scenes/ui/TrinketBadge.tscn")
 #endregion
 
 
@@ -159,6 +161,7 @@ func _ready() -> void:
 	_init_right_panel_toggle_buttons()
 	_init_recruit_button()
 	_init_battle_pause_button()
+	_refresh_trinket_badges()
 	_connect_signals()
 	_apply_pause_ui_state(false)
 	update_all()
@@ -807,6 +810,9 @@ func _connect_signals() -> void:
 
 	if GameManager:
 		GameManager.gold_changed.connect(func(_g): update_top_bar())
+		if GameManager.has_signal("trinkets_changed"):
+			if not GameManager.trinkets_changed.is_connected(_on_trinkets_changed):
+				GameManager.trinkets_changed.connect(_on_trinkets_changed)
 
 	if BattleManager:
 		if not BattleManager.party_hp_changed.is_connected(update_party_display):
@@ -908,10 +914,11 @@ func update_all() -> void:
 
 func update_top_bar() -> void:
 	if stage_label and FieldManager:
-		var fn = FieldManager.get_current_field_name()
+		var fn = FieldManager.get_current_area_name()
 		stage_label.text = FieldManager.get_display_name() + (": " + fn if fn else "")
 	if gold_label and GameManager:
 		gold_label.text = "%d G" % GameManager.gold
+	_refresh_trinket_badges()
 
 
 func update_party_display() -> void:
@@ -923,6 +930,33 @@ func update_party_display() -> void:
 				selected_hero_index = panel_selected
 	_refresh_selected_hero_panels()
 #endregion
+
+
+func _on_trinkets_changed(_ids: Array) -> void:
+	_refresh_trinket_badges()
+
+
+func _refresh_trinket_badges() -> void:
+	if trinket_container == null:
+		return
+	for child in trinket_container.get_children():
+		child.queue_free()
+	if GameManager == null or DataManager == null:
+		return
+
+	var ids: Array[String] = []
+	if GameManager.has_method("get_obtained_trinkets"):
+		ids = GameManager.get_obtained_trinkets()
+	for trinket_id in ids:
+		var data: Dictionary = DataManager.get_trinket(trinket_id)
+		if data.is_empty():
+			continue
+		var badge: Node = TRINKET_BADGE_SCENE.instantiate()
+		if badge == null:
+			continue
+		if badge.has_method("configure"):
+			badge.call("configure", data)
+		trinket_container.add_child(badge)
 
 
 func _refresh_selected_hero_panels() -> void:

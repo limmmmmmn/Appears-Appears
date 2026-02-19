@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "helmet_magic"
+name = "전사의 투구"
+slot = "head"
+type = "helmet"
+rarity = "magic"
+two_handed = false
+stats = {
+  "def": 8,
+  "str": 3,
+  "hp": 10
+}
+gear_score = 18

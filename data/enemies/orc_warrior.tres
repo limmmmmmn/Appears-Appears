@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="EnemyTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTemplate.gd" id="1_enemy_template"]
+
+[resource]
+script = ExtResource("1_enemy_template")
+id = "orc_warrior"
+name = "오크 전사"
+type = "elite"
+stats = {
+"atk": 32,
+"def": 22,
+"dex": 8,
+"hp": 120
+}
+rewards = {
+"exp": 50,
+"gold_max": 50,
+"gold_min": 30
+}
+drop_table = [{
+"item_id": "axe_magic",
+"chance": 0.08
+}, {
+"item_id": "heavy_armor_magic",
+"chance": 0.05
+}, {
+"item_id": "shield_magic",
+"chance": 0.04
+}]
+skills = ["basic_attack", "power_strike"]
+sprite = "orc_warrior"
+tags = ["monster", "orc", "humanoid", "elite"]
+damage_type = "physical"

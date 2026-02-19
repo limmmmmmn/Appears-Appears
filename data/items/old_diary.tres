@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemTemplate.gd" id="1_item_template"]
+
+[resource]
+script = ExtResource("1_item_template")
+id = "old_diary"
+name = "낡은 일기장"
+description = "누군가의 일기장이다. 읽어볼 수 있다."
+type = "key_item"
+category = "note"
+consumable = false
+readable = true
+content = "1월 3일.\n동굴에서 이상한 빛을 봤다.\n그 빛을 따라가면 안 될 것 같은 느낌이 들었다..."

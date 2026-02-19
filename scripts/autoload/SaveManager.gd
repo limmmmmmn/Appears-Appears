@@ -14,8 +14,8 @@ const SAVE_COOLDOWN_TIME: float = 0.5  # 연속 저장 방지
 
 # 필드 위치 저장용
 var last_field_position: Vector2 = Vector2.ZERO
-var last_field_stage: String = ""
-var last_field_id: String = ""
+var last_field_act: String = ""
+var last_field_area: String = ""
 
 
 func _ready() -> void:
@@ -48,11 +48,11 @@ func auto_save(reason: String = "") -> void:
 	save_game()
 
 
-func save_field_position(pos: Vector2, stage_id: String, field_id: String) -> void:
+func save_field_position(pos: Vector2, act_id: String, area_id: String) -> void:
 	## 필드 위치 저장
 	last_field_position = pos
-	last_field_stage = stage_id
-	last_field_id = field_id
+	last_field_act = _normalize_stage_id_to_act_id(act_id)
+	last_field_area = area_id
 #endregion
 
 
@@ -84,10 +84,13 @@ func save_game() -> bool:
 
 func _serialize_game_state() -> Dictionary:
 	return {
-		"current_stage": GameManager.current_stage,
-		"current_field": GameManager.current_field,
+		"current_act_id": GameManager.current_act_id,
+		"current_area_id": GameManager.current_area_id,
+		"runtime_act_seed": FieldManager.runtime_act_seed,
 		"gold": GameManager.gold,
 		"obtained_legendaries": GameManager.obtained_legendaries.duplicate(),
+		"obtained_trinkets": GameManager.get_obtained_trinkets(),
+		"starting_trinket_id": GameManager.starting_trinket_id,
 		"current_state": GameManager.current_state
 	}
 
@@ -118,8 +121,8 @@ func _serialize_field_position() -> Dictionary:
 	return {
 		"position_x": last_field_position.x,
 		"position_y": last_field_position.y,
-		"stage_id": last_field_stage,
-		"field_id": last_field_id
+		"act_id": last_field_act,
+		"area_id": last_field_area
 	}
 
 
@@ -159,16 +162,46 @@ func load_game() -> bool:
 func _deserialize_game_state(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	GameManager.current_stage = int(data.get("current_stage", 1))
-	GameManager.current_field = int(data.get("current_field", 1))
+	var saved_seed: int = int(data.get("runtime_act_seed", 0))
+	FieldManager.generate_runtime_acts(saved_seed)
+
+	var act_id: String = str(data.get("current_act_id", ""))
+	if act_id.is_empty():
+		var legacy_stage: int = int(data.get("current_stage", 1))
+		act_id = "act_%d" % maxi(1, legacy_stage)
+	if not FieldManager.set_current_act(act_id):
+		var acts: Array[Dictionary] = FieldManager.ensure_runtime_acts()
+		if not acts.is_empty():
+			act_id = str((acts[0] as Dictionary).get("id", "act_1"))
+			FieldManager.set_current_act(act_id)
+
+	var area_id: String = str(data.get("current_area_id", ""))
+	if area_id.is_empty():
+		# legacy 저장 데이터(current_field)는 런타임 area id로 직접 매핑 불가
+		area_id = FieldManager.get_first_area_id(act_id)
+	if not FieldManager.set_current_area(area_id):
+		area_id = FieldManager.get_first_area_id(act_id)
+		FieldManager.set_current_area(area_id)
+
+	GameManager.current_act_id = FieldManager.current_act_id
+	GameManager.current_area_id = FieldManager.current_area_id
 	GameManager.gold = int(data.get("gold", 0))
 	GameManager.obtained_legendaries = data.get("obtained_legendaries", [])
+	var saved_trinkets: Array = data.get("obtained_trinkets", [])
+	GameManager.obtained_trinkets.clear()
+	for tid_any in saved_trinkets:
+		var tid: String = str(tid_any)
+		if tid.is_empty():
+			continue
+		GameManager.obtained_trinkets.append(tid)
+	GameManager.starting_trinket_id = str(data.get("starting_trinket_id", ""))
 	
 	# current_state 복원 (enum은 int로 저장됨)
 	var saved_state: int = int(data.get("current_state", GameManager.GameState.FIELD))
 	GameManager.current_state = saved_state as GameManager.GameState
 	
 	GameManager.gold_changed.emit(GameManager.gold)
+	GameManager.trinkets_changed.emit(GameManager.get_obtained_trinkets())
 
 
 func _deserialize_party(data: Array) -> void:
@@ -266,8 +299,12 @@ func _deserialize_field_position(data: Dictionary) -> void:
 		float(data.get("position_x", 0)),
 		float(data.get("position_y", 0))
 	)
-	last_field_stage = str(data.get("stage_id", ""))
-	last_field_id = str(data.get("field_id", ""))
+	last_field_act = str(data.get("act_id", ""))
+	last_field_area = str(data.get("area_id", ""))
+	if last_field_act.is_empty():
+		last_field_act = _normalize_stage_id_to_act_id(str(data.get("stage_id", "")))
+	if last_field_area.is_empty():
+		last_field_area = str(data.get("field_id", ""))
 
 
 #endregion
@@ -305,8 +342,8 @@ func get_save_info() -> Dictionary:
 	
 	return {
 		"timestamp": save_data.get("timestamp", ""),
-		"stage": int(game_data.get("current_stage", 1)),
-		"field": int(game_data.get("current_field", 1)),
+		"act_id": str(game_data.get("current_act_id", "act_1")),
+		"area_id": str(game_data.get("current_area_id", "")),
 		"gold": int(game_data.get("gold", 0)),
 		"party_size": party_data.size()
 	}
@@ -318,8 +355,16 @@ func get_saved_field_position() -> Vector2:
 
 func get_saved_field_info() -> Dictionary:
 	return {
-		"stage_id": last_field_stage,
-		"field_id": last_field_id,
+		"act_id": last_field_act,
+		"area_id": last_field_area,
 		"position": last_field_position
 	}
+
+
+func _normalize_stage_id_to_act_id(raw_id: String) -> String:
+	if raw_id.is_empty():
+		return raw_id
+	if raw_id.begins_with("stage_"):
+		return "act_" + raw_id.trim_prefix("stage_")
+	return raw_id
 #endregion
