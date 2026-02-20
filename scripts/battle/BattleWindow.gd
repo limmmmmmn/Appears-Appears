@@ -212,7 +212,7 @@ func _process(delta: float) -> void:
 		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
 		if can_finish:
 			pending_victory = false
-			_show_claim_reward_button()
+			_end_battle_victory()
 			return
 
 	_update_background_effect(delta)
@@ -464,10 +464,6 @@ func _update_buttons_for_enemies() -> void:
 	if run_button == null:
 		return
 	_update_fold_layout_for_enemy_state()
-	if waiting_reward_claim:
-		_apply_claim_button_style()
-		run_button.disabled = false
-		return
 	_apply_run_button_style()
 	run_button.disabled = not has_alive_enemies()
 
@@ -502,20 +498,6 @@ func add_field_enemies(enemy_ids: Array, is_elite: bool = false) -> int:
 		return 0
 	if enemy_ids.is_empty():
 		return 0
-
-	# 보상 대기 상태였다면 전투 상태로 복귀
-	if waiting_reward_claim:
-		waiting_reward_claim = false
-		_clear_reward_claim_button()
-		current_state = BattleState.RUNNING
-		set_process(true)
-		if run_button:
-			_apply_run_button_style()
-			run_button.visible = true
-		if battle_close_button:
-			battle_close_button.visible = false
-		if block_entry_button and is_instance_valid(block_entry_button):
-			block_entry_button.visible = true
 
 	var alive_count: int = get_enemy_count()
 	var space: int = get_max_enemies_per_window() - alive_count
@@ -2373,7 +2355,7 @@ func _play_elite_death_cinematic(elite: BattleEnemy) -> void:
 
 	# 4) 짧은 대기 후 보상 버튼 표시
 	tween.tween_interval(0.4)
-	tween.tween_callback(_show_claim_reward_button)
+	tween.tween_callback(_end_battle_victory)
 
 
 func _show_popup_text(title: String, subtitle: String, color: Color) -> void:
@@ -2488,7 +2470,7 @@ func _check_battle_end() -> bool:
 			pending_victory_ready_ms = now_ms + min_ready_ms
 		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
 		if can_finish:
-			_show_claim_reward_button()
+			_end_battle_victory()
 			return true
 		pending_victory = true
 		pending_victory_ready_ms = maxi(pending_victory_ready_ms, now_ms + min_ready_ms)
@@ -2520,38 +2502,25 @@ func _update_buttons_for_no_enemies() -> void:
 
 
 func _show_claim_reward_button() -> void:
-	## 적이 모두 처치됨 - 우측 버튼을 '보상받기'로 전환
-	if waiting_reward_claim:
-		return
-	waiting_reward_claim = true
-	pending_victory = false
-	pending_victory_ready_ms = 0
-	current_state = BattleState.VICTORY
-	set_process(false)
-
-	_update_buttons_for_enemies()
+	_end_battle_victory()
 
 
 func is_waiting_reward_claim() -> bool:
-	return waiting_reward_claim
+	return false
 
 
 func _on_reward_claim_pressed() -> void:
-	if not waiting_reward_claim:
-		return
-	_end_battle_victory()
+	return
 
 
 func _clear_reward_claim_button() -> void:
 	waiting_reward_claim = false
-	_update_buttons_for_enemies()
 
 
 func _end_battle_victory() -> void:
-	if current_state == BattleState.VICTORY and not waiting_reward_claim:
+	if current_state == BattleState.VICTORY:
 		return
 	waiting_reward_claim = false
-	_clear_reward_claim_button()
 	current_state = BattleState.VICTORY
 	set_process(false)
 
@@ -2934,10 +2903,7 @@ func _on_close_pressed() -> void:
 
 
 func _on_run_button_pressed() -> void:
-	## 우측 버튼: 전투중=도주 / 전멸후=보상받기
-	if waiting_reward_claim:
-		_end_battle_victory()
-		return
+	## 우측 버튼: 전투중 도주
 	if current_state != BattleState.RUNNING:
 		return
 	_run_with_partial_rewards()

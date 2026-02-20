@@ -14,7 +14,7 @@ enum State { IDLE, WANDER, ALERT, CHASE, SPECTATE }
 @export_group("Movement")
 @export var wander_speed: float = 25.0
 @export var chase_speed: float = 50.0
-@export var detection_range: float = 60.0
+@export var detection_range: float = 70.0
 @export var lose_range: float = 120.0
 
 @export_group("Wander")
@@ -66,6 +66,8 @@ func _setup_from_data() -> void:
 	var dex: int = int(data.get("stats", {}).get("dex", 5))
 	chase_speed = 28.0 + dex * 1.0
 	wander_speed = chase_speed * 0.4
+	# 요청사항: 감지 후 추격 속도도 평소(배회) 속도와 동일
+	chase_speed = wander_speed
 	
 	# SpriteManager에서 스프라이트 로드
 	if SpriteManager:

@@ -7,11 +7,11 @@ class_name EnemySpawner
 # -----------------------------------------------------------------------------
 # Spawn config
 # -----------------------------------------------------------------------------
-var DEFAULT_MAX_ENEMIES: int = 4
-var FIELD_ENEMY_COUNT_MULTIPLIER: float = 1.0
+var DEFAULT_MAX_ENEMIES: int = 6
+var FIELD_ENEMY_COUNT_MULTIPLIER: float = 1.35
 var MIN_SPAWN_DISTANCE_BETWEEN: float = 24.0
 var EDGE_SPAWN_PADDING: float = 32.0
-var MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER: float = 120.0
+var MIN_INITIAL_SPAWN_DISTANCE_FROM_PLAYER: float = 0.0
 var ELITE_SPAWN_CHANCE: float = 0.15
 var MAX_SPAWN_ATTEMPTS: int = 50
 
@@ -176,7 +176,6 @@ func update_movement_spawn(field_enemies: Array) -> void:
 	var delta: float = field.get_process_delta_time() if field else 0.016
 	proactive_spawn_cooldown = maxf(0.0, proactive_spawn_cooldown - delta)
 
-	var camera_rect: Rect2 = _get_camera_rect()
 	if target_enemy_count_cached <= 0:
 		target_enemy_count_cached = _roll_target_enemy_count()
 	var target_enemy_count: int = get_target_enemy_count()
@@ -200,12 +199,10 @@ func update_movement_spawn(field_enemies: Array) -> void:
 
 			var original_pos: Vector2 = entry.get("original_pos", Vector2.ZERO)
 			var spawn_pos: Vector2 = Vector2.ZERO
-			if _is_spawn_position_valid(original_pos, existing_positions) and not camera_rect.has_point(original_pos):
+			if _is_spawn_position_valid(original_pos, existing_positions):
 				spawn_pos = original_pos
-			elif camera_rect.has_point(original_pos):
-				continue
 			else:
-				spawn_pos = _find_spawn_position_on_map(existing_positions, camera_rect, true)
+				spawn_pos = _find_spawn_position_on_map(existing_positions)
 
 			if spawn_pos != Vector2.ZERO:
 				to_respawn.append(i)
@@ -228,8 +225,8 @@ func update_movement_spawn(field_enemies: Array) -> void:
 		var player_pos: Vector2 = _get_player_position()
 		var spawn_pos: Vector2 = _find_spawn_position_on_map(
 			existing_positions,
-			camera_rect,
-			true,
+			Rect2(),
+			false,
 			player_pos,
 			60.0
 		)

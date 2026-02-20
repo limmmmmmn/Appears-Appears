@@ -115,10 +115,7 @@ func start_boss_battle(enemy_id: String, parent_node: Node = null, is_elite: boo
 
 func _find_append_target_window() -> BattleWindow:
 	## 기존 일반 전투창 중 적을 추가할 대상 선택
-	## 우선순위: 보상 대기 창 > 일반 실행 창 (각 그룹 내 최근 생성 창 우선)
-	var selected_reward: BattleWindow = null
 	var selected_running: BattleWindow = null
-	var latest_reward_id: int = -1
 	var latest_running_id: int = -1
 
 	for bid_any in active_battles.keys():
@@ -133,12 +130,9 @@ func _find_append_target_window() -> BattleWindow:
 		if window == null:
 			continue
 		var is_running: bool = window.current_state == BattleWindow.BattleState.RUNNING
-		var is_reward_waiting: bool = window.current_state == BattleWindow.BattleState.VICTORY and window.is_waiting_reward_claim()
-		if not is_running and not is_reward_waiting:
+		if not is_running:
 			continue
 		if window.is_event_mode:
-			continue
-		if window.is_enemy_entry_blocked():
 			continue
 		var max_enemies: int = BASE_ENEMIES_PER_WINDOW
 		if window.has_method("get_max_enemies_per_window"):
@@ -146,17 +140,10 @@ func _find_append_target_window() -> BattleWindow:
 		if window.get_enemy_count() >= max_enemies:
 			continue
 
-		if is_reward_waiting:
-			if bid > latest_reward_id:
-				latest_reward_id = bid
-				selected_reward = window
-		else:
-			if bid > latest_running_id:
-				latest_running_id = bid
-				selected_running = window
+		if bid > latest_running_id:
+			latest_running_id = bid
+			selected_running = window
 
-	if selected_reward != null:
-		return selected_reward
 	return selected_running
 
 
@@ -327,6 +314,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	var was_boss: bool = false
 	var window_gold: int = 0
 	var window_items: Array = []
+	var window_enemy_kills: int = 0
 	var battle_pos: Vector2 = Vector2.ZERO
 	var window_screen_rect: Rect2 = Rect2()
 
@@ -341,12 +329,13 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 			if window != null and is_instance_valid(window):
 				window_gold = window.total_gold
 				window_items = window.drop_items.duplicate()
+				window_enemy_kills = int(window.get_total_enemy_count())
 				window_screen_rect = Rect2(window.position, window.size)
 				last_window_rect = window_screen_rect
 
 	end_battle(battle_id, victory)
 
-	# 승리 보상: 골드/아이템 즉시 지급 + HP 오브 드롭
+	# 승리 보상: 골드/아이템 즉시 지급
 	if victory and (window_gold > 0 or not window_items.is_empty()):
 		# 골드 즉시 지급
 		if window_gold > 0 and GameManager:
@@ -359,8 +348,9 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 				if not equipped:
 					InventoryManager.add_item(item_id)
 
-		# 보상 규모에 따라 HP 오브 개수 결정
-		var hp_orbs: int = _calc_orb_count(window_gold, window_items.size())
+	# HP 오브는 전투창에서 처치한 적 수만큼 드롭
+	if victory and window_enemy_kills > 0:
+		var hp_orbs: int = window_enemy_kills
 		field_drops_requested.emit(hp_orbs, battle_pos, window_screen_rect)
 
 	if was_boss:

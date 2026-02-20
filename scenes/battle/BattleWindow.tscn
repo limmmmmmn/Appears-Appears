@@ -139,19 +139,12 @@ custom_minimum_size = Vector2(0, 30)
 alignment = 1
 theme_override_constants/separation = 14
 
-[node name="BlockEntryButton" type="Button" parent="MainVBox/ButtonBar"]
-custom_minimum_size = Vector2(104, 24)
-layout_mode = 2
-size_flags_horizontal = 4
-text = "봉쇄"
-toggle_mode = true
-
 [node name="RunButton" type="Button" parent="MainVBox/ButtonBar" unique_id=219318160]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(104, 24)
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 0
-tooltip_text = "즉시 도주 (보상 50%)"
+tooltip_text = "즉시 도주 (보상 없음)"
 theme_override_font_sizes/font_size = 9
-text = "도주 50%"
+text = "도주"
