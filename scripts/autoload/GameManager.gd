@@ -141,6 +141,29 @@ func grant_random_trinket(source: String) -> String:
 	return ""
 
 
+func get_trinket_choices(source: String, count: int = 3, include_obtained: bool = false) -> Array[String]:
+	var result: Array[String] = []
+	if count <= 0 or DataManager == null:
+		return result
+
+	var candidates: Array[String] = DataManager.get_trinkets_for_source(source)
+	if not include_obtained:
+		var filtered: Array[String] = []
+		for tid in candidates:
+			if tid not in obtained_trinkets:
+				filtered.append(tid)
+		candidates = filtered
+
+	if candidates.is_empty():
+		return result
+
+	candidates.shuffle()
+	var pick_count: int = mini(count, candidates.size())
+	for i in range(pick_count):
+		result.append(candidates[i])
+	return result
+
+
 func get_obtained_trinkets() -> Array[String]:
 	return obtained_trinkets.duplicate()
 

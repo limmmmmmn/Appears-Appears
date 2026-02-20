@@ -4,3 +4,8 @@
 
 [resource]
 script = ExtResource("1_enemy_spawner_config")
+default_max_enemies = 10
+field_enemy_count_multiplier = 1.8
+respawn_delay_min = 0.45
+respawn_delay_max = 1.2
+proactive_spawn_interval = 0.22

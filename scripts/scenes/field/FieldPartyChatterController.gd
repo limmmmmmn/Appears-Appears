@@ -307,7 +307,6 @@ func update_active_bubble_position(active_battles: Dictionary) -> void:
 	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
 		return
 	_position_party_chatter_bubble(active_party_chatter_speaker, active_party_chatter_bubble)
-	_resolve_battle_window_overlap_with_chatter(active_battles)
 
 
 func _enqueue_party_chatter(speaker: PartyMember, text: String, color: Color) -> void:
@@ -449,63 +448,7 @@ func _create_party_chatter_bubble(_speaker: Node2D, text: String, color: Color) 
 
 
 func _resolve_battle_window_overlap_with_chatter(active_battles: Dictionary) -> void:
-	if host == null:
-		return
-	if active_party_chatter_bubble == null or not is_instance_valid(active_party_chatter_bubble):
-		return
-	var bubble_size: Vector2 = active_party_chatter_bubble.size
-	if bubble_size.x <= 0.0 or bubble_size.y <= 0.0:
-		return
-	var bubble_rect := Rect2(active_party_chatter_bubble.position, bubble_size)
-	var viewport_size: Vector2 = host.get_viewport_rect().size
-	var threshold_w: float = bubble_rect.size.x * 0.5
-
-	for battle_id_any in active_battles.keys():
-		var battle_id: int = int(battle_id_any)
-		var battle_data: Dictionary = active_battles.get(battle_id, {})
-		var window_any: Variant = battle_data.get("window", null)
-		if window_any == null or not is_instance_valid(window_any):
-			continue
-		var window: Control = window_any as Control
-		if window == null:
-			continue
-		var window_size: Vector2 = window.size
-		if window_size.x <= 0.0 or window_size.y <= 0.0:
-			window_size = window.custom_minimum_size
-		if window_size.x <= 0.0 or window_size.y <= 0.0:
-			continue
-		var win_rect := Rect2(window.global_position, window_size)
-		var overlap: Rect2 = bubble_rect.intersection(win_rect)
-		if overlap.size.x <= threshold_w:
-			continue
-
-		var bubble_cx: float = bubble_rect.position.x + bubble_rect.size.x * 0.5
-		var win_cx: float = win_rect.position.x + win_rect.size.x * 0.5
-		var dir_sign: float = -1.0 if win_cx <= bubble_cx else 1.0
-		var shift_x: float = overlap.size.x + 18.0
-		var new_x: float = window.global_position.x + dir_sign * shift_x
-		new_x = clampf(new_x, -window_size.x + 40.0, viewport_size.x - 40.0)
-		var new_y: float = clampf(window.global_position.y, 0.0, viewport_size.y - 30.0)
-		var target_pos := Vector2(new_x, new_y)
-		if window.global_position.distance_to(target_pos) < 2.0:
-			continue
-
-		var prev_target: Vector2 = window.get_meta("chatter_push_target", Vector2.INF) as Vector2
-		if prev_target != Vector2.INF and prev_target.distance_to(target_pos) < 2.0:
-			continue
-		window.set_meta("chatter_push_target", target_pos)
-
-		var prev_tween: Variant = window.get_meta("chatter_push_tween", null)
-		if prev_tween != null and prev_tween is Tween:
-			var tw_prev: Tween = prev_tween as Tween
-			if tw_prev != null and tw_prev.is_valid():
-				tw_prev.kill()
-
-		var tw := window.create_tween()
-		tw.set_trans(Tween.TRANS_SINE)
-		tw.set_ease(Tween.EASE_OUT)
-		tw.tween_property(window, "global_position", target_pos, 0.16)
-		window.set_meta("chatter_push_tween", tw)
+	return
 
 
 func _update_party_chatter_lifecycle(delta: float) -> void:

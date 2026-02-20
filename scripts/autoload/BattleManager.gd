@@ -20,7 +20,7 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(hp_orbs: int, world_pos: Vector2, window_rect: Rect2)
+signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
@@ -38,6 +38,8 @@ var active_battles: Dictionary = {}  # battle_id -> {window, is_boss, is_elite, 
 var _battle_id_counter: int = 0
 var last_battle_pos: Vector2 = Vector2.ZERO
 var last_window_rect: Rect2 = Rect2()
+var hero_battle_locks: Dictionary = {}  # hero_id -> battle_id
+var _party_snapshot_ids: Dictionary = {}  # hero_id -> true
 
 # === 전투 정지 ===
 var is_battle_paused: bool = false
@@ -54,7 +56,10 @@ var battle_container: CanvasLayer = null
 
 
 func _ready() -> void:
-	pass
+	if PartyManager != null and PartyManager.has_signal("party_changed"):
+		if not PartyManager.party_changed.is_connected(_on_party_changed):
+			PartyManager.party_changed.connect(_on_party_changed)
+	_refresh_party_snapshot_ids()
 
 
 func push_hud_notice(message: String, duration: float = 2.0, color: Color = Color.WHITE) -> void:
@@ -296,17 +301,45 @@ func end_battle(battle_id: int, victory: bool) -> void:
 		return
 
 	var battle_data: Dictionary = active_battles[battle_id]
-	var window_ref = battle_data.get("window")
+	var window_ref: BattleWindow = battle_data.get("window") as BattleWindow
+	var fallback_battle_id: int = _get_oldest_open_battle_id_except(battle_id)
+	if window_ref != null and is_instance_valid(window_ref) and fallback_battle_id >= 0:
+		var fallback_data: Dictionary = active_battles.get(fallback_battle_id, {})
+		var fallback_window: BattleWindow = fallback_data.get("window") as BattleWindow
+		if fallback_window != null and is_instance_valid(fallback_window):
+			window_ref.transfer_all_face_chips_to_window(fallback_window)
 
 	if window_ref != null and is_instance_valid(window_ref):
 		window_ref.queue_free()
 
+	release_hero_locks_for_battle(battle_id)
 	active_battles.erase(battle_id)
 	battle_ended.emit(battle_id, victory)
 	
 	if active_battles.is_empty():
 		ATBManager.reset()
 		all_battles_ended.emit()
+
+
+func _get_oldest_open_battle_id_except(excluded_battle_id: int) -> int:
+	var target_battle_id: int = -1
+	for key_any in active_battles.keys():
+		var candidate_id: int = int(key_any)
+		if candidate_id == excluded_battle_id:
+			continue
+		var battle_data: Dictionary = active_battles.get(key_any, {})
+		var candidate_window: BattleWindow = battle_data.get("window") as BattleWindow
+		if candidate_window == null or not is_instance_valid(candidate_window):
+			continue
+		if candidate_window.has_method("_can_accept_face_chip") and not candidate_window.call("_can_accept_face_chip"):
+			continue
+		if target_battle_id < 0 or candidate_id < target_battle_id:
+			target_battle_id = candidate_id
+	return target_battle_id
+
+
+func _get_oldest_open_battle_id() -> int:
+	return _get_oldest_open_battle_id_except(-1)
 
 
 func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
@@ -335,23 +368,10 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 
 	end_battle(battle_id, victory)
 
-	# 승리 보상: 골드/아이템 즉시 지급
-	if victory and (window_gold > 0 or not window_items.is_empty()):
-		# 골드 즉시 지급
-		if window_gold > 0 and GameManager:
-			GameManager.add_gold(window_gold)
-
-		# 아이템 즉시 지급 (자동장착 또는 인벤토리)
-		for item_id in window_items:
-			if InventoryManager:
-				var equipped := InventoryManager.try_auto_equip(item_id)
-				if not equipped:
-					InventoryManager.add_item(item_id)
-
-	# HP 오브는 전투창에서 처치한 적 수만큼 드롭
-	if victory and window_enemy_kills > 0:
+	# HP 오브/골드/아이템은 전투창 위치 기준으로 필드 드롭
+	if victory and (window_enemy_kills > 0 or window_gold > 0 or not window_items.is_empty()):
 		var hp_orbs: int = window_enemy_kills
-		field_drops_requested.emit(hp_orbs, battle_pos, window_screen_rect)
+		field_drops_requested.emit(hp_orbs, window_gold, window_items, battle_pos, window_screen_rect)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -373,6 +393,59 @@ func _on_battle_log(message: String, color: Color) -> void:
 
 func _on_party_updated() -> void:
 	party_hp_changed.emit()
+
+
+func _on_party_changed() -> void:
+	var current_ids: Dictionary = _build_current_party_id_map()
+	var added_hero_ids: Array[String] = []
+	for key_any in current_ids.keys():
+		var hero_id: String = str(key_any)
+		if hero_id.is_empty():
+			continue
+		if not _party_snapshot_ids.has(hero_id):
+			added_hero_ids.append(hero_id)
+	_party_snapshot_ids = current_ids
+	if added_hero_ids.is_empty():
+		return
+	_route_joined_heroes_to_oldest_battle(added_hero_ids)
+
+
+func _build_current_party_id_map() -> Dictionary:
+	var out: Dictionary = {}
+	if PartyManager == null:
+		return out
+	var party: Array = PartyManager.get_party()
+	for hero_any in party:
+		if hero_any == null:
+			continue
+		var hero: Hero = hero_any as Hero
+		if hero == null:
+			continue
+		if hero.id.is_empty():
+			continue
+		out[hero.id] = true
+	return out
+
+
+func _refresh_party_snapshot_ids() -> void:
+	_party_snapshot_ids = _build_current_party_id_map()
+
+
+func _route_joined_heroes_to_oldest_battle(hero_ids: Array[String]) -> void:
+	if hero_ids.is_empty() or active_battles.is_empty():
+		return
+	var target_battle_id: int = _get_oldest_open_battle_id()
+	if target_battle_id < 0:
+		return
+	var target_data: Dictionary = active_battles.get(target_battle_id, {})
+	var target_window: BattleWindow = target_data.get("window") as BattleWindow
+	if target_window == null or not is_instance_valid(target_window):
+		return
+	for hero_id in hero_ids:
+		if hero_id.is_empty():
+			continue
+		if target_window.has_method("add_joined_hero_token"):
+			target_window.call("add_joined_hero_token", hero_id)
 
 
 #endregion
@@ -417,14 +490,8 @@ func claim_accumulated_rewards() -> void:
 		items_arr.append(item.id)
 
 	if accumulated_gold > 0 or not items_arr.is_empty():
-		if accumulated_gold > 0 and GameManager:
-			GameManager.add_gold(accumulated_gold)
-		for item_id in items_arr:
-			if InventoryManager:
-				if not InventoryManager.try_auto_equip(item_id):
-					InventoryManager.add_item(item_id)
 		var hp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
-		field_drops_requested.emit(hp_orbs, last_battle_pos, last_window_rect)
+		field_drops_requested.emit(hp_orbs, accumulated_gold, items_arr, last_battle_pos, last_window_rect)
 
 	# 초기화
 	reset_accumulated_rewards()
@@ -472,6 +539,8 @@ func clear_battle_container() -> void:
 		battle_container.queue_free()
 		battle_container = null
 	active_battles.clear()
+	clear_all_hero_locks()
+	_refresh_party_snapshot_ids()
 	ATBManager.reset()
 #endregion
 
@@ -560,6 +629,7 @@ func force_end_all_non_boss() -> void:
 		if window_ref != null and is_instance_valid(window_ref):
 			window_ref.queue_free()
 		active_battles.erase(battle_id)
+		release_hero_locks_for_battle(int(battle_id))
 		battle_ended.emit(battle_id, false)
 
 
@@ -572,6 +642,7 @@ func close_all_battles() -> void:
 		if window_ref != null and is_instance_valid(window_ref):
 			window_ref.queue_free()
 		active_battles.erase(battle_id)
+		release_hero_locks_for_battle(int(battle_id))
 #endregion
 
 
@@ -609,4 +680,68 @@ func set_battle_group_hovered(hovered: bool) -> void:
 
 func clear_battle_group_hover() -> void:
 	set_battle_group_hovered(false)
+#endregion
+
+
+#region 영웅 전투창 소속
+func lock_hero_to_battle(hero_id: String, battle_id: int) -> bool:
+	if hero_id.is_empty() or battle_id < 0:
+		return false
+	if not active_battles.has(battle_id):
+		return false
+	var locked_battle_id: int = get_hero_battle_lock(hero_id)
+	if locked_battle_id == battle_id:
+		return true
+	if locked_battle_id >= 0 and active_battles.has(locked_battle_id):
+		return false
+	hero_battle_locks[hero_id] = battle_id
+	return true
+
+
+func get_hero_battle_lock(hero_id: String) -> int:
+	if hero_id.is_empty():
+		return -1
+	return int(hero_battle_locks.get(hero_id, -1))
+
+
+func can_hero_act_in_battle(hero_id: String, battle_id: int) -> bool:
+	if hero_id.is_empty() or battle_id < 0:
+		return false
+	var locked_battle_id: int = get_hero_battle_lock(hero_id)
+	return locked_battle_id < 0 or locked_battle_id == battle_id
+
+
+func release_hero_locks_for_battle(battle_id: int) -> void:
+	if battle_id < 0 or hero_battle_locks.is_empty():
+		return
+	var to_remove: Array = []
+	for key in hero_battle_locks.keys():
+		if int(hero_battle_locks.get(key, -1)) == battle_id:
+			to_remove.append(key)
+	for hero_id in to_remove:
+		hero_battle_locks.erase(hero_id)
+
+
+func reassign_hero_locks(from_battle_id: int, to_battle_id: int) -> void:
+	if from_battle_id < 0 or to_battle_id < 0:
+		return
+	var to_update: Array = []
+	for key in hero_battle_locks.keys():
+		if int(hero_battle_locks.get(key, -1)) == from_battle_id:
+			to_update.append(key)
+	for hero_id in to_update:
+		hero_battle_locks[hero_id] = to_battle_id
+
+
+func transfer_hero_to_battle(hero_id: String, to_battle_id: int) -> bool:
+	if hero_id.is_empty() or to_battle_id < 0:
+		return false
+	if not active_battles.has(to_battle_id):
+		return false
+	hero_battle_locks[hero_id] = to_battle_id
+	return true
+
+
+func clear_all_hero_locks() -> void:
+	hero_battle_locks.clear()
 #endregion

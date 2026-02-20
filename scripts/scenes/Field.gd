@@ -49,6 +49,7 @@ const EVENT_HUD_BOTTOM_HEIGHT: float = 60.0
 const EVENT_WINDOW_SIZE_FALLBACK := Vector2(280, 200)
 const FIELD_WORLD_OBJECT_Z: int = 48
 const FIELD_WORLD_EFFECT_Z: int = 52
+const BOSS_TRINKET_CHOICE_COUNT: int = 3
 
 @export var spawn_point: Marker2D
 @export var boss_spawn_point: Marker2D
@@ -111,6 +112,7 @@ var grudge_extra_target: int = 0
 var grudge_extra_despawn_timer: float = 0.0
 var town_tile_trigger_cooldown: float = 0.0
 var shiren_tick_timer: float = SANCTUARY_HEAL_INTERVAL
+var boss_trinket_choice_layer: CanvasLayer = null
 
 const PARTY_CHATTER_LAYER: int = 220
 const PARTY_CHATTER_BUBBLE_EXTRA_LIFT: float = 24.0
@@ -475,18 +477,18 @@ func _get_start_position() -> Vector2:
 #=============================================================================
 func _spawn_field_enemies() -> void:
 	spawner.spawn_initial_enemies(field_enemies)
-	
-	# 보스 로그
-	if FieldManager.is_boss_field() and not field_enemies.is_empty():
-		var boss = field_enemies[0]
-		boss.player_contacted.connect(_on_field_enemy_contacted)
-		var boss_data: Dictionary = DataManager.get_enemy(boss.enemy_id)
-		if hud:
-			hud.add_system_log("⚠ %s이(가) 앞을 막아서고 있다!" % boss_data.get("name", boss.enemy_id))
-	else:
-		# 일반 적 시그널 연결
-		for enemy in field_enemies:
+
+	var logged_boss_notice: bool = false
+	for enemy in field_enemies:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if not enemy.player_contacted.is_connected(_on_field_enemy_contacted):
 			enemy.player_contacted.connect(_on_field_enemy_contacted)
+		if enemy.is_boss and not logged_boss_notice:
+			logged_boss_notice = true
+			var boss_data: Dictionary = DataManager.get_enemy(enemy.enemy_id)
+			if hud:
+				hud.add_system_log("⚠ %s이(가) 앞을 막아서고 있다!" % boss_data.get("name", enemy.enemy_id))
 
 
 func _spawn_recruit_npc() -> void:
@@ -1398,16 +1400,7 @@ func _on_elite_victory(_battle_id: int) -> void:
 func _on_boss_victory(_battle_id: int) -> void:
 	if hud:
 		hud.add_system_log("🎉 보스를 처치했다!")
-		hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
-
-	if GameManager != null and GameManager.has_method("grant_random_trinket"):
-		var gained_trinket_id: String = str(GameManager.call("grant_random_trinket", "boss"))
-		if not gained_trinket_id.is_empty():
-			var tdata: Dictionary = DataManager.get_trinket(gained_trinket_id) if DataManager else {}
-			var tname: String = str(tdata.get("name", gained_trinket_id))
-			var temoji: String = str(tdata.get("emoji", "🧿"))
-			if hud:
-				hud.add_system_log("%s 트링켓 획득: %s" % [temoji, tname])
+		hud.add_system_log("트링켓 1개를 선택할 수 있다.")
 
 	# 보스 처치 확정 시에만 필드 보스 제거
 	for i in range(field_enemies.size() - 1, -1, -1):
@@ -1420,7 +1413,180 @@ func _on_boss_victory(_battle_id: int) -> void:
 			break
 
 	spawner.stop_respawn()
+	_show_boss_trinket_choice()
 	# 보스 보상은 누적 보상 시스템으로 처리됨
+
+
+func _show_boss_trinket_choice() -> void:
+	if boss_trinket_choice_layer != null and is_instance_valid(boss_trinket_choice_layer):
+		return
+
+	var choices: Array[String] = []
+	if GameManager != null and GameManager.has_method("get_trinket_choices"):
+		choices = GameManager.get_trinket_choices("boss", BOSS_TRINKET_CHOICE_COUNT, false)
+
+	if choices.is_empty():
+		if hud:
+			hud.add_system_log("선택 가능한 트링켓이 없다.")
+			hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
+		return
+
+	var tree := get_tree()
+	if tree:
+		tree.paused = true
+
+	boss_trinket_choice_layer = CanvasLayer.new()
+	boss_trinket_choice_layer.layer = 320
+	boss_trinket_choice_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(boss_trinket_choice_layer)
+
+	var full := ColorRect.new()
+	full.set_anchors_preset(Control.PRESET_FULL_RECT)
+	full.color = Color(0.0, 0.02, 0.08, 0.78)
+	boss_trinket_choice_layer.add_child(full)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	boss_trinket_choice_layer.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(840.0, 360.0)
+	panel.add_theme_stylebox_override("panel", _make_boss_trinket_panel_style())
+	center.add_child(panel)
+
+	var root := VBoxContainer.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.offset_left = 24.0
+	root.offset_top = 20.0
+	root.offset_right = -24.0
+	root.offset_bottom = -20.0
+	root.add_theme_constant_override("separation", 14)
+	panel.add_child(root)
+
+	var title := Label.new()
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.text = "보스 보상: 트링켓 선택"
+	root.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 15)
+	subtitle.modulate = Color(0.9, 0.94, 1.0, 0.95)
+	subtitle.text = "세 가지 중 하나를 선택하세요."
+	root.add_child(subtitle)
+
+	var cards := HBoxContainer.new()
+	cards.alignment = BoxContainer.ALIGNMENT_CENTER
+	cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cards.add_theme_constant_override("separation", 14)
+	root.add_child(cards)
+
+	for trinket_id in choices:
+		var data: Dictionary = DataManager.get_trinket(trinket_id) if DataManager != null else {}
+		cards.add_child(_build_boss_trinket_choice_card(trinket_id, data))
+
+
+func _build_boss_trinket_choice_card(trinket_id: String, data: Dictionary) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(238.0, 240.0)
+	card.add_theme_stylebox_override("panel", _make_boss_trinket_card_style())
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 12.0
+	vbox.offset_top = 12.0
+	vbox.offset_right = -12.0
+	vbox.offset_bottom = -12.0
+	vbox.add_theme_constant_override("separation", 10)
+	card.add_child(vbox)
+
+	var emoji_label := Label.new()
+	emoji_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	emoji_label.add_theme_font_size_override("font_size", 42)
+	emoji_label.text = str(data.get("emoji", "🧿"))
+	vbox.add_child(emoji_label)
+
+	var name_label := Label.new()
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_font_size_override("font_size", 17)
+	name_label.text = str(data.get("name", trinket_id))
+	vbox.add_child(name_label)
+
+	var desc_label := Label.new()
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desc_label.add_theme_font_size_override("font_size", 13)
+	desc_label.modulate = Color(0.9, 0.93, 0.98, 0.95)
+	desc_label.text = str(data.get("description", ""))
+	vbox.add_child(desc_label)
+
+	var pick_btn := Button.new()
+	pick_btn.text = "획득"
+	pick_btn.custom_minimum_size = Vector2(0.0, 36.0)
+	pick_btn.add_theme_font_size_override("font_size", 15)
+	pick_btn.pressed.connect(_on_boss_trinket_choice_pressed.bind(trinket_id))
+	vbox.add_child(pick_btn)
+	return card
+
+
+func _on_boss_trinket_choice_pressed(trinket_id: String) -> void:
+	var obtained: bool = false
+	if GameManager != null and GameManager.has_method("obtain_trinket"):
+		obtained = bool(GameManager.call("obtain_trinket", trinket_id, "boss"))
+
+	if obtained:
+		var tdata: Dictionary = DataManager.get_trinket(trinket_id) if DataManager != null else {}
+		var tname: String = str(tdata.get("name", trinket_id))
+		var temoji: String = str(tdata.get("emoji", "🧿"))
+		if hud:
+			hud.add_system_log("%s 트링켓 획득: %s" % [temoji, tname])
+	else:
+		if hud:
+			hud.add_system_log("트링켓 획득에 실패했다.")
+
+	_close_boss_trinket_choice()
+	if hud:
+		hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
+
+
+func _close_boss_trinket_choice() -> void:
+	if boss_trinket_choice_layer != null and is_instance_valid(boss_trinket_choice_layer):
+		boss_trinket_choice_layer.queue_free()
+	boss_trinket_choice_layer = null
+	var tree := get_tree()
+	if tree:
+		tree.paused = false
+
+
+func _make_boss_trinket_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.1, 0.18, 0.96)
+	style.border_color = Color(0.36, 0.45, 0.7, 0.95)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	return style
+
+
+func _make_boss_trinket_card_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.12, 0.14, 0.22, 0.98)
+	style.border_color = Color(0.46, 0.56, 0.82, 0.95)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.corner_radius_bottom_left = 10
+	style.corner_radius_bottom_right = 10
+	return style
 
 
 func _on_boss_battle_started(_battle_id: int) -> void:
@@ -1670,10 +1836,10 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(hp_orbs: int, world_pos: Vector2, window_rect: Rect2) -> void:
+func _on_field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2) -> void:
 	if drop_controller == null:
 		return
-	drop_controller.spawn_battle_drops(hp_orbs, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z)
+	drop_controller.spawn_battle_drops(hp_orbs, gold_amount, item_ids, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z)
 
 
 #=============================================================================

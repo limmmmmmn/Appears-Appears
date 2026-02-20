@@ -165,6 +165,10 @@ func spawn_initial_enemies(field_enemies: Array) -> void:
 			_spawn_enemy_at({"position": pos, "tile_type": tile_type}, field_enemies)
 			spawned_positions.append(pos)
 
+	# 일반 필드에도 보스 1마리 보장 생성
+	if not _has_field_boss(field_enemies):
+		spawn_field_boss(field_enemies)
+
 func setup_respawn_timer(_parent: Node) -> void:
 	pass
 
@@ -404,6 +408,9 @@ func _get_camera_rect() -> Rect2:
 # Internal spawn functions
 # -----------------------------------------------------------------------------
 func _spawn_boss(field_enemies: Array) -> void:
+	if _has_field_boss(field_enemies):
+		return
+
 	var boss_id: String = FieldManager.get_boss_enemy()
 	if boss_id.is_empty():
 		push_error("[EnemySpawner] boss id missing")
@@ -418,6 +425,7 @@ func _spawn_boss(field_enemies: Array) -> void:
 	var boss_pos: Vector2 = map_bounds.get_center() if bounds_calculated else Vector2(350, 135)
 	enemy.setup(boss_id, "grass", boss_pos, false)
 	enemy.is_boss = true
+	enemy.scale = Vector2(3, 3)
 	enemy.add_to_group("field_boss")
 	enemy.add_to_group("field_enemy")
 	field_enemies.append(enemy)
@@ -425,6 +433,9 @@ func _spawn_boss(field_enemies: Array) -> void:
 
 
 func spawn_field_boss(field_enemies: Array) -> void:
+	if _has_field_boss(field_enemies):
+		return
+
 	if not bounds_calculated:
 		_calculate_map_data()
 
@@ -456,14 +467,20 @@ func spawn_field_boss(field_enemies: Array) -> void:
 	enemy.add_to_group("field_boss")
 	enemy.add_to_group("field_enemy")
 	enemy.scale = Vector2(3, 3)
-	enemy.set_deferred("wander_speed", 0.0)
-	enemy.set_deferred("chase_speed", 0.0)
-	enemy.set_deferred("detection_range", 0.0)
 
 	field_enemies.append(enemy)
 	enemy_spawned.emit(enemy)
 
 	print("[EnemySpawner] field boss spawned: %s at %s" % [boss_id, boss_pos])
+
+
+func _has_field_boss(field_enemies: Array) -> bool:
+	for enemy in field_enemies:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if enemy.is_boss:
+			return true
+	return false
 
 
 func _spawn_enemy_at(tile_data: Dictionary, field_enemies: Array, force_elite: bool = false, is_respawn: bool = false) -> void:

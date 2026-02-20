@@ -87,9 +87,13 @@ const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 const BASE_ESCAPE_RATE: float = 40.0
 const GRUDGE_KILLS_PER_LEVEL: int = 5
 const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
+const BATTLE_WINDOW_UNIT_TOKEN_SCENE = preload("res://scenes/battle/BattleWindowUnitToken.tscn")
+const TOOLTIP_SCENE = preload("res://scenes/ui/Tooltip.tscn")
 const BASE_ENEMIES_PER_WINDOW: int = 3
 const BATTLE_ATB_FILL_RATE: float = 0.85
 const ENEMY_ROW_GAP: int = 5
+const VICTORY_CHEST_REVEAL_TIME: float = 0.32
+const VICTORY_CHEST_BOUNCE_TIME: float = 0.11
 
 # === Mother 2 스타일 배경 효과 ===
 var background: ColorRect = null
@@ -119,6 +123,8 @@ var _battle_drag_offset: Vector2 = Vector2.ZERO
 # === 적 호버 툴팁 ===
 var _enemy_tooltip: PanelContainer = null
 var _hovered_enemy: BattleEnemy = null
+var _enemy_tooltip_hide_token: int = 0
+var _tooltip_owner: String = ""
 
 # === 전투창 호버 하이라이트 ===
 var _is_window_hovered: bool = false
@@ -133,6 +139,13 @@ static var _global_face_chip_owner_window_id: int = -1
 var _face_chip_last_ms: Dictionary = {}  # key: "<hero_id>" -> last_ms
 var _face_chip_panels: Dictionary = {}  # key: "<hero_id>" -> PanelContainer
 var _face_chip_order: Array[String] = []
+var _face_chip_layer: Control = null
+var _face_chip_dragging: bool = false
+var _face_chip_drag_hero_id: String = ""
+var _face_chip_drag_panel: PanelContainer = null
+var _face_chip_drag_offset: Vector2 = Vector2.ZERO
+const FACE_CHIP_SIZE: Vector2 = Vector2(28, 28)
+const FACE_CHIP_SPACING: float = 6.0
 
 # === 이벤트 모드 ===
 var is_event_mode: bool = false
@@ -164,6 +177,8 @@ func _ready() -> void:
 	if run_button:
 		run_button.visible = true
 		run_button.pressed.connect(_on_run_button_pressed)
+		run_button.mouse_entered.connect(_on_run_button_mouse_entered)
+		run_button.mouse_exited.connect(_on_run_button_mouse_exited)
 		_apply_run_button_style()
 	if block_entry_button:
 		block_entry_button.visible = true
@@ -188,11 +203,21 @@ func _ready() -> void:
 	_setup_battle_top_bar()
 	_setup_info_bar()
 	_setup_pause_controls()
+	_ensure_face_chip_layer()
 	_reset_local_progression()
 
 
 func _process(delta: float) -> void:
 	_update_pause_visual(delta)
+	if _face_chip_dragging:
+		if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			if _face_chip_drag_panel != null and is_instance_valid(_face_chip_drag_panel):
+				_face_chip_drag_panel.global_position = get_global_mouse_position() - _face_chip_drag_offset
+		else:
+			var drop_window: BattleWindow = _find_face_chip_drop_window(get_global_mouse_position())
+			if drop_window != null and is_instance_valid(drop_window) and not _face_chip_drag_hero_id.is_empty():
+				_transfer_face_chip_to_window(_face_chip_drag_hero_id, drop_window)
+			_finish_face_chip_drag()
 
 	if get_tree().paused:
 		return
@@ -285,7 +310,6 @@ func _apply_run_button_style() -> void:
 	if run_button == null:
 		return
 	run_button.text = "도주 50%"
-	run_button.tooltip_text = "적이 살아있을 때 도주하면 보상 50%만 획득"
 	run_button.add_theme_font_size_override("font_size", 10)
 	run_button.custom_minimum_size = Vector2(104, 24)
 	var normal := StyleBoxFlat.new()
@@ -316,7 +340,6 @@ func _apply_claim_button_style() -> void:
 	if run_button == null:
 		return
 	run_button.text = "보상받기"
-	run_button.tooltip_text = "적 전멸 보상 100% 획득"
 	run_button.add_theme_font_size_override("font_size", 10)
 	run_button.custom_minimum_size = Vector2(104, 24)
 	var normal := StyleBoxFlat.new()
@@ -662,6 +685,7 @@ func _start_battle() -> void:
 	_refresh_top_bar_status()
 	_clear_reward_claim_button()
 	_update_buttons_for_enemies()
+	_prime_party_face_chips_and_locks()
 	set_process(true)
 	_reset_enemy_timers()
 #endregion
@@ -1337,7 +1361,7 @@ func _process_ready_unit() -> void:
 		return
 
 	# 영웅 체크
-	for hero in PartyManager.get_alive_heroes():
+	for hero in _get_alive_heroes_in_battle():
 		if hero != null and not hero.is_dead and hero.is_action_ready() and _has_ready_hero_action(hero):
 			is_processing_action = true
 			_execute_hero_action(hero)
@@ -1360,6 +1384,65 @@ func _process_ready_unit() -> void:
 				ATBManager.action_executed.emit()
 			return
 #endregion
+
+
+func _get_alive_heroes_in_battle(require_face_chip: bool = true) -> Array:
+	var result: Array = []
+	if PartyManager == null:
+		return result
+	var alive_heroes: Array = PartyManager.get_alive_heroes()
+	for hero_any in alive_heroes:
+		var hero: Hero = hero_any as Hero
+		if hero == null:
+			continue
+		if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
+			if not BattleManager.can_hero_act_in_battle(hero.id, battle_id):
+				continue
+		if require_face_chip and not _has_face_chip_in_this_window(hero.id):
+			continue
+		result.append(hero)
+	return result
+
+
+func _prime_party_face_chips_and_locks() -> void:
+	var heroes: Array = _get_alive_heroes_in_battle(false)
+	for hero_any in heroes:
+		var hero: Hero = hero_any as Hero
+		if hero == null:
+			continue
+		var can_join_this_window: bool = true
+		if BattleManager != null and BattleManager.has_method("lock_hero_to_battle"):
+			var locked_now: bool = BattleManager.lock_hero_to_battle(hero.id, battle_id)
+			var can_act_here: bool = true
+			if BattleManager.has_method("can_hero_act_in_battle"):
+				can_act_here = BattleManager.can_hero_act_in_battle(hero.id, battle_id)
+			can_join_this_window = locked_now or can_act_here
+		if not can_join_this_window:
+			continue
+		_show_hero_face_chip(hero.id, false, 0, false, 0.6)
+
+
+func _has_face_chip_in_this_window(hero_id: String) -> bool:
+	if hero_id.is_empty():
+		return false
+	var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
+	return panel != null and is_instance_valid(panel)
+
+
+func add_joined_hero_token(hero_id: String) -> bool:
+	if hero_id.is_empty():
+		return false
+	if not _can_accept_face_chip():
+		return false
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id) if PartyManager else null
+	if hero == null or hero.is_dead:
+		return false
+	if _has_face_chip_in_this_window(hero_id):
+		return true
+	_show_hero_face_chip(hero_id, false, 0, false, 0.6)
+	_layout_persistent_face_chips(true)
+	call_deferred("_emit_party_updated")
+	return _has_face_chip_in_this_window(hero_id)
 
 
 func on_enemy_defeated(enemy: BattleEnemy) -> void:
@@ -1594,7 +1677,7 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 func _get_wounded_heroes() -> Array:
 	## HP가 70% 미만인 아군 반환
 	var result: Array = []
-	for hero in PartyManager.get_alive_heroes():
+	for hero in _get_alive_heroes_in_battle():
 		if hero.get_hp_percent() < 0.7:
 			result.append(hero)
 	return result
@@ -1754,15 +1837,18 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 			# 가장 체력이 낮은 아군 선택
 			var lowest_hp_hero: Hero = null
 			var lowest_percent: float = 1.0
-			for h in PartyManager.get_alive_heroes():
-				var hp_percent := h.get_hp_percent()
+			for h_any in _get_alive_heroes_in_battle():
+				var h: Hero = h_any as Hero
+				if h == null:
+					continue
+				var hp_percent: float = h.get_hp_percent()
 				if hp_percent < lowest_percent:
 					lowest_percent = hp_percent
 					lowest_hp_hero = h
 			if lowest_hp_hero:
 				targets.append(lowest_hp_hero)
 		else:  # all_allies
-			targets = PartyManager.get_alive_heroes()
+			targets = _get_alive_heroes_in_battle()
 
 		# 회복 사운드 재생
 		if targets.size() > 0:
@@ -1964,6 +2050,13 @@ func _show_hero_face_chip(
 		return
 	if battle_area == null:
 		return
+	if BattleManager != null and BattleManager.has_method("lock_hero_to_battle"):
+		var locked_now: bool = BattleManager.lock_hero_to_battle(hero_id, battle_id)
+		var can_act_here: bool = true
+		if BattleManager.has_method("can_hero_act_in_battle"):
+			can_act_here = BattleManager.can_hero_act_in_battle(hero_id, battle_id)
+		if not locked_now and not can_act_here:
+			return
 	if SpriteManager == null or not SpriteManager.has_method("get_hero_face_sprite"):
 		return
 
@@ -1983,43 +2076,37 @@ func _show_hero_face_chip(
 	var panel: PanelContainer = _face_chip_panels.get(key, null) as PanelContainer
 	var is_new_panel: bool = panel == null or not is_instance_valid(panel)
 	if is_new_panel:
-		panel = PanelContainer.new()
+		_ensure_face_chip_layer()
+		var token_node: Node = BATTLE_WINDOW_UNIT_TOKEN_SCENE.instantiate()
+		panel = token_node as PanelContainer
+		if panel == null:
+			return
 		panel.name = "PersistentFaceChip_%s" % key
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		panel.z_index = 70
-		panel.custom_minimum_size = Vector2(42, 42)
-		var face := TextureRect.new()
-		face.name = "Face"
-		face.set_anchors_preset(Control.PRESET_FULL_RECT)
-		face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		panel.add_child(face)
-		add_child(panel)
-		panel.set_as_top_level(true)
+		panel.custom_minimum_size = FACE_CHIP_SIZE
+		_face_chip_layer.add_child(panel)
+		panel.set_as_top_level(false)
+		var face_node_new: TextureRect = panel.get_node_or_null("Face") as TextureRect
+		if face_node_new != null:
+			face_node_new.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.gui_input.connect(_on_face_chip_gui_input.bind(key))
+		panel.mouse_entered.connect(_on_face_chip_mouse_entered.bind(key))
+		panel.mouse_exited.connect(_on_face_chip_mouse_exited.bind(key))
 		_face_chip_panels[key] = panel
 		if not _face_chip_order.has(key):
 			_face_chip_order.append(key)
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.02, 0.03, 0.04, 0.92) if is_damaged else Color(0.04, 0.06, 0.04, 0.92)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(1.0, 0.55, 0.55, 0.95) if is_damaged else Color(0.55, 1.0, 0.65, 0.95)
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	style.content_margin_left = 3
-	style.content_margin_right = 3
-	style.content_margin_top = 3
-	style.content_margin_bottom = 3
-	panel.add_theme_stylebox_override("panel", style)
+	if panel.has_method("apply_state_style"):
+		panel.call("apply_state_style", is_damaged)
 
-	var face_node: TextureRect = panel.get_node_or_null("Face") as TextureRect
-	if face_node != null:
-		face_node.texture = face_tex
+	if panel.has_method("set_token_texture"):
+		panel.call("set_token_texture", face_tex)
+	else:
+		var face_node: TextureRect = panel.get_node_or_null("Face") as TextureRect
+		if face_node != null:
+			face_node.texture = face_tex
 
 	if is_new_panel:
 		panel.modulate.a = 0.0
@@ -2050,6 +2137,8 @@ func _show_hero_face_chip(
 func _layout_persistent_face_chips(animated: bool) -> void:
 	if battle_area == null:
 		return
+	if _face_chip_dragging:
+		return
 
 	var valid_keys: Array[String] = []
 	var panels: Array[PanelContainer] = []
@@ -2065,29 +2154,28 @@ func _layout_persistent_face_chips(animated: bool) -> void:
 	if panels.is_empty():
 		return
 
-	var spacing: float = 8.0
+	var spacing: float = FACE_CHIP_SPACING
 	var total_width: float = 0.0
 	for i in range(panels.size()):
 		total_width += panels[i].size.x
 		if i > 0:
 			total_width += spacing
 
-	var area_pos: Vector2 = battle_area.global_position
 	var area_size: Vector2 = battle_area.size
-	var start_x: float = area_pos.x + (area_size.x - total_width) * 0.5
+	var start_x: float = (area_size.x - total_width) * 0.5
 	var max_h: float = 0.0
 	for panel in panels:
 		max_h = maxf(max_h, panel.size.y)
-	var y: float = area_pos.y + area_size.y - max_h - 8.0
+	var y: float = area_size.y - max_h - 6.0
 	var cursor_x: float = start_x
 
 	for panel in panels:
 		var target_pos := Vector2(cursor_x, y)
 		if animated:
 			var tw := create_tween()
-			tw.tween_property(panel, "global_position", target_pos, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			tw.tween_property(panel, "position", target_pos, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		else:
-			panel.global_position = target_pos
+			panel.position = target_pos
 		cursor_x += panel.size.x + spacing
 
 
@@ -2116,25 +2204,145 @@ func _spawn_face_chip_damage_number(panel: PanelContainer, damage: int, is_crit:
 
 
 func _claim_global_face_chip_owner() -> void:
-	var my_id: int = get_instance_id()
-	if _global_face_chip_owner_window_id == my_id:
+	# 페이스칩은 전투창마다 독립 유지한다.
+	_global_face_chip_owner_window_id = get_instance_id()
+
+
+func _ensure_face_chip_layer() -> void:
+	if _face_chip_layer != null and is_instance_valid(_face_chip_layer):
 		return
-	if _global_face_chip_owner_window_id != -1:
-		var prev_obj: Object = instance_from_id(_global_face_chip_owner_window_id)
-		if prev_obj != null and is_instance_valid(prev_obj) and prev_obj is BattleWindow:
-			var prev_win: BattleWindow = prev_obj as BattleWindow
-			if prev_win != null and prev_win.has_method("_deactivate_persistent_face_chip"):
-				prev_win.call("_deactivate_persistent_face_chip")
-	_global_face_chip_owner_window_id = my_id
+	if battle_area == null:
+		return
+	_face_chip_layer = Control.new()
+	_face_chip_layer.name = "FaceChipLayer"
+	_face_chip_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_face_chip_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_face_chip_layer.z_index = 80
+	battle_area.add_child(_face_chip_layer)
 
 
 func _deactivate_persistent_face_chip() -> void:
+	_face_chip_dragging = false
+	_face_chip_drag_hero_id = ""
+	_face_chip_drag_panel = null
 	for key in _face_chip_panels.keys():
 		var panel: PanelContainer = _face_chip_panels[key] as PanelContainer
 		if panel != null and is_instance_valid(panel):
 			panel.queue_free()
 	_face_chip_panels.clear()
 	_face_chip_order.clear()
+
+
+func _on_face_chip_gui_input(event: InputEvent, hero_id: String) -> void:
+	if hero_id.is_empty():
+		return
+	var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
+	if panel == null or not is_instance_valid(panel):
+		return
+
+	if event is InputEventMouseButton:
+		var btn: InputEventMouseButton = event as InputEventMouseButton
+		if btn.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if btn.pressed:
+			_face_chip_dragging = true
+			_face_chip_drag_hero_id = hero_id
+			_face_chip_drag_panel = panel
+			_face_chip_drag_offset = btn.global_position - panel.global_position
+			panel.z_index = 220
+			accept_event()
+			return
+
+		if _face_chip_dragging and _face_chip_drag_hero_id == hero_id:
+			var drop_window: BattleWindow = _find_face_chip_drop_window(btn.global_position)
+			if drop_window != null and is_instance_valid(drop_window):
+				_transfer_face_chip_to_window(hero_id, drop_window)
+			_finish_face_chip_drag()
+			accept_event()
+	elif event is InputEventMouseMotion:
+		if _face_chip_dragging and _face_chip_drag_hero_id == hero_id:
+			panel.global_position = event.global_position - _face_chip_drag_offset
+			accept_event()
+
+
+func _finish_face_chip_drag() -> void:
+	if _face_chip_drag_panel != null and is_instance_valid(_face_chip_drag_panel):
+		_face_chip_drag_panel.z_index = 70
+	_face_chip_dragging = false
+	_face_chip_drag_hero_id = ""
+	_face_chip_drag_panel = null
+	_layout_persistent_face_chips(false)
+
+
+func _find_face_chip_drop_window(global_pos: Vector2) -> BattleWindow:
+	var result: BattleWindow = null
+	var best_index: int = -999999
+	var tree := get_tree()
+	if tree == null:
+		return null
+	for node in tree.get_nodes_in_group("battle_windows"):
+		if node == null or not is_instance_valid(node):
+			continue
+		if not (node is BattleWindow):
+			continue
+		var window: BattleWindow = node as BattleWindow
+		if window == null:
+			continue
+		if not window._can_accept_face_chip():
+			continue
+		var rect: Rect2 = Rect2(window.global_position, window.size)
+		if not rect.has_point(global_pos):
+			continue
+		var idx: int = window.get_index()
+		if idx >= best_index:
+			best_index = idx
+			result = window
+	return result
+
+
+func _can_accept_face_chip() -> bool:
+	if is_event_mode:
+		return false
+	return current_state == BattleState.RUNNING or current_state == BattleState.STARTING
+
+
+func transfer_all_face_chips_to_window(target_window: BattleWindow) -> Array[String]:
+	var moved_hero_ids: Array[String] = []
+	if target_window == null or not is_instance_valid(target_window):
+		return moved_hero_ids
+	if target_window == self:
+		return moved_hero_ids
+	var ordered_hero_ids: Array[String] = _face_chip_order.duplicate()
+	for hero_id_any in ordered_hero_ids:
+		var hero_id: String = str(hero_id_any)
+		if hero_id.is_empty():
+			continue
+		var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
+		if panel == null or not is_instance_valid(panel):
+			continue
+		_transfer_face_chip_to_window(hero_id, target_window)
+		if not _face_chip_panels.has(hero_id):
+			moved_hero_ids.append(hero_id)
+	return moved_hero_ids
+
+
+func _transfer_face_chip_to_window(hero_id: String, target_window: BattleWindow) -> void:
+	if hero_id.is_empty() or target_window == null or not is_instance_valid(target_window):
+		return
+	if target_window == self:
+		return
+	var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
+	if panel == null or not is_instance_valid(panel):
+		return
+	if BattleManager != null and BattleManager.has_method("transfer_hero_to_battle"):
+		var moved: bool = BattleManager.transfer_hero_to_battle(hero_id, target_window.battle_id)
+		if not moved:
+			return
+	_face_chip_panels.erase(hero_id)
+	_face_chip_order.erase(hero_id)
+	panel.queue_free()
+	target_window._show_hero_face_chip(hero_id, false, 0, false, 0.6)
+	target_window._layout_persistent_face_chips(false)
 
 
 func _play_face_chip_pulse(panel: PanelContainer) -> void:
@@ -2299,7 +2507,7 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 	# 경험치 분배 (골드 기반 간이 계산)
 	var per_kill_exp: int = maxi(5, gold_reward / 2)
-	for hero in PartyManager.get_alive_heroes():
+	for hero in _get_alive_heroes_in_battle():
 		var exp_result: Dictionary = hero.gain_exp(per_kill_exp)
 		if exp_result.get("leveled_up", false):
 			if SoundManager:
@@ -2454,6 +2662,7 @@ func _check_battle_end() -> bool:
 		if e != null and e.is_alive():
 			alive_enemies.append(e)
 
+	# 패배 판정은 전투창 로컬 페이스칩이 아니라 파티 전체 생존 기준으로 처리
 	var alive_heroes: Array = PartyManager.get_alive_heroes()
 
 	if alive_enemies.is_empty():
@@ -2541,25 +2750,89 @@ func _end_battle_victory() -> void:
 		if BattleManager and BattleManager.has_method("push_hud_notice"):
 			BattleManager.push_hud_notice("Gold +%d" % total_gold, 2.0, Color.YELLOW)
 
-	if not drop_items.is_empty():
-		var item_names: Array = []
-		for item_id in drop_items:
-			var edata: Dictionary = DataManager.get_equipment(item_id)
-			if not edata.is_empty():
-				item_names.append(str(edata.get("name", item_id)))
-			else:
-				var idata: Dictionary = DataManager.get_item(item_id)
-				item_names.append(str(idata.get("name", item_id)))
-		if BattleManager and BattleManager.has_method("push_hud_notice"):
-			BattleManager.push_hud_notice("획득: %s" % ", ".join(item_names), 2.8, Color.LIGHT_BLUE)
-
 	_apply_heart_rewards(1.0)
 
-	# 보상 처리 및 전투창 닫기 (즉시)
+	# 보상 처리
 	_grant_exp_rewards()
 	call_deferred("_emit_party_updated")
+	if _has_equipment_reward_items():
+		_play_victory_chest_reveal_then_close()
+		return
+	_finalize_victory_close()
+
+
+func _finalize_victory_close() -> void:
 	battle_ended.emit(battle_id, true)
 	_play_close_effect()
+
+
+func _has_equipment_reward_items() -> bool:
+	if DataManager == null:
+		return false
+	for item_any in drop_items:
+		var item_id: String = str(item_any)
+		if item_id.is_empty():
+			continue
+		var equip_data: Dictionary = DataManager.get_equipment(item_id)
+		if not equip_data.is_empty():
+			return true
+	return false
+
+
+func _play_victory_chest_reveal_then_close() -> void:
+	var host: Control = battle_area if battle_area != null else self
+	var chest := Control.new()
+	chest.name = "VictoryChestReveal"
+	chest.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chest.z_index = 220
+	chest.custom_minimum_size = Vector2(44, 34)
+	chest.set_anchors_preset(Control.PRESET_CENTER)
+	chest.position = Vector2(-22, -17)
+	host.add_child(chest)
+
+	var chest_sprite := Sprite2D.new()
+	chest_sprite.centered = true
+	chest_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	chest_sprite.texture = _make_victory_chest_texture()
+	chest_sprite.position = Vector2(22, 18)
+	chest.add_child(chest_sprite)
+
+	var glow := ColorRect.new()
+	glow.color = Color(1.0, 0.86, 0.42, 0.0)
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.set_anchors_preset(Control.PRESET_FULL_RECT)
+	chest.add_child(glow)
+
+	chest.scale = Vector2(0.2, 0.2)
+	chest.modulate.a = 0.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(chest, "modulate:a", 1.0, 0.08)
+	tw.tween_property(chest, "scale", Vector2(1.2, 1.2), VICTORY_CHEST_REVEAL_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(glow, "color:a", 0.2, VICTORY_CHEST_REVEAL_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_property(chest, "scale", Vector2(1.0, 1.0), VICTORY_CHEST_BOUNCE_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.chain().tween_interval(0.06)
+	tw.chain().tween_callback(chest.queue_free)
+	tw.chain().tween_callback(_finalize_victory_close)
+
+
+func _make_victory_chest_texture() -> Texture2D:
+	var w: int = 24
+	var h: int = 18
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in range(5, 17):
+		for x in range(2, 22):
+			var c := Color(0.66, 0.41, 0.16, 1.0)
+			if y <= 8:
+				c = Color(0.84, 0.58, 0.23, 1.0)
+			if x == 2 or x == 21 or y == 5 or y == 16:
+				c = c.darkened(0.24)
+			img.set_pixel(x, y, c)
+	for y in range(9, 12):
+		for x in range(11, 13):
+			img.set_pixel(x, y, Color(0.97, 0.87, 0.39, 1.0))
+	return ImageTexture.create_from_image(img)
 
 
 func _play_close_effect() -> void:
@@ -2746,7 +3019,7 @@ func _show_rebel_up_popup(text: String) -> void:
 func _collect_party_traits() -> void:
 	## 파티원들의 특성 수집
 	active_traits.clear()
-	for hero in PartyManager.get_alive_heroes():
+	for hero in _get_alive_heroes_in_battle():
 		for trait_data in hero.get_traits():
 			if not trait_data.is_empty():
 				active_traits.append(trait_data)
@@ -2877,6 +3150,8 @@ func _exit_tree() -> void:
 	if _global_face_chip_owner_window_id == get_instance_id():
 		_global_face_chip_owner_window_id = -1
 	_deactivate_persistent_face_chip()
+	if BattleManager and BattleManager.has_method("release_hero_locks_for_battle"):
+		BattleManager.release_hero_locks_for_battle(battle_id)
 	if BattleManager and BattleManager.has_method("clear_battle_group_hover"):
 		BattleManager.clear_battle_group_hover()
 
@@ -3051,30 +3326,16 @@ func _release_reward_pause_locks() -> void:
 
 func _setup_enemy_tooltip() -> void:
 	## 적 호버 시 표시할 툴팁 패널 생성
-	_enemy_tooltip = PanelContainer.new()
+	var tooltip_node: Node = TOOLTIP_SCENE.instantiate()
+	_enemy_tooltip = tooltip_node as PanelContainer
+	if _enemy_tooltip == null:
+		return
 	_enemy_tooltip.name = "EnemyTooltip"
 	_enemy_tooltip.visible = false
 	_enemy_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_enemy_tooltip.z_index = 200
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.05, 0.1, 0.95)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(0.5, 0.5, 0.6, 0.8)
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.content_margin_left = 6
-	style.content_margin_right = 6
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-	_enemy_tooltip.add_theme_stylebox_override("panel", style)
-
 	add_child(_enemy_tooltip)
+	_enemy_tooltip.set_as_top_level(true)
 
 
 func _connect_enemy_hover(enemy: BattleEnemy) -> void:
@@ -3091,6 +3352,7 @@ func _connect_enemy_hover(enemy: BattleEnemy) -> void:
 func _on_enemy_mouse_entered(enemy: BattleEnemy) -> void:
 	if enemy == null or not enemy.is_alive():
 		return
+	_enemy_tooltip_hide_token += 1
 	_hovered_enemy = enemy
 	enemy.set_hover_highlight(true)
 	_show_enemy_tooltip(enemy)
@@ -3098,9 +3360,32 @@ func _on_enemy_mouse_entered(enemy: BattleEnemy) -> void:
 
 func _on_enemy_mouse_exited(enemy: BattleEnemy) -> void:
 	if _hovered_enemy == enemy:
+		if _is_pointer_inside_enemy(enemy):
+			return
 		_hovered_enemy = null
 		enemy.set_hover_highlight(false)
+		var token: int = _enemy_tooltip_hide_token + 1
+		_enemy_tooltip_hide_token = token
+		_defer_hide_enemy_tooltip(token)
+
+
+func _defer_hide_enemy_tooltip(token: int) -> void:
+	if get_tree() == null:
 		_hide_enemy_tooltip()
+		return
+	await get_tree().create_timer(0.06).timeout
+	if token != _enemy_tooltip_hide_token:
+		return
+	if _hovered_enemy != null:
+		return
+	_hide_enemy_tooltip()
+
+
+func _is_pointer_inside_enemy(enemy: BattleEnemy) -> bool:
+	if enemy == null or not is_instance_valid(enemy):
+		return false
+	var rect: Rect2 = Rect2(enemy.global_position, enemy.size)
+	return rect.has_point(get_global_mouse_position())
 
 
 func _show_enemy_tooltip(enemy: BattleEnemy) -> void:
@@ -3108,64 +3393,107 @@ func _show_enemy_tooltip(enemy: BattleEnemy) -> void:
 	if _enemy_tooltip == null:
 		return
 
-	# 기존 내용 제거
-	for child in _enemy_tooltip.get_children():
-		child.queue_free()
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_enemy_tooltip.add_child(vbox)
-
-	# 이름
-	var name_label := Label.new()
-	name_label.text = enemy.enemy_name
-	name_label.add_theme_font_size_override("font_size", 10)
-	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var name_color: Color = Color.WHITE
 	if enemy.is_elite_version:
-		name_label.add_theme_color_override("font_color", Color.PURPLE)
+		name_color = Color.PURPLE
 	elif enemy.enemy_type == "boss":
-		name_label.add_theme_color_override("font_color", Color.ORANGE)
-	else:
-		name_label.add_theme_color_override("font_color", Color.WHITE)
-	vbox.add_child(name_label)
+		name_color = Color.ORANGE
 
-	# HP
-	var hp_label := Label.new()
-	hp_label.text = "HP: %d/%d" % [enemy.current_hp, enemy.max_hp]
-	hp_label.add_theme_font_size_override("font_size", 9)
-	hp_label.add_theme_color_override("font_color", Color(0.8, 0.3, 0.3))
-	hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(hp_label)
-
-	# 스탯
-	var stats_label := Label.new()
-	stats_label.text = "ATK:%d DEF:%d SPD:%d" % [enemy.get_atk(), enemy.get_p_def(), enemy.get_dex()]
-	stats_label.add_theme_font_size_override("font_size", 8)
-	stats_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
-	stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(stats_label)
-
-	# 타입
-	var type_label := Label.new()
-	type_label.text = "타입: %s" % enemy.damage_type
-	type_label.add_theme_font_size_override("font_size", 8)
-	type_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.6))
-	type_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(type_label)
-
-	# 위치: 적 위 또는 아래
-	_enemy_tooltip.visible = true
-	await get_tree().process_frame
-	var tooltip_pos := enemy.global_position + Vector2(0, -_enemy_tooltip.size.y - 4)
-	if tooltip_pos.y < global_position.y:
-		tooltip_pos = enemy.global_position + Vector2(0, enemy.size.y + 2)
-	_enemy_tooltip.global_position = tooltip_pos
+	var rows: Array = [
+		{"text": enemy.enemy_name, "color": name_color, "size": 10},
+		{"text": "HP: %d/%d" % [enemy.current_hp, enemy.max_hp], "color": Color(0.9, 0.35, 0.35, 1.0), "size": 9},
+		{"text": "ATK:%d DEF:%d SPD:%d" % [enemy.get_atk(), enemy.get_p_def(), enemy.get_dex()], "color": Color(0.7, 0.7, 0.8, 1.0), "size": 8},
+		{"text": "타입: %s" % enemy.damage_type, "color": Color(0.6, 0.6, 0.7, 1.0), "size": 8},
+	]
+	var enemy_icon: Texture2D = null
+	var enemy_sprite: AnimatedSprite2D = enemy.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if enemy_sprite != null and enemy_sprite.sprite_frames != null:
+		var anim: StringName = enemy_sprite.animation
+		var frame_idx: int = enemy_sprite.frame
+		if enemy_sprite.sprite_frames.has_animation(anim):
+			enemy_icon = enemy_sprite.sprite_frames.get_frame_texture(anim, frame_idx)
+	var anchor_pos: Vector2 = enemy.global_position + Vector2(enemy.size.x * 0.5, 0.0)
+	_show_shared_tooltip("enemy", rows, anchor_pos, enemy_icon)
 
 
 func _hide_enemy_tooltip() -> void:
 	if _enemy_tooltip:
 		_enemy_tooltip.visible = false
+	_tooltip_owner = ""
+
+
+func _show_shared_tooltip(owner: String, rows: Array, anchor_pos: Vector2, icon_tex: Texture2D = null) -> void:
+	if _enemy_tooltip == null:
+		return
+	_enemy_tooltip_hide_token += 1
+	_tooltip_owner = owner
+	if _enemy_tooltip.has_method("set_rows"):
+		_enemy_tooltip.call("set_rows", rows, icon_tex)
+	_enemy_tooltip.visible = true
+	var clamp_rect: Rect2 = get_viewport().get_visible_rect()
+	if _enemy_tooltip.has_method("place_near"):
+		_enemy_tooltip.call("place_near", anchor_pos, clamp_rect, true, 4.0)
+		return
+	await get_tree().process_frame
+	_enemy_tooltip.global_position = anchor_pos + Vector2(-_enemy_tooltip.size.x * 0.5, -_enemy_tooltip.size.y - 4.0)
+
+
+func _on_face_chip_mouse_entered(hero_id: String) -> void:
+	if _face_chip_dragging:
+		return
+	var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
+	if panel == null or not is_instance_valid(panel):
+		return
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id) if PartyManager else null
+	if hero == null:
+		return
+	var rows: Array = [
+		{"text": hero.hero_name, "color": Color(0.95, 0.96, 1.0, 1.0), "size": 10},
+		{"text": "HP: %d/%d" % [hero.current_hp, hero.get_max_hp()], "color": Color(0.75, 1.0, 0.75, 1.0), "size": 9},
+		{"text": "%s" % hero.hero_class_name, "color": Color(0.72, 0.76, 0.9, 1.0), "size": 8},
+		{"text": "ATK:%d DEF:%d SPD:%d" % [hero.get_atk(), hero.get_p_def(), hero.get_dex()], "color": Color(0.7, 0.7, 0.8, 1.0), "size": 8},
+	]
+	var icon_tex: Texture2D = SpriteManager.get_hero_face_sprite(hero_id) if SpriteManager else null
+	var anchor_pos: Vector2 = panel.global_position + panel.size * 0.5
+	_show_shared_tooltip("token_%s" % hero_id, rows, anchor_pos, icon_tex)
+
+
+func _on_face_chip_mouse_exited(hero_id: String) -> void:
+	if _tooltip_owner != "token_%s" % hero_id:
+		return
+	var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
+	if panel != null and is_instance_valid(panel):
+		var rect: Rect2 = Rect2(panel.global_position, panel.size)
+		if rect.has_point(get_global_mouse_position()):
+			return
+	_hide_enemy_tooltip()
+
+
+func _on_run_button_mouse_entered() -> void:
+	if run_button == null or not is_instance_valid(run_button):
+		return
+	var rows: Array = []
+	if run_button.text.find("보상") >= 0:
+		rows = [
+			{"text": "보상받기", "color": Color(0.85, 1.0, 0.85, 1.0), "size": 10},
+			{"text": "적 전멸 보상 100% 획득", "color": Color(0.78, 0.9, 0.78, 1.0), "size": 8},
+		]
+	else:
+		rows = [
+			{"text": "도주", "color": Color(1.0, 0.92, 0.62, 1.0), "size": 10},
+			{"text": "적이 살아있을 때 보상 50%만 획득", "color": Color(0.88, 0.8, 0.56, 1.0), "size": 8},
+		]
+	var anchor_pos: Vector2 = run_button.global_position + run_button.size * 0.5
+	_show_shared_tooltip("run_button", rows, anchor_pos, null)
+
+
+func _on_run_button_mouse_exited() -> void:
+	if _tooltip_owner != "run_button":
+		return
+	var rect: Rect2 = Rect2(run_button.global_position, run_button.size)
+	if rect.has_point(get_global_mouse_position()):
+		return
+	_hide_enemy_tooltip()
 
 
 func _setup_hover_highlight() -> void:
@@ -3196,24 +3524,27 @@ func _on_window_mouse_entered() -> void:
 		_update_hover_highlight()
 		_update_pause_visual(0.0)
 		return
-	if is_battle_paused and BattleManager and BattleManager.has_method("set_battle_group_hovered"):
-		BattleManager.set_battle_group_hovered(true)
-	else:
-		_pause_hover_focus = true
+	_pause_hover_focus = true
 	_update_hover_highlight()
 	_update_pause_visual(0.0)
 
 
+func _is_pointer_inside_window() -> bool:
+	var rect: Rect2 = Rect2(global_position, size)
+	return rect.has_point(get_global_mouse_position())
+
+
 func _on_window_mouse_exited() -> void:
+	# 자식 Control(에너미/토큰)으로 마우스가 이동할 때도 exited가 들어올 수 있다.
+	# 포인터가 여전히 전투창 영역 안이면 hover를 유지한다.
+	if _is_pointer_inside_window():
+		return
 	_is_window_hovered = false
 	if is_event_mode:
 		_update_hover_highlight()
 		_update_pause_visual(0.0)
 		return
-	if is_battle_paused and BattleManager and BattleManager.has_method("set_battle_group_hovered"):
-		BattleManager.set_battle_group_hovered(false)
-	else:
-		_pause_hover_focus = false
+	_pause_hover_focus = false
 	_update_hover_highlight()
 	_update_pause_visual(0.0)
 
@@ -3343,6 +3674,8 @@ func _execute_merge(target: BattleWindow) -> void:
 	_refresh_enemy_layout()
 
 	# BattleManager에서 제거
+	if BattleManager and BattleManager.has_method("reassign_hero_locks"):
+		BattleManager.reassign_hero_locks(battle_id, target.battle_id)
 	BattleManager.active_battles.erase(battle_id)
 
 	# 하이라이트 정리
