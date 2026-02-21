@@ -67,7 +67,7 @@ var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 var _knight_used_first: Dictionary = {}  # hero_id -> bool (전투창당 첫 공격 스킬 사용 여부)
 
 # === 행동 처리 ===
-const ACTION_DELAY: float = 0.3  # 행동 사이 딜레이 (초)
+const ACTION_DELAY: float = 0.3  # 행동 사이 딜레sd이 (초)
 var is_processing_action: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
 var _event_step_mode: bool = false
