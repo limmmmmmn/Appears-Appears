@@ -6,10 +6,10 @@ const PANEL_COLOR := Color(0.12, 0.15, 0.22, 0.96)
 const PANEL_BORDER := Color(0.35, 0.46, 0.72, 0.95)
 const LOCKED_NODE_COLOR := Color(0.18, 0.18, 0.2, 0.9)
 
-const PANEL_MIN_SIZE := Vector2(860, 360)
-const NODE_BUTTON_MIN_SIZE := Vector2(132, 84)
-const FLOW_SEPARATION := 8
-const SCROLL_MIN_SIZE := Vector2(760, 190)
+const PANEL_MIN_SIZE := Vector2(920, 0)
+const PANEL_CONTENT_MARGIN := Vector4(28, 22, 28, 18)
+const NODE_BUTTON_MIN_SIZE := Vector2(120, 76)
+const FLOW_SEPARATION := 6
 
 const PARTY_SLOT_OFFSETS: Array[Vector2] = [
 	Vector2(-18, 18),
@@ -17,6 +17,9 @@ const PARTY_SLOT_OFFSETS: Array[Vector2] = [
 	Vector2(10, 18),
 	Vector2(24, 14),
 ]
+
+const TOKEN_STAGGER_DELAY := 0.07
+const TOKEN_ARC_PEAK := -14.0
 
 const TYPE_COLORS := {
 	"field": Color(0.2, 0.33, 0.24, 0.98),
@@ -39,22 +42,21 @@ const TYPE_BORDERS := {
 @onready var root_vbox: VBoxContainer = $CenterContainer/NodeMapPanel/RootVBox
 @onready var title_label: Label = $CenterContainer/NodeMapPanel/RootVBox/TitleLabel
 @onready var subtitle_label: Label = $CenterContainer/NodeMapPanel/RootVBox/SubtitleLabel
-@onready var node_scroll: ScrollContainer = $CenterContainer/NodeMapPanel/RootVBox/NodeScroll
-@onready var node_flow: HBoxContainer = $CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow
+@onready var node_flow: HBoxContainer = $CenterContainer/NodeMapPanel/RootVBox/NodeFlow
 @onready var hint_label: Label = $CenterContainer/NodeMapPanel/RootVBox/HintLabel
 @onready var party_overlay: Control = $CenterContainer/NodeMapPanel/PartyOverlay
 @onready var node_button_slots: Array[Button] = [
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/NodeButton1,
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/NodeButton2,
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/NodeButton3,
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/NodeButton4,
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/NodeButton5,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/NodeButton1,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/NodeButton2,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/NodeButton3,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/NodeButton4,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/NodeButton5,
 ]
 @onready var node_arrow_slots: Array[Label] = [
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/Arrow1,
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/Arrow2,
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/Arrow3,
-	$CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow/Arrow4,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/Arrow1,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/Arrow2,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/Arrow3,
+	$CenterContainer/NodeMapPanel/RootVBox/NodeFlow/Arrow4,
 ]
 
 var act_id: String = "act_1"
@@ -112,34 +114,29 @@ func _resolve_act_and_nodes() -> void:
 func _setup_static_ui() -> void:
 	background.color = BG_COLOR
 
+	var panel_style := _make_style(PANEL_COLOR, PANEL_BORDER, 12, 2)
+	panel_style.content_margin_left = PANEL_CONTENT_MARGIN.x
+	panel_style.content_margin_top = PANEL_CONTENT_MARGIN.y
+	panel_style.content_margin_right = PANEL_CONTENT_MARGIN.z
+	panel_style.content_margin_bottom = PANEL_CONTENT_MARGIN.w
 	node_map_panel.custom_minimum_size = PANEL_MIN_SIZE
-	node_map_panel.add_theme_stylebox_override("panel", _make_style(PANEL_COLOR, PANEL_BORDER, 12, 2))
+	node_map_panel.add_theme_stylebox_override("panel", panel_style)
 
-	root_vbox.offset_left = 24
-	root_vbox.offset_top = 20
-	root_vbox.offset_right = -24
-	root_vbox.offset_bottom = -20
-	root_vbox.add_theme_constant_override("separation", 14)
+	root_vbox.add_theme_constant_override("separation", 16)
 
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 24)
+	title_label.add_theme_font_size_override("font_size", 22)
 	title_label.text = "%s 전체 노드" % _get_act_name()
 
 	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle_label.add_theme_font_size_override("font_size", 14)
+	subtitle_label.add_theme_font_size_override("font_size", 13)
 	subtitle_label.modulate = Color(0.85, 0.9, 1.0, 0.95)
 	subtitle_label.text = "파티가 노드를 이동한 뒤 해당 구역으로 진입합니다."
 
-	node_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	node_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	node_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	node_scroll.custom_minimum_size = SCROLL_MIN_SIZE
-
 	node_flow.add_theme_constant_override("separation", FLOW_SEPARATION)
-	node_flow.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint_label.add_theme_font_size_override("font_size", 13)
+	hint_label.add_theme_font_size_override("font_size", 12)
 	hint_label.modulate = Color(0.9, 0.95, 1.0, 0.95)
 	hint_label.text = "이전 노드로는 돌아갈 수 없습니다."
 
@@ -158,6 +155,7 @@ func _rebuild_node_flow() -> void:
 		if node_btn == null:
 			continue
 		node_btn.custom_minimum_size = NODE_BUTTON_MIN_SIZE
+		node_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		node_btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		node_btn.add_theme_font_size_override("font_size", 13)
 		node_btn.visible = i < area_count
@@ -195,7 +193,7 @@ func _rebuild_node_flow() -> void:
 		arrow.visible = i < area_count - 1
 		arrow.text = "→"
 		arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		arrow.add_theme_font_size_override("font_size", 20)
+		arrow.add_theme_font_size_override("font_size", 18)
 		arrow.modulate = Color(0.72, 0.8, 0.98, 0.96)
 
 
@@ -298,7 +296,7 @@ func _play_pending_travel() -> void:
 		from_area_id = start_area_id
 
 	if not from_area_id.is_empty():
-		_set_party_tokens_at_area(from_area_id, Vector2(-90, 0))
+		_set_party_tokens_at_area(from_area_id)
 
 	if node_centers_local.has(target_area_id):
 		await _animate_party_tokens_to_area(target_area_id, 0.55)
@@ -325,17 +323,34 @@ func _animate_party_tokens_to_area(area_id: String, duration: float) -> void:
 	if not node_centers_local.has(area_id):
 		return
 	var center: Vector2 = Vector2(node_centers_local[area_id])
-	var tween := create_tween()
-	tween.set_trans(Tween.TRANS_SINE)
-	tween.set_ease(Tween.EASE_IN_OUT)
-	tween.set_parallel(true)
+	var last_tween: Tween = null
+
 	for i in range(party_tokens.size()):
 		var token: Control = party_tokens[i] as Control
 		if token == null:
 			continue
 		var target_pos: Vector2 = center + _get_party_slot_offset(i)
-		tween.tween_property(token, "position", target_pos, duration)
-	await tween.finished
+		var start_pos: Vector2 = token.position
+		var delay: float = float(i) * TOKEN_STAGGER_DELAY
+		var arc_peak: float = TOKEN_ARC_PEAK
+
+		var tween := create_tween()
+		if delay > 0.0:
+			tween.tween_interval(delay)
+
+		tween.tween_method(
+			func(t: float) -> void:
+				var x_val: float = lerpf(start_pos.x, target_pos.x, t)
+				var y_base: float = lerpf(start_pos.y, target_pos.y, t)
+				var y_arc: float = arc_peak * sin(t * PI)
+				token.position = Vector2(x_val, y_base + y_arc),
+			0.0, 1.0, duration
+		).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+
+		last_tween = tween
+
+	if last_tween != null:
+		await last_tween.finished
 
 
 func _get_party_slot_offset(index: int) -> Vector2:
@@ -377,8 +392,8 @@ func _on_start_area_pressed(area_id: String) -> void:
 	is_transition_running = true
 	_set_all_node_buttons_disabled(true)
 
-	_set_party_tokens_at_area(area_id, Vector2(-90, 0))
-	await _animate_party_tokens_to_area(area_id, 0.45)
+	_set_party_tokens_at_area(area_id, Vector2(-60, 0))
+	await _animate_party_tokens_to_area(area_id, 0.4)
 	GameManager.go_to_area(act_id, area_id)
 
 
