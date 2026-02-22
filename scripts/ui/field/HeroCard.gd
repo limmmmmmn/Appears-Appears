@@ -108,7 +108,7 @@ func _build_ui() -> void:
 
 func _build_name_row() -> void:
 	var name_row := Control.new()
-	name_row.position = Vector2(0, 0)
+	name_row.position = Vector2(0, -3)
 	name_row.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
 	name_row.mouse_filter = MOUSE_FILTER_IGNORE
 	content.add_child(name_row)
