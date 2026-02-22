@@ -14,6 +14,25 @@ var cards: Array[HeroCard] = []
 var selected_hero_index: int = -1
 var selection_enabled: bool = true
 
+# === 타겟팅 모드 ===
+const ARROW_COLOR := Color(0.4, 0.85, 1.0, 0.9)
+const ARROW_COLOR_VALID := Color(0.3, 1.0, 0.45, 0.95)
+const ARROW_COLOR_ALLY := Color(0.35, 1.0, 0.7, 0.95)
+const ARROW_WIDTH := 3.0
+const ARROW_HEAD_SIZE := 10.0
+const ARROW_STEPS := 24
+
+var _targeting: bool = false
+var _targeting_hero_id: String = ""
+var _targeting_skill_id: String = ""
+var _targeting_skill_data: Dictionary = {}
+var _targeting_source_pos: Vector2 = Vector2.ZERO
+var _targeting_is_ally_skill: bool = false
+var _targeting_overlay: CanvasLayer = null
+var _targeting_overlay_ctrl: Control = null
+var _targeting_hovered_enemy: Node = null  # BattleEnemy
+var _targeting_hovered_card: HeroCard = null
+
 
 func _ready() -> void:
 	_connect_signals()
@@ -24,6 +43,10 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	# Will/EXP 바를 매 프레임 갱신 (Will은 전투 밖에서도 항상 충전)
 	_update_realtime_bars()
+	# 타겟팅 오버레이 갱신
+	if _targeting and _targeting_overlay_ctrl:
+		_update_targeting_hover()
+		_targeting_overlay_ctrl.queue_redraw()
 
 
 func _initial_setup() -> void:
@@ -188,12 +211,22 @@ func _on_field_heal_requested(hero_index: int) -> void:
 
 
 func _on_active_skill_pressed(p_hero_id: String, skill_id: String) -> void:
-	## 액티브 스킬 버튼 → 전투창에서 즉시 발동
-	var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
-	for bw in battle_windows:
-		if bw.has_method("execute_active_skill"):
-			bw.execute_active_skill(p_hero_id, skill_id)
-			return
+	## 액티브 스킬 버튼 → 타겟팅 모드 진입
+	if _targeting:
+		_cancel_targeting()
+	if BattleManager == null or BattleManager.get_active_battle_count() == 0:
+		return
+	if not CooldownManager.is_skill_ready(p_hero_id, skill_id):
+		return
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	if skill_data.is_empty():
+		return
+	var target_type: String = str(skill_data.get("target", "single_enemy"))
+	# AOE는 타겟팅 불필요 → 즉시 발동
+	if target_type == "all_enemies" or target_type == "all_allies":
+		_execute_skill_immediate(p_hero_id, skill_id)
+		return
+	_start_targeting(p_hero_id, skill_id, skill_data)
 
 
 func _on_card_accordion_toggle(hero_index: int) -> void:
@@ -201,6 +234,8 @@ func _on_card_accordion_toggle(hero_index: int) -> void:
 
 
 func _on_card_selected(hero_index: int) -> void:
+	if _targeting:
+		return  # 타겟팅 중에는 카드 선택 무시
 	if not selection_enabled:
 		return
 	if hero_index < 0:
@@ -252,6 +287,220 @@ func set_selected_hero_index(index: int, emit_signal: bool = false) -> void:
 	_update_selection_visuals()
 	if emit_signal and selected_hero_index >= 0:
 		hero_selected.emit(selected_hero_index)
+
+
+#region 타겟팅 모드
+func _start_targeting(hero_id: String, skill_id: String, skill_data: Dictionary) -> void:
+	_targeting = true
+	_targeting_hero_id = hero_id
+	_targeting_skill_id = skill_id
+	_targeting_skill_data = skill_data
+	var target_type: String = str(skill_data.get("target", "single_enemy"))
+	_targeting_is_ally_skill = target_type in ["single_ally", "all_allies"]
+
+	# 소스 위치: 해당 히어로 카드 중앙
+	for card in cards:
+		if card.hero_id == hero_id:
+			_targeting_source_pos = card.global_position + card.size * 0.5
+			break
+
+	_create_targeting_overlay()
+
+
+func _create_targeting_overlay() -> void:
+	_targeting_overlay = CanvasLayer.new()
+	_targeting_overlay.layer = 200
+	_targeting_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(_targeting_overlay)
+
+	_targeting_overlay_ctrl = Control.new()
+	_targeting_overlay_ctrl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_targeting_overlay_ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
+	_targeting_overlay_ctrl.draw.connect(_draw_targeting_arrow)
+	_targeting_overlay_ctrl.gui_input.connect(_on_targeting_input)
+	_targeting_overlay.add_child(_targeting_overlay_ctrl)
+
+
+func _cancel_targeting() -> void:
+	_clear_targeting_highlights()
+	_targeting = false
+	_targeting_hero_id = ""
+	_targeting_skill_id = ""
+	_targeting_skill_data = {}
+	_targeting_hovered_enemy = null
+	_targeting_hovered_card = null
+	if _targeting_overlay:
+		_targeting_overlay.queue_free()
+		_targeting_overlay = null
+		_targeting_overlay_ctrl = null
+
+
+func _execute_skill_immediate(hero_id: String, skill_id: String) -> void:
+	## AOE/전체 아군 스킬 → 타겟팅 없이 즉시 발동
+	var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
+	for bw in battle_windows:
+		if bw.has_method("execute_active_skill"):
+			bw.execute_active_skill(hero_id, skill_id)
+			return
+
+
+func _update_targeting_hover() -> void:
+	## 매 프레임: 마우스 아래 유효한 타겟 감지 + 하이라이트
+	var mouse_pos: Vector2 = _targeting_overlay_ctrl.get_global_mouse_position()
+	var prev_enemy: Node = _targeting_hovered_enemy
+	var prev_card: HeroCard = _targeting_hovered_card
+	_targeting_hovered_enemy = null
+	_targeting_hovered_card = null
+
+	if _targeting_is_ally_skill:
+		# 아군 카드 호버 감지
+		for card in cards:
+			if card.hero_id.is_empty():
+				continue
+			var rect := Rect2(card.global_position, card.size)
+			if rect.has_point(mouse_pos):
+				_targeting_hovered_card = card
+				break
+	else:
+		# 적 호버 감지
+		var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
+		for bw in battle_windows:
+			if not bw.has_method("get_enemy_at_position"):
+				continue
+			var enemy: Node = bw.get_enemy_at_position(mouse_pos)
+			if enemy != null:
+				_targeting_hovered_enemy = enemy
+				break
+
+	# 하이라이트 갱신
+	if prev_enemy != _targeting_hovered_enemy:
+		if prev_enemy != null and is_instance_valid(prev_enemy) and prev_enemy.has_method("set_hover_highlight"):
+			prev_enemy.set_hover_highlight(false)
+		if _targeting_hovered_enemy != null and _targeting_hovered_enemy.has_method("set_hover_highlight"):
+			_targeting_hovered_enemy.set_hover_highlight(true)
+
+
+func _clear_targeting_highlights() -> void:
+	if _targeting_hovered_enemy != null and is_instance_valid(_targeting_hovered_enemy):
+		if _targeting_hovered_enemy.has_method("set_hover_highlight"):
+			_targeting_hovered_enemy.set_hover_highlight(false)
+	_targeting_hovered_enemy = null
+	_targeting_hovered_card = null
+
+
+func _draw_targeting_arrow() -> void:
+	## 오버레이 _draw 콜백: 베지어 화살표
+	if not _targeting or _targeting_overlay_ctrl == null:
+		return
+	var mouse_pos: Vector2 = _targeting_overlay_ctrl.get_global_mouse_position()
+	var from: Vector2 = _targeting_source_pos
+	var to: Vector2 = mouse_pos
+
+	# 유효 타겟 위에 있으면 색상 변경
+	var has_valid_target: bool = (_targeting_hovered_enemy != null) or (_targeting_hovered_card != null)
+	var color: Color
+	if has_valid_target:
+		color = ARROW_COLOR_ALLY if _targeting_is_ally_skill else ARROW_COLOR_VALID
+	else:
+		color = ARROW_COLOR
+
+	# 베지어 커브 계산
+	var dist: float = from.distance_to(to)
+	var mid: Vector2 = (from + to) * 0.5
+	var control: Vector2 = mid - Vector2(0, dist * 0.3)
+	var points := PackedVector2Array()
+	for i in range(ARROW_STEPS + 1):
+		var t: float = float(i) / float(ARROW_STEPS)
+		var a: Vector2 = from.lerp(control, t)
+		var b: Vector2 = control.lerp(to, t)
+		points.append(a.lerp(b, t))
+
+	# 곡선 그리기
+	if points.size() >= 2:
+		_targeting_overlay_ctrl.draw_polyline(points, color, ARROW_WIDTH, true)
+
+	# 화살촉
+	if points.size() >= 2:
+		var tip: Vector2 = points[-1]
+		var dir: Vector2 = (points[-1] - points[-2]).normalized()
+		var perp: Vector2 = Vector2(-dir.y, dir.x)
+		var left: Vector2 = tip - dir * ARROW_HEAD_SIZE + perp * ARROW_HEAD_SIZE * 0.5
+		var right: Vector2 = tip - dir * ARROW_HEAD_SIZE - perp * ARROW_HEAD_SIZE * 0.5
+		_targeting_overlay_ctrl.draw_polygon(
+			PackedVector2Array([tip, left, right]),
+			PackedColorArray([color, color, color])
+		)
+
+	# 유효 타겟 위에 원형 표시
+	if has_valid_target:
+		var target_center: Vector2 = to
+		if _targeting_hovered_enemy != null and is_instance_valid(_targeting_hovered_enemy):
+			target_center = _targeting_hovered_enemy.global_position + _targeting_hovered_enemy.size * 0.5
+		elif _targeting_hovered_card != null:
+			target_center = _targeting_hovered_card.global_position + _targeting_hovered_card.size * 0.5
+		_targeting_overlay_ctrl.draw_arc(target_center, 18.0, 0, TAU, 32, color, 2.0, true)
+
+
+func _on_targeting_input(event: InputEvent) -> void:
+	## 타겟팅 오버레이 입력 처리
+	if not _targeting:
+		return
+
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed:
+			if mb.button_index == MOUSE_BUTTON_RIGHT:
+				_cancel_targeting()
+				_targeting_overlay_ctrl.accept_event()
+			elif mb.button_index == MOUSE_BUTTON_LEFT:
+				_try_confirm_target(mb.global_position)
+				_targeting_overlay_ctrl.accept_event()
+	elif event is InputEventKey:
+		var key := event as InputEventKey
+		if key.pressed and key.keycode == KEY_ESCAPE:
+			_cancel_targeting()
+
+
+func _try_confirm_target(pos: Vector2) -> void:
+	if _targeting_is_ally_skill:
+		_try_confirm_ally_target(pos)
+	else:
+		_try_confirm_enemy_target(pos)
+
+
+func _try_confirm_enemy_target(pos: Vector2) -> void:
+	var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
+	for bw in battle_windows:
+		if not bw.has_method("get_enemy_at_position"):
+			continue
+		var enemy = bw.get_enemy_at_position(pos)
+		if enemy != null:
+			var hero_id: String = _targeting_hero_id
+			var skill_id: String = _targeting_skill_id
+			_cancel_targeting()
+			bw.execute_active_skill(hero_id, skill_id, enemy)
+			return
+	# 유효한 타겟 없으면 무시 (취소하지 않음)
+
+
+func _try_confirm_ally_target(pos: Vector2) -> void:
+	for card in cards:
+		if card.hero_id.is_empty():
+			continue
+		var rect := Rect2(card.global_position, card.size)
+		if rect.has_point(pos):
+			var hero_id: String = _targeting_hero_id
+			var skill_id: String = _targeting_skill_id
+			var target_hero_id: String = card.hero_id
+			_cancel_targeting()
+			# 대상 아군에게 스킬 발동
+			var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
+			for bw in battle_windows:
+				if bw.has_method("execute_active_skill"):
+					bw.execute_active_skill(hero_id, skill_id, null, target_hero_id)
+					return
+			return
+#endregion
 
 
 #region 필드 힐

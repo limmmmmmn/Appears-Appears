@@ -1596,8 +1596,10 @@ func _can_use_skill(hero: Hero, skill_id: String) -> bool:
 	return true
 
 
-func execute_active_skill(hero_id: String, skill_id: String) -> void:
+func execute_active_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy = null, ally_target_id: String = "") -> void:
 	## 외부(HeroCard)에서 호출: ATB 무시, 쿨다운만 확인하여 즉시 발동
+	## enemy_target: 지정된 적 타겟 (타겟팅 모드에서 클릭한 적)
+	## ally_target_id: 지정된 아군 타겟 hero_id (타겟팅 모드에서 클릭한 아군)
 	if current_state != BattleState.RUNNING:
 		return
 	if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
@@ -1606,8 +1608,6 @@ func execute_active_skill(hero_id: String, skill_id: String) -> void:
 	var hero: Hero = _find_hero_by_id(hero_id)
 	if hero == null or hero.is_dead:
 		return
-	if not has_alive_enemies():
-		return
 	if not CooldownManager.is_skill_ready(hero_id, skill_id):
 		return
 
@@ -1615,19 +1615,39 @@ func execute_active_skill(hero_id: String, skill_id: String) -> void:
 	if skill_data.is_empty():
 		return
 
+	var target_type: String = skill_data.get("target", "single_enemy")
+
+	# 적 대상 스킬인데 살아있는 적이 없으면 스킵
+	if target_type not in ["single_ally", "all_allies"]:
+		if not has_alive_enemies():
+			return
+
 	hero.reset_skill_action_timer()
 	BattleManager.hero_attacked.emit(hero.id)
 
-	var target_type: String = skill_data.get("target", "single_enemy")
 	match target_type:
 		"single_ally", "all_allies":
-			_execute_ally_skill(hero, skill_id, skill_data, target_type)
+			var forced_ally: Hero = null
+			if not ally_target_id.is_empty():
+				forced_ally = _find_hero_by_id(ally_target_id)
+			_execute_ally_skill(hero, skill_id, skill_data, target_type, forced_ally)
 		"all_enemies":
 			_execute_aoe_attack(hero, skill_id, skill_data)
 		_:
-			_execute_single_attack(hero, skill_id, skill_data)
+			_execute_single_attack(hero, skill_id, skill_data, enemy_target)
 
 	CooldownManager.start_cooldown(hero.id, skill_id)
+
+
+func get_enemy_at_position(screen_pos: Vector2) -> BattleEnemy:
+	## 화면 좌표에서 살아있는 적을 찾아 반환
+	for enemy in enemies:
+		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
+			continue
+		var rect := Rect2(enemy.global_position, enemy.size)
+		if rect.has_point(screen_pos):
+			return enemy
+	return null
 
 
 func _find_finisher_skill(hero: Hero, skill_ids: Array) -> String:
@@ -1722,12 +1742,12 @@ func _get_wounded_heroes() -> Array:
 	return result
 
 
-func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -> void:
+func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary, forced_target: BattleEnemy = null) -> void:
 	## 단일 대상 공격 실행
 	if not has_alive_enemies():
 		return
 
-	var target: BattleEnemy = _select_smart_target(hero)
+	var target: BattleEnemy = forced_target if (forced_target != null and forced_target.is_alive()) else _select_smart_target(hero)
 	if target == null:
 		return
 	_show_hero_face_chip(hero.id, false, 0, false, 0.95)
@@ -1866,14 +1886,16 @@ func _show_skill_particle(target: BattleEnemy, skill_id: String, skill_data: Dic
 	target.show_attack_particle(emoji, burst_count)
 
 
-func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, target_type: String) -> void:
+func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, target_type: String, forced_target: Hero = null) -> void:
 	## 아군 대상 스킬 실행 (힐 등)
 	var skill_name: String = skill_data.get("name", "스킬")
 	var skill_type: String = skill_data.get("type", "utility")
 
 	if skill_type == "heal":
 		var targets: Array = []
-		if target_type == "single_ally":
+		if forced_target != null and not forced_target.is_dead:
+			targets.append(forced_target)
+		elif target_type == "single_ally":
 			# 가장 체력이 낮은 아군 선택
 			var lowest_hp_hero: Hero = null
 			var lowest_percent: float = 1.0
