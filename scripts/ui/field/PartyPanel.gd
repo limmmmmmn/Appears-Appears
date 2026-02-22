@@ -214,14 +214,17 @@ func _on_active_skill_pressed(p_hero_id: String, skill_id: String) -> void:
 	## 액티브 스킬 버튼 → 타겟팅 모드 진입
 	if _targeting:
 		_cancel_targeting()
-	if BattleManager == null or BattleManager.get_active_battle_count() == 0:
-		return
 	if not CooldownManager.is_skill_ready(p_hero_id, skill_id):
 		return
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	if skill_data.is_empty():
 		return
 	var target_type: String = str(skill_data.get("target", "single_enemy"))
+	var is_enemy_skill: bool = target_type in ["single_enemy", "all_enemies"]
+	var has_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
+	# 적 대상 스킬은 전투 필요
+	if is_enemy_skill and not has_battle:
+		return
 	# AOE는 타겟팅 불필요 → 즉시 발동
 	if target_type == "all_enemies" or target_type == "all_allies":
 		_execute_skill_immediate(p_hero_id, skill_id)
@@ -342,6 +345,14 @@ func _execute_skill_immediate(hero_id: String, skill_id: String) -> void:
 		if bw.has_method("execute_active_skill"):
 			bw.execute_active_skill(hero_id, skill_id)
 			return
+	# 전투창 없음 → 아군 스킬이면 파티 전원에게 필드 발동
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	var target_type: String = str(skill_data.get("target", ""))
+	if target_type == "all_allies":
+		var party: Array = PartyManager.get_party() if PartyManager else []
+		for h in party:
+			if h != null and not h.is_dead:
+				_execute_field_ally_skill(hero_id, skill_id, h.id)
 
 
 func _update_targeting_hover() -> void:
@@ -493,13 +504,63 @@ func _try_confirm_ally_target(pos: Vector2) -> void:
 			var skill_id: String = _targeting_skill_id
 			var target_hero_id: String = card.hero_id
 			_cancel_targeting()
-			# 대상 아군에게 스킬 발동
+			# 전투창이 있으면 전투창을 통해 발동
 			var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
 			for bw in battle_windows:
 				if bw.has_method("execute_active_skill"):
 					bw.execute_active_skill(hero_id, skill_id, null, target_hero_id)
 					return
+			# 전투창 없음 → 필드에서 직접 발동
+			_execute_field_ally_skill(hero_id, skill_id, target_hero_id)
 			return
+#endregion
+
+
+#region 필드 아군 스킬 실행
+func _execute_field_ally_skill(hero_id: String, skill_id: String, target_hero_id: String) -> void:
+	## 전투창 없이 필드에서 아군 대상 스킬 직접 실행
+	var hero: Hero = _find_hero_by_id(hero_id)
+	var target: Hero = _find_hero_by_id(target_hero_id)
+	if hero == null or hero.is_dead:
+		return
+	if target == null or target.is_dead:
+		return
+	if not CooldownManager.is_skill_ready(hero_id, skill_id):
+		return
+
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	if skill_data.is_empty():
+		return
+
+	var skill_type: String = str(skill_data.get("type", ""))
+
+	if skill_type == "heal":
+		var base_value: int = int(skill_data.get("base_damage", 25))
+		var scaling: float = skill_data.get("scaling", 1.2)
+		var int_stat: int = hero.get_int()
+		var heal_amount: int = int(base_value + int_stat * scaling)
+		var actual_heal: int = target.heal(heal_amount)
+		if SoundManager:
+			SoundManager.play_heal()
+		if BattleManager:
+			BattleManager.battle_log_received.emit(
+				"[필드] %s → %s HP +%d" % [hero.hero_name, target.hero_name, actual_heal],
+				Color.LIGHT_GREEN
+			)
+
+	# 쿨다운 시작
+	if CooldownManager:
+		CooldownManager.start_cooldown(hero_id, skill_id)
+	update_display()
+
+
+func _find_hero_by_id(p_hero_id: String) -> Hero:
+	if not PartyManager:
+		return null
+	for h in PartyManager.get_party():
+		if h != null and h.id == p_hero_id:
+			return h
+	return null
 #endregion
 
 
