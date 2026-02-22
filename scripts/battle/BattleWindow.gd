@@ -92,8 +92,6 @@ const TOOLTIP_SCENE = preload("res://scenes/ui/Tooltip.tscn")
 const BASE_ENEMIES_PER_WINDOW: int = 3
 const BATTLE_ATB_FILL_RATE: float = 0.85
 const ENEMY_ROW_GAP: int = 5
-const VICTORY_CHEST_REVEAL_TIME: float = 0.32
-const VICTORY_CHEST_BOUNCE_TIME: float = 0.11
 
 # === Mother 2 스타일 배경 효과 ===
 var background: ColorRect = null
@@ -2755,10 +2753,7 @@ func _end_battle_victory() -> void:
 	# 보상 처리
 	_grant_exp_rewards()
 	call_deferred("_emit_party_updated")
-	if _has_equipment_reward_items():
-		_play_victory_chest_reveal_then_close()
-		return
-	_finalize_victory_close()
+	_play_victory_text_then_close()
 
 
 func _finalize_victory_close() -> void:
@@ -2766,73 +2761,38 @@ func _finalize_victory_close() -> void:
 	_play_close_effect()
 
 
-func _has_equipment_reward_items() -> bool:
-	if DataManager == null:
-		return false
-	for item_any in drop_items:
-		var item_id: String = str(item_any)
-		if item_id.is_empty():
-			continue
-		var equip_data: Dictionary = DataManager.get_equipment(item_id)
-		if not equip_data.is_empty():
-			return true
-	return false
 
-
-func _play_victory_chest_reveal_then_close() -> void:
+func _play_victory_text_then_close() -> void:
 	var host: Control = battle_area if battle_area != null else self
-	var chest := Control.new()
-	chest.name = "VictoryChestReveal"
-	chest.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	chest.z_index = 220
-	chest.custom_minimum_size = Vector2(44, 34)
-	chest.set_anchors_preset(Control.PRESET_CENTER)
-	chest.position = Vector2(-22, -17)
-	host.add_child(chest)
+	var victory_label := Label.new()
+	victory_label.name = "VictoryText"
+	victory_label.text = "Victory!"
+	victory_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	victory_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	victory_label.set_anchors_preset(Control.PRESET_CENTER)
+	victory_label.size = Vector2(120, 30)
+	victory_label.position = Vector2(-60, -15)
+	victory_label.add_theme_font_size_override("font_size", 14)
+	victory_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	victory_label.add_theme_color_override("font_shadow_color", Color(0.1, 0.08, 0.0, 0.7))
+	victory_label.add_theme_constant_override("shadow_offset_x", 1)
+	victory_label.add_theme_constant_override("shadow_offset_y", 1)
+	victory_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	victory_label.z_index = 220
+	host.add_child(victory_label)
 
-	var chest_sprite := Sprite2D.new()
-	chest_sprite.centered = true
-	chest_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	chest_sprite.texture = _make_victory_chest_texture()
-	chest_sprite.position = Vector2(22, 18)
-	chest.add_child(chest_sprite)
-
-	var glow := ColorRect.new()
-	glow.color = Color(1.0, 0.86, 0.42, 0.0)
-	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	glow.set_anchors_preset(Control.PRESET_FULL_RECT)
-	chest.add_child(glow)
-
-	chest.scale = Vector2(0.2, 0.2)
-	chest.modulate.a = 0.0
+	victory_label.scale = Vector2(0.5, 0.5)
+	victory_label.modulate.a = 0.0
+	victory_label.pivot_offset = victory_label.size * 0.5
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(chest, "modulate:a", 1.0, 0.08)
-	tw.tween_property(chest, "scale", Vector2(1.2, 1.2), VICTORY_CHEST_REVEAL_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(glow, "color:a", 0.2, VICTORY_CHEST_REVEAL_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_property(chest, "scale", Vector2(1.0, 1.0), VICTORY_CHEST_BOUNCE_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-	tw.chain().tween_interval(0.06)
-	tw.chain().tween_callback(chest.queue_free)
+	tw.tween_property(victory_label, "modulate:a", 1.0, 0.12)
+	tw.tween_property(victory_label, "scale", Vector2(1.1, 1.1), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_property(victory_label, "scale", Vector2(1.0, 1.0), 0.1).set_trans(Tween.TRANS_SINE)
+	tw.chain().tween_interval(0.4)
+	tw.chain().tween_property(victory_label, "modulate:a", 0.0, 0.2)
+	tw.chain().tween_callback(victory_label.queue_free)
 	tw.chain().tween_callback(_finalize_victory_close)
-
-
-func _make_victory_chest_texture() -> Texture2D:
-	var w: int = 24
-	var h: int = 18
-	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	for y in range(5, 17):
-		for x in range(2, 22):
-			var c := Color(0.66, 0.41, 0.16, 1.0)
-			if y <= 8:
-				c = Color(0.84, 0.58, 0.23, 1.0)
-			if x == 2 or x == 21 or y == 5 or y == 16:
-				c = c.darkened(0.24)
-			img.set_pixel(x, y, c)
-	for y in range(9, 12):
-		for x in range(11, 13):
-			img.set_pixel(x, y, Color(0.97, 0.87, 0.39, 1.0))
-	return ImageTexture.create_from_image(img)
 
 
 func _play_close_effect() -> void:
