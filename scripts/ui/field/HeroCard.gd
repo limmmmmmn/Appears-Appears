@@ -100,10 +100,10 @@ func _build_ui() -> void:
 	content.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(content)
 
-	_build_name_row()
 	_build_face_area()
 	_build_atb_area()
 	_build_exp_bar()
+	_build_name_row()
 
 
 func _build_name_row() -> void:
@@ -114,11 +114,11 @@ func _build_name_row() -> void:
 	content.add_child(name_row)
 
 	name_label = Label.new()
-	name_label.position = Vector2(1, 0)
-	name_label.size = Vector2(CARD_WIDTH - 2, NAME_HEIGHT)
+	name_label.position = Vector2(0, 0)
+	name_label.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
 	name_label.add_theme_font_size_override("font_size", 8)
-	name_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.85))
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.88))
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.clip_text = true
 	name_label.mouse_filter = MOUSE_FILTER_IGNORE
@@ -127,10 +127,10 @@ func _build_name_row() -> void:
 	level_label = Label.new()
 	level_label.position = Vector2(0, 0)
 	level_label.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
-	level_label.add_theme_font_size_override("font_size", 7)
-	level_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65, 0.8))
+	level_label.add_theme_font_size_override("font_size", 8)
+	level_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65))
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	level_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	level_label.text = "Lv.1"
 	level_label.mouse_filter = MOUSE_FILTER_IGNORE
 	name_row.add_child(level_label)
@@ -142,7 +142,7 @@ func _build_face_area() -> void:
 	face_container = Control.new()
 	face_container.position = Vector2(0, face_y)
 	face_container.size = Vector2(FACE_SIZE, FACE_SIZE)
-	face_container.clip_children = Control.CLIP_CHILDREN_AND_DRAW
+	face_container.clip_contents = true
 	face_container.mouse_filter = MOUSE_FILTER_STOP
 	face_container.gui_input.connect(_on_gui_input)
 	content.add_child(face_container)
