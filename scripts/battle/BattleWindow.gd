@@ -2766,26 +2766,27 @@ func _play_victory_text_then_close() -> void:
 	var host: Control = battle_area if battle_area != null else self
 
 	# 드퀘풍 메시지 박스
+	var box_w: int = int(host.size.x * 0.8)
+	var box_h: int = 28
+	var box_x: int = int((host.size.x - box_w) * 0.5)
+	var box_y: int = int(host.size.y - box_h - 6)
+
 	var box := Panel.new()
 	box.name = "VictoryBox"
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.z_index = 220
-	var box_w: int = int(host.size.x * 0.8)
-	var box_h: int = 28
+	box.anchor_left = 0.0
+	box.anchor_top = 0.0
+	box.anchor_right = 0.0
+	box.anchor_bottom = 0.0
+	box.position = Vector2(box_x, box_y)
 	box.size = Vector2(box_w, box_h)
-	box.position = Vector2((host.size.x - box_w) * 0.5, host.size.y - box_h - 6)
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.0, 0.0, 0.12, 0.92)
 	style.border_color = Color(0.85, 0.85, 0.85)
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(2)
 	style.content_margin_left = 6
 	style.content_margin_right = 6
 	box.add_theme_stylebox_override("panel", style)
@@ -2795,9 +2796,11 @@ func _play_victory_text_then_close() -> void:
 	lbl.text = "승리했다!"
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl.position = Vector2.ZERO
+	lbl.size = Vector2(box_w, box_h)
 	lbl.add_theme_font_size_override("font_size", 11)
 	lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	lbl.add_theme_constant_override("margin_left", 6)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(lbl)
 
