@@ -2824,10 +2824,13 @@ func _show_next_skill_select() -> void:
 	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
 		_skill_select_popup.queue_free()
 
-	# CanvasLayer로 감싸 카메라 무관하게 화면 고정
+	# 말풍선(PartyChatterLayer) 숨기기
+	_hide_party_chatter_layer(true)
+
+	# CanvasLayer로 감싸 카메라 무관하게 화면 고정 (ChatterLayer=220보다 위)
 	var layer := CanvasLayer.new()
 	layer.name = "SkillSelectLayer"
-	layer.layer = 100
+	layer.layer = 300
 	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().root.add_child(layer)
 
@@ -2865,11 +2868,20 @@ func _on_skill_selected(hero_id: String, skill_id: String) -> void:
 		if layer_node and is_instance_valid(layer_node) and layer_node.name == "SkillSelectLayer":
 			layer_node.queue_free()
 
+	# 말풍선(PartyChatterLayer) 복원
+	_hide_party_chatter_layer(false)
+
 	# 일시정지 해제
 	get_tree().paused = false
 
 	# 다음 영웅 처리 or 승리 연출
 	_show_next_skill_select()
+
+
+func _hide_party_chatter_layer(hide: bool) -> void:
+	var chatter_layer: CanvasLayer = get_tree().root.find_child("PartyChatterLayer", true, false) as CanvasLayer
+	if chatter_layer != null and is_instance_valid(chatter_layer):
+		chatter_layer.visible = not hide
 
 
 func _find_hero_by_id(hero_id: String) -> Hero:
