@@ -2764,35 +2764,47 @@ func _finalize_victory_close() -> void:
 
 func _play_victory_text_then_close() -> void:
 	var host: Control = battle_area if battle_area != null else self
-	var victory_label := Label.new()
-	victory_label.name = "VictoryText"
-	victory_label.text = "Victory!"
-	victory_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	victory_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	victory_label.set_anchors_preset(Control.PRESET_CENTER)
-	victory_label.size = Vector2(120, 30)
-	victory_label.position = Vector2(-60, -15)
-	victory_label.add_theme_font_size_override("font_size", 14)
-	victory_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	victory_label.add_theme_color_override("font_shadow_color", Color(0.1, 0.08, 0.0, 0.7))
-	victory_label.add_theme_constant_override("shadow_offset_x", 1)
-	victory_label.add_theme_constant_override("shadow_offset_y", 1)
-	victory_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	victory_label.z_index = 220
-	host.add_child(victory_label)
 
-	victory_label.scale = Vector2(0.5, 0.5)
-	victory_label.modulate.a = 0.0
-	victory_label.pivot_offset = victory_label.size * 0.5
+	# 드퀘풍 메시지 박스
+	var box := Panel.new()
+	box.name = "VictoryBox"
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.z_index = 220
+	var box_w: int = int(host.size.x * 0.8)
+	var box_h: int = 28
+	box.size = Vector2(box_w, box_h)
+	box.position = Vector2((host.size.x - box_w) * 0.5, host.size.y - box_h - 6)
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.12, 0.92)
+	style.border_color = Color(0.85, 0.85, 0.85)
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	box.add_theme_stylebox_override("panel", style)
+	host.add_child(box)
+
+	var lbl := Label.new()
+	lbl.text = "승리했다!"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(lbl)
+
 	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(victory_label, "modulate:a", 1.0, 0.12)
-	tw.tween_property(victory_label, "scale", Vector2(1.1, 1.1), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.chain().tween_property(victory_label, "scale", Vector2(1.0, 1.0), 0.1).set_trans(Tween.TRANS_SINE)
-	tw.chain().tween_interval(0.4)
-	tw.chain().tween_property(victory_label, "modulate:a", 0.0, 0.2)
-	tw.chain().tween_callback(victory_label.queue_free)
-	tw.chain().tween_callback(_finalize_victory_close)
+	tw.tween_interval(1.2)
+	tw.tween_callback(box.queue_free)
+	tw.tween_callback(_finalize_victory_close)
 
 
 func _play_close_effect() -> void:
