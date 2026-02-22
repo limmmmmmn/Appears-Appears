@@ -2826,16 +2826,15 @@ func _show_next_skill_select() -> void:
 
 	_skill_select_popup = SKILL_SELECT_POPUP_SCENE.instantiate() as SkillSelectPopup
 	_skill_select_popup.z_index = 300
-	_skill_select_popup.top_level = true
 	_skill_select_popup.process_mode = Node.PROCESS_MODE_ALWAYS
 	_skill_select_popup.skill_selected.connect(_on_skill_selected)
 
-	# self에 추가 후 전투창 중앙에 배치
-	self.add_child(_skill_select_popup)
+	# 씬 루트에 추가하여 화면 중앙에 표시
+	get_tree().root.add_child(_skill_select_popup)
 	_skill_select_popup.open(hero_id, hero_name, choices)
 
-	# open 이후 크기가 결정되므로 deferred로 위치 조정
-	_skill_select_popup.call_deferred("_center_on_parent")
+	# open 이후 크기가 결정되므로 deferred로 화면 중앙 배치
+	_skill_select_popup.call_deferred("_center_on_screen")
 
 	# 게임 일시정지
 	get_tree().paused = true

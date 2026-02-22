@@ -94,13 +94,10 @@ func _build_ui() -> void:
 		_buttons.append(btn)
 
 
-func _center_on_parent() -> void:
-	## 부모 컨트롤 중앙에 위치 (top_level=true 용)
-	var parent_ctrl: Control = get_parent() as Control
-	if parent_ctrl == null:
-		return
-	var parent_center: Vector2 = parent_ctrl.global_position + parent_ctrl.size * 0.5
-	global_position = parent_center - size * 0.5
+func _center_on_screen() -> void:
+	## 화면 중앙에 배치
+	var screen_size: Vector2 = get_viewport_rect().size
+	global_position = (screen_size - size) * 0.5
 
 
 func _on_skill_chosen(skill_id: String) -> void:
