@@ -1,6 +1,6 @@
 extends Control
 class_name PartyPanel
-## 파티 초상화 패널 (좌측 상단, 세로 배치)
+## 파티 초상화 패널 (하단 중앙, 가로 배치)
 ## HeroCard.tscn을 인스턴스하여 파티원별 초상화를 표시
 
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
@@ -8,7 +8,7 @@ const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
 signal equipment_dropped(hero_index: int, item_id: String)
 signal hero_selected(hero_index: int)
 
-@onready var cards_container: VBoxContainer = %CardsContainer
+@onready var cards_container: HBoxContainer = %CardsContainer
 
 var cards: Array[HeroCard] = []
 var selected_hero_index: int = -1

@@ -1,24 +1,21 @@
 extends Control
 class_name HeroCard
-## 좌측 파티 카드: 평소 페이스칩+바 표시
+## 파티 카드: 세로 레이아웃 (하단 중앙 가로 배열용)
+## 상단: 이름+레벨 / 중앙: 초상화(HP 오버레이) / 하단: ATB 바 + EXP 바
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
-const FACE_SIZE := 48
-const BAR_GAP := 2
 
-const HP_BAR_HEIGHT := 9
-const SKILL_ATB_BAR_HEIGHT := 3
-const SKILL_ATB_BAR_SPACING := 1
-const EXP_BAR_HEIGHT := 4
-const BAR_SPACING := 2
+const CARD_WIDTH := 120
+const FACE_SIZE := 56
+const FACE_MARGIN_X := 32
+const NAME_HEIGHT := 16
+const ATB_AREA_HEIGHT := 12
+const EXP_BAR_HEIGHT := 3
+const ATB_BAR_HEIGHT := 5
+const ATB_BAR_SPACING := 2
+const CARD_PADDING := 4
 
-const LONG_BAR_MAX_WIDTH := 120
-const MIN_BAR_RATIO := 0.3
-const SHORT_BAR_WIDTH := 55
-const CARD_WIDTH := FACE_SIZE + BAR_GAP + LONG_BAR_MAX_WIDTH
-const EXPANDED_EXTRA_HEIGHT := 152.0
-const EXPAND_DURATION := 0.28
-const COLLAPSE_DURATION := 0.22
+const CARD_TOTAL_HEIGHT := NAME_HEIGHT + FACE_SIZE + CARD_PADDING + ATB_AREA_HEIGHT + 2 + EXP_BAR_HEIGHT + CARD_PADDING
 
 const SLOT_ORDER: Array[String] = [
 	"main_hand", "off_hand", "head", "body", "acc1", "acc2"
@@ -31,6 +28,7 @@ const SLOT_ICONS: Dictionary = {
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID := Color(0.92, 0.72, 0.2)
 const HP_COLOR_LOW := Color(0.92, 0.22, 0.22)
+const HP_OVERLAY_COLOR := Color(0.85, 0.12, 0.12, 0.55)
 const HP_GHOST_COLOR := Color(1.0, 0.35, 0.35, 0.8)
 const EXP_BAR_COLOR := Color(0.3, 0.85, 0.75)
 const BAR_BG_COLOR := Color(0.06, 0.06, 0.09, 0.9)
@@ -43,6 +41,10 @@ const GHOST_DURATION := 0.5
 const SHAKE_DURATION := 0.2
 const SHAKE_STRENGTH := 3.0
 
+const EXPANDED_EXTRA_HEIGHT := 152.0
+const EXPAND_DURATION := 0.28
+const COLLAPSE_DURATION := 0.22
+
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
 signal card_selected(hero_index: int)
@@ -53,33 +55,30 @@ var _hero_ref: Hero = null
 var hp_reference: int = 100
 
 var content: Control
+var name_label: Label
+var level_label: Label
 var face_container: Control
 var placeholder: ColorRect
 var face_chip: TextureRect
+var hp_overlay: ColorRect
 var death_overlay: ColorRect
 var skull_label: Label
-var bars_container: Control
-var hp_bar_bg: ColorRect
-var hp_ghost: ColorRect
-var hp_bar: ColorRect
-var hp_tick_overlay: Control
-var skill_bars_container: Control
+var atb_container: Control
 var skill_bar_bgs: Array[ColorRect] = []
 var skill_bar_fills: Array[ColorRect] = []
 var skill_bar_skill_ids: Array[String] = []
 var exp_bar_bg: ColorRect
 var exp_bar: ColorRect
-var level_label: Label
 
 var equip_panel: PanelContainer
-var equip_rows: Dictionary = {} # slot -> {panel, item}
+var equip_rows: Dictionary = {}
 var _row_style_normal: StyleBoxFlat
 var _row_style_highlight: StyleBoxFlat
 var _is_expanded: bool = false
 
-var _hp_bar_width: float = LONG_BAR_MAX_WIDTH
 var _cached_max_hp: int = 0
 var _prev_hp: int = -1
+var _prev_hp_ratio: float = 1.0
 var _hp_tween: Tween
 var _ghost_tween: Tween
 var _shake_tween: Tween
@@ -88,7 +87,7 @@ var _is_selected: bool = false
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(CARD_WIDTH, FACE_SIZE)
+	custom_minimum_size = Vector2(CARD_WIDTH, CARD_TOTAL_HEIGHT)
 	mouse_filter = MOUSE_FILTER_STOP
 	gui_input.connect(_on_gui_input)
 	_build_ui()
@@ -98,12 +97,51 @@ func _ready() -> void:
 func _build_ui() -> void:
 	content = Control.new()
 	content.position = Vector2.ZERO
-	content.size = Vector2(CARD_WIDTH, FACE_SIZE)
+	content.size = Vector2(CARD_WIDTH, CARD_TOTAL_HEIGHT)
 	content.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(content)
 
+	_build_name_row()
+	_build_face_area()
+	_build_atb_area()
+	_build_exp_bar()
+
+
+func _build_name_row() -> void:
+	var name_row := Control.new()
+	name_row.position = Vector2(0, 0)
+	name_row.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
+	name_row.mouse_filter = MOUSE_FILTER_IGNORE
+	content.add_child(name_row)
+
+	name_label = Label.new()
+	name_label.position = Vector2(2, 0)
+	name_label.size = Vector2(CARD_WIDTH - 36, NAME_HEIGHT)
+	name_label.add_theme_font_size_override("font_size", 9)
+	name_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.85))
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_label.clip_text = true
+	name_label.mouse_filter = MOUSE_FILTER_IGNORE
+	name_row.add_child(name_label)
+
+	level_label = Label.new()
+	level_label.position = Vector2(CARD_WIDTH - 34, 0)
+	level_label.size = Vector2(32, NAME_HEIGHT)
+	level_label.add_theme_font_size_override("font_size", 8)
+	level_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65))
+	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	level_label.text = "Lv.1"
+	level_label.mouse_filter = MOUSE_FILTER_IGNORE
+	name_row.add_child(level_label)
+
+
+func _build_face_area() -> void:
+	var face_y: float = NAME_HEIGHT
+	var face_x: float = floorf((CARD_WIDTH - FACE_SIZE) * 0.5)
+
 	face_container = Control.new()
-	face_container.position = Vector2.ZERO
+	face_container.position = Vector2(face_x, face_y)
 	face_container.size = Vector2(FACE_SIZE, FACE_SIZE)
 	face_container.clip_children = Control.CLIP_CHILDREN_AND_DRAW
 	face_container.mouse_filter = MOUSE_FILTER_STOP
@@ -123,6 +161,13 @@ func _build_ui() -> void:
 	face_chip.mouse_filter = MOUSE_FILTER_IGNORE
 	face_container.add_child(face_chip)
 
+	hp_overlay = ColorRect.new()
+	hp_overlay.position = Vector2(0, 0)
+	hp_overlay.size = Vector2(FACE_SIZE, 0)
+	hp_overlay.color = HP_OVERLAY_COLOR
+	hp_overlay.mouse_filter = MOUSE_FILTER_IGNORE
+	face_container.add_child(hp_overlay)
+
 	death_overlay = ColorRect.new()
 	death_overlay.size = Vector2(FACE_SIZE, FACE_SIZE)
 	death_overlay.color = DEATH_OVERLAY_COLOR
@@ -140,108 +185,22 @@ func _build_ui() -> void:
 	skull_label.mouse_filter = MOUSE_FILTER_IGNORE
 	death_overlay.add_child(skull_label)
 
-	bars_container = Control.new()
-	bars_container.position = Vector2(FACE_SIZE + BAR_GAP, 0)
-	bars_container.size = Vector2(LONG_BAR_MAX_WIDTH, FACE_SIZE)
-	bars_container.mouse_filter = MOUSE_FILTER_IGNORE
-	content.add_child(bars_container)
 
-	var hp_y: float = 0.0
-	hp_bar_bg = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), BAR_BG_COLOR)
-	bars_container.add_child(hp_bar_bg)
-	hp_ghost = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), HP_GHOST_COLOR)
-	bars_container.add_child(hp_ghost)
-	hp_bar = _make_rect(Vector2(0, hp_y), Vector2(LONG_BAR_MAX_WIDTH, HP_BAR_HEIGHT), HP_COLOR_HIGH)
-	bars_container.add_child(hp_bar)
-	hp_tick_overlay = _create_tick_overlay(Vector2(0, hp_y), HP_BAR_HEIGHT)
-	bars_container.add_child(hp_tick_overlay)
+func _build_atb_area() -> void:
+	var atb_y: float = NAME_HEIGHT + FACE_SIZE + CARD_PADDING
+	atb_container = Control.new()
+	atb_container.position = Vector2(0, atb_y)
+	atb_container.size = Vector2(CARD_WIDTH, ATB_AREA_HEIGHT)
+	atb_container.mouse_filter = MOUSE_FILTER_IGNORE
+	content.add_child(atb_container)
 
-	skill_bars_container = Control.new()
-	skill_bars_container.position = Vector2.ZERO
-	skill_bars_container.size = Vector2(LONG_BAR_MAX_WIDTH, FACE_SIZE)
-	skill_bars_container.mouse_filter = MOUSE_FILTER_IGNORE
-	bars_container.add_child(skill_bars_container)
 
-	level_label = Label.new()
-	level_label.text = "Lv.1"
-	level_label.add_theme_font_size_override("font_size", 9)
-	level_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.7))
-	level_label.mouse_filter = MOUSE_FILTER_IGNORE
-	bars_container.add_child(level_label)
-
-	var exp_y: float = 0.0
-	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(SHORT_BAR_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
-	bars_container.add_child(exp_bar_bg)
+func _build_exp_bar() -> void:
+	var exp_y: float = NAME_HEIGHT + FACE_SIZE + CARD_PADDING + ATB_AREA_HEIGHT + 2
+	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(CARD_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
+	content.add_child(exp_bar_bg)
 	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
-	bars_container.add_child(exp_bar)
-
-	_layout_bar_elements()
-
-	# 아코디언 장비 패널 비활성화
-
-
-func _build_equip_panel() -> void:
-	equip_panel = PanelContainer.new()
-	equip_panel.position = Vector2(0, FACE_SIZE + 2.0)
-	equip_panel.custom_minimum_size = Vector2(CARD_WIDTH, EXPANDED_EXTRA_HEIGHT)
-	equip_panel.visible = false
-	equip_panel.mouse_filter = MOUSE_FILTER_IGNORE
-	var pstyle := StyleBoxFlat.new()
-	pstyle.bg_color = Color(0.03, 0.03, 0.06, 0.96)
-	pstyle.border_color = Color(0.45, 0.39, 0.2, 0.9)
-	pstyle.set_border_width_all(1)
-	pstyle.set_corner_radius_all(5)
-	pstyle.content_margin_left = 6
-	pstyle.content_margin_right = 6
-	pstyle.content_margin_top = 5
-	pstyle.content_margin_bottom = 5
-	equip_panel.add_theme_stylebox_override("panel", pstyle)
-	add_child(equip_panel)
-
-	_row_style_normal = StyleBoxFlat.new()
-	_row_style_normal.bg_color = Color(0.05, 0.06, 0.09, 0.95)
-	_row_style_normal.border_color = Color(0.36, 0.34, 0.22, 0.7)
-	_row_style_normal.set_border_width_all(1)
-	_row_style_normal.set_corner_radius_all(4)
-	_row_style_normal.content_margin_left = 4
-	_row_style_normal.content_margin_right = 4
-	_row_style_normal.content_margin_top = 2
-	_row_style_normal.content_margin_bottom = 2
-
-	_row_style_highlight = _row_style_normal.duplicate()
-	_row_style_highlight.bg_color = Color(0.1, 0.09, 0.03, 0.98)
-	_row_style_highlight.border_color = Color(1.0, 0.9, 0.35, 1.0)
-	_row_style_highlight.set_border_width_all(2)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	equip_panel.add_child(vbox)
-
-	equip_rows.clear()
-	for slot in SLOT_ORDER:
-		var row_panel := PanelContainer.new()
-		row_panel.add_theme_stylebox_override("panel", _row_style_normal)
-		vbox.add_child(row_panel)
-
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 4)
-		row_panel.add_child(row)
-
-		var icon := Label.new()
-		icon.text = str(SLOT_ICONS.get(slot, "📦"))
-		icon.custom_minimum_size.x = 16
-		icon.add_theme_font_size_override("font_size", 9)
-		row.add_child(icon)
-
-		var item := Label.new()
-		item.text = "— 비어있음 —"
-		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		item.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		item.add_theme_font_size_override("font_size", 9)
-		item.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
-		row.add_child(item)
-
-		equip_rows[slot] = {"panel": row_panel, "item": item}
+	content.add_child(exp_bar)
 
 
 func _make_rect(pos: Vector2, sz: Vector2, color: Color) -> ColorRect:
@@ -253,34 +212,6 @@ func _make_rect(pos: Vector2, sz: Vector2, color: Color) -> ColorRect:
 	return r
 
 
-class TickOverlay extends Control:
-	var max_value: int = 0
-	var bar_height: float = 0.0
-
-	func setup(p_max: int, bar_width: float, p_height: float) -> void:
-		max_value = p_max
-		bar_height = p_height
-		size = Vector2(bar_width, p_height)
-		queue_redraw()
-
-	func _draw() -> void:
-		if max_value <= 10:
-			return
-		var tick_val: int = 10
-		while tick_val < max_value:
-			var x: float = (float(tick_val) / float(max_value)) * size.x
-			draw_line(Vector2(x, 0), Vector2(x, bar_height), Color(0.0, 0.0, 0.0, 0.3), 1.0)
-			tick_val += 10
-
-
-func _create_tick_overlay(pos: Vector2, height: float) -> Control:
-	var overlay := TickOverlay.new()
-	overlay.position = pos
-	overlay.size = Vector2(LONG_BAR_MAX_WIDTH, height)
-	overlay.mouse_filter = MOUSE_FILTER_IGNORE
-	return overlay
-
-
 func init(p_hero_index: int) -> void:
 	hero_index = p_hero_index
 
@@ -288,7 +219,10 @@ func init(p_hero_index: int) -> void:
 func _draw() -> void:
 	if not _is_selected:
 		return
-	var border_rect := Rect2(Vector2.ZERO, Vector2(FACE_SIZE, FACE_SIZE))
+	var border_rect := Rect2(
+		Vector2(floorf((CARD_WIDTH - FACE_SIZE) * 0.5) - 1, NAME_HEIGHT - 1),
+		Vector2(FACE_SIZE + 2, FACE_SIZE + 2)
+	)
 	draw_rect(border_rect, Color(1.0, 0.88, 0.28, 1.0), false, 2.0)
 
 
@@ -304,11 +238,11 @@ func update_from_hero(hero: Hero) -> void:
 	hero_id = hero.id
 	_load_face_chip(hero)
 	_rebuild_skill_atb_rows(hero)
-	_recalc_bar_widths(hero.get_max_hp())
 	update_hp(hero.current_hp, hero.get_max_hp())
 	update_skill_atb_bars(hero)
 	update_exp(hero.get_exp_ratio())
 	update_level(hero.level)
+	update_name(hero.hero_name)
 	set_dead(hero.is_dead)
 	_refresh_equip_rows()
 
@@ -334,69 +268,6 @@ func _refresh_equip_rows() -> void:
 		panel.modulate = Color.WHITE
 
 
-func _recalc_bar_widths(max_hp: int) -> void:
-	_hp_bar_width = _calc_bar_length(max_hp, hp_reference, LONG_BAR_MAX_WIDTH)
-	if hp_bar_bg:
-		hp_bar_bg.size.x = _hp_bar_width
-	if hp_ghost:
-		hp_ghost.size.x = minf(hp_ghost.size.x, _hp_bar_width)
-	if max_hp != _cached_max_hp:
-		_cached_max_hp = max_hp
-		if hp_tick_overlay and hp_tick_overlay is TickOverlay:
-			(hp_tick_overlay as TickOverlay).setup(max_hp, _hp_bar_width, HP_BAR_HEIGHT)
-	_layout_bar_elements()
-	custom_minimum_size.x = FACE_SIZE + BAR_GAP + _hp_bar_width
-
-
-func _layout_bar_elements() -> void:
-	if bars_container == null:
-		return
-	var skill_count: int = skill_bar_skill_ids.size()
-	var skill_total_height: float = 0.0
-	if skill_count > 0:
-		skill_total_height = skill_count * SKILL_ATB_BAR_HEIGHT + maxi(0, skill_count - 1) * SKILL_ATB_BAR_SPACING
-
-	var total_height: float = HP_BAR_HEIGHT + BAR_SPACING + skill_total_height + BAR_SPACING + EXP_BAR_HEIGHT
-	var start_y: float = maxf(0.0, floorf((FACE_SIZE - total_height) * 0.5))
-
-	var hp_y: float = start_y
-	if hp_bar_bg:
-		hp_bar_bg.position.y = hp_y
-		hp_bar_bg.size.x = _hp_bar_width
-	if hp_ghost:
-		hp_ghost.position.y = hp_y
-	if hp_bar:
-		hp_bar.position.y = hp_y
-	if hp_tick_overlay:
-		hp_tick_overlay.position.y = hp_y
-		hp_tick_overlay.size.x = _hp_bar_width
-		if hp_tick_overlay is TickOverlay:
-			(hp_tick_overlay as TickOverlay).setup(_cached_max_hp, _hp_bar_width, HP_BAR_HEIGHT)
-
-	var skill_start_y: float = hp_y + HP_BAR_HEIGHT + BAR_SPACING
-	for i in range(skill_bar_skill_ids.size()):
-		if i >= skill_bar_bgs.size() or i >= skill_bar_fills.size():
-			continue
-		var y: float = skill_start_y + i * (SKILL_ATB_BAR_HEIGHT + SKILL_ATB_BAR_SPACING)
-		skill_bar_bgs[i].position = Vector2(0.0, y)
-		skill_bar_bgs[i].size = Vector2(_hp_bar_width, SKILL_ATB_BAR_HEIGHT)
-		skill_bar_fills[i].position = Vector2(0.0, y)
-		skill_bar_fills[i].size.y = SKILL_ATB_BAR_HEIGHT
-
-	var exp_y: float = skill_start_y + skill_total_height + BAR_SPACING
-	if exp_bar_bg:
-		exp_bar_bg.position = Vector2(0.0, exp_y)
-	if exp_bar:
-		exp_bar.position = Vector2(0.0, exp_y)
-	if level_label:
-		level_label.position = Vector2(SHORT_BAR_WIDTH + 4.0, exp_y - 3.0)
-
-
-func _calc_bar_length(max_value: int, reference: int, max_width: float) -> float:
-	var ratio: float = clampf(float(max_value) / float(reference), MIN_BAR_RATIO, 1.0)
-	return ratio * max_width
-
-
 func _load_face_chip(hero: Hero) -> void:
 	var face_path := ""
 	if not hero.portrait.is_empty():
@@ -416,45 +287,52 @@ func set_portrait(tex: Texture2D) -> void:
 		placeholder.visible = (tex == null)
 
 
-func update_hp(current: int, max_hp: int) -> void:
-	if hp_bar == null:
-		return
-	var ratio: float = clampf(float(current) / float(max_hp), 0.0, 1.0) if max_hp > 0 else 1.0
-	var target_w: float = _hp_bar_width * ratio
+func update_name(hero_name: String) -> void:
+	if name_label:
+		name_label.text = hero_name
 
-	if ratio > 0.6:
-		hp_bar.color = HP_COLOR_HIGH
-	elif ratio > 0.3:
-		hp_bar.color = HP_COLOR_MID
-	else:
-		hp_bar.color = HP_COLOR_LOW
+
+func update_hp(current: int, max_hp: int) -> void:
+	if hp_overlay == null:
+		return
+	_cached_max_hp = max_hp
+	var ratio: float = clampf(float(current) / float(max_hp), 0.0, 1.0) if max_hp > 0 else 1.0
+	var damage_ratio: float = 1.0 - ratio
+	var overlay_height: float = FACE_SIZE * damage_ratio
+	var target_y: float = FACE_SIZE - overlay_height
 
 	if _prev_hp < 0:
-		hp_bar.size.x = target_w
-		hp_ghost.size.x = target_w
+		hp_overlay.position.y = target_y
+		hp_overlay.size = Vector2(FACE_SIZE, overlay_height)
 		_prev_hp = current
+		_prev_hp_ratio = ratio
 		return
 
-	if current < _prev_hp:
-		hp_bar.size.x = target_w
-		_kill_tween(_ghost_tween)
-		_ghost_tween = create_tween()
-		_ghost_tween.tween_interval(GHOST_DELAY)
-		_ghost_tween.tween_property(hp_ghost, "size:x", target_w, GHOST_DURATION).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-	elif current > _prev_hp:
-		_kill_tween(_ghost_tween)
-		hp_ghost.size.x = target_w
-		_kill_tween(_hp_tween)
-		_hp_tween = create_tween()
-		_hp_tween.tween_property(hp_bar, "size:x", target_w, HP_TWEEN_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	if damage_ratio > 0.001:
+		if ratio > 0.6:
+			hp_overlay.color = Color(HP_OVERLAY_COLOR.r, HP_OVERLAY_COLOR.g, HP_OVERLAY_COLOR.b, 0.3)
+		elif ratio > 0.3:
+			hp_overlay.color = Color(HP_OVERLAY_COLOR.r, HP_OVERLAY_COLOR.g * 0.5, HP_OVERLAY_COLOR.b, 0.45)
+		else:
+			hp_overlay.color = HP_OVERLAY_COLOR
+	else:
+		hp_overlay.color = Color(HP_OVERLAY_COLOR.r, HP_OVERLAY_COLOR.g, HP_OVERLAY_COLOR.b, 0.0)
+
+	_kill_tween(_hp_tween)
+	_hp_tween = create_tween()
+	_hp_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_hp_tween.set_parallel(true)
+	_hp_tween.tween_property(hp_overlay, "position:y", target_y, HP_TWEEN_DURATION)
+	_hp_tween.tween_property(hp_overlay, "size:y", overlay_height, HP_TWEEN_DURATION)
 
 	_prev_hp = current
+	_prev_hp_ratio = ratio
 
 
 func update_exp(percent: float) -> void:
 	if exp_bar == null:
 		return
-	exp_bar.size.x = SHORT_BAR_WIDTH * clampf(percent, 0.0, 1.0)
+	exp_bar.size.x = CARD_WIDTH * clampf(percent, 0.0, 1.0)
 
 
 func update_level(lv: int) -> void:
@@ -463,7 +341,7 @@ func update_level(lv: int) -> void:
 
 
 func _rebuild_skill_atb_rows(hero: Hero) -> void:
-	if skill_bars_container == null or hero == null:
+	if atb_container == null or hero == null:
 		return
 	var skills: Array[String] = []
 	for skill_any in hero.get_available_skills():
@@ -475,38 +353,38 @@ func _rebuild_skill_atb_rows(hero: Hero) -> void:
 		return
 
 	skill_bar_skill_ids = skills
-	for child in skill_bars_container.get_children():
+	for child in atb_container.get_children():
 		child.queue_free()
 	skill_bar_bgs.clear()
 	skill_bar_fills.clear()
 
-	for skill_id in skill_bar_skill_ids:
-		var bg := _make_rect(Vector2.ZERO, Vector2(_hp_bar_width, SKILL_ATB_BAR_HEIGHT), BAR_BG_COLOR)
-		bg.mouse_filter = MOUSE_FILTER_IGNORE
+	var bar_count: int = mini(skill_bar_skill_ids.size(), 2)
+	var total_h: float = bar_count * ATB_BAR_HEIGHT + maxi(0, bar_count - 1) * ATB_BAR_SPACING
+	var start_y: float = maxf(0.0, floorf((ATB_AREA_HEIGHT - total_h) * 0.5))
+
+	for i in range(bar_count):
+		var skill_id: String = skill_bar_skill_ids[i]
+		var y: float = start_y + i * (ATB_BAR_HEIGHT + ATB_BAR_SPACING)
+		var bg := _make_rect(Vector2(0, y), Vector2(CARD_WIDTH, ATB_BAR_HEIGHT), BAR_BG_COLOR)
 		bg.tooltip_text = _get_skill_atb_tooltip(skill_id)
-		skill_bars_container.add_child(bg)
+		atb_container.add_child(bg)
 		skill_bar_bgs.append(bg)
 
-		var fill := _make_rect(Vector2.ZERO, Vector2(0.0, SKILL_ATB_BAR_HEIGHT), Color(0.35, 0.65, 1.0))
-		fill.mouse_filter = MOUSE_FILTER_IGNORE
+		var fill := _make_rect(Vector2(0, y), Vector2(0, ATB_BAR_HEIGHT), Color(0.35, 0.65, 1.0))
 		fill.tooltip_text = _get_skill_atb_tooltip(skill_id)
-		skill_bars_container.add_child(fill)
+		atb_container.add_child(fill)
 		skill_bar_fills.append(fill)
-
-	_layout_bar_elements()
 
 
 func update_skill_atb_bars(hero: Hero) -> void:
 	if hero == null:
 		return
 	_rebuild_skill_atb_rows(hero)
-	for i in range(skill_bar_skill_ids.size()):
-		if i >= skill_bar_fills.size():
-			continue
+	for i in range(mini(skill_bar_skill_ids.size(), skill_bar_fills.size())):
 		var skill_id: String = skill_bar_skill_ids[i]
 		var ratio: float = _get_skill_atb_ratio(hero, skill_id)
 		var fill: ColorRect = skill_bar_fills[i]
-		fill.size.x = _hp_bar_width * clampf(ratio, 0.0, 1.0)
+		fill.size.x = CARD_WIDTH * clampf(ratio, 0.0, 1.0)
 		fill.color = _get_skill_atb_color(hero, skill_id, ratio)
 
 
@@ -550,8 +428,12 @@ func _get_skill_atb_tooltip(skill_id: String) -> String:
 func set_dead(is_dead: bool) -> void:
 	if death_overlay:
 		death_overlay.visible = is_dead
-	if bars_container:
-		bars_container.visible = not is_dead
+	if atb_container:
+		atb_container.visible = not is_dead
+	if exp_bar_bg:
+		exp_bar_bg.visible = not is_dead
+	if exp_bar:
+		exp_bar.visible = not is_dead
 
 
 func is_expanded() -> bool:
