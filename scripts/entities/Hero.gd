@@ -425,6 +425,9 @@ func _unlock_skills_for_level(new_level: int) -> Array:
 	var newly_unlocked: Array = []
 	for sid in skill_unlock_levels.keys():
 		var skill_id: String = str(sid)
+		# 레벨 2 스킬은 3지선다 팝업으로 선택하므로 자동 해금 건너뜀
+		if int(skill_unlock_levels[skill_id]) == 2 and skill_id != "basic_attack":
+			continue
 		if int(skill_unlock_levels[skill_id]) == new_level and not unlocked_skills.has(skill_id):
 			unlocked_skills.append(skill_id)
 			newly_unlocked.append(skill_id)
@@ -461,10 +464,13 @@ func set_progress(saved_level: int, saved_exp: int, saved_level_stats: Dictionar
 		# 기존 세이브 호환
 		_setup_skill_unlocks(DataManager.get_class_data(class_id))
 
-	# 현재 레벨에 맞게 재해금 보정
+	# 현재 레벨에 맞게 재해금 보정 (레벨 2 스킬은 팝업 선택이므로 자동 재해금 제외)
 	for sid in skill_unlock_levels.keys():
 		var skill_id: String = str(sid)
-		if int(skill_unlock_levels[skill_id]) <= level and not unlocked_skills.has(skill_id):
+		var unlock_lv: int = int(skill_unlock_levels[skill_id])
+		if unlock_lv == 2 and skill_id != "basic_attack":
+			continue
+		if unlock_lv <= level and not unlocked_skills.has(skill_id):
 			unlocked_skills.append(skill_id)
 
 	if not unlocked_skills.has("basic_attack"):

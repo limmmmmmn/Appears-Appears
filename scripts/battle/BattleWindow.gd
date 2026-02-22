@@ -2794,24 +2794,30 @@ func _show_next_skill_select() -> void:
 	var hero_id: String = entry.get("hero_id", "")
 	var hero_name: String = entry.get("hero_name", "")
 
-	# 이미 보유한 스킬 제외, 후보 생성
+	# 클래스 스킬에서 후보 생성 (기본 공격 및 보유 스킬 제외)
 	var hero: Hero = _find_hero_by_id(hero_id)
 	var owned: Array = hero.get_available_skills() if hero else ["basic_attack"]
-	var all_skills: Array = DataManager.get_all_skill_ids()
+	var class_skills: Array = DataManager.get_class_skills(hero.class_id) if hero else []
 
 	var candidates: Array = []
-	for sid in all_skills:
-		if not owned.has(sid):
-			candidates.append(sid)
+	for sid in class_skills:
+		var skill_id: String = str(sid)
+		if skill_id != "basic_attack" and not owned.has(skill_id):
+			candidates.append(skill_id)
 
 	# 후보가 없으면 스킵
 	if candidates.is_empty():
 		_show_next_skill_select()
 		return
 
-	# 셔플 후 3개 선택
-	candidates.shuffle()
-	var choices: Array = candidates.slice(0, mini(SKILL_SELECT_CHOICE_COUNT, candidates.size()))
+	# 3지선다 구성: 후보가 충분하면 셔플 후 선택, 부족하면 반복하여 채움
+	var choices: Array = []
+	if candidates.size() >= SKILL_SELECT_CHOICE_COUNT:
+		candidates.shuffle()
+		choices = candidates.slice(0, SKILL_SELECT_CHOICE_COUNT)
+	else:
+		for i in range(SKILL_SELECT_CHOICE_COUNT):
+			choices.append(candidates[i % candidates.size()])
 
 	# 팝업 생성
 	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
