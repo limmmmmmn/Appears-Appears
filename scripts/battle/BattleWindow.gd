@@ -1690,7 +1690,8 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	if target == null:
 		return
 	_show_hero_face_chip(hero.id, false, 0, false, 0.95)
-	_show_skill_particle(target, skill_id, skill_data)
+	if skill_id != "basic_attack":
+		_show_skill_particle(target, skill_id, skill_data)
 
 	var skill_name: String = skill_data.get("name", "공격")
 	var skill_type: String = skill_data.get("type", "physical")
@@ -1802,7 +1803,7 @@ func _show_skill_particle(target: BattleEnemy, skill_id: String, skill_data: Dic
 		"backstab":
 			emoji = "🗡️"
 		"basic_attack":
-			emoji = "👊"
+			return
 
 	# ID가 기대와 다를 때 이름 기반 보조 매핑
 	if emoji == "👊":
