@@ -100,15 +100,16 @@ func _build_ui() -> void:
 	content.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(content)
 
-	_build_name_row()
 	_build_face_area()
+	_build_name_row()
 	_build_atb_area()
 	_build_exp_bar()
 
 
 func _build_name_row() -> void:
+	var name_y: float = FACE_SIZE - 3
 	var name_row := Control.new()
-	name_row.position = Vector2(0, 0)
+	name_row.position = Vector2(0, name_y)
 	name_row.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
 	name_row.mouse_filter = MOUSE_FILTER_IGNORE
 	content.add_child(name_row)
@@ -118,7 +119,7 @@ func _build_name_row() -> void:
 	name_label.size = Vector2(CARD_WIDTH - 2, NAME_HEIGHT)
 	name_label.add_theme_font_size_override("font_size", 8)
 	name_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.85))
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.clip_text = true
 	name_label.mouse_filter = MOUSE_FILTER_IGNORE
@@ -126,18 +127,18 @@ func _build_name_row() -> void:
 
 	level_label = Label.new()
 	level_label.position = Vector2(0, 0)
-	level_label.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
+	level_label.size = Vector2(CARD_WIDTH - 1, NAME_HEIGHT)
 	level_label.add_theme_font_size_override("font_size", 7)
 	level_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65, 0.8))
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	level_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	level_label.text = "Lv.1"
 	level_label.mouse_filter = MOUSE_FILTER_IGNORE
 	name_row.add_child(level_label)
 
 
 func _build_face_area() -> void:
-	var face_y: float = NAME_HEIGHT
+	var face_y: float = 0
 
 	face_container = Control.new()
 	face_container.position = Vector2(0, face_y)
@@ -186,7 +187,7 @@ func _build_face_area() -> void:
 
 
 func _build_atb_area() -> void:
-	var atb_y: float = NAME_HEIGHT + FACE_SIZE + CARD_PADDING
+	var atb_y: float = FACE_SIZE + NAME_HEIGHT + CARD_PADDING
 	atb_container = Control.new()
 	atb_container.position = Vector2(0, atb_y)
 	atb_container.size = Vector2(CARD_WIDTH, ATB_AREA_HEIGHT)
@@ -195,7 +196,7 @@ func _build_atb_area() -> void:
 
 
 func _build_exp_bar() -> void:
-	var exp_y: float = NAME_HEIGHT + FACE_SIZE + CARD_PADDING + ATB_AREA_HEIGHT + 2
+	var exp_y: float = FACE_SIZE + NAME_HEIGHT + CARD_PADDING + ATB_AREA_HEIGHT + 2
 	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(CARD_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
 	content.add_child(exp_bar_bg)
 	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
@@ -219,7 +220,7 @@ func _draw() -> void:
 	if not _is_selected:
 		return
 	var border_rect := Rect2(
-		Vector2(-1, NAME_HEIGHT - 1),
+		Vector2(-1, -1),
 		Vector2(FACE_SIZE + 2, FACE_SIZE + 2)
 	)
 	draw_rect(border_rect, Color(1.0, 0.88, 0.28, 1.0), false, 2.0)
