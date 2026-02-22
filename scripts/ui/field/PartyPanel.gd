@@ -462,10 +462,8 @@ func _on_targeting_input(event: InputEvent) -> void:
 		if mb.pressed:
 			if mb.button_index == MOUSE_BUTTON_RIGHT:
 				_cancel_targeting()
-				_targeting_overlay_ctrl.accept_event()
 			elif mb.button_index == MOUSE_BUTTON_LEFT:
 				_try_confirm_target(mb.global_position)
-				_targeting_overlay_ctrl.accept_event()
 	elif event is InputEventKey:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_ESCAPE:
