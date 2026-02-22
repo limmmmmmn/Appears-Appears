@@ -88,6 +88,7 @@ const SKILL_SELECT_POPUP_SCENE = preload("res://scenes/ui/SkillSelectPopup.tscn"
 const SKILL_SELECT_CHOICE_COUNT: int = 3
 var _skill_select_queue: Array = []  # Array of { hero_id, hero_name }
 var _skill_select_popup: SkillSelectPopup = null
+var _skill_select_in_victory: bool = false  # 승리 흐름에서 팝업 처리 중인지
 
 # === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
@@ -676,6 +677,7 @@ func _start_battle() -> void:
 	pending_victory_ready_ms = 0
 	waiting_reward_claim = false
 	_skill_select_queue.clear()
+	_skill_select_in_victory = false
 	_clear_reward_claim_button()
 	entry_blocked = false
 	_update_block_entry_button_state()
@@ -2759,6 +2761,7 @@ func _end_battle_victory() -> void:
 
 	# 스킬 선택 큐가 있으면 팝업 먼저 처리
 	if not _skill_select_queue.is_empty():
+		_skill_select_in_victory = true
 		_show_next_skill_select()
 		return
 
@@ -2766,7 +2769,7 @@ func _end_battle_victory() -> void:
 
 
 func _check_skill_select_on_levelup(hero: Hero, old_level: int, result: Dictionary) -> void:
-	## 레벨업 결과에서 2레벨 도달 여부 확인 → 스킬 선택 큐 추가
+	## 레벨업 결과에서 2레벨 도달 여부 확인 → 즉시 스킬 선택 팝업 표시
 	if old_level >= 2:
 		return
 	# 이미 큐에 있는 영웅은 스킵
@@ -2781,13 +2784,18 @@ func _check_skill_select_on_levelup(hero: Hero, old_level: int, result: Dictiona
 				"hero_id": hero.id,
 				"hero_name": hero.hero_name,
 			})
+			# 팝업이 열려있지 않으면 즉시 표시
+			if _skill_select_popup == null or not is_instance_valid(_skill_select_popup):
+				_show_next_skill_select()
 			break
 
 
 func _show_next_skill_select() -> void:
 	## 큐에서 다음 영웅의 스킬 선택 팝업 표시
 	if _skill_select_queue.is_empty():
-		_play_victory_text_then_close()
+		if _skill_select_in_victory:
+			_skill_select_in_victory = false
+			_play_victory_text_then_close()
 		return
 
 	var entry: Dictionary = _skill_select_queue.pop_front()
