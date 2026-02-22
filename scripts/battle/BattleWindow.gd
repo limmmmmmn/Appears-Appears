@@ -151,12 +151,6 @@ var _face_chip_drag_offset: Vector2 = Vector2.ZERO
 const FACE_CHIP_SIZE: Vector2 = Vector2(28, 28)
 const FACE_CHIP_SPACING: float = 6.0
 
-# === 액티브 스킬 버튼 ===
-const ACTIVE_SKILL_BTN_SIZE: Vector2 = Vector2(20, 20)
-const ACTIVE_SKILL_BTN_GAP: float = 2.0
-const ACTIVE_SKILL_BTN_LIFT: float = 4.0  # 페이스칩 위 여백
-var _active_skill_buttons: Dictionary = {}  # hero_id -> Array[Button]
-
 # === 이벤트 모드 ===
 var is_event_mode: bool = false
 var event_context: Dictionary = {}
@@ -262,10 +256,6 @@ func _process(delta: float) -> void:
 			push_warning("[BattleWindow] 행동 처리 타임아웃 (%.1fs) - 강제 해제" % ACTION_TIMEOUT)
 			is_processing_action = false
 			_action_process_timer = 0.0
-
-	# 액티브 스킬 버튼 쿨다운 갱신
-	for hid in _active_skill_buttons.keys():
-		_update_active_skill_button_cooldowns(hid)
 
 	# 행동 준비된 유닛 즉시 행동 (정지 상태면 스킵)
 	if not is_processing_action and not is_battle_paused:
@@ -1606,6 +1596,40 @@ func _can_use_skill(hero: Hero, skill_id: String) -> bool:
 	return true
 
 
+func execute_active_skill(hero_id: String, skill_id: String) -> void:
+	## 외부(HeroCard)에서 호출: ATB 무시, 쿨다운만 확인하여 즉시 발동
+	if current_state != BattleState.RUNNING:
+		return
+	if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
+		if not BattleManager.can_hero_act_in_battle(hero_id, battle_id):
+			return
+	var hero: Hero = _find_hero_by_id(hero_id)
+	if hero == null or hero.is_dead:
+		return
+	if not has_alive_enemies():
+		return
+	if not CooldownManager.is_skill_ready(hero_id, skill_id):
+		return
+
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	if skill_data.is_empty():
+		return
+
+	hero.reset_skill_action_timer()
+	BattleManager.hero_attacked.emit(hero.id)
+
+	var target_type: String = skill_data.get("target", "single_enemy")
+	match target_type:
+		"single_ally", "all_allies":
+			_execute_ally_skill(hero, skill_id, skill_data, target_type)
+		"all_enemies":
+			_execute_aoe_attack(hero, skill_id, skill_data)
+		_:
+			_execute_single_attack(hero, skill_id, skill_data)
+
+	CooldownManager.start_cooldown(hero.id, skill_id)
+
+
 func _find_finisher_skill(hero: Hero, skill_ids: Array) -> String:
 	## 스킬로 적을 한 방에 처치할 수 있는지 확인, 가능한 스킬 ID 반환
 	var alive: Array = get_alive_enemies()
@@ -2132,8 +2156,6 @@ func _show_hero_face_chip(
 		panel.scale = Vector2.ONE
 
 	_layout_persistent_face_chips(is_new_panel)
-	_ensure_active_skill_buttons(hero_id)
-	_layout_active_skill_buttons()
 
 	if damage_number > 0:
 		_spawn_face_chip_damage_number(panel, damage_number, is_crit)
@@ -2192,198 +2214,9 @@ func _layout_persistent_face_chips(animated: bool) -> void:
 		if animated:
 			var tw := create_tween()
 			tw.tween_property(panel, "position", target_pos, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-			tw.tween_callback(_layout_active_skill_buttons)
 		else:
 			panel.position = target_pos
 		cursor_x += panel.size.x + spacing
-
-	if not animated:
-		_layout_active_skill_buttons()
-
-
-func _get_active_skills_for_hero(hero_id: String) -> Array:
-	## 2렙에 배운 액티브 스킬(basic_attack 제외) 목록 반환
-	var hero: Hero = _find_hero_by_id(hero_id)
-	if hero == null:
-		return []
-	var result: Array = []
-	for sid in hero.unlocked_skills:
-		if sid == "basic_attack":
-			continue
-		result.append(sid)
-	return result
-
-
-func _ensure_active_skill_buttons(hero_id: String) -> void:
-	## 해당 영웅의 액티브 스킬 버튼들을 생성/갱신
-	if _face_chip_layer == null or not is_instance_valid(_face_chip_layer):
-		return
-	var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
-	if panel == null or not is_instance_valid(panel):
-		return
-
-	var skills: Array = _get_active_skills_for_hero(hero_id)
-	if skills.is_empty():
-		_clear_active_skill_buttons(hero_id)
-		return
-
-	# 이미 같은 개수로 존재하면 스킵
-	var existing: Array = _active_skill_buttons.get(hero_id, []) as Array
-	if existing.size() == skills.size():
-		var all_valid: bool = true
-		for btn in existing:
-			if btn == null or not is_instance_valid(btn):
-				all_valid = false
-				break
-		if all_valid:
-			_update_active_skill_button_cooldowns(hero_id)
-			return
-
-	_clear_active_skill_buttons(hero_id)
-	var buttons: Array = []
-	for i in range(skills.size()):
-		var skill_id: String = str(skills[i])
-		var skill_data: Dictionary = DataManager.get_skill(skill_id)
-		var skill_name: String = skill_data.get("name", skill_id)
-
-		var btn := Button.new()
-		btn.name = "ActiveSkill_%s_%s" % [hero_id, skill_id]
-		btn.custom_minimum_size = ACTIVE_SKILL_BTN_SIZE
-		btn.size = ACTIVE_SKILL_BTN_SIZE
-		btn.mouse_filter = Control.MOUSE_FILTER_STOP
-		btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		btn.z_index = 90
-		btn.focus_mode = Control.FOCUS_NONE
-
-		# 스킬 이름 첫 글자 표시
-		btn.text = skill_name.substr(0, 1) if not skill_name.is_empty() else "?"
-		btn.tooltip_text = skill_name
-
-		_apply_active_skill_btn_style(btn, false)
-		btn.add_theme_font_size_override("font_size", 9)
-		btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-
-		btn.pressed.connect(_on_active_skill_btn_pressed.bind(hero_id, skill_id))
-		_face_chip_layer.add_child(btn)
-		buttons.append(btn)
-	_active_skill_buttons[hero_id] = buttons
-
-
-func _apply_active_skill_btn_style(btn: Button, disabled: bool) -> void:
-	var style := StyleBoxFlat.new()
-	if disabled:
-		style.bg_color = Color(0.15, 0.15, 0.15, 0.7)
-	else:
-		style.bg_color = Color(0.12, 0.22, 0.42, 0.92)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(0.5, 0.7, 1.0, 0.8) if not disabled else Color(0.3, 0.3, 0.3, 0.6)
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover_style := style.duplicate() as StyleBoxFlat
-	if not disabled:
-		hover_style.bg_color = Color(0.18, 0.32, 0.58, 0.95)
-		hover_style.border_color = Color(0.6, 0.85, 1.0, 0.95)
-	btn.add_theme_stylebox_override("hover", hover_style)
-
-	var pressed_style := style.duplicate() as StyleBoxFlat
-	if not disabled:
-		pressed_style.bg_color = Color(0.08, 0.15, 0.32, 0.95)
-	btn.add_theme_stylebox_override("pressed", pressed_style)
-
-
-func _layout_active_skill_buttons() -> void:
-	## 모든 영웅의 액티브 스킬 버튼을 페이스칩 위에 배치
-	for hero_id in _active_skill_buttons.keys():
-		var buttons: Array = _active_skill_buttons[hero_id] as Array
-		var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
-		if panel == null or not is_instance_valid(panel):
-			continue
-		if buttons.is_empty():
-			continue
-
-		# 패널 왼쪽 상단 기준으로 왼쪽 정렬
-		var base_x: float = panel.position.x
-		var base_y: float = panel.position.y - ACTIVE_SKILL_BTN_SIZE.y - ACTIVE_SKILL_BTN_LIFT
-
-		var cursor_x: float = base_x
-		for btn in buttons:
-			if btn == null or not is_instance_valid(btn):
-				continue
-			btn.position = Vector2(cursor_x, base_y)
-			cursor_x += ACTIVE_SKILL_BTN_SIZE.x + ACTIVE_SKILL_BTN_GAP
-
-
-func _update_active_skill_button_cooldowns(hero_id: String) -> void:
-	## 쿨타임 상태에 따라 버튼 활성/비활성 갱신
-	var skills: Array = _get_active_skills_for_hero(hero_id)
-	var buttons: Array = _active_skill_buttons.get(hero_id, []) as Array
-	for i in range(mini(skills.size(), buttons.size())):
-		var skill_id: String = str(skills[i])
-		var btn: Button = buttons[i] as Button
-		if btn == null or not is_instance_valid(btn):
-			continue
-		var on_cooldown: bool = not CooldownManager.is_skill_ready(hero_id, skill_id)
-		btn.disabled = on_cooldown
-		_apply_active_skill_btn_style(btn, on_cooldown)
-
-
-func _clear_active_skill_buttons(hero_id: String) -> void:
-	var buttons: Array = _active_skill_buttons.get(hero_id, []) as Array
-	for btn in buttons:
-		if btn != null and is_instance_valid(btn):
-			btn.queue_free()
-	_active_skill_buttons.erase(hero_id)
-
-
-func _clear_all_active_skill_buttons() -> void:
-	for hero_id in _active_skill_buttons.keys():
-		_clear_active_skill_buttons(hero_id)
-	_active_skill_buttons.clear()
-
-
-func _on_active_skill_btn_pressed(hero_id: String, skill_id: String) -> void:
-	## 액티브 스킬 버튼 클릭 → ATB 없이 즉시 발동
-	var hero: Hero = _find_hero_by_id(hero_id)
-	if hero == null or hero.is_dead:
-		return
-	if not has_alive_enemies():
-		return
-	# 쿨다운만 확인 (ATB 무시)
-	if not CooldownManager.is_skill_ready(hero_id, skill_id):
-		return
-
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	if skill_data.is_empty():
-		return
-
-	# 스킬 타이머만 리셋 (일반 ATB는 건드리지 않음)
-	hero.reset_skill_action_timer()
-
-	# 히어로 공격 이벤트
-	BattleManager.hero_attacked.emit(hero.id)
-
-	# 타겟 타입에 따른 실행
-	var target_type: String = skill_data.get("target", "single_enemy")
-	match target_type:
-		"single_ally", "all_allies":
-			_execute_ally_skill(hero, skill_id, skill_data, target_type)
-		"all_enemies":
-			_execute_aoe_attack(hero, skill_id, skill_data)
-		_:
-			_execute_single_attack(hero, skill_id, skill_data)
-
-	# 쿨타임 시작
-	CooldownManager.start_cooldown(hero.id, skill_id)
-
-	# 버튼 쿨다운 상태 갱신
-	_update_active_skill_button_cooldowns(hero_id)
 
 
 func _spawn_face_chip_damage_number(panel: PanelContainer, damage: int, is_crit: bool) -> void:
@@ -2432,7 +2265,6 @@ func _deactivate_persistent_face_chip() -> void:
 	_face_chip_dragging = false
 	_face_chip_drag_hero_id = ""
 	_face_chip_drag_panel = null
-	_clear_all_active_skill_buttons()
 	for key in _face_chip_panels.keys():
 		var panel: PanelContainer = _face_chip_panels[key] as PanelContainer
 		if panel != null and is_instance_valid(panel):

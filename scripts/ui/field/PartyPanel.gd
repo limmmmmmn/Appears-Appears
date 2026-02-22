@@ -72,6 +72,7 @@ func _rebuild_cards() -> void:
 		card.equipment_dropped.connect(_on_card_equip_dropped)
 		card.field_heal_requested.connect(_on_field_heal_requested)
 		card.card_selected.connect(_on_card_selected)
+		card.active_skill_pressed.connect(_on_active_skill_pressed)
 		cards_container.add_child(card)
 		cards.append(card)
 	_update_selection_visuals()
@@ -107,6 +108,7 @@ func init_party(heroes: Array) -> void:
 		card.equipment_dropped.connect(_on_card_equip_dropped)
 		card.field_heal_requested.connect(_on_field_heal_requested)
 		card.card_selected.connect(_on_card_selected)
+		card.active_skill_pressed.connect(_on_active_skill_pressed)
 		cards_container.add_child(card)
 		cards.append(card)
 		card.update_from_hero(heroes[i])
@@ -151,6 +153,7 @@ func _update_realtime_bars() -> void:
 			card.update_exp(hero.get_exp_ratio())
 			card.update_level(hero.level)
 		card.update_skill_atb_bars(hero)
+		card.update_active_skill_cooldowns()
 #endregion
 
 
@@ -182,6 +185,15 @@ func _on_card_equip_dropped(hero_index: int, item_id: String) -> void:
 
 func _on_field_heal_requested(hero_index: int) -> void:
 	_try_field_heal(hero_index)
+
+
+func _on_active_skill_pressed(p_hero_id: String, skill_id: String) -> void:
+	## 액티브 스킬 버튼 → 전투창에서 즉시 발동
+	var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
+	for bw in battle_windows:
+		if bw.has_method("execute_active_skill"):
+			bw.execute_active_skill(p_hero_id, skill_id)
+			return
 
 
 func _on_card_accordion_toggle(hero_index: int) -> void:

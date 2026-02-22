@@ -47,11 +47,18 @@ const COLLAPSE_DURATION := 0.22
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
 signal card_selected(hero_index: int)
+signal active_skill_pressed(hero_id: String, skill_id: String)
+
+const SKILL_BTN_SIZE := 20
+const SKILL_BTN_GAP := 2
+const SKILL_BTN_LIFT := 2  # 카드 상단 위 여백
 
 var hero_index: int = -1
 var hero_id: String = ""
 var _hero_ref: Hero = null
 var hp_reference: int = 100
+var _active_skill_buttons: Array[Button] = []
+var _active_skill_ids: Array[String] = []
 
 var content: Control
 var name_label: Label
@@ -104,6 +111,7 @@ func _build_ui() -> void:
 	_build_atb_area()
 	_build_exp_bar()
 	_build_name_row()
+	_build_active_skill_buttons()
 
 
 func _build_name_row() -> void:
@@ -244,6 +252,7 @@ func update_from_hero(hero: Hero) -> void:
 	update_name(hero.hero_name)
 	set_dead(hero.is_dead)
 	_refresh_equip_rows()
+	refresh_active_skill_buttons(hero)
 
 
 func _refresh_equip_rows() -> void:
@@ -433,6 +442,8 @@ func set_dead(is_dead: bool) -> void:
 		exp_bar_bg.visible = not is_dead
 	if exp_bar:
 		exp_bar.visible = not is_dead
+	if is_dead:
+		_hide_all_skill_buttons()
 
 
 func is_expanded() -> bool:
@@ -505,6 +516,112 @@ func play_attack_anim() -> void:
 func _kill_tween(tw: Tween) -> void:
 	if tw and tw.is_valid():
 		tw.kill()
+
+
+func _build_active_skill_buttons() -> void:
+	## 액티브 스킬 버튼 3개 슬롯을 카드 상단에 생성 (초기에는 숨김)
+	for i in range(3):
+		var btn := Button.new()
+		btn.name = "ActiveSkillBtn_%d" % i
+		btn.custom_minimum_size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
+		btn.size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
+		btn.mouse_filter = MOUSE_FILTER_STOP
+		btn.mouse_default_cursor_shape = CURSOR_POINTING_HAND
+		btn.focus_mode = FOCUS_NONE
+		btn.visible = false
+		btn.clip_text = true
+		btn.add_theme_font_size_override("font_size", 9)
+		btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+		_apply_skill_btn_style(btn, false)
+		btn.pressed.connect(_on_active_skill_btn_pressed.bind(i))
+		add_child(btn)
+		_active_skill_buttons.append(btn)
+
+
+func _apply_skill_btn_style(btn: Button, on_cooldown: bool) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.15, 0.15, 0.7) if on_cooldown else Color(0.12, 0.22, 0.42, 0.92)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.3, 0.3, 0.3, 0.6) if on_cooldown else Color(0.5, 0.7, 1.0, 0.8)
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover := style.duplicate() as StyleBoxFlat
+	if not on_cooldown:
+		hover.bg_color = Color(0.18, 0.32, 0.58, 0.95)
+		hover.border_color = Color(0.6, 0.85, 1.0, 0.95)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	var pressed := style.duplicate() as StyleBoxFlat
+	if not on_cooldown:
+		pressed.bg_color = Color(0.08, 0.15, 0.32, 0.95)
+	btn.add_theme_stylebox_override("pressed", pressed)
+
+
+func refresh_active_skill_buttons(hero: Hero) -> void:
+	## 영웅의 해금된 액티브 스킬에 맞게 버튼 갱신
+	if hero == null:
+		_hide_all_skill_buttons()
+		return
+
+	var skills: Array[String] = []
+	for sid in hero.unlocked_skills:
+		if str(sid) == "basic_attack":
+			continue
+		skills.append(str(sid))
+
+	_active_skill_ids = skills
+
+	for i in range(_active_skill_buttons.size()):
+		var btn: Button = _active_skill_buttons[i]
+		if i < skills.size():
+			var skill_id: String = skills[i]
+			var skill_data: Dictionary = DataManager.get_skill(skill_id)
+			var skill_name: String = str(skill_data.get("name", skill_id))
+			btn.text = skill_name.substr(0, 1) if not skill_name.is_empty() else "?"
+			btn.tooltip_text = skill_name
+			btn.visible = true
+			# 위치: 카드 상단 왼쪽 정렬
+			var x: float = float(i) * float(SKILL_BTN_SIZE + SKILL_BTN_GAP)
+			var y: float = -float(SKILL_BTN_SIZE) - float(SKILL_BTN_LIFT)
+			btn.position = Vector2(x, y)
+		else:
+			btn.visible = false
+
+	update_active_skill_cooldowns()
+
+
+func update_active_skill_cooldowns() -> void:
+	## 매 프레임 호출: 쿨다운 상태 반영
+	for i in range(mini(_active_skill_ids.size(), _active_skill_buttons.size())):
+		var skill_id: String = _active_skill_ids[i]
+		var btn: Button = _active_skill_buttons[i]
+		if not btn.visible:
+			continue
+		var on_cooldown: bool = not CooldownManager.is_skill_ready(hero_id, skill_id)
+		btn.disabled = on_cooldown
+		_apply_skill_btn_style(btn, on_cooldown)
+
+
+func _hide_all_skill_buttons() -> void:
+	_active_skill_ids.clear()
+	for btn in _active_skill_buttons:
+		btn.visible = false
+
+
+func _on_active_skill_btn_pressed(index: int) -> void:
+	if index < 0 or index >= _active_skill_ids.size():
+		return
+	var skill_id: String = _active_skill_ids[index]
+	if hero_id.is_empty():
+		return
+	active_skill_pressed.emit(hero_id, skill_id)
 
 
 func _on_gui_input(event: InputEvent) -> void:
