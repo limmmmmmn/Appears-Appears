@@ -259,6 +259,14 @@ func get_class_skills(class_id: String) -> Array:
 	var class_data: Dictionary = get_class_data(class_id)
 	return class_data.get("skills", ["basic_attack"])
 
+func get_all_skill_ids() -> Array:
+	## basic_attack 제외 모든 스킬 ID 반환
+	var result: Array = []
+	for skill_id in skills.keys():
+		if skill_id != "basic_attack":
+			result.append(skill_id)
+	return result
+
 
 # 장비
 func get_equipment(equip_id: String) -> Dictionary:

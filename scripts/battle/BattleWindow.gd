@@ -83,6 +83,12 @@ var _action_process_timer: float = 0.0
 const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 
 
+# === 레벨업 스킬 선택 ===
+const SKILL_SELECT_POPUP_SCENE = preload("res://scenes/ui/SkillSelectPopup.tscn")
+const SKILL_SELECT_CHOICE_COUNT: int = 3
+var _skill_select_queue: Array = []  # Array of { hero_id, hero_name }
+var _skill_select_popup: SkillSelectPopup = null
+
 # === 도주 설정 ===
 const BASE_ESCAPE_RATE: float = 40.0
 const GRUDGE_KILLS_PER_LEVEL: int = 5
@@ -669,6 +675,7 @@ func _start_battle() -> void:
 	pending_victory = false
 	pending_victory_ready_ms = 0
 	waiting_reward_claim = false
+	_skill_select_queue.clear()
 	_clear_reward_claim_button()
 	entry_blocked = false
 	_update_block_entry_button_state()
@@ -2507,7 +2514,9 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	# 경험치 분배 (골드 기반 간이 계산)
 	var per_kill_exp: int = maxi(5, gold_reward / 2)
 	for hero in _get_alive_heroes_in_battle():
+		var old_lv: int = hero.level
 		var exp_result: Dictionary = hero.gain_exp(per_kill_exp)
+		_check_skill_select_on_levelup(hero, old_lv, exp_result)
 		if exp_result.get("leveled_up", false):
 			if SoundManager:
 				SoundManager.play_level_up()
@@ -2754,7 +2763,118 @@ func _end_battle_victory() -> void:
 	# 보상 처리
 	_grant_exp_rewards()
 	call_deferred("_emit_party_updated")
+
+	# 스킬 선택 큐가 있으면 팝업 먼저 처리
+	if not _skill_select_queue.is_empty():
+		_show_next_skill_select()
+		return
+
 	_play_victory_text_then_close()
+
+
+func _check_skill_select_on_levelup(hero: Hero, old_level: int, result: Dictionary) -> void:
+	## 레벨업 결과에서 2레벨 도달 여부 확인 → 스킬 선택 큐 추가
+	if old_level >= 2:
+		return
+	# 이미 큐에 있는 영웅은 스킵
+	for entry in _skill_select_queue:
+		if entry.get("hero_id", "") == hero.id:
+			return
+	var levels: Array = result.get("levels", [])
+	for lv_data in levels:
+		var lv: int = int(lv_data.get("level", 0))
+		if lv == 2:
+			_skill_select_queue.append({
+				"hero_id": hero.id,
+				"hero_name": hero.hero_name,
+			})
+			break
+
+
+func _show_next_skill_select() -> void:
+	## 큐에서 다음 영웅의 스킬 선택 팝업 표시
+	if _skill_select_queue.is_empty():
+		_play_victory_text_then_close()
+		return
+
+	var entry: Dictionary = _skill_select_queue.pop_front()
+	var hero_id: String = entry.get("hero_id", "")
+	var hero_name: String = entry.get("hero_name", "")
+
+	# 이미 보유한 스킬 제외, 후보 생성
+	var hero: Hero = _find_hero_by_id(hero_id)
+	var owned: Array = hero.get_available_skills() if hero else ["basic_attack"]
+	var all_skills: Array = DataManager.get_all_skill_ids()
+
+	var candidates: Array = []
+	for sid in all_skills:
+		if not owned.has(sid):
+			candidates.append(sid)
+
+	# 후보가 없으면 스킵
+	if candidates.is_empty():
+		_show_next_skill_select()
+		return
+
+	# 셔플 후 3개 선택
+	candidates.shuffle()
+	var choices: Array = candidates.slice(0, mini(SKILL_SELECT_CHOICE_COUNT, candidates.size()))
+
+	# 팝업 생성
+	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
+		_skill_select_popup.queue_free()
+
+	_skill_select_popup = SKILL_SELECT_POPUP_SCENE.instantiate() as SkillSelectPopup
+	_skill_select_popup.z_index = 300
+	_skill_select_popup.top_level = true
+	_skill_select_popup.process_mode = Node.PROCESS_MODE_ALWAYS
+	_skill_select_popup.skill_selected.connect(_on_skill_selected)
+
+	# self에 추가 후 전투창 중앙에 배치
+	self.add_child(_skill_select_popup)
+	_skill_select_popup.open(hero_id, hero_name, choices)
+
+	# open 이후 크기가 결정되므로 deferred로 위치 조정
+	_skill_select_popup.call_deferred("_center_on_parent")
+
+	# 게임 일시정지
+	get_tree().paused = true
+
+
+func _on_skill_selected(hero_id: String, skill_id: String) -> void:
+	## 스킬 선택 완료 콜백
+	var hero: Hero = _find_hero_by_id(hero_id)
+	if hero and not hero.unlocked_skills.has(skill_id):
+		hero.unlocked_skills.append(skill_id)
+
+	if BattleManager and BattleManager.has_method("push_hud_notice"):
+		var skill_data: Dictionary = DataManager.get_skill(skill_id)
+		var skill_name: String = skill_data.get("name", skill_id)
+		var hero_name: String = hero.hero_name if hero else hero_id
+		BattleManager.push_hud_notice("%s: %s 습득!" % [hero_name, skill_name], 2.5, Color(0.4, 1.0, 0.6))
+
+	# 팝업 제거
+	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
+		_skill_select_popup.queue_free()
+		_skill_select_popup = null
+
+	# 일시정지 해제
+	get_tree().paused = false
+
+	# 다음 영웅 처리 or 승리 연출
+	_show_next_skill_select()
+
+
+func _find_hero_by_id(hero_id: String) -> Hero:
+	var party: Array = PartyManager.get_party() if PartyManager else []
+	for h in party:
+		if h != null and h.id == hero_id:
+			return h
+	var bench: Array = PartyManager.get_bench_heroes() if PartyManager and PartyManager.has_method("get_bench_heroes") else []
+	for h in bench:
+		if h != null and h.id == hero_id:
+			return h
+	return null
 
 
 func _finalize_victory_close() -> void:
@@ -2920,8 +3040,10 @@ func _grant_exp_rewards() -> void:
 	for hero in party:
 		if hero == null:
 			continue
+		var old_level: int = hero.level
 		var result: Dictionary = hero.gain_exp(total_exp)
 		_show_rebel_up_popups(hero, result)
+		_check_skill_select_on_levelup(hero, old_level, result)
 
 	var bench: Array = PartyManager.get_bench_heroes() if PartyManager and PartyManager.has_method("get_bench_heroes") else []
 	var bench_exp: int = int(total_exp * Hero.BENCH_EXP_RATIO)
@@ -2931,8 +3053,10 @@ func _grant_exp_rewards() -> void:
 	for hero in bench:
 		if hero == null:
 			continue
+		var old_level: int = hero.level
 		var result: Dictionary = hero.gain_exp(bench_exp)
 		_show_rebel_up_popups(hero, result)
+		_check_skill_select_on_levelup(hero, old_level, result)
 
 
 func _show_rebel_up_popups(hero: Hero, gain_result: Dictionary) -> void:
