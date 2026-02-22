@@ -2765,22 +2765,21 @@ func _finalize_victory_close() -> void:
 func _play_victory_text_then_close() -> void:
 	var host: Control = battle_area if battle_area != null else self
 
-	# 드퀘풍 메시지 박스
+	# 드퀘풍 메시지 박스 — host(PanelContainer) 위치 기준, self에 추가
 	var box_w: int = int(host.size.x * 0.8)
 	var box_h: int = 28
-	var box_x: int = int((host.size.x - box_w) * 0.5)
-	var box_y: int = int(host.size.y - box_h - 6)
+	var area_pos: Vector2 = host.position if host != self else Vector2.ZERO
+	var box_x: int = int(area_pos.x + (host.size.x - box_w) * 0.5)
+	var box_y: int = int(area_pos.y + host.size.y - box_h - 6)
 
 	var box := Panel.new()
 	box.name = "VictoryBox"
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.z_index = 220
-	box.anchor_left = 0.0
-	box.anchor_top = 0.0
-	box.anchor_right = 0.0
-	box.anchor_bottom = 0.0
-	box.position = Vector2(box_x, box_y)
+	box.custom_minimum_size = Vector2(box_w, box_h)
 	box.size = Vector2(box_w, box_h)
+	box.position = Vector2(box_x, box_y)
+	box.top_level = true
 
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.0, 0.0, 0.12, 0.92)
@@ -2790,7 +2789,12 @@ func _play_victory_text_then_close() -> void:
 	style.content_margin_left = 6
 	style.content_margin_right = 6
 	box.add_theme_stylebox_override("panel", style)
-	host.add_child(box)
+	self.add_child(box)
+	# top_level=true이므로 global_position 직접 설정
+	box.global_position = host.global_position + Vector2(
+		(host.size.x - box_w) * 0.5,
+		host.size.y - box_h - 6
+	)
 
 	var lbl := Label.new()
 	lbl.text = "승리했다!"
@@ -2800,7 +2804,6 @@ func _play_victory_text_then_close() -> void:
 	lbl.size = Vector2(box_w, box_h)
 	lbl.add_theme_font_size_override("font_size", 11)
 	lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-	lbl.add_theme_constant_override("margin_left", 6)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(lbl)
 
