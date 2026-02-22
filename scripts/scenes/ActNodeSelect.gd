@@ -476,9 +476,9 @@ func _build_editor_preview_areas() -> void:
 	start_area_id = "preview_1"
 	act_areas = [
 		{"id":"preview_1","type":"field","name":"Field1_1"},
-		{"id":"preview_2","type":"town","name":"Town1_1"},
+		{"id":"preview_2","type":"town","name":"Town"},
 		{"id":"preview_3","type":"field","name":"Field1_2"},
-		{"id":"preview_4","type":"town","name":"Town1_2"},
+		{"id":"preview_4","type":"town","name":"Town"},
 		{"id":"preview_5","type":"field","name":"Field1_3"},
 	]
 

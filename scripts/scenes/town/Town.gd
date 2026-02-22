@@ -57,9 +57,13 @@ var street_bg: ColorRect
 var walkers: Array[Dictionary] = []
 var shop_trinket_granted_this_visit: bool = false
 var event_trinket_granted_this_visit: bool = false
+var town_visit_order_in_act: int = 1
+var town_area_order_in_act: int = 1
+var town_act_order: int = 1
 
 func _ready() -> void:
 	randomize()
+	_resolve_town_stage_context()
 	_build_ui()
 	_apply_town_title()
 	_generate_building_layout()
@@ -243,8 +247,9 @@ func _apply_town_title() -> void:
 		resolved = str(FieldManager.get_current_area_name()).strip_edges()
 	if resolved.is_empty():
 		resolved = "마을"
+	var stage_suffix: String = " [A%d-T%d]" % [town_act_order, town_visit_order_in_act]
 	if title_label != null:
-		title_label.text = resolved
+		title_label.text = resolved + stage_suffix
 
 
 func _update_layout_sizes() -> void:
@@ -274,10 +279,10 @@ func _update_layout_sizes() -> void:
 
 func _generate_building_layout() -> void:
 	layout_data.clear()
-	for b in COMMERCIAL_BUILDINGS:
-		layout_data.append((b as Dictionary).duplicate())
-	for b in EVENT_BUILDINGS:
-		layout_data.append((b as Dictionary).duplicate())
+	var profile: Dictionary = _get_town_stage_profile()
+	_append_random_pool_items(COMMERCIAL_BUILDINGS, int(profile.get("commercial_slots", 3)))
+	_append_random_pool_items(EVENT_BUILDINGS, int(profile.get("event_slots", 3)))
+	_append_random_pool_items(EXTRA_BUILDINGS, int(profile.get("extra_slots", 1)))
 
 	var all_pool: Array[Dictionary] = []
 	for b in COMMERCIAL_BUILDINGS:
@@ -500,6 +505,96 @@ func _try_grant_town_trinket(index: int) -> void:
 	var append_msg: String = "\n\n%s [%s] 트링켓 획득: %s" % [temoji, source_name, tname]
 	if popup_desc != null:
 		popup_desc.text += append_msg
+
+
+func _resolve_town_stage_context() -> void:
+	town_visit_order_in_act = 1
+	town_area_order_in_act = 1
+	town_act_order = 1
+	if FieldManager == null:
+		return
+
+	var act_id: String = str(FieldManager.current_act_id)
+	var area_id: String = str(FieldManager.current_area_id)
+	town_act_order = maxi(1, _extract_numeric_suffix_int(act_id))
+	town_area_order_in_act = maxi(1, _extract_runtime_area_order(area_id))
+	town_visit_order_in_act = maxi(1, _count_town_visits_until_area(act_id, area_id))
+
+
+func _get_town_stage_profile() -> Dictionary:
+	var progression_tier: int = ((town_act_order - 1) * 2) + (town_visit_order_in_act - 1)
+	var commercial_slots: int = clampi(3 - int(floor(float(progression_tier) * 0.5)), 1, 3)
+	var event_slots: int = clampi(2 + int(ceil(float(progression_tier) * 0.5)), 2, 4)
+	var extra_slots: int = clampi(1 + int(floor(float(progression_tier) * 0.5)), 1, 4)
+
+	while commercial_slots + event_slots + extra_slots > CELL_COUNT:
+		if extra_slots > 1:
+			extra_slots -= 1
+		elif event_slots > 2:
+			event_slots -= 1
+		else:
+			break
+
+	return {
+		"commercial_slots": commercial_slots,
+		"event_slots": event_slots,
+		"extra_slots": extra_slots,
+	}
+
+
+func _append_random_pool_items(pool: Array[Dictionary], count: int) -> void:
+	if pool.is_empty() or count <= 0:
+		return
+	for i in range(count):
+		var pick: Dictionary = (pool[randi() % pool.size()] as Dictionary).duplicate()
+		layout_data.append(pick)
+
+
+func _count_town_visits_until_area(act_id: String, area_id: String) -> int:
+	if FieldManager == null:
+		return 1
+	var act_data: Dictionary = FieldManager.get_runtime_act(act_id)
+	if act_data.is_empty():
+		return 1
+	var areas: Array = act_data.get("areas", []) as Array
+	var count: int = 0
+	for area_any in areas:
+		var area: Dictionary = area_any as Dictionary
+		if str(area.get("type", "")) == "town":
+			count += 1
+		if str(area.get("id", "")) == area_id:
+			return maxi(1, count)
+	return 1
+
+
+func _extract_runtime_area_order(area_id: String) -> int:
+	if area_id.is_empty():
+		return 1
+	var marker: String = "_area_"
+	var marker_idx: int = area_id.rfind(marker)
+	if marker_idx < 0:
+		return 1
+	var suffix: String = area_id.substr(marker_idx + marker.length())
+	if suffix.is_empty():
+		return 1
+	if suffix.is_valid_int():
+		return maxi(1, int(suffix))
+	return 1
+
+
+func _extract_numeric_suffix_int(raw_id: String) -> int:
+	if raw_id.is_empty():
+		return 1
+	var digits: String = ""
+	for i in range(raw_id.length() - 1, -1, -1):
+		var ch: String = raw_id.substr(i, 1)
+		if ch >= "0" and ch <= "9":
+			digits = ch + digits
+		elif not digits.is_empty():
+			break
+	if digits.is_empty():
+		return 1
+	return maxi(1, int(digits))
 
 
 func _make_style(bg: Color, border: Color, radius: int = 6, width: int = 1) -> StyleBoxFlat:

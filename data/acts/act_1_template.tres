@@ -1,11 +1,9 @@
-[gd_resource type="Resource" script_class="ActTemplate" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="ActTemplate" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/resources/ActTemplate.gd" id="1_act_template"]
 [ext_resource type="Resource" path="res://data/fields/field1_1.tres" id="2_a1_start"]
 [ext_resource type="Resource" path="res://data/fields/field1_2.tres" id="3_a1_field_a"]
 [ext_resource type="Resource" path="res://data/fields/field1_3.tres" id="4_a1_field_b"]
-[ext_resource type="Resource" path="res://data/towns/town1_1.tres" id="5_town1_1"]
-[ext_resource type="Resource" path="res://data/towns/town1_2.tres" id="6_town1_2"]
 
 [resource]
 script = ExtResource("1_act_template")
@@ -28,6 +26,6 @@ start_area_pool = [ExtResource("2_a1_start")]
 field_pool = [ExtResource("3_a1_field_a"), ExtResource("4_a1_field_b")]
 dungeon_pool = []
 event_pool = []
-town_pool = [ExtResource("5_town1_1"), ExtResource("6_town1_2")]
+town_pool = [{"id":"act1_town_1","name":"Town1_1","scene":"res://scenes/town/Town.tscn","weight":1.0}, {"id":"act1_town_2","name":"Town1_2","scene":"res://scenes/town/Town.tscn","weight":1.0}]
 fixed_area_sequence = PackedStringArray("field", "town", "field", "town", "field")
-fixed_area_path = [ExtResource("2_a1_start"), ExtResource("5_town1_1"), ExtResource("3_a1_field_a"), ExtResource("6_town1_2"), ExtResource("4_a1_field_b")]
+fixed_area_path = [ExtResource("2_a1_start"), {"id":"act1_town_1","name":"Town1_1","scene":"res://scenes/town/Town.tscn","weight":1.0}, ExtResource("3_a1_field_a"), {"id":"act1_town_2","name":"Town1_2","scene":"res://scenes/town/Town.tscn","weight":1.0}, ExtResource("4_a1_field_b")]
