@@ -598,8 +598,9 @@ func refresh_active_skill_buttons(hero: Hero) -> void:
 
 
 func update_active_skill_cooldowns() -> void:
-	## 매 프레임 호출: 쿨다운 + 전투 유무에 따른 활성 상태 반영
+	## 매 프레임 호출: 쿨다운 + 기본공격 타이머 + 전투 유무에 따른 활성 상태 반영
 	var has_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
+	var action_ready: bool = _hero_ref != null and _hero_ref.is_action_ready()
 	for i in range(mini(_active_skill_ids.size(), _active_skill_buttons.size())):
 		var skill_id: String = _active_skill_ids[i]
 		var btn: Button = _active_skill_buttons[i]
@@ -607,7 +608,7 @@ func update_active_skill_cooldowns() -> void:
 			continue
 		var on_cooldown: bool = not CooldownManager.is_skill_ready(hero_id, skill_id)
 		var is_enemy_skill: bool = _is_enemy_target_skill(skill_id)
-		var disabled: bool = on_cooldown or (is_enemy_skill and not has_battle)
+		var disabled: bool = on_cooldown or not action_ready or (is_enemy_skill and not has_battle)
 		btn.disabled = disabled
 		_apply_skill_btn_style(btn, disabled)
 

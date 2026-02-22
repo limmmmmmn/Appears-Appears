@@ -28,4 +28,4 @@ equip_restrictions = {
 "dual_wield": false
 }
 tags = ["magic", "ranged", "aoe"]
-skills = []
+skills = ["basic_attack", "fireball"]

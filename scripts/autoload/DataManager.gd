@@ -259,6 +259,9 @@ func get_class_skills(class_id: String) -> Array:
 	var class_data: Dictionary = get_class_data(class_id)
 	return class_data.get("skills", ["basic_attack"])
 
+func is_active_skill(skill_id: String) -> bool:
+	return get_skill(skill_id).get("is_active", false)
+
 func get_all_skill_ids() -> Array:
 	## basic_attack 제외 모든 스킬 ID 반환
 	var result: Array = []

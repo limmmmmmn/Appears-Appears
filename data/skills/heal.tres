@@ -12,6 +12,7 @@ target = "single_ally"
 cooldown = 4.0
 effects = []
 default_on = true
+is_active = true
 base_damage = 12
 scaling = 0.8
 usable_on_field = true

@@ -214,6 +214,10 @@ func _on_active_skill_pressed(p_hero_id: String, skill_id: String) -> void:
 	## 액티브 스킬 버튼 → 타겟팅 모드 진입
 	if _targeting:
 		_cancel_targeting()
+	# 기본공격 타이머가 차야 사용 가능
+	var hero: Hero = PartyManager.get_hero_by_id(p_hero_id) if PartyManager else null
+	if hero != null and not hero.is_action_ready():
+		return
 	if not CooldownManager.is_skill_ready(p_hero_id, skill_id):
 		return
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)

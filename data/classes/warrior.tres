@@ -28,4 +28,4 @@ equip_restrictions = {
 "dual_wield": false
 }
 tags = Array[String](["melee", "physical", "tank"])
-skills = Array[String]([])
+skills = Array[String](["basic_attack", "power_strike"])

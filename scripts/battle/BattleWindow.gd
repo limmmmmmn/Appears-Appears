@@ -1507,99 +1507,32 @@ func _execute_enemy_action(enemy: BattleEnemy) -> void:
 
 
 func _select_hero_skill(hero: Hero) -> String:
-	## 영웅의 스킬 선택 (클래스별 전투 AI)
-	var skills: Array = hero.get_available_skills()
-
-	# ── 성직자: 아군 HP 70% 미만이면 힐 우선 ──
-	if hero.class_id == "cleric":
-		var wounded: Array = _get_wounded_heroes()
-		if not wounded.is_empty():
-			for s in skills:
-				var data: Dictionary = DataManager.get_skill(s)
-				if data.get("type", "") == "heal":
-					if _can_use_skill(hero, s):
-						return s
-
-	# ── 마법사: 적 2마리 이상이면 전체 마법, 1마리여도 마법 사용 ──
-	if hero.class_id == "mage":
-		# 전체 공격 우선 (적 2+)
-		if get_enemy_count() >= 2:
-			for s in skills:
-				var data: Dictionary = DataManager.get_skill(s)
-				if data.get("target", "") == "all_enemies":
-					if _can_use_skill(hero, s):
-						return s
-		# 단일 대상이라도 마법 스킬 사용
-		for s in skills:
-			if s == "basic_attack":
-				continue
-			if _can_use_skill(hero, s):
-				return s
-
-	# ── 기사: 전투창마다 첫 공격은 반드시 스킬 ──
-	if hero.class_id == "knight":
-		if not _knight_used_first.get(hero.id, false):
-			_knight_used_first[hero.id] = true
-			for s in skills:
-				if s == "basic_attack":
-					continue
-				if _can_use_skill(hero, s):
-					return s
-
-	# ── 사용 가능한 공격 스킬 수집 ──
-	var usable_skills: Array = []
-	for s in skills:
-		if s == "basic_attack":
-			continue
-		var data: Dictionary = DataManager.get_skill(s)
-		if data.get("type", "") == "heal":
-			continue
-		if _can_use_skill(hero, s):
-			usable_skills.append(s)
-
-	# ── 스킬로 적을 마무리할 수 있으면 즉시 사용 ──
-	if not usable_skills.is_empty():
-		var finisher: String = _find_finisher_skill(hero, usable_skills)
-		if not finisher.is_empty():
-			return finisher
-
-	# ── 스킬 있으면 항상 사용 ──
-	if not usable_skills.is_empty():
-		return usable_skills[0]
-
-	# ── 기본 공격 ──
+	## 영웅의 스킬 선택 — 액티브 스킬은 자동 사용하지 않음
 	if _can_use_skill(hero, "basic_attack"):
 		return "basic_attack"
 	return ""
 
 
 func _has_ready_hero_action(hero: Hero) -> bool:
-	## 쿨다운 기준으로 즉시 가능한 행동 존재 여부
+	## 기본 공격 가능 여부만 확인 (액티브 스킬은 수동)
 	if hero == null or hero.is_dead:
 		return false
-	for skill_id in hero.get_available_skills():
-		if _can_use_skill(hero, str(skill_id)):
-			return true
-	return false
+	return hero.is_action_ready()
 
 
 func _can_use_skill(hero: Hero, skill_id: String) -> bool:
-	## 스킬 사용 가능 여부 확인 (토글 + 일반/스킬 ATB + 쿨다운)
+	## 자동 전투용 스킬 사용 가능 여부 (액티브 스킬 제외)
+	if DataManager.is_active_skill(skill_id):
+		return false
 	if not hero.is_skill_enabled(skill_id):
 		return false
 	if skill_id == "basic_attack":
 		return hero.is_action_ready()
-	if not hero.is_skill_action_ready():
-		return false
-	if not CooldownManager.is_skill_ready(hero.id, skill_id):
-		return false
-	return true
+	return false
 
 
 func execute_active_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy = null, ally_target_id: String = "") -> void:
-	## 외부(HeroCard)에서 호출: ATB 무시, 쿨다운만 확인하여 즉시 발동
-	## enemy_target: 지정된 적 타겟 (타겟팅 모드에서 클릭한 적)
-	## ally_target_id: 지정된 아군 타겟 hero_id (타겟팅 모드에서 클릭한 아군)
+	## 액티브 스킬 수동 발동: 기본공격 쿨 동안은 사용 불가, 스킬 ATB 없음
 	if current_state != BattleState.RUNNING:
 		return
 	if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
@@ -1607,6 +1540,9 @@ func execute_active_skill(hero_id: String, skill_id: String, enemy_target: Battl
 			return
 	var hero: Hero = _find_hero_by_id(hero_id)
 	if hero == null or hero.is_dead:
+		return
+	# 기본공격 타이머가 차야 사용 가능 (연속 사용 방지)
+	if not hero.is_action_ready():
 		return
 	if not CooldownManager.is_skill_ready(hero_id, skill_id):
 		return
@@ -1622,7 +1558,8 @@ func execute_active_skill(hero_id: String, skill_id: String, enemy_target: Battl
 		if not has_alive_enemies():
 			return
 
-	hero.reset_skill_action_timer()
+	# 기본공격 타이머 리셋 (연속 사용 방지)
+	hero.reset_action_timer()
 	BattleManager.hero_attacked.emit(hero.id)
 
 	match target_type:
