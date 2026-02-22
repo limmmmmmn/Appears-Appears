@@ -28,4 +28,4 @@ equip_restrictions = {
 "dual_wield": false
 }
 tags = ["melee", "physical", "tank", "heavy"]
-skills = ["basic_attack", "shield_bash"]
+skills = []
