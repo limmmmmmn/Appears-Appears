@@ -2824,13 +2824,18 @@ func _show_next_skill_select() -> void:
 	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
 		_skill_select_popup.queue_free()
 
+	# CanvasLayer로 감싸 카메라 무관하게 화면 고정
+	var layer := CanvasLayer.new()
+	layer.name = "SkillSelectLayer"
+	layer.layer = 100
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(layer)
+
 	_skill_select_popup = SKILL_SELECT_POPUP_SCENE.instantiate() as SkillSelectPopup
-	_skill_select_popup.z_index = 300
 	_skill_select_popup.process_mode = Node.PROCESS_MODE_ALWAYS
 	_skill_select_popup.skill_selected.connect(_on_skill_selected)
 
-	# 씬 루트에 추가하여 화면 중앙에 표시
-	get_tree().root.add_child(_skill_select_popup)
+	layer.add_child(_skill_select_popup)
 	_skill_select_popup.open(hero_id, hero_name, choices)
 
 	# open 이후 크기가 결정되므로 deferred로 화면 중앙 배치
@@ -2852,10 +2857,13 @@ func _on_skill_selected(hero_id: String, skill_id: String) -> void:
 		var hero_name: String = hero.hero_name if hero else hero_id
 		BattleManager.push_hud_notice("%s: %s 습득!" % [hero_name, skill_name], 2.5, Color(0.4, 1.0, 0.6))
 
-	# 팝업 제거
+	# 팝업 + CanvasLayer 제거
 	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
+		var layer_node: Node = _skill_select_popup.get_parent()
 		_skill_select_popup.queue_free()
 		_skill_select_popup = null
+		if layer_node and is_instance_valid(layer_node) and layer_node.name == "SkillSelectLayer":
+			layer_node.queue_free()
 
 	# 일시정지 해제
 	get_tree().paused = false
