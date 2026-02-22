@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://baxosjwox60ow" path="res://scripts/ui/field/HeroCard.gd" id="1_script"]
 
 [node name="HeroCard" type="Control" unique_id=2049406407]
-custom_minimum_size = Vector2(120, 95)
+custom_minimum_size = Vector2(56, 93)
 layout_mode = 3
 anchors_preset = 0
 mouse_filter = 1

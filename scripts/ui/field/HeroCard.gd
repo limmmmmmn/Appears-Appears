@@ -5,10 +5,9 @@ class_name HeroCard
 
 const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
 
-const CARD_WIDTH := 120
 const FACE_SIZE := 56
-const FACE_MARGIN_X := 32
-const NAME_HEIGHT := 16
+const CARD_WIDTH := FACE_SIZE
+const NAME_HEIGHT := 14
 const ATB_AREA_HEIGHT := 12
 const EXP_BAR_HEIGHT := 3
 const ATB_BAR_HEIGHT := 5
@@ -115,22 +114,23 @@ func _build_name_row() -> void:
 	content.add_child(name_row)
 
 	name_label = Label.new()
-	name_label.position = Vector2(2, 0)
-	name_label.size = Vector2(CARD_WIDTH - 36, NAME_HEIGHT)
-	name_label.add_theme_font_size_override("font_size", 9)
+	name_label.position = Vector2(1, 0)
+	name_label.size = Vector2(CARD_WIDTH - 2, NAME_HEIGHT)
+	name_label.add_theme_font_size_override("font_size", 8)
 	name_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.85))
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.clip_text = true
 	name_label.mouse_filter = MOUSE_FILTER_IGNORE
 	name_row.add_child(name_label)
 
 	level_label = Label.new()
-	level_label.position = Vector2(CARD_WIDTH - 34, 0)
-	level_label.size = Vector2(32, NAME_HEIGHT)
-	level_label.add_theme_font_size_override("font_size", 8)
-	level_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65))
+	level_label.position = Vector2(0, 0)
+	level_label.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
+	level_label.add_theme_font_size_override("font_size", 7)
+	level_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65, 0.8))
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	level_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	level_label.text = "Lv.1"
 	level_label.mouse_filter = MOUSE_FILTER_IGNORE
 	name_row.add_child(level_label)
@@ -138,10 +138,9 @@ func _build_name_row() -> void:
 
 func _build_face_area() -> void:
 	var face_y: float = NAME_HEIGHT
-	var face_x: float = floorf((CARD_WIDTH - FACE_SIZE) * 0.5)
 
 	face_container = Control.new()
-	face_container.position = Vector2(face_x, face_y)
+	face_container.position = Vector2(0, face_y)
 	face_container.size = Vector2(FACE_SIZE, FACE_SIZE)
 	face_container.clip_children = Control.CLIP_CHILDREN_AND_DRAW
 	face_container.mouse_filter = MOUSE_FILTER_STOP
@@ -220,7 +219,7 @@ func _draw() -> void:
 	if not _is_selected:
 		return
 	var border_rect := Rect2(
-		Vector2(floorf((CARD_WIDTH - FACE_SIZE) * 0.5) - 1, NAME_HEIGHT - 1),
+		Vector2(-1, NAME_HEIGHT - 1),
 		Vector2(FACE_SIZE + 2, FACE_SIZE + 2)
 	)
 	draw_rect(border_rect, Color(1.0, 0.88, 0.28, 1.0), false, 2.0)
