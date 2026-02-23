@@ -1534,7 +1534,7 @@ func _can_use_skill(hero: Hero, skill_id: String) -> bool:
 
 
 func execute_active_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy = null, ally_target_id: String = "") -> void:
-	## 액티브 스킬 수동 발동: 기본공격 쿨 동안은 사용 불가, 스킬 ATB 없음
+	## 액티브 스킬 수동 발동: ATB 무관, 쿨타임만 체크
 	if current_state != BattleState.RUNNING:
 		return
 	if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
@@ -1542,9 +1542,6 @@ func execute_active_skill(hero_id: String, skill_id: String, enemy_target: Battl
 			return
 	var hero: Hero = _find_hero_by_id(hero_id)
 	if hero == null or hero.is_dead:
-		return
-	# 기본공격 타이머가 차야 사용 가능 (연속 사용 방지)
-	if not hero.is_action_ready():
 		return
 	if not CooldownManager.is_skill_ready(hero_id, skill_id):
 		return
@@ -1560,8 +1557,6 @@ func execute_active_skill(hero_id: String, skill_id: String, enemy_target: Battl
 		if not has_alive_enemies():
 			return
 
-	# 기본공격 타이머 리셋 (연속 사용 방지)
-	hero.reset_action_timer()
 	BattleManager.hero_attacked.emit(hero.id)
 
 	match target_type:

@@ -656,7 +656,7 @@ func get_available_skills() -> Array:
 
 
 func get_usable_skills() -> Array:
-	## 토글 ON이고 쿨타임이 없는 스킬 목록 반환 (기본 공격 제외)
+	## 토글 ON이고 쿨타임이 없는 스킬 목록 반환 (기본 공격 제외, ATB 무관)
 	var result: Array = []
 	var skills: Array = get_available_skills()
 	for skill_id in skills:
@@ -665,9 +665,6 @@ func get_usable_skills() -> Array:
 		# 토글이 OFF면 스킵
 		if not is_skill_enabled(skill_id):
 			continue
-		# 스킬 전용 ATB가 덜 찼으면 스킵
-		if not is_skill_action_ready():
-			continue
 		# 쿨타임 체크
 		if CooldownManager.is_skill_ready(id, skill_id):
 			result.append(skill_id)
@@ -675,10 +672,10 @@ func get_usable_skills() -> Array:
 
 
 func can_use_skill(skill_id: String) -> bool:
-	## 해당 스킬을 사용할 수 있는지 확인 (공격/스킬 ATB + 쿨타임)
+	## 해당 스킬을 사용할 수 있는지 확인 (기본공격=ATB, 액티브=쿨타임만)
 	if skill_id == "basic_attack":
 		return is_action_ready()
-	return is_skill_action_ready() and CooldownManager.is_skill_ready(id, skill_id)
+	return CooldownManager.is_skill_ready(id, skill_id)
 #endregion
 
 

@@ -397,20 +397,14 @@ func update_skill_atb_bars(hero: Hero) -> void:
 
 
 func _get_skill_atb_ratio(hero: Hero, skill_id: String) -> float:
-	var action_delay: float = maxf(0.001, hero.get_action_delay())
-	var loop_ratio: float = clampf(hero.action_timer / action_delay, 0.0, 1.0)
-	var has_active_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
 	if skill_id == "basic_attack":
-		return loop_ratio
+		var action_delay: float = maxf(0.001, hero.get_action_delay())
+		return clampf(hero.action_timer / action_delay, 0.0, 1.0)
 
-	var skill_delay: float = maxf(0.001, hero.get_skill_action_delay())
-	var skill_ratio: float = clampf(hero.skill_action_timer / skill_delay, 0.0, 1.0)
+	# 액티브 스킬: 쿨타임만 표시 (ATB 무관)
 	if CooldownManager == null:
-		return skill_ratio
-	var cd_ratio: float = clampf(1.0 - CooldownManager.get_cooldown_percent(hero.id, skill_id), 0.0, 1.0)
-	if not has_active_battle and cd_ratio >= 0.999:
-		return skill_ratio
-	return minf(skill_ratio, cd_ratio)
+		return 1.0
+	return clampf(1.0 - CooldownManager.get_cooldown_percent(hero.id, skill_id), 0.0, 1.0)
 
 
 func _get_skill_atb_color(hero: Hero, skill_id: String, ratio: float) -> Color:
