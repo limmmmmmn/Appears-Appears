@@ -82,6 +82,9 @@ var waiting_reward_claim: bool = false
 var _action_process_timer: float = 0.0
 const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 
+# === 초당 마나 자연 회복 ===
+var _mp_regen_timer: float = 0.0
+
 
 # === 레벨업 스킬 선택 ===
 const SKILL_SELECT_POPUP_SCENE = preload("res://scenes/ui/SkillSelectPopup.tscn")
@@ -249,6 +252,13 @@ func _process(delta: float) -> void:
 
 	# 적 행동 타이머 충전 (영웅은 ATBManager에서 중앙 관리)
 	_update_enemy_timers(delta)
+
+	# 초당 마나 +1 자연 회복
+	_mp_regen_timer += delta
+	if _mp_regen_timer >= 1.0:
+		_mp_regen_timer -= 1.0
+		for hero in _get_alive_heroes_in_battle():
+			hero.restore_mp(1)
 
 	# 행동 타임아웃 안전장치
 	if is_processing_action:
@@ -1516,6 +1526,8 @@ func _execute_hero_action(hero: Hero) -> void:
 				_execute_aoe_attack(hero, skill_id, skill_data)
 			_:
 				_execute_single_attack(hero, skill_id, skill_data)
+		# 기본 공격 시 마나 +2 회복
+		hero.restore_mp(2)
 
 
 func _execute_enemy_action(enemy: BattleEnemy) -> void:
