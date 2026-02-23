@@ -29,3 +29,4 @@ equip_restrictions = {
 }
 tags = ["melee", "physical", "speed", "dual_wield"]
 skills = ["basic_attack", "backstab"]
+action_speed = 1.5

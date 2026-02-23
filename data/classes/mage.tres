@@ -29,3 +29,4 @@ equip_restrictions = {
 }
 tags = ["magic", "ranged", "aoe"]
 skills = ["basic_attack", "fireball"]
+action_speed = 2.5

@@ -1,639 +1,381 @@
 extends Control
 class_name HeroCard
-## 파티 카드: 세로 레이아웃 (하단 중앙 가로 배열용)
-## 상단: 이름+레벨 / 중앙: 초상화(HP 오버레이) / 하단: ATB 바 + EXP 바
+## 히어로 박스 — 고전 RPG 스타일
+## 레이아웃: 좌측 페이스칩 | 우측 이름+레벨, HP바, MP바, ATB바
 
-const FACE_CHIP_PATH := "res://assets/sprites/heroes/%s.png"
+#region 상수 / 인스펙터 조정 가능 레이아웃
+# 레이아웃 치수 (인스펙터에서 조정 가능)
+@export_group("Layout")
+@export var name_row_h: int = 14           ## 이름/레벨 행 높이
+@export var bar_row_h: int = 12            ## HP/MP/ATB 행 높이 (라벨+바 통합)
+@export var bar_thickness: int = 8         ## 바 ColorRect 실제 높이
+@export var row_gap: int = 2               ## 행 사이 간격
+@export var inner_pad: int = 4             ## 내부 패딩
+@export var border_width: int = 1          ## 테두리 두께
 
-const FACE_SIZE := 56
-const CARD_WIDTH := FACE_SIZE
-const NAME_HEIGHT := 14
-const ATB_AREA_HEIGHT := 12
-const EXP_BAR_HEIGHT := 3
-const ATB_BAR_HEIGHT := 5
-const ATB_BAR_SPACING := 2
-const CARD_PADDING := 4
+@export_group("Face Chip")
+@export var face_size: int = 40            ## 페이스칩 크기 (정사각형)
+@export var face_gap: int = 4              ## 페이스칩과 바 사이 간격
 
-const CARD_TOTAL_HEIGHT := NAME_HEIGHT + FACE_SIZE + CARD_PADDING + ATB_AREA_HEIGHT + 2 + EXP_BAR_HEIGHT + CARD_PADDING
+@export_group("Bar Labels")
+@export var bar_label_w: int = 18          ## "HP"/"MP"/"ATB" 라벨 너비
+@export var bar_num_min_w: int = 32        ## 숫자 표시 최소 너비
 
-const SLOT_ORDER: Array[String] = [
-	"main_hand", "off_hand", "head", "body", "acc1", "acc2"
-]
-const SLOT_ICONS: Dictionary = {
-	"main_hand": "⚔️", "off_hand": "🛡️", "head": "⛑️",
-	"body": "🛡️", "acc1": "💍", "acc2": "💎"
-}
+## 페이스칩 영역 폭 (inner_pad + face_size + face_gap)
+var face_area_w: int:
+	get: return inner_pad + face_size + face_gap
 
+# 색상 — 고전 RPG 테두리 박스
+const BG_COLOR := Color(0.06, 0.06, 0.1, 0.92)
+const BORDER_COLOR := Color(0.55, 0.6, 0.75, 0.9)
+const BORDER_COLOR_SELECTED := Color(1.0, 0.88, 0.28, 1.0)
+const BORDER_COLOR_HOVER := Color(0.7, 0.75, 0.9, 1.0)
+
+# HP 바 색상 (비율별)
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID := Color(0.92, 0.72, 0.2)
 const HP_COLOR_LOW := Color(0.92, 0.22, 0.22)
-const HP_OVERLAY_COLOR := Color(0.85, 0.12, 0.12, 0.55)
-const HP_GHOST_COLOR := Color(1.0, 0.35, 0.35, 0.8)
-const EXP_BAR_COLOR := Color(0.3, 0.85, 0.75)
-const BAR_BG_COLOR := Color(0.06, 0.06, 0.09, 0.9)
-const DEATH_OVERLAY_COLOR := Color(0.1, 0.1, 0.1, 0.7)
-const PLACEHOLDER_COLOR := Color(0.15, 0.12, 0.2)
+const HP_BG_COLOR := Color(0.12, 0.12, 0.15, 0.9)
 
-const HP_TWEEN_DURATION := 0.35
-const GHOST_DELAY := 0.4
-const GHOST_DURATION := 0.5
+# MP 바 색상
+const MP_COLOR := Color(0.3, 0.5, 0.95)
+const MP_BG_COLOR := Color(0.1, 0.1, 0.18, 0.9)
+
+# ATB 바 색상
+const ATB_BG_COLOR := Color(0.1, 0.1, 0.14, 0.85)
+const ATB_FILL_LOW := Color(0.2, 0.3, 0.5, 0.7)
+const ATB_FILL_HIGH := Color(0.4, 0.75, 1.0, 0.95)
+const ATB_FILL_READY := Color(0.25, 0.9, 0.35, 0.95)
+const ATB_FILL_QUEUED_PHYS := Color(1.0, 0.55, 0.25, 0.95)
+const ATB_FILL_QUEUED_MAG := Color(0.6, 0.5, 1.0, 0.95)
+const ATB_FILL_QUEUED_HEAL := Color(0.4, 0.9, 0.8, 0.95)
+const ATB_FILL_QUEUED_READY := Color(1.0, 0.85, 0.2, 0.95)
+
+# 사망 오버레이
+const DEATH_OVERLAY_COLOR := Color(0.08, 0.08, 0.08, 0.7)
+
+# 애니메이션
 const SHAKE_DURATION := 0.2
 const SHAKE_STRENGTH := 3.0
+#endregion
 
-const EXPANDED_EXTRA_HEIGHT := 152.0
-const EXPAND_DURATION := 0.28
-const COLLAPSE_DURATION := 0.22
 
+#region 시그널
 signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
 signal card_selected(hero_index: int)
-signal active_skill_pressed(hero_id: String, skill_id: String)
+signal card_hovered(hero_index: int, is_hovered: bool)
+#endregion
 
-const SKILL_BTN_SIZE := 20
-const SKILL_BTN_GAP := 2
-const SKILL_BTN_LIFT := 2  # 카드 상단 위 여백
 
+#region 변수
 var hero_index: int = -1
 var hero_id: String = ""
 var _hero_ref: Hero = null
-var hp_reference: int = 100
-var _active_skill_buttons: Array[Button] = []
-var _active_skill_ids: Array[String] = []
+var _is_selected: bool = false
+var _is_hovered: bool = false
 
-var content: Control
-var name_label: Label
-var level_label: Label
-var face_container: Control
-var placeholder: ColorRect
-var face_chip: TextureRect
-var hp_overlay: ColorRect
-var death_overlay: ColorRect
-var skull_label: Label
-var atb_container: Control
-var skill_bar_bgs: Array[ColorRect] = []
-var skill_bar_fills: Array[ColorRect] = []
-var skill_bar_skill_ids: Array[String] = []
-var exp_bar_bg: ColorRect
-var exp_bar: ColorRect
+# UI 노드 (씬 참조)
+@onready var _content: Control = %Content
+@onready var _face_chip: TextureRect = %FaceChip
+@onready var _name_label: Label = %NameLabel
+@onready var _level_label: Label = %LevelLabel
+@onready var _hp_bar_bg: ColorRect = %HPBarBG
+@onready var _hp_bar_fill: ColorRect = %HPBarFill
+@onready var _hp_label_tag: Label = %HPLabelTag
+@onready var _hp_label_num: Label = %HPLabelNum
+@onready var _mp_bar_bg: ColorRect = %MPBarBG
+@onready var _mp_bar_fill: ColorRect = %MPBarFill
+@onready var _mp_label_tag: Label = %MPLabelTag
+@onready var _mp_label_num: Label = %MPLabelNum
+@onready var _atb_bar_bg: ColorRect = %ATBBarBG
+@onready var _atb_bar_fill: ColorRect = %ATBBarFill
+@onready var _atb_label_tag: Label = %ATBLabelTag
+@onready var _death_overlay: ColorRect = %DeathOverlay
+@onready var _skull_label: Label = %SkullLabel
 
-var equip_panel: PanelContainer
-var equip_rows: Dictionary = {}
-var _row_style_normal: StyleBoxFlat
-var _row_style_highlight: StyleBoxFlat
-var _is_expanded: bool = false
-
+# 캐시
 var _cached_max_hp: int = 0
 var _prev_hp: int = -1
-var _prev_hp_ratio: float = 1.0
-var _hp_tween: Tween
-var _ghost_tween: Tween
+
+# 트윈
 var _shake_tween: Tween
-var _expand_tween: Tween
-var _is_selected: bool = false
+
+# 장비 관련 (호환성)
+var equip_rows: Dictionary = {}
+var equip_panel: PanelContainer
+#endregion
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(CARD_WIDTH, CARD_TOTAL_HEIGHT)
 	mouse_filter = MOUSE_FILTER_STOP
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 	gui_input.connect(_on_gui_input)
-	_build_ui()
-	queue_redraw()
 
 
-func _build_ui() -> void:
-	content = Control.new()
-	content.position = Vector2.ZERO
-	content.size = Vector2(CARD_WIDTH, CARD_TOTAL_HEIGHT)
-	content.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(content)
-
-	_build_face_area()
-	_build_atb_area()
-	_build_exp_bar()
-	_build_name_row()
-	_build_active_skill_buttons()
+#region 리사이즈 — 카드 폭이 바뀔 때 바/라벨 재배치
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
+		_relayout()
 
 
-func _build_name_row() -> void:
-	var name_row := Control.new()
-	name_row.position = Vector2(0, -3)
-	name_row.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
-	name_row.mouse_filter = MOUSE_FILTER_IGNORE
-	content.add_child(name_row)
+func _relayout() -> void:
+	var w: float = size.x
+	var h: float = size.y
+	if w <= 0:
+		return
 
-	name_label = Label.new()
-	name_label.position = Vector2(0, 0)
-	name_label.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
-	name_label.add_theme_font_size_override("font_size", 8)
-	name_label.add_theme_color_override("font_color", Color(0.92, 0.92, 0.88))
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_label.clip_text = true
-	name_label.mouse_filter = MOUSE_FILTER_IGNORE
-	name_row.add_child(name_label)
+	# 우측 영역: 페이스칩 오른쪽부터 카드 끝까지
+	var right_w: float = w - face_area_w - inner_pad
+	var right_x: float = face_area_w
 
-	level_label = Label.new()
-	level_label.position = Vector2(0, 0)
-	level_label.size = Vector2(CARD_WIDTH, NAME_HEIGHT)
-	level_label.add_theme_font_size_override("font_size", 8)
-	level_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.65))
-	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	level_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	level_label.text = "Lv.1"
-	level_label.mouse_filter = MOUSE_FILTER_IGNORE
-	name_row.add_child(level_label)
+	# 페이스칩 세로 중앙 배치
+	if _face_chip:
+		var face_y: float = maxf(inner_pad, floorf((h - face_size) * 0.5))
+		_face_chip.position = Vector2(inner_pad, face_y)
+		_face_chip.size = Vector2(face_size, face_size)
 
+	# 이름/레벨 라벨
+	if _name_label:
+		_name_label.position.x = right_x
+		_name_label.size = Vector2(right_w * 0.6, name_row_h)
+	if _level_label:
+		_level_label.position.x = right_x
+		_level_label.size = Vector2(right_w, name_row_h)
 
-func _build_face_area() -> void:
-	var face_y: float = NAME_HEIGHT
+	# HP/MP/ATB 바 — 라벨 오른쪽
+	var bar_x: float = right_x + bar_label_w + 2
+	var bar_w: float = right_w - bar_label_w - 2
+	if _hp_bar_bg:
+		_hp_bar_bg.position.x = bar_x
+		_hp_bar_bg.size.x = bar_w
+	if _hp_bar_fill:
+		_hp_bar_fill.position.x = bar_x
+	if _hp_label_num:
+		_hp_label_num.position.x = bar_x
+		_hp_label_num.size.x = bar_w
 
-	face_container = Control.new()
-	face_container.position = Vector2(0, face_y)
-	face_container.size = Vector2(FACE_SIZE, FACE_SIZE)
-	face_container.clip_contents = true
-	face_container.mouse_filter = MOUSE_FILTER_STOP
-	face_container.gui_input.connect(_on_gui_input)
-	content.add_child(face_container)
+	# MP 바
+	if _mp_bar_bg:
+		_mp_bar_bg.position.x = bar_x
+		_mp_bar_bg.size.x = bar_w
+	if _mp_bar_fill:
+		_mp_bar_fill.position.x = bar_x
+	if _mp_label_num:
+		_mp_label_num.position.x = bar_x
+		_mp_label_num.size.x = bar_w
 
-	placeholder = ColorRect.new()
-	placeholder.size = Vector2(FACE_SIZE, FACE_SIZE)
-	placeholder.color = PLACEHOLDER_COLOR
-	placeholder.mouse_filter = MOUSE_FILTER_IGNORE
-	face_container.add_child(placeholder)
-
-	face_chip = TextureRect.new()
-	face_chip.size = Vector2(FACE_SIZE, FACE_SIZE)
-	face_chip.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	face_chip.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	face_chip.mouse_filter = MOUSE_FILTER_IGNORE
-	face_container.add_child(face_chip)
-
-	hp_overlay = ColorRect.new()
-	hp_overlay.position = Vector2(0, 0)
-	hp_overlay.size = Vector2(FACE_SIZE, 0)
-	hp_overlay.color = HP_OVERLAY_COLOR
-	hp_overlay.mouse_filter = MOUSE_FILTER_IGNORE
-	face_container.add_child(hp_overlay)
-
-	death_overlay = ColorRect.new()
-	death_overlay.size = Vector2(FACE_SIZE, FACE_SIZE)
-	death_overlay.color = DEATH_OVERLAY_COLOR
-	death_overlay.visible = false
-	death_overlay.mouse_filter = MOUSE_FILTER_IGNORE
-	face_container.add_child(death_overlay)
-
-	skull_label = Label.new()
-	skull_label.text = "☠"
-	skull_label.size = Vector2(FACE_SIZE, FACE_SIZE)
-	skull_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	skull_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	skull_label.add_theme_font_size_override("font_size", 22)
-	skull_label.add_theme_color_override("font_color", Color(0.8, 0.2, 0.2))
-	skull_label.mouse_filter = MOUSE_FILTER_IGNORE
-	death_overlay.add_child(skull_label)
+	# ATB 바
+	if _atb_bar_bg:
+		_atb_bar_bg.position.x = bar_x
+		_atb_bar_bg.size.x = bar_w
+#endregion
 
 
-func _build_atb_area() -> void:
-	var atb_y: float = NAME_HEIGHT + FACE_SIZE + CARD_PADDING
-	atb_container = Control.new()
-	atb_container.position = Vector2(0, atb_y)
-	atb_container.size = Vector2(CARD_WIDTH, ATB_AREA_HEIGHT)
-	atb_container.mouse_filter = MOUSE_FILTER_IGNORE
-	content.add_child(atb_container)
+#region _draw — 테두리
+func _draw() -> void:
+	var rect := Rect2(Vector2.ZERO, size)
+	# 배경
+	draw_rect(rect, BG_COLOR)
+	# 테두리
+	var border_col := BORDER_COLOR
+	if _is_selected:
+		border_col = BORDER_COLOR_SELECTED
+	elif _is_hovered:
+		border_col = BORDER_COLOR_HOVER
+	draw_rect(rect, border_col, false, float(border_width))
+#endregion
 
 
-func _build_exp_bar() -> void:
-	var exp_y: float = NAME_HEIGHT + FACE_SIZE + CARD_PADDING + ATB_AREA_HEIGHT + 2
-	exp_bar_bg = _make_rect(Vector2(0, exp_y), Vector2(CARD_WIDTH, EXP_BAR_HEIGHT), BAR_BG_COLOR)
-	content.add_child(exp_bar_bg)
-	exp_bar = _make_rect(Vector2(0, exp_y), Vector2(0, EXP_BAR_HEIGHT), EXP_BAR_COLOR)
-	content.add_child(exp_bar)
-
-
-func _make_rect(pos: Vector2, sz: Vector2, color: Color) -> ColorRect:
-	var r := ColorRect.new()
-	r.position = pos
-	r.size = sz
-	r.color = color
-	r.mouse_filter = MOUSE_FILTER_IGNORE
-	return r
-
-
+#region 초기화
 func init(p_hero_index: int) -> void:
 	hero_index = p_hero_index
+#endregion
 
 
-func _draw() -> void:
-	if not _is_selected:
-		return
-	var border_rect := Rect2(
-		Vector2(-1, NAME_HEIGHT - 1),
-		Vector2(FACE_SIZE + 2, FACE_SIZE + 2)
-	)
-	draw_rect(border_rect, Color(1.0, 0.88, 0.28, 1.0), false, 2.0)
-
-
-func set_selected(selected: bool) -> void:
-	_is_selected = selected
-	queue_redraw()
-
-
+#region 히어로 데이터 갱신
 func update_from_hero(hero: Hero) -> void:
 	if hero == null:
 		return
 	_hero_ref = hero
 	hero_id = hero.id
-	_load_face_chip(hero)
-	_rebuild_skill_atb_rows(hero)
-	update_hp(hero.current_hp, hero.get_max_hp())
-	update_skill_atb_bars(hero)
-	update_exp(hero.get_exp_ratio())
-	update_level(hero.level)
+	# 페이스칩
+	if _face_chip and SpriteManager:
+		_face_chip.texture = SpriteManager.get_hero_face_sprite(hero.id)
 	update_name(hero.hero_name)
+	update_level(hero.level)
+	update_hp(hero.current_hp, hero.get_max_hp())
+	update_mp(hero)
+	update_atb(hero)
 	set_dead(hero.is_dead)
-	_refresh_equip_rows()
-	refresh_active_skill_buttons(hero)
-
-
-func _refresh_equip_rows() -> void:
-	if _hero_ref == null:
-		return
-	for slot in SLOT_ORDER:
-		var row: Dictionary = equip_rows.get(slot, {})
-		if row.is_empty():
-			continue
-		var item_label: Label = row.get("item")
-		var panel: PanelContainer = row.get("panel")
-		var equip_id: String = str(_hero_ref.equipment.get(slot, ""))
-		if equip_id.is_empty():
-			item_label.text = "— 비어있음 —"
-			item_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
-		else:
-			var data: Dictionary = DataManager.get_equipment(equip_id)
-			item_label.text = str(data.get("name", equip_id))
-			item_label.add_theme_color_override("font_color", Color(0.94, 0.94, 0.82))
-		panel.add_theme_stylebox_override("panel", _row_style_normal)
-		panel.modulate = Color.WHITE
-
-
-func _load_face_chip(hero: Hero) -> void:
-	var face_path := ""
-	if not hero.portrait.is_empty():
-		face_path = FACE_CHIP_PATH % hero.portrait
-	elif not hero.field_sprite.is_empty():
-		face_path = FACE_CHIP_PATH % hero.field_sprite
-	if not face_path.is_empty() and ResourceLoader.exists(face_path):
-		set_portrait(load(face_path))
-	else:
-		set_portrait(null)
-
-
-func set_portrait(tex: Texture2D) -> void:
-	if face_chip:
-		face_chip.texture = tex
-	if placeholder:
-		placeholder.visible = (tex == null)
 
 
 func update_name(hero_name: String) -> void:
-	if name_label:
-		name_label.text = hero_name
-
-
-func update_hp(current: int, max_hp: int) -> void:
-	if hp_overlay == null:
-		return
-	_cached_max_hp = max_hp
-	var ratio: float = clampf(float(current) / float(max_hp), 0.0, 1.0) if max_hp > 0 else 1.0
-	var damage_ratio: float = 1.0 - ratio
-	var overlay_height: float = FACE_SIZE * damage_ratio
-	var target_y: float = FACE_SIZE - overlay_height
-
-	if _prev_hp < 0:
-		hp_overlay.position.y = target_y
-		hp_overlay.size = Vector2(FACE_SIZE, overlay_height)
-		_prev_hp = current
-		_prev_hp_ratio = ratio
-		return
-
-	if damage_ratio > 0.001:
-		if ratio > 0.6:
-			hp_overlay.color = Color(HP_OVERLAY_COLOR.r, HP_OVERLAY_COLOR.g, HP_OVERLAY_COLOR.b, 0.3)
-		elif ratio > 0.3:
-			hp_overlay.color = Color(HP_OVERLAY_COLOR.r, HP_OVERLAY_COLOR.g * 0.5, HP_OVERLAY_COLOR.b, 0.45)
-		else:
-			hp_overlay.color = HP_OVERLAY_COLOR
-	else:
-		hp_overlay.color = Color(HP_OVERLAY_COLOR.r, HP_OVERLAY_COLOR.g, HP_OVERLAY_COLOR.b, 0.0)
-
-	_kill_tween(_hp_tween)
-	_hp_tween = create_tween()
-	_hp_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_hp_tween.set_parallel(true)
-	_hp_tween.tween_property(hp_overlay, "position:y", target_y, HP_TWEEN_DURATION)
-	_hp_tween.tween_property(hp_overlay, "size:y", overlay_height, HP_TWEEN_DURATION)
-
-	_prev_hp = current
-	_prev_hp_ratio = ratio
-
-
-func update_exp(percent: float) -> void:
-	if exp_bar == null:
-		return
-	exp_bar.size.x = CARD_WIDTH * clampf(percent, 0.0, 1.0)
+	if _name_label:
+		_name_label.text = hero_name
 
 
 func update_level(lv: int) -> void:
-	if level_label:
-		level_label.text = "Lv.%d" % lv
+	if _level_label:
+		_level_label.text = "Lv.%d" % lv
 
 
-func _rebuild_skill_atb_rows(hero: Hero) -> void:
-	if atb_container == null or hero == null:
+func update_hp(current: int, max_hp: int) -> void:
+	_cached_max_hp = max_hp
+	var ratio: float = clampf(float(current) / float(max_hp), 0.0, 1.0) if max_hp > 0 else 1.0
+
+	# 바 너비
+	if _hp_bar_fill and _hp_bar_bg:
+		var bar_w: float = _hp_bar_bg.size.x
+		_hp_bar_fill.size.x = bar_w * ratio
+
+	# 바 색상 (비율별)
+	if _hp_bar_fill:
+		if ratio > 0.6:
+			_hp_bar_fill.color = HP_COLOR_HIGH
+		elif ratio > 0.3:
+			_hp_bar_fill.color = HP_COLOR_MID
+		else:
+			_hp_bar_fill.color = HP_COLOR_LOW
+
+	# 숫자 텍스트
+	if _hp_label_num:
+		_hp_label_num.text = "%d/%d" % [current, max_hp]
+
+	_prev_hp = current
+
+
+func update_mp(hero: Hero) -> void:
+	## MP 바 갱신 — Hero에 MP 시스템이 없으면 빈 바 표시
+	if _mp_bar_fill == null or _mp_bar_bg == null:
 		return
-	var skills: Array[String] = []
-	for skill_any in hero.get_available_skills():
-		skills.append(str(skill_any))
-	if skills.is_empty():
-		skills.append("basic_attack")
+	var current_mp: int = 0
+	var max_mp: int = 0
+	if hero != null:
+		if "current_mp" in hero:
+			current_mp = int(hero.get("current_mp"))
+		if hero.has_method("get_max_mp"):
+			max_mp = int(hero.get_max_mp())
+		elif "max_mp" in hero:
+			max_mp = int(hero.get("max_mp"))
 
-	if skills == skill_bar_skill_ids:
+	var bar_w: float = _mp_bar_bg.size.x
+	if max_mp > 0:
+		var ratio: float = clampf(float(current_mp) / float(max_mp), 0.0, 1.0)
+		_mp_bar_fill.size.x = bar_w * ratio
+	else:
+		_mp_bar_fill.size.x = 0
+
+	if _mp_label_num:
+		if max_mp > 0:
+			_mp_label_num.text = "%d/%d" % [current_mp, max_mp]
+		else:
+			_mp_label_num.text = ""
+
+
+func update_atb(hero: Hero) -> void:
+	if hero == null or _atb_bar_fill == null or _atb_bar_bg == null:
 		return
-
-	skill_bar_skill_ids = skills
-	for child in atb_container.get_children():
-		child.queue_free()
-	skill_bar_bgs.clear()
-	skill_bar_fills.clear()
-
-	var bar_count: int = mini(skill_bar_skill_ids.size(), 2)
-	var total_h: float = bar_count * ATB_BAR_HEIGHT + maxi(0, bar_count - 1) * ATB_BAR_SPACING
-	var start_y: float = maxf(0.0, floorf((ATB_AREA_HEIGHT - total_h) * 0.5))
-
-	for i in range(bar_count):
-		var skill_id: String = skill_bar_skill_ids[i]
-		var y: float = start_y + i * (ATB_BAR_HEIGHT + ATB_BAR_SPACING)
-		var bg := _make_rect(Vector2(0, y), Vector2(CARD_WIDTH, ATB_BAR_HEIGHT), BAR_BG_COLOR)
-		bg.tooltip_text = _get_skill_atb_tooltip(skill_id)
-		atb_container.add_child(bg)
-		skill_bar_bgs.append(bg)
-
-		var fill := _make_rect(Vector2(0, y), Vector2(0, ATB_BAR_HEIGHT), Color(0.35, 0.65, 1.0))
-		fill.tooltip_text = _get_skill_atb_tooltip(skill_id)
-		atb_container.add_child(fill)
-		skill_bar_fills.append(fill)
+	var action_delay: float = maxf(0.001, hero.get_action_delay())
+	var ratio: float = clampf(hero.action_timer / action_delay, 0.0, 1.0)
+	var bar_w: float = _atb_bar_bg.size.x
+	_atb_bar_fill.size.x = bar_w * ratio
+	_atb_bar_fill.color = _calc_atb_color(hero, ratio)
 
 
-func update_skill_atb_bars(hero: Hero) -> void:
-	if hero == null:
-		return
-	_rebuild_skill_atb_rows(hero)
-	for i in range(mini(skill_bar_skill_ids.size(), skill_bar_fills.size())):
-		var skill_id: String = skill_bar_skill_ids[i]
-		var ratio: float = _get_skill_atb_ratio(hero, skill_id)
-		var fill: ColorRect = skill_bar_fills[i]
-		fill.size.x = CARD_WIDTH * clampf(ratio, 0.0, 1.0)
-		fill.color = _get_skill_atb_color(hero, skill_id, ratio)
-
-
-func _get_skill_atb_ratio(hero: Hero, skill_id: String) -> float:
-	if skill_id == "basic_attack":
-		var action_delay: float = maxf(0.001, hero.get_action_delay())
-		return clampf(hero.action_timer / action_delay, 0.0, 1.0)
-
-	# 액티브 스킬: 쿨타임만 표시 (ATB 무관)
-	if CooldownManager == null:
-		return 1.0
-	return clampf(1.0 - CooldownManager.get_cooldown_percent(hero.id, skill_id), 0.0, 1.0)
-
-
-func _get_skill_atb_color(hero: Hero, skill_id: String, ratio: float) -> Color:
-	if skill_id != "basic_attack" and hero.has_method("is_skill_enabled") and not hero.is_skill_enabled(skill_id):
-		return Color(0.35, 0.35, 0.4, 0.9)
+func _calc_atb_color(hero: Hero, ratio: float) -> Color:
+	# 예약 스킬이 있으면 스킬 타입별 색상
+	if not hero.queued_skill.is_empty():
+		if ratio >= 0.999:
+			return ATB_FILL_QUEUED_READY
+		var queued_data: Dictionary = DataManager.get_skill(hero.queued_skill)
+		var queued_type: String = str(queued_data.get("type", "physical"))
+		if queued_type == "magic":
+			return ATB_FILL_QUEUED_MAG
+		if queued_type == "heal":
+			return ATB_FILL_QUEUED_HEAL
+		return ATB_FILL_QUEUED_PHYS
 	if ratio >= 0.999:
-		return Color(0.25, 0.9, 0.35, 0.95)
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	var skill_type: String = str(skill_data.get("type", "physical"))
-	if skill_type == "magic":
-		return Color(0.45, 0.65, 1.0, 0.95)
-	if skill_type == "heal":
-		return Color(0.35, 0.9, 0.75, 0.95)
-	return Color(0.95, 0.65, 0.35, 0.95)
+		return ATB_FILL_READY
+	# 점점 밝아지는 효과
+	return ATB_FILL_LOW.lerp(ATB_FILL_HIGH, ratio)
 
 
-func _get_skill_atb_tooltip(skill_id: String) -> String:
-	var data: Dictionary = DataManager.get_skill(skill_id)
-	var skill_name: String = str(data.get("name", skill_id))
-	return "%s ATB" % skill_name
+func update_exp(_percent: float) -> void:
+	# EXP 바는 새 디자인에서 제거 (레벨업 버튼 사용)
+	pass
+#endregion
+
+
+#region 스킬 (하위 호환 스텁)
+func update_skill_cooldowns() -> void:
+	pass
+
+func refresh_skill_buttons(_hero: Hero) -> void:
+	pass
+#endregion
+
+
+#region 상태
+func set_selected(selected: bool) -> void:
+	_is_selected = selected
+	queue_redraw()
 
 
 func set_dead(is_dead: bool) -> void:
-	if death_overlay:
-		death_overlay.visible = is_dead
-	if atb_container:
-		atb_container.visible = not is_dead
-	if exp_bar_bg:
-		exp_bar_bg.visible = not is_dead
-	if exp_bar:
-		exp_bar.visible = not is_dead
-	if is_dead:
-		_hide_all_skill_buttons()
+	if _death_overlay:
+		_death_overlay.visible = is_dead
+	if _atb_bar_bg:
+		_atb_bar_bg.visible = not is_dead
+	if _atb_label_tag:
+		_atb_label_tag.visible = not is_dead
+	if _atb_bar_fill:
+		_atb_bar_fill.visible = not is_dead
+	if _face_chip:
+		_face_chip.modulate = Color(0.3, 0.3, 0.3) if is_dead else Color.WHITE
+#endregion
 
+
+#region 기존 하위 호환 API (PartyPanel에서 사용)
+func update_skill_atb_bars(hero: Hero) -> void:
+	update_atb(hero)
+
+var hp_reference: int = 100
 
 func is_expanded() -> bool:
 	return false
 
-
 func toggle_equips() -> void:
 	pass
-
 
 func expand_equips() -> void:
 	pass
 
-
-func play_equip_sequence(slot: String, id: String = "") -> void:
+func play_equip_sequence(_slot: String, _id: String = "") -> void:
 	pass
-
 
 func collapse_equips() -> void:
 	pass
 
-
-func highlight_slot(slot: String, _id: String = "") -> void:
+func highlight_slot(_slot: String, _id: String = "") -> void:
 	pass
-
 
 func clear_slot_highlights() -> void:
 	pass
 
-
 func show_item_info(_item_id: String) -> void:
 	pass
-
 
 func show_stat_compare(_item_id: String) -> void:
 	pass
 
-
 func hide_stat_compare() -> void:
 	pass
 
-
-func shake() -> void:
-	if content == null:
-		return
-	_kill_tween(_shake_tween)
-	var ox: float = 0.0
-	_shake_tween = create_tween()
-	_shake_tween.tween_property(content, "position:x", ox - SHAKE_STRENGTH, SHAKE_DURATION * 0.15)
-	_shake_tween.tween_property(content, "position:x", ox + SHAKE_STRENGTH, SHAKE_DURATION * 0.15)
-	_shake_tween.tween_property(content, "position:x", ox - SHAKE_STRENGTH * 0.6, SHAKE_DURATION * 0.15)
-	_shake_tween.tween_property(content, "position:x", ox + SHAKE_STRENGTH * 0.6, SHAKE_DURATION * 0.15)
-	_shake_tween.tween_property(content, "position:x", ox, SHAKE_DURATION * 0.1)
-
-
-func play_damage_anim() -> void:
-	shake()
-
-
-func play_attack_anim() -> void:
-	if content == null:
-		return
-	_kill_tween(_shake_tween)
-	var oy: float = 0.0
-	_shake_tween = create_tween()
-	_shake_tween.tween_property(content, "position:y", oy - 5.0, 0.08).set_ease(Tween.EASE_OUT)
-	_shake_tween.tween_property(content, "position:y", oy, 0.12).set_ease(Tween.EASE_IN)
-
-
-func _kill_tween(tw: Tween) -> void:
-	if tw and tw.is_valid():
-		tw.kill()
-
-
-func _build_active_skill_buttons() -> void:
-	## 액티브 스킬 버튼 3개 슬롯을 카드 상단에 생성 (초기에는 숨김)
-	for i in range(3):
-		var btn := Button.new()
-		btn.name = "ActiveSkillBtn_%d" % i
-		btn.custom_minimum_size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
-		btn.size = Vector2(SKILL_BTN_SIZE, SKILL_BTN_SIZE)
-		btn.mouse_filter = MOUSE_FILTER_STOP
-		btn.mouse_default_cursor_shape = CURSOR_POINTING_HAND
-		btn.focus_mode = FOCUS_NONE
-		btn.visible = false
-		btn.clip_text = true
-		btn.add_theme_font_size_override("font_size", 9)
-		btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-		_apply_skill_btn_style(btn, false)
-		btn.pressed.connect(_on_active_skill_btn_pressed.bind(i))
-		add_child(btn)
-		_active_skill_buttons.append(btn)
-
-
-func _apply_skill_btn_style(btn: Button, on_cooldown: bool) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.15, 0.15, 0.15, 0.7) if on_cooldown else Color(0.12, 0.22, 0.42, 0.92)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(0.3, 0.3, 0.3, 0.6) if on_cooldown else Color(0.5, 0.7, 1.0, 0.8)
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover := style.duplicate() as StyleBoxFlat
-	if not on_cooldown:
-		hover.bg_color = Color(0.18, 0.32, 0.58, 0.95)
-		hover.border_color = Color(0.6, 0.85, 1.0, 0.95)
-	btn.add_theme_stylebox_override("hover", hover)
-
-	var pressed := style.duplicate() as StyleBoxFlat
-	if not on_cooldown:
-		pressed.bg_color = Color(0.08, 0.15, 0.32, 0.95)
-	btn.add_theme_stylebox_override("pressed", pressed)
-
-
-func refresh_active_skill_buttons(hero: Hero) -> void:
-	## 영웅의 해금된 액티브 스킬에 맞게 버튼 갱신
-	if hero == null:
-		_hide_all_skill_buttons()
-		return
-
-	var skills: Array[String] = []
-	for sid in hero.unlocked_skills:
-		if str(sid) == "basic_attack":
-			continue
-		skills.append(str(sid))
-
-	_active_skill_ids = skills
-
-	for i in range(_active_skill_buttons.size()):
-		var btn: Button = _active_skill_buttons[i]
-		if i < skills.size():
-			var skill_id: String = skills[i]
-			var skill_data: Dictionary = DataManager.get_skill(skill_id)
-			var skill_name: String = str(skill_data.get("name", skill_id))
-			btn.text = skill_name.substr(0, 1) if not skill_name.is_empty() else "?"
-			btn.tooltip_text = skill_name
-			btn.visible = true
-			# 위치: 카드 상단 왼쪽 정렬
-			var x: float = float(i) * float(SKILL_BTN_SIZE + SKILL_BTN_GAP)
-			var y: float = -float(SKILL_BTN_SIZE) - float(SKILL_BTN_LIFT)
-			btn.position = Vector2(x, y)
-		else:
-			btn.visible = false
-
-	update_active_skill_cooldowns()
-
-
-func update_active_skill_cooldowns() -> void:
-	## 매 프레임 호출: 쿨다운 + 전투 유무에 따른 활성 상태 반영 (ATB 무관)
-	var has_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
-	for i in range(mini(_active_skill_ids.size(), _active_skill_buttons.size())):
-		var skill_id: String = _active_skill_ids[i]
-		var btn: Button = _active_skill_buttons[i]
-		if not btn.visible:
-			continue
-		var on_cooldown: bool = not CooldownManager.is_skill_ready(hero_id, skill_id)
-		var is_enemy_skill: bool = _is_enemy_target_skill(skill_id)
-		var disabled: bool = on_cooldown or (is_enemy_skill and not has_battle)
-		btn.disabled = disabled
-		_apply_skill_btn_style(btn, disabled)
-
-
-static func _is_enemy_target_skill(skill_id: String) -> bool:
-	## 적 대상 스킬인지 (공격 스킬 → 전투 필요)
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	var target_type: String = str(skill_data.get("target", "single_enemy"))
-	return target_type in ["single_enemy", "all_enemies"]
-
-
-func _hide_all_skill_buttons() -> void:
-	_active_skill_ids.clear()
-	for btn in _active_skill_buttons:
-		btn.visible = false
-
-
-func _on_active_skill_btn_pressed(index: int) -> void:
-	if index < 0 or index >= _active_skill_ids.size():
-		return
-	var skill_id: String = _active_skill_ids[index]
-	if hero_id.is_empty():
-		return
-	active_skill_pressed.emit(hero_id, skill_id)
-
-
-func _on_gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			card_selected.emit(hero_index)
-
+func set_portrait(tex: Texture2D) -> void:
+	if _face_chip:
+		_face_chip.texture = tex
 
 static func get_target_slots(item_slot: String) -> Array:
 	var normalized: String = Hero.normalize_equipment_slot(item_slot)
@@ -641,12 +383,59 @@ static func get_target_slots(item_slot: String) -> Array:
 		return ["acc1", "acc2"]
 	return [normalized]
 
-
 func get_slot_global_center(slot: String) -> Vector2:
-	var row: Dictionary = equip_rows.get(slot, {})
-	if row.is_empty():
-		return global_position + size * 0.5
-	var panel: PanelContainer = row.get("panel")
-	if panel == null:
-		return global_position + size * 0.5
-	return panel.global_position + panel.size * 0.5
+	return global_position + size * 0.5
+#endregion
+
+
+#region 애니메이션
+func shake() -> void:
+	if _content == null:
+		return
+	_kill_tween(_shake_tween)
+	_shake_tween = create_tween()
+	_shake_tween.tween_property(_content, "position:x", -SHAKE_STRENGTH, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(_content, "position:x", SHAKE_STRENGTH, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(_content, "position:x", -SHAKE_STRENGTH * 0.6, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(_content, "position:x", SHAKE_STRENGTH * 0.6, SHAKE_DURATION * 0.15)
+	_shake_tween.tween_property(_content, "position:x", 0.0, SHAKE_DURATION * 0.1)
+
+
+func play_damage_anim() -> void:
+	shake()
+
+
+func play_attack_anim() -> void:
+	if _content == null:
+		return
+	_kill_tween(_shake_tween)
+	_shake_tween = create_tween()
+	_shake_tween.tween_property(_content, "position:y", -5.0, 0.08).set_ease(Tween.EASE_OUT)
+	_shake_tween.tween_property(_content, "position:y", 0.0, 0.12).set_ease(Tween.EASE_IN)
+
+
+func _kill_tween(tw: Tween) -> void:
+	if tw and tw.is_valid():
+		tw.kill()
+#endregion
+
+
+#region 입력
+func _on_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			card_selected.emit(hero_index)
+
+
+func _on_mouse_entered() -> void:
+	_is_hovered = true
+	queue_redraw()
+	card_hovered.emit(hero_index, true)
+
+
+func _on_mouse_exited() -> void:
+	_is_hovered = false
+	queue_redraw()
+	card_hovered.emit(hero_index, false)
+#endregion

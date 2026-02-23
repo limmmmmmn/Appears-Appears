@@ -87,6 +87,11 @@ var field_sprite: String = ""
 var action_timer: float = 0.0
 var skill_action_timer: float = 0.0
 
+# 예약 스킬: 자동 선택 또는 수동 예약 시 다음 행동에 사용
+var queued_skill: String = ""
+var queued_skill_enemy: Object = null   # BattleEnemy or null
+var queued_skill_ally_id: String = ""
+
 
 static func create_from_id(hero_id: String) -> Hero:
 	var hero := Hero.new()
@@ -526,13 +531,23 @@ func reset_skill_action_timer() -> void:
 
 
 func get_action_delay() -> float:
-	# 기본공격 기준 액션 딜레이: 2.0 - DEX*0.05, 최소 0.5
-	return maxf(0.5, 2.0 - get_dex() * 0.05)
+	# 클래스 기본 action_speed + DEX 보정, 최소 0.5
+	var base_speed: float = _get_class_action_speed()
+	return maxf(0.5, base_speed - get_dex() * 0.02)
 
 
 func get_skill_action_delay() -> float:
-	# 액티브 스킬 ATB는 기본공격보다 느리게 충전
-	return maxf(1.0, 3.8 - get_dex() * 0.03)
+	# 스킬 ATB는 기본공격보다 느리게 충전
+	var base_speed: float = _get_class_action_speed()
+	return maxf(1.0, base_speed * 1.6 - get_dex() * 0.015)
+
+
+func _get_class_action_speed() -> float:
+	## 클래스 데이터에서 action_speed 가져오기 (없으면 기본 2.0)
+	if class_id.is_empty():
+		return 2.0
+	var class_data: Dictionary = DataManager.get_class_data(class_id)
+	return float(class_data.get("action_speed", 2.0))
 
 
 func apply_seed_bonus(stat: String, value: int) -> void:

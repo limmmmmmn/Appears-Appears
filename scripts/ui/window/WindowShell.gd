@@ -221,9 +221,10 @@ static func calculate_spawn_position(
 		margin: float = 20.0,
 		top_hud: float = 32.0,
 		bottom_hud: float = 60.0,
-		center_safe: float = 100.0
+		center_safe: float = 100.0,
+		left_hud: float = 0.0
 	) -> Vector2:
-	var safe_left: float = maxf(0.0, margin)
+	var safe_left: float = maxf(maxf(0.0, margin), left_hud)
 	var safe_top: float = maxf(0.0, top_hud)
 	var safe_right: float = maxf(safe_left, viewport_size.x - window_size.x - margin)
 	var safe_bottom: float = maxf(safe_top, viewport_size.y - window_size.y - bottom_hud)

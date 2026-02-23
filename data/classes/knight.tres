@@ -29,3 +29,4 @@ equip_restrictions = {
 }
 tags = ["melee", "physical", "tank", "heavy"]
 skills = ["basic_attack", "shield_bash"]
+action_speed = 3.0

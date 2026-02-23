@@ -20,7 +20,7 @@ func _process(delta: float) -> void:
 
 func _update_hero_timers(delta: float) -> void:
 	## 살아있는 영웅의 기본공격 타이머를 액션 딜레이 기준으로 충전
-	## (액티브 스킬은 ATB 무관, 쿨타임만 사용)
+	## (스킬은 ATB 무관, 쿨타임만 사용)
 	if not PartyManager:
 		return
 	var has_active_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0

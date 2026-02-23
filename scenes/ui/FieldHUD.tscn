@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c2cjb4efakggb"]
 
-[ext_resource type="Script" uid="uid://b22n74rgrssul" path="res://scripts/ui/field/FieldHUD.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://ckil0m21u1krf" path="res://scripts/ui/field/FieldHUD.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://bb513eup5x5ha" path="res://scenes/ui/PartyPanel.tscn" id="2_party"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_topbar"]
 content_margin_left = 10.0
@@ -11,12 +12,11 @@ bg_color = Color(0.06, 0.06, 0.09, 0.95)
 border_width_bottom = 1
 border_color = Color(0.3, 0.35, 0.5, 0.8)
 
-
-[node name="FieldHUD" type="CanvasLayer"]
+[node name="FieldHUD" type="CanvasLayer" unique_id=425698396]
 layer = 20
 script = ExtResource("1_script")
 
-[node name="Control" type="Control" parent="."]
+[node name="Control" type="Control" parent="." unique_id=1296338832]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -25,7 +25,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="TopBar" type="PanelContainer" parent="Control"]
+[node name="TopBar" type="PanelContainer" parent="Control" unique_id=1611956280]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -33,23 +33,23 @@ offset_bottom = 26.0
 grow_horizontal = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_topbar")
 
-[node name="HBox" type="HBoxContainer" parent="Control/TopBar"]
+[node name="HBox" type="HBoxContainer" parent="Control/TopBar" unique_id=1947823029]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="TrinketContainer" type="HBoxContainer" parent="Control/TopBar/HBox"]
+[node name="TrinketContainer" type="HBoxContainer" parent="Control/TopBar/HBox" unique_id=2088815461]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="StageLabel" type="Label" parent="Control/TopBar/HBox"]
+[node name="StageLabel" type="Label" parent="Control/TopBar/HBox" unique_id=1440643813]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 11
 text = "Stage 1-1"
 
-[node name="GoldLabel" type="Label" parent="Control/TopBar/HBox"]
+[node name="GoldLabel" type="Label" parent="Control/TopBar/HBox" unique_id=1380654011]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
@@ -57,7 +57,7 @@ theme_override_font_sizes/font_size = 11
 text = "0 G"
 horizontal_alignment = 2
 
-[node name="SpeedButton" type="Button" parent="Control/TopBar/HBox"]
+[node name="SpeedButton" type="Button" parent="Control/TopBar/HBox" unique_id=1704735688]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(36, 0)
 layout_mode = 2
@@ -65,8 +65,12 @@ tooltip_text = "전투 속도"
 theme_override_font_sizes/font_size = 10
 text = "x1"
 
-[node name="MenuButton" type="Button" parent="Control/TopBar/HBox"]
+[node name="MenuButton" type="Button" parent="Control/TopBar/HBox" unique_id=45403510]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "☰"
+
+[node name="PartyPanel" parent="Control" unique_id=1627343081 instance=ExtResource("2_party")]
+unique_name_in_owner = true
+layout_mode = 1

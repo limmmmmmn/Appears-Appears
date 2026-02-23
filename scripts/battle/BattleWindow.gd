@@ -1449,14 +1449,23 @@ func _execute_hero_action(hero: Hero) -> void:
 	if hero == null or hero.is_dead:
 		return
 
-	# 클래스별 스킬 선택 (간단한 AI)
+	# 스킬 선택: 예약 스킬 우선, 없으면 기본공격
 	var skill_id: String = _select_hero_skill(hero)
 	if skill_id.is_empty():
 		return
+
+	# 예약 스킬 타겟 정보 저장 후 클리어
+	var queued_enemy: Object = hero.queued_skill_enemy
+	var queued_ally_id: String = hero.queued_skill_ally_id
+	var is_queued: bool = not hero.queued_skill.is_empty()
+	hero.queued_skill = ""
+	hero.queued_skill_enemy = null
+	hero.queued_skill_ally_id = ""
+
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 
 	if skill_data.is_empty():
-		if _can_use_skill(hero, "basic_attack"):
+		if hero.is_action_ready():
 			skill_id = "basic_attack"
 			skill_data = DataManager.get_skill("basic_attack")
 		else:
@@ -1468,19 +1477,41 @@ func _execute_hero_action(hero: Hero) -> void:
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
 
-	# 타겟 타입에 따른 처리
-	var target_type: String = skill_data.get("target", "single_enemy")
-	match target_type:
-		"single_ally", "all_allies":
-			_execute_ally_skill(hero, skill_id, skill_data, target_type)
-		"all_enemies":
-			_execute_aoe_attack(hero, skill_id, skill_data)
-		_:  # single_enemy
-			_execute_single_attack(hero, skill_id, skill_data)
-
-	# 액티브 스킬만 쿨타임 시작
-	if skill_id != "basic_attack":
+	# 예약 스킬이면 저장된 타겟으로 실행
+	if is_queued and skill_id != "basic_attack":
+		var skill_type: String = skill_data.get("type", "physical")
+		var target_type: String = skill_data.get("target", "single_enemy")
+		if queued_enemy != null and is_instance_valid(queued_enemy):
+			var enemy_target: BattleEnemy = queued_enemy as BattleEnemy
+			if skill_type == "heal":
+				_execute_heal_on_enemy(hero, skill_id, skill_data, enemy_target)
+			else:
+				_execute_single_attack(hero, skill_id, skill_data, enemy_target)
+		elif not queued_ally_id.is_empty():
+			var ally: Hero = _find_hero_by_id(queued_ally_id)
+			if skill_type == "heal":
+				_execute_ally_skill(hero, skill_id, skill_data, "single_ally", ally)
+			else:
+				_execute_attack_on_ally(hero, skill_id, skill_data, ally)
+		else:
+			match target_type:
+				"single_ally", "all_allies":
+					_execute_ally_skill(hero, skill_id, skill_data, target_type)
+				"all_enemies":
+					_execute_aoe_attack(hero, skill_id, skill_data)
+				_:
+					_execute_single_attack(hero, skill_id, skill_data)
 		CooldownManager.start_cooldown(hero.id, skill_id)
+	else:
+		# 기본공격
+		var target_type: String = skill_data.get("target", "single_enemy")
+		match target_type:
+			"single_ally", "all_allies":
+				_execute_ally_skill(hero, skill_id, skill_data, target_type)
+			"all_enemies":
+				_execute_aoe_attack(hero, skill_id, skill_data)
+			_:
+				_execute_single_attack(hero, skill_id, skill_data)
 
 
 func _execute_enemy_action(enemy: BattleEnemy) -> void:
@@ -1495,32 +1526,47 @@ func _execute_enemy_action(enemy: BattleEnemy) -> void:
 
 
 func _select_hero_skill(hero: Hero) -> String:
-	## 영웅의 스킬 선택 — 액티브 스킬은 자동 사용하지 않음
-	if _can_use_skill(hero, "basic_attack"):
+	## 영웅의 스킬 선택 — 예약 스킬 우선, 없으면 쿨다운 끝난 스킬 자동 사용
+	if not hero.queued_skill.is_empty():
+		return hero.queued_skill
+	# 해금 스킬 중 사용 가능한 것 자동 선택 (basic_attack 제외)
+	var auto_skill: String = _pick_auto_skill(hero)
+	if not auto_skill.is_empty():
+		# 자동 선택된 스킬을 예약으로 설정 (타겟은 자동 결정)
+		hero.queued_skill = auto_skill
+		return auto_skill
+	# 사용 가능한 스킬이 없으면 기본공격
+	if hero.is_action_ready():
 		return "basic_attack"
 	return ""
 
 
+func _pick_auto_skill(hero: Hero) -> String:
+	## 해금된 스킬 중 쿨다운이 끝나고 사용 가능한 스킬 선택
+	for sid in hero.unlocked_skills:
+		var skill_id: String = str(sid)
+		if skill_id == "basic_attack":
+			continue
+		if not CooldownManager.is_skill_ready(hero.id, skill_id):
+			continue
+		if not hero.is_skill_enabled(skill_id):
+			continue
+		var skill_data: Dictionary = DataManager.get_skill(skill_id)
+		if skill_data.is_empty():
+			continue
+		return skill_id
+	return ""
+
+
 func _has_ready_hero_action(hero: Hero) -> bool:
-	## 기본 공격 가능 여부만 확인 (액티브 스킬은 수동)
+	## 기본 공격 또는 예약 스킬 가능 여부 확인
 	if hero == null or hero.is_dead:
 		return false
 	return hero.is_action_ready()
 
 
-func _can_use_skill(hero: Hero, skill_id: String) -> bool:
-	## 자동 전투용 스킬 사용 가능 여부 (액티브 스킬 제외)
-	if DataManager.is_active_skill(skill_id):
-		return false
-	if not hero.is_skill_enabled(skill_id):
-		return false
-	if skill_id == "basic_attack":
-		return hero.is_action_ready()
-	return false
-
-
-func execute_active_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy = null, ally_target_id: String = "") -> void:
-	## 액티브 스킬 수동 발동: 자유 타겟팅 (적/아군 크로스 가능)
+func execute_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy = null, ally_target_id: String = "") -> void:
+	## 스킬 예약: 다음 ATB 충전 완료 시 발동
 	if current_state != BattleState.RUNNING:
 		return
 	var hero: Hero = _find_hero_by_id(hero_id)
@@ -1533,36 +1579,10 @@ func execute_active_skill(hero_id: String, skill_id: String, enemy_target: Battl
 	if skill_data.is_empty():
 		return
 
-	var skill_type: String = skill_data.get("type", "physical")
-	var target_type: String = skill_data.get("target", "single_enemy")
-
-	BattleManager.hero_attacked.emit(hero.id)
-
-	# 자유 타겟팅: 클릭한 대상에 따라 실행
-	if enemy_target != null:
-		# 적을 클릭 → 공격 스킬이면 공격, 힐 스킬이면 적 회복
-		if skill_type == "heal":
-			_execute_heal_on_enemy(hero, skill_id, skill_data, enemy_target)
-		else:
-			_execute_single_attack(hero, skill_id, skill_data, enemy_target)
-	elif not ally_target_id.is_empty():
-		# 아군을 클릭 → 힐 스킬이면 회복, 공격 스킬이면 아군에 데미지
-		var ally: Hero = _find_hero_by_id(ally_target_id)
-		if skill_type == "heal":
-			_execute_ally_skill(hero, skill_id, skill_data, "single_ally", ally)
-		else:
-			_execute_attack_on_ally(hero, skill_id, skill_data, ally)
-	else:
-		# 타겟 없이 호출 → 기존 로직 폴백
-		match target_type:
-			"single_ally", "all_allies":
-				_execute_ally_skill(hero, skill_id, skill_data, target_type)
-			"all_enemies":
-				_execute_aoe_attack(hero, skill_id, skill_data)
-			_:
-				_execute_single_attack(hero, skill_id, skill_data)
-
-	CooldownManager.start_cooldown(hero.id, skill_id)
+	# 스킬 예약 (ATB는 리셋하지 않음 — 현재 게이지 유지)
+	hero.queued_skill = skill_id
+	hero.queued_skill_enemy = enemy_target
+	hero.queued_skill_ally_id = ally_target_id
 
 
 func _execute_heal_on_enemy(hero: Hero, skill_id: String, skill_data: Dictionary, target: BattleEnemy) -> void:
@@ -1701,7 +1721,7 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
 
-	# 액티브 스킬만 쿨타임 시작
+	# 스킬 쿨타임 시작
 	if skill_id != "basic_attack":
 		CooldownManager.start_cooldown(hero.id, skill_id)
 
@@ -1909,7 +1929,7 @@ func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary,
 	var damage: int = 1
 	var crit_attack_base: float = float(hero.get_atk())
 	if resolved_skill_id == "power_strike":
-		# 강타: 평타 강화가 아니라 액티브 스킬, 최종 데미지 = 평타 데미지의 2배
+		# 강타: 평타 강화가 아니라 스킬, 최종 데미지 = 평타 데미지의 2배
 		var basic_damage: int = _calc_physical_damage(float(hero.get_atk()), target.get_p_def())
 		damage = maxi(1, basic_damage * 2)
 		crit_attack_base = float(hero.get_atk()) * 2.0

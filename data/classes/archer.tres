@@ -29,3 +29,4 @@ equip_restrictions = {
 }
 tags = Array[String](["ranged", "physical", "speed"])
 skills = Array[String](["basic_attack", "aimed_shot"])
+action_speed = 1.8

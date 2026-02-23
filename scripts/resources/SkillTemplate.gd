@@ -14,7 +14,6 @@ class_name SkillTemplate
 @export var base_damage: int = 0
 @export var scaling: float = 0.0
 @export var usable_on_field: bool = false
-@export var is_active: bool = false
 @export var extra: Dictionary = {}
 
 
@@ -33,5 +32,4 @@ func to_dict() -> Dictionary:
 	out["base_damage"] = base_damage
 	out["scaling"] = scaling
 	out["usable_on_field"] = usable_on_field
-	out["is_active"] = is_active
 	return out

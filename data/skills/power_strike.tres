@@ -17,4 +17,3 @@ damage_scaling = {
 }
 effects = []
 default_on = true
-is_active = true

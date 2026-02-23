@@ -3,7 +3,7 @@ class_name FieldHUD
 ## 필드 HUD 메인 컨트롤러
 ## 구성:
 ##   TopBar     - 스테이지, 골드, 배속, 메뉴 (상단)
-##   PartyCards - 파티 카드 (하단 중앙)
+##   PartyCards - 파티 카드 (좌측 세로)
 
 signal menu_pressed
 signal hero_recruited(hero_id: String)
@@ -45,10 +45,16 @@ const STYLE := {
 @onready var speed_button: Button = %SpeedButton
 @onready var menu_button: Button = %MenuButton
 # PartyPanel
-var party_panel: PartyPanel = null
+@onready var party_panel: PartyPanel = %PartyPanel
 
 # 전투 정지 버튼
 var battle_pause_button: Button = null
+
+# 레벨업 스킬 선택
+const SKILL_SELECT_POPUP_SCENE = preload("res://scenes/ui/SkillSelectPopup.tscn")
+const SKILL_SELECT_CHOICE_COUNT: int = 3
+var _skill_select_queue: Array = []
+var _skill_select_popup: SkillSelectPopup = null
 
 # 일시정지 메뉴
 var pause_menu: CanvasLayer = null
@@ -161,6 +167,7 @@ func _ready() -> void:
 	_init_right_panel_toggle_buttons()
 	_init_recruit_button()
 	_init_battle_pause_button()
+	_init_level_up_button()
 	_refresh_trinket_badges()
 	_connect_signals()
 	_apply_pause_ui_state(false)
@@ -207,43 +214,27 @@ func _init_topbar() -> void:
 
 
 func _init_party_cards() -> void:
-	var scene := preload("res://scenes/ui/PartyPanel.tscn")
-	party_panel = scene.instantiate() as PartyPanel
-	var ctrl := get_node_or_null("Control")
-	if ctrl:
-		ctrl.add_child(party_panel)
+	# PartyPanel은 FieldHUD.tscn 씬 노드 (%PartyPanel)
+	if party_panel == null:
+		return
+	# BattleManager에 좌측 패널 폭 알림 (전투창 배치 safe zone)
+	if BattleManager:
+		BattleManager.hud_left_width = party_panel.panel_width + 10.0
+	# 호버 인디케이터 연결
+	if party_panel.has_signal("hero_hovered"):
+		party_panel.hero_hovered.connect(_on_hero_card_hovered)
 
 
 func _init_recruit_button() -> void:
-	## 좌측 하단 테스트용 영입 버튼
-	var ctrl := get_node_or_null("Control")
-	if not ctrl:
+	## 상단바 영입 버튼 (TopBar HBox에 삽입)
+	var hbox := get_node_or_null("Control/TopBar/HBox")
+	if not hbox:
 		return
 
-	var btn := Button.new()
-	btn.text = "👤+ 영입"
-	btn.custom_minimum_size = Vector2(70, 36)
-	btn.add_theme_font_size_override("font_size", STYLE.font_normal)
-
-	var style := _make_flat_style(Color(0.1, 0.15, 0.25, 0.9), Color(0.3, 0.4, 0.6, 0.8), STYLE.corner_radius, 1)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	btn.add_theme_stylebox_override("normal", style)
-
-	var hover := style.duplicate()
-	hover.bg_color = Color(0.15, 0.22, 0.35, 0.95)
-	hover.border_color = Color(0.5, 0.6, 0.9)
-	btn.add_theme_stylebox_override("hover", hover)
-
-	btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	btn.offset_left = 8
-	btn.offset_top = -46
-	btn.offset_right = 88
-	btn.offset_bottom = -8
+	var btn := _create_topbar_button("👤+", "영입", Color(0.1, 0.15, 0.25, 0.9), Color(0.3, 0.4, 0.6, 0.8))
 	btn.pressed.connect(_on_recruit_pressed)
-	ctrl.add_child(btn)
+	hbox.add_child(btn)
+	hbox.move_child(btn, 1)  # TrinketContainer 다음
 
 
 func _on_recruit_pressed() -> void:
@@ -276,42 +267,25 @@ func _on_recruit_pressed() -> void:
 
 
 func _init_battle_pause_button() -> void:
-	## 영입 버튼 옆에 전투 정지 토글 버튼 생성
-	var ctrl := get_node_or_null("Control")
-	if not ctrl:
+	## 상단바 정지 토글 버튼 (TopBar HBox에 삽입)
+	var hbox := get_node_or_null("Control/TopBar/HBox")
+	if not hbox:
 		return
 
-	battle_pause_button = Button.new()
-	battle_pause_button.text = "⏸ 정지"
+	battle_pause_button = _create_topbar_button("⏸", "정지", Color(0.15, 0.12, 0.2, 0.9), Color(0.4, 0.3, 0.6, 0.8))
 	battle_pause_button.toggle_mode = true
-	battle_pause_button.custom_minimum_size = Vector2(70, 36)
-	battle_pause_button.add_theme_font_size_override("font_size", STYLE.font_normal)
 	battle_pause_button.tooltip_text = "전투 정지/재개 (Space)"
 
-	var style := _make_flat_style(Color(0.15, 0.12, 0.2, 0.9), Color(0.4, 0.3, 0.6, 0.8), STYLE.corner_radius, 1)
-	style.content_margin_left = 10
-	style.content_margin_right = 10
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	battle_pause_button.add_theme_stylebox_override("normal", style)
-
-	var hover := style.duplicate()
-	hover.bg_color = Color(0.22, 0.18, 0.3, 0.95)
-	hover.border_color = Color(0.6, 0.5, 0.9)
-	battle_pause_button.add_theme_stylebox_override("hover", hover)
-
-	var pressed_style := style.duplicate()
-	pressed_style.bg_color = Color(0.3, 0.15, 0.1, 0.95)
-	pressed_style.border_color = Color(0.9, 0.4, 0.3, 0.9)
+	var pressed_style := _make_flat_style(Color(0.3, 0.15, 0.1, 0.95), Color(0.9, 0.4, 0.3, 0.9), 4, 1)
+	pressed_style.content_margin_left = 6
+	pressed_style.content_margin_right = 6
+	pressed_style.content_margin_top = 2
+	pressed_style.content_margin_bottom = 2
 	battle_pause_button.add_theme_stylebox_override("pressed", pressed_style)
 
-	battle_pause_button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	battle_pause_button.offset_left = 96
-	battle_pause_button.offset_top = -46
-	battle_pause_button.offset_right = 176
-	battle_pause_button.offset_bottom = -8
 	battle_pause_button.toggled.connect(_on_battle_pause_toggled)
-	ctrl.add_child(battle_pause_button)
+	hbox.add_child(battle_pause_button)
+	hbox.move_child(battle_pause_button, 2)  # 영입 버튼 다음
 
 
 func _toggle_battle_pause() -> void:
@@ -341,9 +315,146 @@ func _on_battle_pause_toggled(toggled_on: bool) -> void:
 func _update_battle_pause_button_text(paused: bool) -> void:
 	if battle_pause_button:
 		if paused:
-			battle_pause_button.text = "▶ 재개"
+			battle_pause_button.text = "▶"
 		else:
-			battle_pause_button.text = "⏸ 정지"
+			battle_pause_button.text = "⏸"
+
+
+func _init_level_up_button() -> void:
+	## 상단바 레벨업 버튼 (TopBar HBox에 삽입)
+	var hbox := get_node_or_null("Control/TopBar/HBox")
+	if not hbox:
+		return
+
+	var btn := _create_topbar_button("⬆", "Lv", Color(0.12, 0.2, 0.1, 0.9), Color(0.3, 0.6, 0.3, 0.8))
+	btn.pressed.connect(_on_level_up_pressed)
+	hbox.add_child(btn)
+	hbox.move_child(btn, 3)  # 정지 버튼 다음
+
+
+func _on_level_up_pressed() -> void:
+	## 파티원 전원 레벨 +1 → 스킬 선택 팝업
+	if not PartyManager:
+		return
+	var party: Array = PartyManager.get_party()
+	if party.is_empty():
+		return
+
+	var names: Array[String] = []
+	for hero_any in party:
+		var hero: Hero = hero_any as Hero
+		if hero == null or hero.level >= Hero.MAX_LEVEL:
+			continue
+		var need: int = hero.get_exp_to_next_level() - hero.current_exp
+		hero.gain_exp(need)
+		names.append("%s Lv.%d" % [hero.hero_name, hero.level])
+		# 스킬 선택 큐에 추가
+		_skill_select_queue.append({
+			"hero_id": hero.id,
+			"hero_name": hero.hero_name,
+		})
+
+	if party_panel:
+		party_panel.update_display()
+
+	if not names.is_empty():
+		_show_notice("레벨업! %s" % " / ".join(names), 2.0, STYLE.text_green)
+
+	# 스킬 선택 팝업 시작
+	if not _skill_select_queue.is_empty():
+		_show_next_skill_select()
+
+
+func _show_next_skill_select() -> void:
+	## 큐에서 다음 영웅의 스킬 선택 팝업 표시
+	if _skill_select_queue.is_empty():
+		# 전투 정지 상태가 아니면 게임 재개
+		if not BattleManager or not BattleManager.is_battle_paused:
+			get_tree().paused = false
+		return
+
+	var entry: Dictionary = _skill_select_queue.pop_front()
+	var hero_id: String = entry.get("hero_id", "")
+	var hero_name: String = entry.get("hero_name", "")
+
+	var hero: Hero = _find_hero_by_id(hero_id)
+	var class_skills: Array = DataManager.get_class_skills(hero.class_id) if hero else []
+
+	var candidates: Array = []
+	for sid in class_skills:
+		var skill_id: String = str(sid)
+		if skill_id != "basic_attack":
+			candidates.append(skill_id)
+
+	# 후보가 없으면 다음으로 스킵
+	if candidates.is_empty():
+		_show_next_skill_select()
+		return
+
+	# 3지선다 구성
+	var choices: Array = []
+	if candidates.size() >= SKILL_SELECT_CHOICE_COUNT:
+		candidates.shuffle()
+		choices = candidates.slice(0, SKILL_SELECT_CHOICE_COUNT)
+	else:
+		for i in range(SKILL_SELECT_CHOICE_COUNT):
+			choices.append(candidates[i % candidates.size()])
+
+	# 기존 팝업 정리
+	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
+		_skill_select_popup.queue_free()
+
+	# CanvasLayer로 감싸 화면 고정
+	var layer := CanvasLayer.new()
+	layer.name = "SkillSelectLayer"
+	layer.layer = 300
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(layer)
+
+	_skill_select_popup = SKILL_SELECT_POPUP_SCENE.instantiate() as SkillSelectPopup
+	_skill_select_popup.process_mode = Node.PROCESS_MODE_ALWAYS
+	_skill_select_popup.skill_selected.connect(_on_skill_selected_from_levelup)
+
+	layer.add_child(_skill_select_popup)
+	_skill_select_popup.open(hero_id, hero_name, choices, hero)
+	_skill_select_popup.call_deferred("_center_on_screen")
+
+	get_tree().paused = true
+
+
+func _on_skill_selected_from_levelup(hero_id: String, skill_id: String) -> void:
+	## 스킬 선택 완료 콜백
+	var hero: Hero = _find_hero_by_id(hero_id)
+	var already_owned: bool = hero != null and hero.unlocked_skills.has(skill_id)
+
+	if hero and not already_owned:
+		hero.unlocked_skills.append(skill_id)
+	elif hero and already_owned:
+		hero.level_up_skill(skill_id)
+
+	# 알림
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	var skill_name: String = skill_data.get("name", skill_id)
+	var hero_name: String = hero.hero_name if hero else hero_id
+	if already_owned:
+		var new_lv: int = hero.get_skill_level(skill_id) if hero else 2
+		_show_notice("%s: %s Lv.%d!" % [hero_name, skill_name, new_lv], 2.0, Color(0.6, 0.8, 1.0))
+	else:
+		_show_notice("%s: %s 습득!" % [hero_name, skill_name], 2.0, STYLE.text_green)
+
+	# 팝업 + CanvasLayer 제거
+	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):
+		var layer_node: Node = _skill_select_popup.get_parent()
+		_skill_select_popup.queue_free()
+		_skill_select_popup = null
+		if layer_node and is_instance_valid(layer_node) and layer_node.name == "SkillSelectLayer":
+			layer_node.queue_free()
+
+	if party_panel:
+		party_panel.update_display()
+
+	# 다음 영웅 처리
+	_show_next_skill_select()
 
 
 func _init_equipment_screen() -> void:
@@ -862,6 +973,29 @@ static func _make_flat_style(
 		s.border_width_bottom = border_w
 		s.border_color = border
 	return s
+
+
+func _create_topbar_button(icon: String, label: String, bg: Color, border: Color) -> Button:
+	## 상단바용 소형 버튼 생성
+	var btn := Button.new()
+	btn.text = "%s %s" % [icon, label]
+	btn.custom_minimum_size = Vector2(0, 0)
+	btn.add_theme_font_size_override("font_size", STYLE.font_small)
+	btn.focus_mode = Control.FOCUS_NONE
+
+	var style := _make_flat_style(bg, border, 4, 1)
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	btn.add_theme_stylebox_override("normal", style)
+
+	var hover := style.duplicate()
+	hover.bg_color = bg.lightened(0.15)
+	hover.border_color = border.lightened(0.3)
+	btn.add_theme_stylebox_override("hover", hover)
+
+	return btn
 #endregion
 
 
@@ -883,6 +1017,43 @@ func _on_battle_pause_changed(paused: bool) -> void:
 		battle_pause_button.set_pressed_no_signal(paused)
 	_update_battle_pause_button_text(paused)
 	_apply_pause_ui_state(paused)
+
+
+#region 히어로 카드 호버 → 필드 인디케이터
+var _hover_indicator: Node2D = null  # 필드 위 반투명 원형 인디케이터
+
+func _on_hero_card_hovered(hero_index: int, is_hovered: bool) -> void:
+	## 카드 호버 시 필드의 해당 영웅 발밑에 인디케이터 표시
+	if not is_hovered:
+		_remove_hover_indicator()
+		return
+	# 해당 인덱스의 파티 멤버 찾기
+	var party_members: Array = get_tree().get_nodes_in_group("party")
+	for member in party_members:
+		if member is PartyMember and member.member_index == hero_index:
+			_show_hover_indicator(member)
+			return
+	_remove_hover_indicator()
+
+
+func _show_hover_indicator(member: PartyMember) -> void:
+	_remove_hover_indicator()
+	_hover_indicator = Node2D.new()
+	_hover_indicator.z_index = 90
+	member.add_child(_hover_indicator)
+	# 발밑에 위치 (스프라이트 아래)
+	_hover_indicator.position = Vector2(0, 8)
+	_hover_indicator.set_meta("_draw_circle", true)
+	# 커스텀 드로우를 위한 서브클래스 대신, Sprite2D 없이 직접 CanvasItem
+	var circle := _HoverCircle.new()
+	_hover_indicator.add_child(circle)
+
+
+func _remove_hover_indicator() -> void:
+	if _hover_indicator and is_instance_valid(_hover_indicator):
+		_hover_indicator.queue_free()
+	_hover_indicator = null
+#endregion
 
 
 func _on_item_equipped(hero_name: String, item_id: String, _slot: String, replaced_id: String) -> void:
@@ -1686,4 +1857,28 @@ func add_system_log(_msg: String) -> void:
 
 func clear_logs() -> void:
 	pass
+#endregion
+
+
+#region 호버 인디케이터 서브클래스
+class _HoverCircle extends Node2D:
+	## 반투명 원형 인디케이터 (영웅 발밑)
+	var _alpha_tween: Tween
+	var _alpha: float = 0.0
+
+	func _ready() -> void:
+		_alpha_tween = create_tween().set_loops()
+		_alpha_tween.tween_method(_set_alpha, 0.25, 0.55, 0.6)
+		_alpha_tween.tween_method(_set_alpha, 0.55, 0.25, 0.6)
+
+	func _set_alpha(a: float) -> void:
+		_alpha = a
+		queue_redraw()
+
+	func _draw() -> void:
+		var color := Color(0.3, 0.85, 1.0, _alpha)
+		# 타원형 인디케이터
+		draw_arc(Vector2.ZERO, 12.0, 0, TAU, 32, color, 1.5, true)
+		var inner_color := Color(0.3, 0.85, 1.0, _alpha * 0.3)
+		draw_circle(Vector2.ZERO, 10.0, inner_color)
 #endregion

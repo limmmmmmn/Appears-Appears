@@ -29,3 +29,4 @@ equip_restrictions = {
 }
 tags = ["magic", "support", "healer"]
 skills = ["basic_attack", "heal"]
+action_speed = 2.5

@@ -11,6 +11,7 @@ class_name ClassTemplate
 @export var skills: Array[String] = []
 @export var growth_per_level: Dictionary = {}
 @export var skill_unlocks: Dictionary = {}
+@export var action_speed: float = 2.0  ## 기본공격 ATB 기준 속도 (초). 낮을수록 빠름
 
 
 func to_dict() -> Dictionary:
@@ -28,4 +29,5 @@ func to_dict() -> Dictionary:
 		out["growth_per_level"] = growth_per_level.duplicate(true)
 	if not skill_unlocks.is_empty():
 		out["skill_unlocks"] = skill_unlocks.duplicate(true)
+	out["action_speed"] = action_speed
 	return out

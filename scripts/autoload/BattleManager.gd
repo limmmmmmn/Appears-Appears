@@ -547,8 +547,9 @@ func clear_battle_container() -> void:
 
 #region 전투창 위치 계산
 # HUD 영역 설정
-const HUD_TOP_HEIGHT: float = 32.0  # TopBar 높이 + 여유
-const HUD_BOTTOM_HEIGHT: float = 60.0  # BottomPartyPanel 높이 + 여유
+const HUD_TOP_HEIGHT: float = 32.0   # TopBar 높이 + 여유
+const HUD_BOTTOM_HEIGHT: float = 10.0  # 하단 여유 (패널은 좌측으로 이동)
+var hud_left_width: float = 170.0   ## PartyPanel 폭 + 여유 (FieldHUD에서 갱신)
 
 func _calculate_window_position() -> Vector2:
 	var viewport_size := Vector2(640, 360)
@@ -571,7 +572,8 @@ func _calculate_window_position() -> Vector2:
 		WINDOW_MARGIN,
 		HUD_TOP_HEIGHT,
 		HUD_BOTTOM_HEIGHT,
-		CENTER_SAFE_SIZE
+		CENTER_SAFE_SIZE,
+		hud_left_width
 	)
 
 
