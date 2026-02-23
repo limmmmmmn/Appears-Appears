@@ -104,10 +104,12 @@ func _serialize_party() -> Array:
 			"current_exp": hero.current_exp,
 			"level_stats": hero.level_stats.duplicate(),
 			"current_hp": hero.current_hp,
+			"current_mp": hero.current_mp,
 			"is_dead": hero.is_dead,
 			"seed_bonus": hero.seed_bonus.duplicate(),
 			"equipment": hero.equipment.duplicate(),
 			"skill_toggles": hero.skill_toggles.duplicate(),
+			"skill_priority": hero.skill_priority.duplicate(),
 			"unlocked_skills": hero.unlocked_skills.duplicate(),
 			"skill_levels": hero.skill_levels.duplicate()
 		})
@@ -250,12 +252,24 @@ func _deserialize_party(data: Array) -> void:
 		for skill_id in saved_toggles:
 			hero.skill_toggles[skill_id] = bool(saved_toggles[skill_id])
 
+		var saved_priority: Array = hero_data.get("skill_priority", [])
+		if not saved_priority.is_empty():
+			hero.skill_priority.clear()
+			for sid in saved_priority:
+				hero.skill_priority.append(str(sid))
+			hero._init_skill_priority()  # 새로 해금된 스킬 보충
+
 		var saved_skill_levels: Dictionary = hero_data.get("skill_levels", {})
 		for skill_id in saved_skill_levels:
 			hero.skill_levels[str(skill_id)] = int(saved_skill_levels[skill_id])
 
-		# 세이브 데이터를 모두 적용한 뒤 체력 안전 보정
+		# 세이브 데이터를 모두 적용한 뒤 체력/MP 안전 보정
 		hero.current_hp = mini(hero.current_hp, hero.get_max_hp())
+		var saved_mp: int = int(hero_data.get("current_mp", -1))
+		if saved_mp >= 0:
+			hero.current_mp = mini(saved_mp, hero.get_max_mp())
+		else:
+			hero.current_mp = hero.get_max_mp()
 		
 		PartyManager.party.append(hero)
 	

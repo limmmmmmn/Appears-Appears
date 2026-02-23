@@ -180,6 +180,7 @@ func _update_realtime_bars() -> void:
 		if not hero.is_dead:
 			card.update_level(hero.level)
 		card.update_hp(hero.current_hp, hero.get_max_hp())
+		card.update_mp(hero)
 		card.update_skill_atb_bars(hero)
 #endregion
 
@@ -314,6 +315,11 @@ func _find_available_healer() -> Hero:
 			continue
 		if CooldownManager and not CooldownManager.is_skill_ready(hero.id, "heal"):
 			continue
+		# MP 확인
+		var skill_data_check: Dictionary = DataManager.get_skill("heal")
+		var mp_cost: int = int(skill_data_check.get("mp_cost", 0))
+		if mp_cost > 0 and hero.current_mp < mp_cost:
+			continue
 		return hero
 	return null
 
@@ -327,6 +333,11 @@ func _execute_field_heal(healer: Hero, target: Hero) -> void:
 	var heal_amount: int = int(base_value + int_stat * scaling)
 
 	var actual_heal := target.heal(heal_amount)
+
+	# MP 소모
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	if mp_cost > 0:
+		healer.use_mp(mp_cost)
 
 	if CooldownManager:
 		CooldownManager.start_cooldown(healer.id, "heal")

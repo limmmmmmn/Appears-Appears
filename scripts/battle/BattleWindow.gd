@@ -1501,6 +1501,10 @@ func _execute_hero_action(hero: Hero) -> void:
 					_execute_aoe_attack(hero, skill_id, skill_data)
 				_:
 					_execute_single_attack(hero, skill_id, skill_data)
+		# MP 소모
+		var mp_cost: int = int(skill_data.get("mp_cost", 0))
+		if mp_cost > 0:
+			hero.use_mp(mp_cost)
 		CooldownManager.start_cooldown(hero.id, skill_id)
 	else:
 		# 기본공격
@@ -1542,10 +1546,11 @@ func _select_hero_skill(hero: Hero) -> String:
 
 
 func _pick_auto_skill(hero: Hero) -> String:
-	## 해금된 스킬 중 쿨다운이 끝나고 사용 가능한 스킬 선택
-	for sid in hero.unlocked_skills:
+	## 작전 우선순위에 따라 쿨다운·MP가 충분한 스킬 자동 선택
+	var priority_list: Array = hero.get_skill_priority_list()
+	for sid in priority_list:
 		var skill_id: String = str(sid)
-		if skill_id == "basic_attack":
+		if not hero.unlocked_skills.has(skill_id):
 			continue
 		if not CooldownManager.is_skill_ready(hero.id, skill_id):
 			continue
@@ -1553,6 +1558,9 @@ func _pick_auto_skill(hero: Hero) -> String:
 			continue
 		var skill_data: Dictionary = DataManager.get_skill(skill_id)
 		if skill_data.is_empty():
+			continue
+		var mp_cost: int = int(skill_data.get("mp_cost", 0))
+		if mp_cost > 0 and hero.current_mp < mp_cost:
 			continue
 		return skill_id
 	return ""

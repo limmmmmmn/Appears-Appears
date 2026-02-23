@@ -66,6 +66,7 @@ var skill_levels: Dictionary = {}   # { skill_id: int } — 기본 1, 중복 선
 
 # 현재 상태
 var current_hp: int = 0
+var current_mp: int = 0
 var is_dead: bool = false
 
 # 도발 상태 (기사 방패 강타)
@@ -78,6 +79,8 @@ var equipment: Dictionary = {
 
 # 스킬 토글
 var skill_toggles: Dictionary = {}
+# 스킬 우선순위 (작전 탭에서 설정, 인덱스 0이 가장 우선)
+var skill_priority: Array = []
 
 var tags: Array = []
 var portrait: String = ""
@@ -146,6 +149,7 @@ func _initialize(hero_id: String) -> void:
 	_setup_skill_unlocks(class_data)
 
 	current_hp = get_max_hp()
+	current_mp = get_max_mp()
 	_init_skill_toggles()
 
 
@@ -222,6 +226,47 @@ func _init_skill_toggles() -> void:
 	var class_skills: Array = DataManager.get_class_skills(class_id)
 	for skill_id in class_skills:
 		skill_toggles[skill_id] = true
+	# 우선순위 초기화 (basic_attack 제외, 해금 순서)
+	_init_skill_priority()
+
+
+func _init_skill_priority() -> void:
+	## 스킬 우선순위 초기화 — 해금된 스킬만, basic_attack 제외
+	if not skill_priority.is_empty():
+		# 이미 설정됨 (세이브 로드 등) — 새로 해금된 스킬만 추가
+		for sid in unlocked_skills:
+			if sid != "basic_attack" and not skill_priority.has(sid):
+				skill_priority.append(sid)
+		return
+	skill_priority.clear()
+	for sid in unlocked_skills:
+		if sid != "basic_attack":
+			skill_priority.append(sid)
+
+
+func get_skill_priority_list() -> Array:
+	## 작전 탭용: 우선순위 순서대로 스킬 목록 반환
+	# 해금되지 않은 스킬 제거, 새로 해금된 스킬 추가
+	var result: Array = []
+	for sid in skill_priority:
+		if unlocked_skills.has(sid):
+			result.append(sid)
+	for sid in unlocked_skills:
+		if sid != "basic_attack" and not result.has(sid):
+			result.append(sid)
+	return result
+
+
+func move_skill_priority(skill_id: String, direction: int) -> void:
+	## direction: -1 = 위로 (더 높은 우선순위), +1 = 아래로
+	var idx: int = skill_priority.find(skill_id)
+	if idx < 0:
+		return
+	var new_idx: int = clampi(idx + direction, 0, skill_priority.size() - 1)
+	if new_idx == idx:
+		return
+	skill_priority.remove_at(idx)
+	skill_priority.insert(new_idx, skill_id)
 
 
 func _normalize_stat_key(stat: String) -> String:
@@ -246,6 +291,11 @@ func get_base_stat(stat: String) -> int:
 
 func get_max_hp() -> int:
 	return get_base_stat("hp") + _get_equipment_stat("hp")
+
+
+func get_max_mp() -> int:
+	## MP = WIS * 3 + 장비 mp 보정
+	return get_base_stat("wis") * 3 + _get_equipment_stat("mp")
 
 
 func get_str() -> int:
@@ -506,11 +556,29 @@ func heal(amount: int) -> int:
 	return actual
 
 
+func use_mp(amount: int) -> bool:
+	## MP 소모. 충분하면 차감 후 true, 부족하면 false
+	if amount <= 0:
+		return true
+	if current_mp < amount:
+		return false
+	current_mp -= amount
+	return true
+
+
+func restore_mp(amount: int) -> int:
+	## MP 회복. 실제 회복량 반환
+	var actual := mini(amount, get_max_mp() - current_mp)
+	current_mp += actual
+	return actual
+
+
 func revive(hp_percent: float = 0.3) -> void:
 	if not is_dead:
 		return
 	is_dead = false
 	current_hp = int(get_max_hp() * hp_percent)
+	current_mp = int(get_max_mp() * hp_percent)
 
 
 # === 행동 타이머 ===

@@ -7,6 +7,7 @@ class_name SkillTemplate
 @export var type: String = ""
 @export var target: String = ""
 @export var cooldown: float = 0.0
+@export var mp_cost: int = 0
 @export var damage_base: int = 0
 @export var damage_scaling: Dictionary = {}
 @export var effects: Array[Dictionary] = []
@@ -25,6 +26,7 @@ func to_dict() -> Dictionary:
 	out["type"] = type
 	out["target"] = target
 	out["cooldown"] = cooldown
+	out["mp_cost"] = mp_cost
 	out["damage_base"] = damage_base
 	out["damage_scaling"] = damage_scaling.duplicate(true)
 	out["effects"] = effects.duplicate(true)

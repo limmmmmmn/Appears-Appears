@@ -1,7 +1,7 @@
 extends CanvasLayer
 class_name EquipmentScreen
 ## 정비 화면 — ESC / 햄버거 버튼으로 열고 닫기
-## 탭: 정비 | 스킬
+## 탭: 정비 | 스킬 | 작전
 
 const FACE_PATH := "res://assets/sprites/heroes/%s.png"
 const FIELD_SPRITE_PATH := "res://assets/sprites/heroes/%s.png"
@@ -57,7 +57,7 @@ signal closed
 
 var is_open: bool = false
 var selected_hero_index: int = 0
-var current_tab: int = 0  # 0=장비, 1=스킬
+var current_tab: int = 0  # 0=장비, 1=스킬, 2=작전
 
 # 주요 노드
 var root: Control
@@ -74,6 +74,7 @@ var _tab_buttons: Array[Button] = []
 # 중앙 패널 (탭별 전환)
 var equip_panel: VBoxContainer
 var skills_panel: VBoxContainer
+var tactics_panel: VBoxContainer
 
 # 장비 탭
 var equip_slots_container: VBoxContainer
@@ -285,7 +286,7 @@ func _build_center_panels(parent: HBoxContainer) -> void:
 	wrapper.add_child(tab_hbox)
 
 	_tab_buttons.clear()
-	var tab_names := ["정비", "스킬"]
+	var tab_names := ["정비", "스킬", "작전"]
 	for i in range(tab_names.size()):
 		var btn := Button.new()
 		btn.text = tab_names[i]
@@ -317,6 +318,13 @@ func _build_center_panels(parent: HBoxContainer) -> void:
 	skills_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	skills_panel.visible = false
 	wrapper.add_child(skills_panel)
+
+	# 작전 패널
+	tactics_panel = VBoxContainer.new()
+	tactics_panel.add_theme_constant_override("separation", 3)
+	tactics_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tactics_panel.visible = false
+	wrapper.add_child(tactics_panel)
 
 
 
@@ -437,11 +445,13 @@ func _switch_tab(tab_index: int) -> void:
 	_update_tab_styles()
 	equip_panel.visible = (tab_index == 0)
 	skills_panel.visible = (tab_index == 1)
+	tactics_panel.visible = (tab_index == 2)
 	inv_panel.visible = (tab_index == 0)
 
 	match tab_index:
 		0: _refresh_equip_slots(); _refresh_inventory()
 		1: _refresh_skills()
+		2: _refresh_tactics()
 
 
 func _update_tab_styles() -> void:
@@ -619,6 +629,7 @@ func _refresh_stats() -> void:
 		["LV", str(int(hero.level)), "lv"],
 		["EXP", "%d/%d" % [int(hero.current_exp), int(hero.get_exp_to_next_level())], "exp"],
 		["HP", "%d/%d" % [hero.current_hp, hero.get_max_hp()], "hp"],
+		["MP", "%d/%d" % [hero.current_mp, hero.get_max_mp()], "mp"],
 		["ATK", str(hero.get_atk()), "atk"],
 		["DEF", str(hero.get_def()), "def"],
 		["MATK", str(hero.get_magic_attack()), "matk"],
@@ -889,6 +900,9 @@ func _create_skill_card(hero: Hero, skill_id: String, is_unlocked: bool, unlock_
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		name_row.add_child(badge)
 
+	# MP 코스트
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+
 	# 설명 행
 	var desc_parts: Array = []
 	# 타겟
@@ -898,6 +912,10 @@ func _create_skill_card(hero: Hero, skill_id: String, is_unlocked: bool, unlock_
 		"single_ally": desc_parts.append("아군")
 		"all_allies": desc_parts.append("아군전체")
 		"self": desc_parts.append("자신")
+
+	# MP 소모량
+	if mp_cost > 0:
+		desc_parts.append("MP %d" % mp_cost)
 
 	# 데미지 배율
 	var scaling: Dictionary = skill_data.get("damage_scaling", {})
@@ -953,6 +971,230 @@ func _create_skill_card(hero: Hero, skill_id: String, is_unlocked: bool, unlock_
 				hero.toggle_skill(skill_id)
 				_refresh_skills()
 	)
+
+	return panel
+#endregion
+
+
+#region 작전 탭
+func _refresh_tactics() -> void:
+	for child in tactics_panel.get_children():
+		child.queue_free()
+
+	var hero := _get_hero()
+	if hero == null:
+		return
+
+	# 헤더
+	var header := Label.new()
+	header.text = "스킬 사용 우선순위"
+	header.add_theme_font_size_override("font_size", 11)
+	header.add_theme_color_override("font_color", S.text_gold)
+	tactics_panel.add_child(header)
+
+	var desc := Label.new()
+	desc.text = "위에 있을수록 먼저 사용. 클릭으로 활성/비활성 전환."
+	desc.add_theme_font_size_override("font_size", 8)
+	desc.add_theme_color_override("font_color", S.text_dim)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD
+	tactics_panel.add_child(desc)
+
+	# 스킬 목록 (우선순위 순)
+	var priority_list: Array = hero.get_skill_priority_list()
+	for i in range(priority_list.size()):
+		var skill_id: String = str(priority_list[i])
+		var row := _create_tactics_row(hero, skill_id, i, priority_list.size())
+		tactics_panel.add_child(row)
+
+	# 기본공격 (항상 마지막, 이동 불가)
+	var ba_row := _create_basic_attack_row()
+	tactics_panel.add_child(ba_row)
+
+
+func _create_tactics_row(hero: Hero, skill_id: String, index: int, total: int) -> PanelContainer:
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	var skill_name: String = skill_data.get("name", skill_id)
+	var is_enabled: bool = hero.is_skill_enabled(skill_id)
+	var is_unlocked: bool = hero.unlocked_skills.has(skill_id)
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	var cooldown: float = float(skill_data.get("cooldown", 5.0))
+
+	var panel := PanelContainer.new()
+	var bg_color := Color(0.1, 0.1, 0.14, 0.9) if is_enabled else Color(0.06, 0.06, 0.09, 0.6)
+	if not is_unlocked:
+		bg_color = Color(0.05, 0.05, 0.08, 0.5)
+	var border_c := S.border_gold if is_enabled else S.border
+	var normal_style := _make_style(bg_color, border_c, 3, 1)
+	normal_style.content_margin_left = 6; normal_style.content_margin_right = 6
+	normal_style.content_margin_top = 4; normal_style.content_margin_bottom = 4
+	panel.add_theme_stylebox_override("panel", normal_style)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 4)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(hbox)
+
+	# 우선순위 번호
+	var num_lbl := Label.new()
+	num_lbl.text = "%d." % (index + 1)
+	num_lbl.add_theme_font_size_override("font_size", 10)
+	num_lbl.add_theme_color_override("font_color", S.text_gold if is_enabled else S.text_dim)
+	num_lbl.custom_minimum_size.x = 18
+	num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(num_lbl)
+
+	# 아이콘
+	var icon := Label.new()
+	icon.text = SKILL_ICONS.get(skill_id, "✦")
+	icon.add_theme_font_size_override("font_size", 14)
+	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(icon)
+
+	# 스킬 이름 + 정보
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 0)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(info)
+
+	var name_lbl := Label.new()
+	name_lbl.text = skill_name
+	name_lbl.add_theme_font_size_override("font_size", 10)
+	name_lbl.add_theme_color_override("font_color", S.text if is_enabled else S.text_dim)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(name_lbl)
+
+	# MP + 쿨다운 행
+	var sub_parts: Array = []
+	if mp_cost > 0:
+		sub_parts.append("MP %d" % mp_cost)
+	if cooldown < 4.0:
+		sub_parts.append("빠름")
+	elif cooldown <= 7.0:
+		sub_parts.append("보통")
+	else:
+		sub_parts.append("느림")
+	if not is_unlocked:
+		var unlock_lv: int = int(hero.skill_unlock_levels.get(skill_id, 1))
+		sub_parts.append("Lv.%d 해금" % unlock_lv)
+
+	var sub_lbl := Label.new()
+	sub_lbl.text = " | ".join(sub_parts)
+	sub_lbl.add_theme_font_size_override("font_size", 8)
+	sub_lbl.add_theme_color_override("font_color", S.text_dim)
+	sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(sub_lbl)
+
+	# 상태 뱃지 (활성/비활성)
+	var state := Label.new()
+	state.add_theme_font_size_override("font_size", 9)
+	state.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not is_unlocked:
+		state.text = "미해금"
+		state.add_theme_color_override("font_color", S.text_dim)
+	elif is_enabled:
+		state.text = "ON"
+		state.add_theme_color_override("font_color", S.text_green)
+	else:
+		state.text = "OFF"
+		state.add_theme_color_override("font_color", S.text_red)
+	state.custom_minimum_size.x = 24
+	state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hbox.add_child(state)
+
+	# 위/아래 이동 버튼
+	var btn_vbox := VBoxContainer.new()
+	btn_vbox.add_theme_constant_override("separation", 0)
+	hbox.add_child(btn_vbox)
+
+	var up_btn := Button.new()
+	up_btn.text = "▲"
+	up_btn.add_theme_font_size_override("font_size", 8)
+	up_btn.custom_minimum_size = Vector2(20, 14)
+	up_btn.flat = true
+	up_btn.focus_mode = Control.FOCUS_NONE
+	up_btn.disabled = (index == 0)
+	up_btn.add_theme_color_override("font_color", S.text if index > 0 else S.text_dim)
+	var sid_up := skill_id
+	up_btn.pressed.connect(func():
+		hero.move_skill_priority(sid_up, -1)
+		_refresh_tactics()
+	)
+	btn_vbox.add_child(up_btn)
+
+	var down_btn := Button.new()
+	down_btn.text = "▼"
+	down_btn.add_theme_font_size_override("font_size", 8)
+	down_btn.custom_minimum_size = Vector2(20, 14)
+	down_btn.flat = true
+	down_btn.focus_mode = Control.FOCUS_NONE
+	down_btn.disabled = (index == total - 1)
+	down_btn.add_theme_color_override("font_color", S.text if index < total - 1 else S.text_dim)
+	var sid_down := skill_id
+	down_btn.pressed.connect(func():
+		hero.move_skill_priority(sid_down, 1)
+		_refresh_tactics()
+	)
+	btn_vbox.add_child(down_btn)
+
+	# 호버 효과
+	var hover_style := _make_style(Color(0.14, 0.14, 0.2, 0.95), S.border_gold, 3, 1)
+	hover_style.content_margin_left = 6; hover_style.content_margin_right = 6
+	hover_style.content_margin_top = 4; hover_style.content_margin_bottom = 4
+
+	panel.mouse_entered.connect(func():
+		panel.add_theme_stylebox_override("panel", hover_style)
+	)
+	panel.mouse_exited.connect(func():
+		panel.add_theme_stylebox_override("panel", normal_style)
+	)
+
+	# 클릭 → ON/OFF 토글
+	if is_unlocked:
+		panel.gui_input.connect(func(event: InputEvent):
+			if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+				hero.toggle_skill(skill_id)
+				_refresh_tactics()
+		)
+
+	return panel
+
+
+func _create_basic_attack_row() -> PanelContainer:
+	var panel := PanelContainer.new()
+	var style := _make_style(Color(0.08, 0.08, 0.12, 0.7), S.border, 3, 1)
+	style.content_margin_left = 6; style.content_margin_right = 6
+	style.content_margin_top = 4; style.content_margin_bottom = 4
+	panel.add_theme_stylebox_override("panel", style)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 4)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(hbox)
+
+	var dot_lbl := Label.new()
+	dot_lbl.text = "—"
+	dot_lbl.add_theme_font_size_override("font_size", 10)
+	dot_lbl.add_theme_color_override("font_color", S.text_dim)
+	dot_lbl.custom_minimum_size.x = 18
+	dot_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(dot_lbl)
+
+	var icon := Label.new()
+	icon.text = "⚔️"
+	icon.add_theme_font_size_override("font_size", 14)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(icon)
+
+	var name_lbl := Label.new()
+	name_lbl.text = "기본 공격 (스킬 사용 불가 시 자동)"
+	name_lbl.add_theme_font_size_override("font_size", 10)
+	name_lbl.add_theme_color_override("font_color", S.text_blue)
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(name_lbl)
 
 	return panel
 #endregion

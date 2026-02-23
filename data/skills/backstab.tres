@@ -10,6 +10,7 @@ description = "급소를 노린다. 크리티컬 확률 증가"
 type = "physical"
 target = "single_enemy"
 cooldown = 4.0
+mp_cost = 5
 damage_base = 3
 damage_scaling = {
   "stat": "str",

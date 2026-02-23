@@ -10,6 +10,7 @@ description = "공격력 절반 데미지 + 다음 2회 공격을 대신 받음"
 type = "physical"
 target = "single_enemy"
 cooldown = 8.0
+mp_cost = 6
 damage_base = 0
 damage_scaling = {
   "stat": "str",

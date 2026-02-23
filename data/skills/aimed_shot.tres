@@ -10,6 +10,7 @@ description = "정확히 조준하여 쏜다"
 type = "physical"
 target = "single_enemy"
 cooldown = 5.0
+mp_cost = 6
 damage_base = 8
 damage_scaling = {
   "stat": "str",
