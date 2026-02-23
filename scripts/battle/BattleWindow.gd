@@ -1597,7 +1597,7 @@ func _pick_auto_skill(hero: Hero) -> String:
 		if skill_data.get("type", "") == "resurrect":
 			var has_dead: bool = false
 			if PartyManager != null:
-				for h in PartyManager.get_party_heroes():
+				for h in PartyManager.get_party():
 					if h is Hero and h.is_dead:
 						has_dead = true
 						break
@@ -1811,7 +1811,7 @@ func _execute_special_skill(hero: Hero, skill_id: String, skill_data: Dictionary
 				hp_percent = float(effect.get("hp_percent", 0.3))
 		var dead_hero: Hero = null
 		if PartyManager != null:
-			for h in PartyManager.get_party_heroes():
+			for h in PartyManager.get_party():
 				var hero_h: Hero = h as Hero
 				if hero_h != null and hero_h.is_dead:
 					dead_hero = hero_h
