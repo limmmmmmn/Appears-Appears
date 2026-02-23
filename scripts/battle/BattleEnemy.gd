@@ -609,82 +609,56 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	var vel_x: float = cos(angle) * launch_speed * randf_range(0.15, 0.35)
 	var vel_y: float = -sin(angle) * launch_speed  # 위로 (음수)
 
-	# 물리 시뮬레이션용 변수
-	var state := {"vel_x": vel_x, "vel_y": vel_y, "ground_y": start_pos.y, "bounces": 0, "time": 0.0, "fade_started": false}
+	# tween 기반 포물선 시뮬레이션: 고정 스텝으로 키프레임 생성
+	var dt := 1.0 / 60.0  # 60fps 기준
 	var bounce_damping := 0.35
 	var max_bounces := 2
 	var linger_time := 0.6
 
-	# 팝 등장
+	# 물리 시뮬레이션으로 키프레임 계산
+	var pos := start_pos
+	var cur_vel_x := vel_x
+	var cur_vel_y := vel_y
+	var bounces := 0
+	var keyframes: Array[Vector2] = [pos]
+
+	for step in range(300):  # 최대 5초 (300 * 1/60)
+		cur_vel_y += gravity * dt
+		pos.x += cur_vel_x * dt
+		pos.y += cur_vel_y * dt
+
+		if pos.y >= start_pos.y and bounces < max_bounces:
+			pos.y = start_pos.y
+			cur_vel_y = -absf(cur_vel_y) * bounce_damping
+			cur_vel_x *= 0.5
+			bounces += 1
+
+		keyframes.append(pos)
+
+		if bounces >= max_bounces and pos.y >= start_pos.y:
+			pos.y = start_pos.y
+			break
+
+	# tween으로 키프레임 재생
 	label.modulate.a = 0.0
-	var pop_tween := create_tween()
-	pop_tween.set_parallel(true)
-	pop_tween.tween_property(label, "modulate:a", 1.0, 0.05)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "modulate:a", 1.0, 0.05)
 	if is_crit:
-		pop_tween.tween_property(label, "scale", Vector2.ONE, 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(label, "scale", Vector2.ONE, 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-	# _process 콜백으로 물리 시뮬레이션
-	var callable := func(delta: float) -> void:
-		if not is_instance_valid(label):
-			return
-		state.time += delta
+	# 위치 키프레임을 tween 체인으로 변환
+	var pos_tween := create_tween()
+	for i in range(1, keyframes.size()):
+		pos_tween.tween_property(label, "position", keyframes[i], dt)
 
-		# 중력 적용
-		state.vel_y += gravity * delta
-		label.position.x += state.vel_x * delta
-		label.position.y += state.vel_y * delta
-
-		# 바닥 충돌 체크
-		if label.position.y >= state.ground_y and state.bounces < max_bounces:
-			label.position.y = state.ground_y
-			state.vel_y = -absf(state.vel_y) * bounce_damping
-			state.vel_x *= 0.5
-			state.bounces += 1
-
-		# 최종 바운스 후 바닥에 안착하면 멈춤
-		if state.bounces >= max_bounces and label.position.y >= state.ground_y:
-			label.position.y = state.ground_y
-			state.vel_x = 0.0
-			state.vel_y = 0.0
-
-			# 페이드아웃 시작 (한 번만)
-			if not state.fade_started:
-				state.fade_started = true
-				var fade_tween := label.create_tween()
-				fade_tween.tween_interval(linger_time)
-				fade_tween.tween_property(label, "modulate:a", 0.0, 0.25)
-				fade_tween.finished.connect(func():
-					if is_instance_valid(label):
-						label.queue_free()
-				)
-
-	label.set_meta("_dmg_physics", callable)
-	label.set_process(true)
-	# 트리에 연결: 매 프레임 callable 호출
-	var _on_process := func():
-		if not is_instance_valid(label):
-			return
-		var cb: Callable = label.get_meta("_dmg_physics", Callable())
-		if cb.is_valid():
-			cb.call(get_process_delta_time())
-	label.ready.connect(func():
+	# 착지 후: 머무름 → 페이드아웃 → 제거
+	pos_tween.tween_interval(linger_time)
+	pos_tween.tween_property(label, "modulate:a", 0.0, 0.25)
+	pos_tween.finished.connect(func():
 		if is_instance_valid(label):
-			label.set_process(true)
+			label.queue_free()
 	)
-	# SceneTree process_frame 시그널 사용
-	var tree := get_tree()
-	if tree:
-		var disconnect_ref := {"connected": true}
-		var frame_cb: Callable
-		frame_cb = func():
-			if not is_instance_valid(label):
-				if disconnect_ref.connected:
-					disconnect_ref.connected = false
-					tree.process_frame.disconnect(frame_cb)
-				return
-			var cb: Callable = label.get_meta("_dmg_physics", Callable())
-			if cb.is_valid():
-				cb.call(tree.root.get_process_delta_time())
 		tree.process_frame.connect(frame_cb)
 
 
