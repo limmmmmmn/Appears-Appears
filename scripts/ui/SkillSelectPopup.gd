@@ -6,13 +6,15 @@ signal skill_selected(hero_id: String, skill_id: String)
 
 var _hero_id: String = ""
 var _hero_name: String = ""
+var _hero: Hero = null
 var _choices: Array = []  # Array of skill_id strings
 var _buttons: Array = []
 
 
-func open(hero_id: String, hero_name: String, choices: Array) -> void:
+func open(hero_id: String, hero_name: String, choices: Array, hero: Hero = null) -> void:
 	_hero_id = hero_id
 	_hero_name = hero_name
+	_hero = hero
 	_choices = choices
 	_build_ui()
 	visible = true
@@ -47,6 +49,9 @@ func _build_ui() -> void:
 	var sep := HSeparator.new()
 	vbox.add_child(sep)
 
+	# 보유 스킬 목록
+	var owned: Array = _hero.get_available_skills() if _hero else []
+
 	# 스킬 버튼 3개
 	_buttons.clear()
 	for skill_id in _choices:
@@ -64,14 +69,25 @@ func _build_ui() -> void:
 			"heal": type_label = "[회복]"
 			_: type_label = "[%s]" % skill_type
 
-		btn.text = "%s %s  CD:%.0fs\n%s" % [type_label, skill_name, cooldown, skill_desc]
+		# 이미 배운 스킬이면 현재 레벨 표시 + 레벨업 안내
+		var is_owned: bool = owned.has(skill_id)
+		if is_owned and _hero:
+			var cur_lv: int = _hero.get_skill_level(skill_id)
+			btn.text = "%s %s Lv.%d → Lv.%d  CD:%.0fs\n%s" % [type_label, skill_name, cur_lv, cur_lv + 1, cooldown, skill_desc]
+		else:
+			btn.text = "%s %s  CD:%.0fs\n%s" % [type_label, skill_name, cooldown, skill_desc]
+
 		btn.custom_minimum_size = Vector2(220, 40)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.add_theme_font_size_override("font_size", 10)
 
 		var btn_style := StyleBoxFlat.new()
-		btn_style.bg_color = Color(0.12, 0.12, 0.2, 0.95)
-		btn_style.border_color = Color(0.5, 0.5, 0.7)
+		if is_owned:
+			btn_style.bg_color = Color(0.15, 0.18, 0.25, 0.95)
+			btn_style.border_color = Color(0.4, 0.6, 1.0)
+		else:
+			btn_style.bg_color = Color(0.12, 0.12, 0.2, 0.95)
+			btn_style.border_color = Color(0.5, 0.5, 0.7)
 		btn_style.set_border_width_all(1)
 		btn_style.set_corner_radius_all(4)
 		btn_style.content_margin_left = 8

@@ -1569,7 +1569,7 @@ func _execute_heal_on_enemy(hero: Hero, skill_id: String, skill_data: Dictionary
 	## 힐 스킬을 적에게 사용 → 적 체력 회복
 	if target == null or not target.is_alive():
 		return
-	var heal_amount: int = _calc_heal_amount(hero, skill_data)
+	var heal_amount: int = _calc_heal_amount(hero, skill_data, skill_id)
 	var actual_heal: int = target.heal(heal_amount)
 	if SoundManager:
 		SoundManager.play_heal()
@@ -1594,6 +1594,11 @@ func _execute_attack_on_ally(hero: Hero, skill_id: String, skill_data: Dictionar
 		damage = maxi(1, int(float(damage_base) + float(int_stat) * multiplier))
 	else:
 		damage = maxi(1, int(float(damage_base) + float(hero.get_atk()) * multiplier))
+	# 스킬 레벨 보너스
+	if skill_id != "basic_attack":
+		var skill_lv: int = hero.get_skill_level(skill_id)
+		if skill_lv > 1:
+			damage = int(float(damage) * (1.0 + 0.1 * float(skill_lv - 1)))
 	var actual: int = target.take_damage(damage)
 	if SoundManager:
 		SoundManager.play_attack(hero.class_id, false)
@@ -1629,24 +1634,33 @@ func _find_finisher_skill(hero: Hero, skill_ids: Array) -> String:
 func _estimate_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary, skill_id: String = "") -> int:
 	## 스킬 예상 데미지 (크리 제외, 방어 반영)
 	var resolved_skill_id: String = skill_id if not skill_id.is_empty() else str(skill_data.get("id", ""))
+	var damage: int = 0
 	if resolved_skill_id == "power_strike":
 		var basic_damage: int = _calc_physical_damage(float(hero.get_atk()), target.get_p_def())
-		return maxi(1, basic_damage * 2)
+		damage = maxi(1, basic_damage * 2)
+	else:
+		var damage_base: int = int(skill_data.get("damage_base", 0))
+		var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
+		var multiplier: float = scaling.get("multiplier", 1.0)
+		var skill_type: String = skill_data.get("type", "physical")
+		if skill_type == "magic":
+			var int_stat: int = hero.get_base_stat("wis")
+			var equip_matk_bonus: int = hero.get_magic_attack() - int_stat
+			var matk: float = float(damage_base) + float(int_stat) * multiplier + float(equip_matk_bonus)
+			damage = _calc_magic_damage(matk, target.get_m_def())
+		else:
+			var skill_mult: float = float(skill_data.get("skill_multiplier", multiplier))
+			var skill_flat: int = int(skill_data.get("skill_flat_bonus", damage_base))
+			var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
+			damage = _calc_physical_damage(effective_atk, target.get_p_def())
 
-	var damage_base: int = int(skill_data.get("damage_base", 0))
-	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
-	var multiplier: float = scaling.get("multiplier", 1.0)
-	var skill_type: String = skill_data.get("type", "physical")
-	if skill_type == "magic":
-		var int_stat: int = hero.get_base_stat("wis")
-		var equip_matk_bonus: int = hero.get_magic_attack() - int_stat
-		var matk: float = float(damage_base) + float(int_stat) * multiplier + float(equip_matk_bonus)
-		return _calc_magic_damage(matk, target.get_m_def())
+	# 스킬 레벨 보너스 (레벨당 +10%, 기본공격 제외)
+	if resolved_skill_id != "basic_attack" and resolved_skill_id != "":
+		var skill_lv: int = hero.get_skill_level(resolved_skill_id)
+		if skill_lv > 1:
+			damage = int(float(damage) * (1.0 + 0.1 * float(skill_lv - 1)))
 
-	var skill_mult: float = float(skill_data.get("skill_multiplier", multiplier))
-	var skill_flat: int = int(skill_data.get("skill_flat_bonus", damage_base))
-	var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
-	return _calc_physical_damage(effective_atk, target.get_p_def())
+	return maxi(1, damage)
 
 
 func _play_turn_effect() -> void:
@@ -1877,7 +1891,7 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 				SoundManager.play_heal()
 
 		for target in targets:
-			var heal_amount: int = _calc_heal_amount(hero, skill_data)
+			var heal_amount: int = _calc_heal_amount(hero, skill_data, skill_id)
 			var actual_heal: int = target.heal(heal_amount)
 
 		call_deferred("_emit_party_updated")
@@ -1912,18 +1926,34 @@ func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary,
 		damage = _calc_physical_damage(effective_atk, target.get_p_def())
 		crit_attack_base = effective_atk
 
+	# 스킬 레벨 보너스 (레벨당 +10%, 기본공격 제외)
+	if resolved_skill_id != "basic_attack" and resolved_skill_id != "":
+		var skill_lv: int = hero.get_skill_level(resolved_skill_id)
+		if skill_lv > 1:
+			damage = int(float(damage) * (1.0 + 0.1 * float(skill_lv - 1)))
+			crit_attack_base *= (1.0 + 0.1 * float(skill_lv - 1))
+
 	if is_crit:
 		damage = _calc_critical_damage_from_attack(crit_attack_base)
 	return maxi(1, damage)
 
 
-func _calc_heal_amount(hero: Hero, skill_data: Dictionary) -> int:
+func _calc_heal_amount(hero: Hero, skill_data: Dictionary, skill_id: String = "") -> int:
 	## 힐량 계산
 	var heal_base: float = float(skill_data.get("heal_base", skill_data.get("base_damage", 0)))
 	var scaling: Dictionary = skill_data.get("heal_scaling", {"stat": "int", "multiplier": skill_data.get("scaling", 0.5)})
 	var multiplier: float = float(scaling.get("multiplier", skill_data.get("scaling", 0.5)))
 	var int_stat: int = hero.get_base_stat("wis")
-	return _round_half_up(heal_base + float(int_stat) * multiplier)
+	var base_heal: float = heal_base + float(int_stat) * multiplier
+
+	# 스킬 레벨 보너스 (레벨당 +10%)
+	var resolved_id: String = skill_id if not skill_id.is_empty() else str(skill_data.get("id", ""))
+	if resolved_id != "" and resolved_id != "basic_attack":
+		var skill_lv: int = hero.get_skill_level(resolved_id)
+		if skill_lv > 1:
+			base_heal *= (1.0 + 0.1 * float(skill_lv - 1))
+
+	return _round_half_up(base_heal)
 
 
 func _get_skill_effect_value(skill_data: Dictionary, effect_type: String, default_value: float) -> float:
@@ -2811,15 +2841,14 @@ func _show_next_skill_select() -> void:
 	var hero_id: String = entry.get("hero_id", "")
 	var hero_name: String = entry.get("hero_name", "")
 
-	# 클래스 스킬에서 후보 생성 (기본 공격 및 보유 스킬 제외)
+	# 클래스 스킬에서 후보 생성 (기본 공격 제외, 배운 스킬도 포함 → 중복 선택 시 레벨업)
 	var hero: Hero = _find_hero_by_id(hero_id)
-	var owned: Array = hero.get_available_skills() if hero else ["basic_attack"]
 	var class_skills: Array = DataManager.get_class_skills(hero.class_id) if hero else []
 
 	var candidates: Array = []
 	for sid in class_skills:
 		var skill_id: String = str(sid)
-		if skill_id != "basic_attack" and not owned.has(skill_id):
+		if skill_id != "basic_attack":
 			candidates.append(skill_id)
 
 	# 후보가 없으면 스킵
@@ -2855,7 +2884,7 @@ func _show_next_skill_select() -> void:
 	_skill_select_popup.skill_selected.connect(_on_skill_selected)
 
 	layer.add_child(_skill_select_popup)
-	_skill_select_popup.open(hero_id, hero_name, choices)
+	_skill_select_popup.open(hero_id, hero_name, choices, hero)
 
 	# open 이후 크기가 결정되므로 deferred로 화면 중앙 배치
 	_skill_select_popup.call_deferred("_center_on_screen")
@@ -2867,14 +2896,22 @@ func _show_next_skill_select() -> void:
 func _on_skill_selected(hero_id: String, skill_id: String) -> void:
 	## 스킬 선택 완료 콜백
 	var hero: Hero = _find_hero_by_id(hero_id)
-	if hero and not hero.unlocked_skills.has(skill_id):
+	var already_owned: bool = hero != null and hero.unlocked_skills.has(skill_id)
+
+	if hero and not already_owned:
 		hero.unlocked_skills.append(skill_id)
+	elif hero and already_owned:
+		hero.level_up_skill(skill_id)
 
 	if BattleManager and BattleManager.has_method("push_hud_notice"):
 		var skill_data: Dictionary = DataManager.get_skill(skill_id)
 		var skill_name: String = skill_data.get("name", skill_id)
 		var hero_name: String = hero.hero_name if hero else hero_id
-		BattleManager.push_hud_notice("%s: %s 습득!" % [hero_name, skill_name], 2.5, Color(0.4, 1.0, 0.6))
+		if already_owned:
+			var new_lv: int = hero.get_skill_level(skill_id) if hero else 2
+			BattleManager.push_hud_notice("%s: %s Lv.%d!" % [hero_name, skill_name, new_lv], 2.5, Color(0.6, 0.8, 1.0))
+		else:
+			BattleManager.push_hud_notice("%s: %s 습득!" % [hero_name, skill_name], 2.5, Color(0.4, 1.0, 0.6))
 
 	# 팝업 + CanvasLayer 제거
 	if _skill_select_popup != null and is_instance_valid(_skill_select_popup):

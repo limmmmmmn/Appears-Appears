@@ -62,6 +62,7 @@ var growth_per_level: Dictionary = {
 # 클래스별 스킬 해금 레벨
 var skill_unlock_levels: Dictionary = {}
 var unlocked_skills: Array = []
+var skill_levels: Dictionary = {}   # { skill_id: int } — 기본 1, 중복 선택 시 +1
 
 # 현재 상태
 var current_hp: int = 0
@@ -653,6 +654,17 @@ func get_enabled_skills() -> Array:
 func get_available_skills() -> Array:
 	## 현재 레벨에서 해금된 스킬 목록 반환
 	return unlocked_skills.duplicate()
+
+
+func get_skill_level(skill_id: String) -> int:
+	return int(skill_levels.get(skill_id, 1))
+
+
+func level_up_skill(skill_id: String) -> int:
+	## 스킬 레벨 +1, 새 레벨 반환
+	var cur: int = get_skill_level(skill_id)
+	skill_levels[skill_id] = cur + 1
+	return cur + 1
 
 
 func get_usable_skills() -> Array:

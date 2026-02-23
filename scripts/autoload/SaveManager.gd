@@ -108,7 +108,8 @@ func _serialize_party() -> Array:
 			"seed_bonus": hero.seed_bonus.duplicate(),
 			"equipment": hero.equipment.duplicate(),
 			"skill_toggles": hero.skill_toggles.duplicate(),
-			"unlocked_skills": hero.unlocked_skills.duplicate()
+			"unlocked_skills": hero.unlocked_skills.duplicate(),
+			"skill_levels": hero.skill_levels.duplicate()
 		})
 	return party_data
 
@@ -248,6 +249,10 @@ func _deserialize_party(data: Array) -> void:
 		var saved_toggles: Dictionary = hero_data.get("skill_toggles", {})
 		for skill_id in saved_toggles:
 			hero.skill_toggles[skill_id] = bool(saved_toggles[skill_id])
+
+		var saved_skill_levels: Dictionary = hero_data.get("skill_levels", {})
+		for skill_id in saved_skill_levels:
+			hero.skill_levels[str(skill_id)] = int(saved_skill_levels[skill_id])
 
 		# 세이브 데이터를 모두 적용한 뒤 체력 안전 보정
 		hero.current_hp = mini(hero.current_hp, hero.get_max_hp())
