@@ -211,28 +211,21 @@ func _on_field_heal_requested(hero_index: int) -> void:
 
 
 func _on_active_skill_pressed(p_hero_id: String, skill_id: String) -> void:
-	## 액티브 스킬 버튼 → 타겟팅 모드 진입
+	## 액티브 스킬 버튼 → 타겟팅 모드 진입 (ATB 무관, 쿨타임만 체크)
 	if _targeting:
 		_cancel_targeting()
-	# 기본공격 타이머가 차야 사용 가능
-	var hero: Hero = PartyManager.get_hero_by_id(p_hero_id) if PartyManager else null
-	if hero != null and not hero.is_action_ready():
-		return
 	if not CooldownManager.is_skill_ready(p_hero_id, skill_id):
 		return
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	if skill_data.is_empty():
 		return
 	var target_type: String = str(skill_data.get("target", "single_enemy"))
-	var is_enemy_skill: bool = target_type in ["single_enemy", "all_enemies"]
+	# AOE는 타겟팅 불필요 → 즉시 발동 (전투 중일 때만)
 	var has_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
-	# 적 대상 스킬은 전투 필요
-	if is_enemy_skill and not has_battle:
-		return
-	# AOE는 타겟팅 불필요 → 즉시 발동
-	if target_type == "all_enemies" or target_type == "all_allies":
+	if has_battle and (target_type == "all_enemies" or target_type == "all_allies"):
 		_execute_skill_immediate(p_hero_id, skill_id)
 		return
+	# 단일 대상 스킬 → 자유 타겟팅 (적/아군 무관)
 	_start_targeting(p_hero_id, skill_id, skill_data)
 
 
@@ -360,24 +353,24 @@ func _execute_skill_immediate(hero_id: String, skill_id: String) -> void:
 
 
 func _update_targeting_hover() -> void:
-	## 매 프레임: 마우스 아래 유효한 타겟 감지 + 하이라이트
+	## 매 프레임: 마우스 아래 타겟 감지 (적/아군 모두) + 하이라이트
 	var mouse_pos: Vector2 = _targeting_overlay_ctrl.get_global_mouse_position()
 	var prev_enemy: Node = _targeting_hovered_enemy
 	var prev_card: HeroCard = _targeting_hovered_card
 	_targeting_hovered_enemy = null
 	_targeting_hovered_card = null
 
-	if _targeting_is_ally_skill:
-		# 아군 카드 호버 감지
-		for card in cards:
-			if card.hero_id.is_empty():
-				continue
-			var rect := Rect2(card.global_position, card.size)
-			if rect.has_point(mouse_pos):
-				_targeting_hovered_card = card
-				break
-	else:
-		# 적 호버 감지
+	# 아군 카드 호버 감지
+	for card in cards:
+		if card.hero_id.is_empty():
+			continue
+		var rect := Rect2(card.global_position, card.size)
+		if rect.has_point(mouse_pos):
+			_targeting_hovered_card = card
+			break
+
+	# 적 호버 감지 (아군 카드 위가 아닐 때)
+	if _targeting_hovered_card == null:
 		var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
 		for bw in battle_windows:
 			if not bw.has_method("get_enemy_at_position"):
@@ -411,11 +404,13 @@ func _draw_targeting_arrow() -> void:
 	var from: Vector2 = _targeting_source_pos
 	var to: Vector2 = mouse_pos
 
-	# 유효 타겟 위에 있으면 색상 변경
+	# 유효 타겟 위에 있으면 색상 변경 (적=초록, 아군=시안)
 	var has_valid_target: bool = (_targeting_hovered_enemy != null) or (_targeting_hovered_card != null)
 	var color: Color
-	if has_valid_target:
-		color = ARROW_COLOR_ALLY if _targeting_is_ally_skill else ARROW_COLOR_VALID
+	if _targeting_hovered_card != null:
+		color = ARROW_COLOR_ALLY
+	elif _targeting_hovered_enemy != null:
+		color = ARROW_COLOR_VALID
 	else:
 		color = ARROW_COLOR
 
@@ -475,38 +470,18 @@ func _on_targeting_input(event: InputEvent) -> void:
 
 
 func _try_confirm_target(pos: Vector2) -> void:
-	if _targeting_is_ally_skill:
-		_try_confirm_ally_target(pos)
-	else:
-		_try_confirm_enemy_target(pos)
+	## 자유 타겟팅: 클릭 위치의 아군 카드 또는 적 유닛에 스킬 발동
+	var hero_id: String = _targeting_hero_id
+	var skill_id: String = _targeting_skill_id
 
-
-func _try_confirm_enemy_target(pos: Vector2) -> void:
-	var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
-	for bw in battle_windows:
-		if not bw.has_method("get_enemy_at_position"):
-			continue
-		var enemy = bw.get_enemy_at_position(pos)
-		if enemy != null:
-			var hero_id: String = _targeting_hero_id
-			var skill_id: String = _targeting_skill_id
-			_cancel_targeting()
-			bw.execute_active_skill(hero_id, skill_id, enemy)
-			return
-	# 유효한 타겟 없으면 무시 (취소하지 않음)
-
-
-func _try_confirm_ally_target(pos: Vector2) -> void:
+	# 아군 카드 클릭 확인
 	for card in cards:
 		if card.hero_id.is_empty():
 			continue
 		var rect := Rect2(card.global_position, card.size)
 		if rect.has_point(pos):
-			var hero_id: String = _targeting_hero_id
-			var skill_id: String = _targeting_skill_id
 			var target_hero_id: String = card.hero_id
 			_cancel_targeting()
-			# 전투창이 있으면 전투창을 통해 발동
 			var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
 			for bw in battle_windows:
 				if bw.has_method("execute_active_skill"):
@@ -515,6 +490,18 @@ func _try_confirm_ally_target(pos: Vector2) -> void:
 			# 전투창 없음 → 필드에서 직접 발동
 			_execute_field_ally_skill(hero_id, skill_id, target_hero_id)
 			return
+
+	# 적 유닛 클릭 확인
+	var battle_windows: Array = get_tree().get_nodes_in_group("battle_windows")
+	for bw in battle_windows:
+		if not bw.has_method("get_enemy_at_position"):
+			continue
+		var enemy = bw.get_enemy_at_position(pos)
+		if enemy != null:
+			_cancel_targeting()
+			bw.execute_active_skill(hero_id, skill_id, enemy)
+			return
+	# 유효한 타겟 없으면 무시 (취소하지 않음)
 #endregion
 
 

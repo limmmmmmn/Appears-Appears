@@ -1532,7 +1532,7 @@ func _can_use_skill(hero: Hero, skill_id: String) -> bool:
 
 
 func execute_active_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy = null, ally_target_id: String = "") -> void:
-	## 액티브 스킬 수동 발동: ATB 무관, 쿨타임만 체크
+	## 액티브 스킬 수동 발동: 자유 타겟팅 (적/아군 크로스 가능)
 	if current_state != BattleState.RUNNING:
 		return
 	if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
@@ -1548,27 +1548,71 @@ func execute_active_skill(hero_id: String, skill_id: String, enemy_target: Battl
 	if skill_data.is_empty():
 		return
 
+	var skill_type: String = skill_data.get("type", "physical")
 	var target_type: String = skill_data.get("target", "single_enemy")
-
-	# 적 대상 스킬인데 살아있는 적이 없으면 스킵
-	if target_type not in ["single_ally", "all_allies"]:
-		if not has_alive_enemies():
-			return
 
 	BattleManager.hero_attacked.emit(hero.id)
 
-	match target_type:
-		"single_ally", "all_allies":
-			var forced_ally: Hero = null
-			if not ally_target_id.is_empty():
-				forced_ally = _find_hero_by_id(ally_target_id)
-			_execute_ally_skill(hero, skill_id, skill_data, target_type, forced_ally)
-		"all_enemies":
-			_execute_aoe_attack(hero, skill_id, skill_data)
-		_:
+	# 자유 타겟팅: 클릭한 대상에 따라 실행
+	if enemy_target != null:
+		# 적을 클릭 → 공격 스킬이면 공격, 힐 스킬이면 적 회복
+		if skill_type == "heal":
+			_execute_heal_on_enemy(hero, skill_id, skill_data, enemy_target)
+		else:
 			_execute_single_attack(hero, skill_id, skill_data, enemy_target)
+	elif not ally_target_id.is_empty():
+		# 아군을 클릭 → 힐 스킬이면 회복, 공격 스킬이면 아군에 데미지
+		var ally: Hero = _find_hero_by_id(ally_target_id)
+		if skill_type == "heal":
+			_execute_ally_skill(hero, skill_id, skill_data, "single_ally", ally)
+		else:
+			_execute_attack_on_ally(hero, skill_id, skill_data, ally)
+	else:
+		# 타겟 없이 호출 → 기존 로직 폴백
+		match target_type:
+			"single_ally", "all_allies":
+				_execute_ally_skill(hero, skill_id, skill_data, target_type)
+			"all_enemies":
+				_execute_aoe_attack(hero, skill_id, skill_data)
+			_:
+				_execute_single_attack(hero, skill_id, skill_data)
 
 	CooldownManager.start_cooldown(hero.id, skill_id)
+
+
+func _execute_heal_on_enemy(hero: Hero, skill_id: String, skill_data: Dictionary, target: BattleEnemy) -> void:
+	## 힐 스킬을 적에게 사용 → 적 체력 회복
+	if target == null or not target.is_alive():
+		return
+	var heal_amount: int = _calc_heal_amount(hero, skill_data)
+	var actual_heal: int = target.heal(heal_amount)
+	if SoundManager:
+		SoundManager.play_heal()
+	if target.has_method("show_heal_number"):
+		target.show_heal_number(actual_heal)
+
+
+func _execute_attack_on_ally(hero: Hero, skill_id: String, skill_data: Dictionary, target: Hero) -> void:
+	## 공격 스킬을 아군에게 사용 → 아군에게 데미지
+	if target == null or target.is_dead:
+		return
+	# 간이 데미지 계산 (방어 무시, 순수 공격력 기반)
+	var damage_base: int = int(skill_data.get("damage_base", 0))
+	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
+	var multiplier: float = scaling.get("multiplier", 1.0)
+	var damage: int = 0
+	var skill_type: String = skill_data.get("type", "physical")
+	if skill_id == "power_strike":
+		damage = maxi(1, int(float(hero.get_atk()) * 2.0))
+	elif skill_type == "magic":
+		var int_stat: int = hero.get_base_stat("wis")
+		damage = maxi(1, int(float(damage_base) + float(int_stat) * multiplier))
+	else:
+		damage = maxi(1, int(float(damage_base) + float(hero.get_atk()) * multiplier))
+	var actual: int = target.take_damage(damage)
+	if SoundManager:
+		SoundManager.play_attack(hero.class_id, false)
+	call_deferred("_emit_party_updated")
 
 
 func get_enemy_at_position(screen_pos: Vector2) -> BattleEnemy:
