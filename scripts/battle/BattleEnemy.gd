@@ -545,30 +545,30 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	var gravity: float        # 중력 가속도
 
 	if damage >= 100:
-		font_size = 11
+		font_size = 22
 		color = Color(1.0, 0.3, 0.3)
 		text_suffix = "!!"
 		launch_speed = 250.0
 		gravity = 900.0
 	elif damage >= 61:
-		font_size = 9
+		font_size = 18
 		color = Color(1.0, 0.6, 0.2)
 		text_suffix = "!"
 		launch_speed = 220.0
 		gravity = 850.0
 	elif damage >= 36:
-		font_size = 8
+		font_size = 16
 		color = Color(1.0, 0.9, 0.3)
 		text_suffix = "!"
 		launch_speed = 190.0
 		gravity = 800.0
 	elif damage >= 16:
-		font_size = 6
+		font_size = 12
 		color = Color.WHITE
 		launch_speed = 160.0
 		gravity = 750.0
 	else:
-		font_size = 5
+		font_size = 10
 		color = Color(0.9, 0.9, 0.9)
 		launch_speed = 130.0
 		gravity = 700.0
@@ -596,7 +596,7 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 
 	# 스프라이트 중앙 위에 배치
 	sprite.add_child(label)
-	var start_pos := Vector2(-10, -20)
+	var start_pos := Vector2(-10, 0)
 	label.position = start_pos
 	label.z_index = 100
 	label.pivot_offset = label.size / 2
