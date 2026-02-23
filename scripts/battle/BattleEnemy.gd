@@ -659,7 +659,6 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 		if is_instance_valid(label):
 			label.queue_free()
 	)
-		tree.process_frame.connect(frame_cb)
 
 
 func show_heal_number(amount: int) -> void:
