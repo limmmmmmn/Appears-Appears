@@ -20,7 +20,7 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2)
+signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
@@ -346,6 +346,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	var was_elite: bool = false
 	var was_boss: bool = false
 	var window_gold: int = 0
+	var window_exp: int = 0
 	var window_items: Array = []
 	var window_enemy_kills: int = 0
 	var battle_pos: Vector2 = Vector2.ZERO
@@ -361,6 +362,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 			var window = bd.get("window")
 			if window != null and is_instance_valid(window):
 				window_gold = window.total_gold
+				window_exp = window.total_exp
 				window_items = window.drop_items.duplicate()
 				window_enemy_kills = int(window.get_total_enemy_count())
 				window_screen_rect = Rect2(window.position, window.size)
@@ -368,10 +370,10 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 
 	end_battle(battle_id, victory)
 
-	# HP 오브/골드/아이템은 전투창 위치 기준으로 필드 드롭
-	if victory and (window_enemy_kills > 0 or window_gold > 0 or not window_items.is_empty()):
+	# HP 오브/골드/아이템/EXP는 전투창 위치 기준으로 필드 드롭
+	if victory and (window_enemy_kills > 0 or window_gold > 0 or not window_items.is_empty() or window_exp > 0):
 		var hp_orbs: int = window_enemy_kills
-		field_drops_requested.emit(hp_orbs, window_gold, window_items, battle_pos, window_screen_rect)
+		field_drops_requested.emit(hp_orbs, window_gold, window_items, battle_pos, window_screen_rect, window_exp)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -489,9 +491,9 @@ func claim_accumulated_rewards() -> void:
 	for item in accumulated_items:
 		items_arr.append(item.id)
 
-	if accumulated_gold > 0 or not items_arr.is_empty():
+	if accumulated_gold > 0 or not items_arr.is_empty() or accumulated_exp > 0:
 		var hp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
-		field_drops_requested.emit(hp_orbs, accumulated_gold, items_arr, last_battle_pos, last_window_rect)
+		field_drops_requested.emit(hp_orbs, accumulated_gold, items_arr, last_battle_pos, last_window_rect, accumulated_exp)
 
 	# 초기화
 	reset_accumulated_rewards()

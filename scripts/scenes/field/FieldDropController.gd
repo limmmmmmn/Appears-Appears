@@ -15,12 +15,13 @@ func spawn_battle_drops(
 	world_pos: Vector2,
 	window_rect: Rect2,
 	party_leader: Node2D,
-	world_effect_z: int
+	world_effect_z: int,
+	exp_amount: int = 0
 ) -> void:
 	if host == null:
 		return
 
-	if hp_orbs <= 0 and gold_amount <= 0 and item_ids.is_empty():
+	if hp_orbs <= 0 and gold_amount <= 0 and item_ids.is_empty() and exp_amount <= 0:
 		return
 
 	var equip_item_ids: Array[String] = []
@@ -38,6 +39,17 @@ func spawn_battle_drops(
 	var drops: Array[Dictionary] = []
 	var delay: float = 0.0
 	const DELAY_STEP: float = 0.08
+
+	# EXP 오브 (하늘색) — 먼저 떨어짐
+	var exp_orb_count: int = _calc_exp_orb_count(exp_amount)
+	var exp_per_orb: int = int(ceil(float(exp_amount) / float(maxi(1, exp_orb_count))))
+	var exp_remaining: int = exp_amount
+	for _i in range(exp_orb_count):
+		var orb_exp: int = mini(exp_per_orb, exp_remaining)
+		exp_remaining -= orb_exp
+		drops.append({"type": FieldDrop.DropType.EXP_ORB, "delay": delay, "exp": orb_exp})
+		delay += DELAY_STEP
+
 	for _i in range(hp_orbs):
 		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
 		delay += DELAY_STEP
@@ -58,6 +70,8 @@ func spawn_battle_drops(
 			drop.heal_amount = FieldDrop.HP_PER_ORB
 		elif drop.drop_type == FieldDrop.DropType.GOLD:
 			drop.gold_amount = maxi(1, int(data.get("gold", 1)))
+		elif drop.drop_type == FieldDrop.DropType.EXP_ORB:
+			drop.exp_amount = maxi(1, int(data.get("exp", 1)))
 		elif drop.drop_type == FieldDrop.DropType.ITEM:
 			drop.item_id = str(data.get("item_id", ""))
 			var item_data: Dictionary = {}
@@ -106,6 +120,13 @@ func _resolve_scatter_rect(window_rect: Rect2, world_pos: Vector2, party_leader:
 	if world_pos == Vector2.ZERO and party_leader != null:
 		world_pos = party_leader.global_position
 	return Rect2(world_pos - Vector2(40, 30), Vector2(80, 60))
+
+
+func _calc_exp_orb_count(total_exp: int) -> int:
+	if total_exp <= 0:
+		return 0
+	# EXP 10당 1개, 최소 1 최대 5
+	return clampi(int(ceil(float(total_exp) / 10.0)), 1, 5)
 
 
 func _split_gold_into_drop_chunks(total_gold: int) -> Array[int]:

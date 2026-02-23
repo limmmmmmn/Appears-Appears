@@ -3,19 +3,21 @@ class_name FieldDrop
 ## 필드 드롭 오브젝트: 전투 종료 후 필드에 떨어지는 보상
 ## 플레이어가 위를 지나가면 수집
 
-enum DropType { GOLD, ITEM, HP_ORB, BATTLE_CHEST }
+enum DropType { GOLD, ITEM, HP_ORB, BATTLE_CHEST, EXP_ORB }
 
 const DROP_ICONS := {
 	DropType.GOLD: "🪙",
 	DropType.ITEM: "📦",
 	DropType.HP_ORB: "💗",
 	DropType.BATTLE_CHEST: "🎁",
+	DropType.EXP_ORB: "✦",
 }
 const DROP_COLORS := {
 	DropType.GOLD: Color(1.0, 0.9, 0.3),
 	DropType.ITEM: Color(0.9, 0.6, 1.0),
 	DropType.HP_ORB: Color(1.0, 0.4, 0.6),
 	DropType.BATTLE_CHEST: Color(0.95, 0.8, 0.32),
+	DropType.EXP_ORB: Color(0.45, 0.78, 1.0),
 }
 
 const ITEM_TYPE_ICONS: Dictionary = {
@@ -50,6 +52,7 @@ const GOLD_MAGNET_TRIGGER_DISTANCE: float = 74.0
 
 var drop_type: DropType = DropType.GOLD
 var gold_amount: int = 0
+var exp_amount: int = 0
 var item_id: String = ""
 var item_type: String = ""
 var item_rarity: String = ""
@@ -96,7 +99,7 @@ func _ready() -> void:
 
 	body_entered.connect(_on_body_entered)
 
-	if drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.ITEM or drop_type == DropType.BATTLE_CHEST:
+	if drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.ITEM or drop_type == DropType.BATTLE_CHEST or drop_type == DropType.EXP_ORB:
 		call_deferred("_start_hp_orb_sequence")
 	else:
 		# 즉시 활성화 (기존 동작 유지)
@@ -109,7 +112,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _collected:
 		return
-	if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD) and not _is_homing:
+	if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB) and not _is_homing:
 		var magnet_target: Node2D = _resolve_homing_target()
 		if magnet_target != null and is_instance_valid(magnet_target):
 			var trigger_dist: float = global_position.distance_to(magnet_target.global_position)
@@ -296,7 +299,7 @@ func _on_body_entered(body: Node2D) -> void:
 	if _collected:
 		return
 	if body.is_in_group("party_leader") or body.is_in_group("party"):
-		if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD) and not _is_homing:
+		if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB) and not _is_homing:
 			_begin_homing_to_party()
 			return
 		if drop_type == DropType.BATTLE_CHEST:
@@ -319,6 +322,8 @@ func collect() -> void:
 			_collect_item()
 		DropType.HP_ORB:
 			_collect_hp()
+		DropType.EXP_ORB:
+			_collect_exp()
 
 	_play_collect_anim()
 
@@ -359,6 +364,20 @@ func _collect_hp() -> void:
 		BattleManager.battle_log_received.emit(
 			"💗 파티 전체 HP +%d" % actual_total, Color(0.4, 1.0, 0.4)
 		)
+
+
+func _collect_exp() -> void:
+	## EXP 오브 수집 — 연출용 (EXP는 전투 승리 시 이미 지급됨)
+	if exp_amount > 0:
+		_spawn_exp_popups()
+		if BattleManager:
+			BattleManager.battle_log_received.emit(
+				"✦ EXP +%d" % exp_amount, Color(0.45, 0.78, 1.0)
+			)
+
+
+func _spawn_exp_popups() -> void:
+	_spawn_restore_popups("+%d EXP" % exp_amount, Color(0.45, 0.78, 1.0))
 
 
 func _open_battle_chest() -> void:
@@ -465,7 +484,7 @@ func _build_drop_texture() -> Texture2D:
 			var py: int = y - OBJECT_SIZE / 2
 			var inside: bool = false
 			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.ITEM:
+				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB:
 					inside = float(px * px + py * py) <= 36.0
 				_:
 					inside = x >= 4 and x <= 11 and y >= 4 and y <= 11
@@ -475,7 +494,7 @@ func _build_drop_texture() -> Texture2D:
 
 			var edge: bool = false
 			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.ITEM:
+				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB:
 					edge = float(px * px + py * py) >= 28.0
 				_:
 					edge = false
