@@ -533,7 +533,7 @@ func play_death_effect() -> void:
 
 
 func show_damage_number(damage: int, is_crit: bool = false) -> void:
-	## MOTHER 2/3 스타일 데미지 숫자: 랜덤 방향으로 포물선 튕김
+	## MOTHER 2/3 스타일 데미지 숫자: _process 기반 물리 포물선
 	if not sprite:
 		return
 
@@ -541,45 +541,45 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	var font_size: int
 	var color: Color
 	var text_suffix: String = ""
-	var pop_height: float  # 튀어오르는 높이
-	var pop_speed: float   # 포물선 총 시간
+	var launch_speed: float   # 초기 발사 속력
+	var gravity: float        # 중력 가속도
 
 	if damage >= 100:
-		font_size = 42
+		font_size = 32
 		color = Color(1.0, 0.3, 0.3)
 		text_suffix = "!!"
-		pop_height = 55.0
-		pop_speed = 0.5
+		launch_speed = 110.0
+		gravity = 380.0
 	elif damage >= 61:
-		font_size = 34
+		font_size = 26
 		color = Color(1.0, 0.6, 0.2)
 		text_suffix = "!"
-		pop_height = 45.0
-		pop_speed = 0.45
+		launch_speed = 95.0
+		gravity = 380.0
 	elif damage >= 36:
-		font_size = 28
+		font_size = 22
 		color = Color(1.0, 0.9, 0.3)
 		text_suffix = "!"
-		pop_height = 38.0
-		pop_speed = 0.42
+		launch_speed = 80.0
+		gravity = 360.0
 	elif damage >= 16:
-		font_size = 22
+		font_size = 18
 		color = Color.WHITE
-		pop_height = 30.0
-		pop_speed = 0.38
+		launch_speed = 65.0
+		gravity = 340.0
 	else:
-		font_size = 16
+		font_size = 14
 		color = Color(0.9, 0.9, 0.9)
-		pop_height = 22.0
-		pop_speed = 0.35
+		launch_speed = 50.0
+		gravity = 320.0
 
 	# 크리티컬 보너스
 	if is_crit:
-		font_size = int(font_size * 1.3)
+		font_size = int(font_size * 1.2)
 		color = Color(1.0, 1.0, 0.4)
 		text_suffix = " CRIT!"
-		pop_height *= 1.4
-		pop_speed += 0.08
+		launch_speed *= 1.25
+		gravity *= 0.9
 
 	# 라벨 생성
 	var label := Label.new()
@@ -600,44 +600,92 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	label.position = start_pos
 	label.z_index = 100
 	label.pivot_offset = label.size / 2
+	label.scale = Vector2(1.15, 1.15) if is_crit else Vector2.ONE
 
-	# 랜덤 수평 방향 (-1 또는 +1) + 랜덤 세기
-	var dir_x: float = randf_range(15.0, 35.0) * (1.0 if randf() > 0.5 else -1.0)
-	var ground_y: float = start_pos.y  # 바닥 기준선
+	# 랜덤 발사 각도 (위쪽 60~120도 범위, 즉 살짝 좌우로)
+	var angle: float = randf_range(deg_to_rad(60), deg_to_rad(120))
+	if randf() > 0.5:
+		angle = PI - angle  # 좌우 반전
+	var vel_x: float = cos(angle) * launch_speed * randf_range(0.15, 0.35)
+	var vel_y: float = -sin(angle) * launch_speed  # 위로 (음수)
 
-	# 팝 스케일
-	var bounce_scale: float = 1.3 if is_crit else 1.15
-	label.scale = Vector2(bounce_scale, bounce_scale)
+	# 물리 시뮬레이션용 변수
+	var state := {"vel_x": vel_x, "vel_y": vel_y, "ground_y": start_pos.y, "bounces": 0, "time": 0.0, "fade_started": false}
+	var bounce_damping := 0.35
+	var max_bounces := 2
+	var linger_time := 0.6
+
+	# 팝 등장
 	label.modulate.a = 0.0
+	var pop_tween := create_tween()
+	pop_tween.set_parallel(true)
+	pop_tween.tween_property(label, "modulate:a", 1.0, 0.05)
+	if is_crit:
+		pop_tween.tween_property(label, "scale", Vector2.ONE, 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-	# Phase 1: 팝 등장 (즉시 나타남)
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(label, "scale", Vector2(1.0, 1.0), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "modulate:a", 1.0, 0.06)
+	# _process 콜백으로 물리 시뮬레이션
+	var callable := func(delta: float) -> void:
+		if not is_instance_valid(label):
+			return
+		state.time += delta
 
-	# Phase 2: 포물선 — 위로 튕김 (X: 선형, Y: 위로 갔다 내려옴)
-	tween.tween_property(label, "position:x", start_pos.x + dir_x, pop_speed).set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "position:y", start_pos.y - pop_height, pop_speed * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		# 중력 적용
+		state.vel_y += gravity * delta
+		label.position.x += state.vel_x * delta
+		label.position.y += state.vel_y * delta
 
-	# Phase 2b: 낙하 (중력)
-	tween.set_parallel(false)
-	tween.tween_property(label, "position:y", ground_y, pop_speed * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		# 바닥 충돌 체크
+		if label.position.y >= state.ground_y and state.bounces < max_bounces:
+			label.position.y = state.ground_y
+			state.vel_y = -absf(state.vel_y) * bounce_damping
+			state.vel_x *= 0.5
+			state.bounces += 1
 
-	# Phase 3: 바닥 바운스 (작게 한번 더 튕김)
-	var bounce_h: float = pop_height * 0.2
-	var bounce_dir_x: float = dir_x * 0.15
-	tween.set_parallel(true)
-	tween.tween_property(label, "position:y", ground_y - bounce_h, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "position:x", label.position.x + dir_x + bounce_dir_x, 0.3).set_ease(Tween.EASE_OUT)
-	tween.set_parallel(false)
-	tween.tween_property(label, "position:y", ground_y, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		# 최종 바운스 후 바닥에 안착하면 멈춤
+		if state.bounces >= max_bounces and label.position.y >= state.ground_y:
+			label.position.y = state.ground_y
+			state.vel_x = 0.0
+			state.vel_y = 0.0
 
-	# Phase 4: 잠깐 머무른 후 페이드아웃
-	tween.tween_interval(0.5)
-	tween.tween_property(label, "modulate:a", 0.0, 0.3)
+			# 페이드아웃 시작 (한 번만)
+			if not state.fade_started:
+				state.fade_started = true
+				var fade_tween := label.create_tween()
+				fade_tween.tween_interval(linger_time)
+				fade_tween.tween_property(label, "modulate:a", 0.0, 0.25)
+				fade_tween.finished.connect(func():
+					if is_instance_valid(label):
+						label.queue_free()
+				)
 
-	tween.finished.connect(func(): label.queue_free())
+	label.set_meta("_dmg_physics", callable)
+	label.set_process(true)
+	# 트리에 연결: 매 프레임 callable 호출
+	var _on_process := func():
+		if not is_instance_valid(label):
+			return
+		var cb: Callable = label.get_meta("_dmg_physics", Callable())
+		if cb.is_valid():
+			cb.call(get_process_delta_time())
+	label.ready.connect(func():
+		if is_instance_valid(label):
+			label.set_process(true)
+	)
+	# SceneTree process_frame 시그널 사용
+	var tree := get_tree()
+	if tree:
+		var disconnect_ref := {"connected": true}
+		var frame_cb: Callable
+		frame_cb = func():
+			if not is_instance_valid(label):
+				if disconnect_ref.connected:
+					disconnect_ref.connected = false
+					tree.process_frame.disconnect(frame_cb)
+				return
+			var cb: Callable = label.get_meta("_dmg_physics", Callable())
+			if cb.is_valid():
+				cb.call(tree.root.get_process_delta_time())
+		tree.process_frame.connect(frame_cb)
 
 
 func show_heal_number(amount: int) -> void:
