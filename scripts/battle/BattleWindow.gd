@@ -1393,7 +1393,8 @@ func _process_ready_unit() -> void:
 #endregion
 
 
-func _get_alive_heroes_in_battle(require_face_chip: bool = true) -> Array:
+func _get_alive_heroes_in_battle(_require_face_chip: bool = true) -> Array:
+	## 모든 살아있는 히어로가 모든 전투창에서 행동 가능
 	var result: Array = []
 	if PartyManager == null:
 		return result
@@ -1402,29 +1403,16 @@ func _get_alive_heroes_in_battle(require_face_chip: bool = true) -> Array:
 		var hero: Hero = hero_any as Hero
 		if hero == null:
 			continue
-		if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
-			if not BattleManager.can_hero_act_in_battle(hero.id, battle_id):
-				continue
-		if require_face_chip and not _has_face_chip_in_this_window(hero.id):
-			continue
 		result.append(hero)
 	return result
 
 
 func _prime_party_face_chips_and_locks() -> void:
+	## 모든 히어로를 이 전투창에 표시 (락 무시)
 	var heroes: Array = _get_alive_heroes_in_battle(false)
 	for hero_any in heroes:
 		var hero: Hero = hero_any as Hero
 		if hero == null:
-			continue
-		var can_join_this_window: bool = true
-		if BattleManager != null and BattleManager.has_method("lock_hero_to_battle"):
-			var locked_now: bool = BattleManager.lock_hero_to_battle(hero.id, battle_id)
-			var can_act_here: bool = true
-			if BattleManager.has_method("can_hero_act_in_battle"):
-				can_act_here = BattleManager.can_hero_act_in_battle(hero.id, battle_id)
-			can_join_this_window = locked_now or can_act_here
-		if not can_join_this_window:
 			continue
 		_show_hero_face_chip(hero.id, false, 0, false, 0.6)
 
@@ -1535,9 +1523,6 @@ func execute_active_skill(hero_id: String, skill_id: String, enemy_target: Battl
 	## 액티브 스킬 수동 발동: 자유 타겟팅 (적/아군 크로스 가능)
 	if current_state != BattleState.RUNNING:
 		return
-	if BattleManager != null and BattleManager.has_method("can_hero_act_in_battle"):
-		if not BattleManager.can_hero_act_in_battle(hero_id, battle_id):
-			return
 	var hero: Hero = _find_hero_by_id(hero_id)
 	if hero == null or hero.is_dead:
 		return
@@ -2086,13 +2071,6 @@ func _show_hero_face_chip(
 		return
 	if battle_area == null:
 		return
-	if BattleManager != null and BattleManager.has_method("lock_hero_to_battle"):
-		var locked_now: bool = BattleManager.lock_hero_to_battle(hero_id, battle_id)
-		var can_act_here: bool = true
-		if BattleManager.has_method("can_hero_act_in_battle"):
-			can_act_here = BattleManager.can_hero_act_in_battle(hero_id, battle_id)
-		if not locked_now and not can_act_here:
-			return
 	if SpriteManager == null or not SpriteManager.has_method("get_hero_face_sprite"):
 		return
 
@@ -2370,10 +2348,6 @@ func _transfer_face_chip_to_window(hero_id: String, target_window: BattleWindow)
 	var panel: PanelContainer = _face_chip_panels.get(hero_id, null) as PanelContainer
 	if panel == null or not is_instance_valid(panel):
 		return
-	if BattleManager != null and BattleManager.has_method("transfer_hero_to_battle"):
-		var moved: bool = BattleManager.transfer_hero_to_battle(hero_id, target_window.battle_id)
-		if not moved:
-			return
 	_face_chip_panels.erase(hero_id)
 	_face_chip_order.erase(hero_id)
 	panel.queue_free()
