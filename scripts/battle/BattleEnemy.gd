@@ -533,54 +533,54 @@ func play_death_effect() -> void:
 
 
 func show_damage_number(damage: int, is_crit: bool = false) -> void:
-	## 발라트로 스타일 데미지 숫자 표시
+	## MOTHER 2/3 스타일 데미지 숫자: 랜덤 방향으로 포물선 튕김
 	if not sprite:
 		return
-	
+
 	# 데미지 규모에 따른 설정
 	var font_size: int
 	var color: Color
-	var duration: float
-	var bounce_scale: float
 	var text_suffix: String = ""
-	
+	var pop_height: float  # 튀어오르는 높이
+	var pop_speed: float   # 포물선 총 시간
+
 	if damage >= 100:
 		font_size = 42
-		color = Color(1.0, 0.3, 0.3)  # 빨간색
-		duration = 2.2
-		bounce_scale = 1.8
+		color = Color(1.0, 0.3, 0.3)
 		text_suffix = "!!"
+		pop_height = 55.0
+		pop_speed = 0.5
 	elif damage >= 61:
 		font_size = 34
-		color = Color(1.0, 0.6, 0.2)  # 주황색
-		duration = 1.8
-		bounce_scale = 1.6
+		color = Color(1.0, 0.6, 0.2)
 		text_suffix = "!"
+		pop_height = 45.0
+		pop_speed = 0.45
 	elif damage >= 36:
 		font_size = 28
-		color = Color(1.0, 0.9, 0.3)  # 노란색
-		duration = 1.5
-		bounce_scale = 1.4
+		color = Color(1.0, 0.9, 0.3)
 		text_suffix = "!"
+		pop_height = 38.0
+		pop_speed = 0.42
 	elif damage >= 16:
 		font_size = 22
 		color = Color.WHITE
-		duration = 1.2
-		bounce_scale = 1.2
+		pop_height = 30.0
+		pop_speed = 0.38
 	else:
 		font_size = 16
 		color = Color(0.9, 0.9, 0.9)
-		duration = 1.0
-		bounce_scale = 1.1
-	
+		pop_height = 22.0
+		pop_speed = 0.35
+
 	# 크리티컬 보너스
 	if is_crit:
 		font_size = int(font_size * 1.3)
-		color = Color(1.0, 1.0, 0.4)  # 밝은 노란색
-		duration += 0.3
-		bounce_scale += 0.3
+		color = Color(1.0, 1.0, 0.4)
 		text_suffix = " CRIT!"
-	
+		pop_height *= 1.4
+		pop_speed += 0.08
+
 	# 라벨 생성
 	var label := Label.new()
 	label.text = str(damage) + text_suffix
@@ -588,56 +588,56 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
-	
-	# 테두리 효과 (큰 데미지용)
-	if damage >= 36 or is_crit:
-		label.add_theme_constant_override("outline_size", 3)
-		label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	
+
+	# 검정 테두리 (모든 데미지)
+	var outline_size: int = 3 if damage >= 36 or is_crit else 2
+	label.add_theme_constant_override("outline_size", outline_size)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+
 	# 스프라이트 중앙 위에 배치
 	sprite.add_child(label)
-	label.position = Vector2(-10, -20)
+	var start_pos := Vector2(-10, -20)
+	label.position = start_pos
 	label.z_index = 100
 	label.pivot_offset = label.size / 2
-	
-	# 시작 시 크게 (bounce_scale), 투명
+
+	# 랜덤 수평 방향 (-1 또는 +1) + 랜덤 세기
+	var dir_x: float = randf_range(15.0, 35.0) * (1.0 if randf() > 0.5 else -1.0)
+	var ground_y: float = start_pos.y  # 바닥 기준선
+
+	# 팝 스케일
+	var bounce_scale: float = 1.3 if is_crit else 1.15
 	label.scale = Vector2(bounce_scale, bounce_scale)
 	label.modulate.a = 0.0
-	
-	# 애니메이션
+
+	# Phase 1: 팝 등장 (즉시 나타남)
 	var tween := create_tween()
-	
-	# Phase 1: 펑! 하고 나타남 (0.1초)
 	tween.set_parallel(true)
-	tween.tween_property(label, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "modulate:a", 1.0, 0.08)
-	tween.tween_property(label, "position:y", label.position.y - 8, 0.12)
-	
-	# Phase 2: 머무름
+	tween.tween_property(label, "scale", Vector2(1.0, 1.0), 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 1.0, 0.06)
+
+	# Phase 2: 포물선 — 위로 튕김 (X: 선형, Y: 위로 갔다 내려옴)
+	tween.tween_property(label, "position:x", start_pos.x + dir_x, pop_speed).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "position:y", start_pos.y - pop_height, pop_speed * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+	# Phase 2b: 낙하 (중력)
 	tween.set_parallel(false)
-	tween.tween_interval(duration * 0.55)
+	tween.tween_property(label, "position:y", ground_y, pop_speed * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
-	# Phase 3: 천천히 위로 올라가며 페이드아웃
+	# Phase 3: 바닥 바운스 (작게 한번 더 튕김)
+	var bounce_h: float = pop_height * 0.2
+	var bounce_dir_x: float = dir_x * 0.15
 	tween.set_parallel(true)
-	tween.tween_property(label, "position:y", label.position.y - 30, duration * 0.35)
-	tween.tween_property(label, "modulate:a", 0.0, duration * 0.3)
-	
-	# 큰 데미지면 살짝 흔들림 추가
-	if damage >= 61 or is_crit:
-		_shake_label(label, 0.15)
-	
+	tween.tween_property(label, "position:y", ground_y - bounce_h, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "position:x", label.position.x + dir_x + bounce_dir_x, 0.3).set_ease(Tween.EASE_OUT)
+	tween.set_parallel(false)
+	tween.tween_property(label, "position:y", ground_y, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+	# Phase 4: 잠깐 머무른 후 페이드아웃
+	tween.tween_interval(0.5)
+	tween.tween_property(label, "modulate:a", 0.0, 0.3)
+
 	tween.finished.connect(func(): label.queue_free())
-
-
-func _shake_label(label: Label, duration: float) -> void:
-	## 라벨 흔들림 효과
-	var shake_tween := create_tween()
-	var original_x: float = label.position.x
-	var shake_amount := 3.0
-	
-	for i in range(4):
-		shake_tween.tween_property(label, "position:x", original_x + randf_range(-shake_amount, shake_amount), duration / 4)
-	shake_tween.tween_property(label, "position:x", original_x, 0.05)
 
 
 func show_heal_number(amount: int) -> void:
