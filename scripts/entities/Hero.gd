@@ -16,7 +16,7 @@ const BENCH_EXP_RATIO: float = 0.5
 # 성장/전투 상수
 const SEED_CAP: int = 99
 const AGI_CRIT_RATIO: float = 0.003 # 민첩 100 -> 크리 30%
-const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [2, 5, 10, 15]
+const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [1, 5, 10, 15]
 
 # 행동 타이머 상수 (내부 ATB)
 const ACTION_INTERVAL: float = 5.0     # 행동 간격 기준값
