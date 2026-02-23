@@ -20,12 +20,13 @@ content_margin_bottom = 1.0
 
 [node name="TrinketBadge" type="PanelContainer"]
 custom_minimum_size = Vector2(28, 20)
-mouse_filter = 2
+mouse_filter = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_badge")
 script = ExtResource("1_script")
 
 [node name="EmojiLabel" type="Label" parent="."]
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 14
 text = "🧿"
 horizontal_alignment = 1
