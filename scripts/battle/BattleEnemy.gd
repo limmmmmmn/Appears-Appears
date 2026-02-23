@@ -548,30 +548,30 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 		font_size = 22
 		color = Color(1.0, 0.3, 0.3)
 		text_suffix = "!!"
-		launch_speed = 250.0
-		gravity = 900.0
+		launch_speed = 750.0
+		gravity = 1100.0
 	elif damage >= 61:
 		font_size = 18
 		color = Color(1.0, 0.6, 0.2)
 		text_suffix = "!"
-		launch_speed = 220.0
-		gravity = 850.0
+		launch_speed = 660.0
+		gravity = 1050.0
 	elif damage >= 36:
 		font_size = 16
 		color = Color(1.0, 0.9, 0.3)
 		text_suffix = "!"
-		launch_speed = 190.0
-		gravity = 800.0
+		launch_speed = 570.0
+		gravity = 1000.0
 	elif damage >= 16:
 		font_size = 12
 		color = Color.WHITE
-		launch_speed = 160.0
-		gravity = 750.0
+		launch_speed = 480.0
+		gravity = 950.0
 	else:
 		font_size = 10
 		color = Color(0.9, 0.9, 0.9)
-		launch_speed = 130.0
-		gravity = 700.0
+		launch_speed = 390.0
+		gravity = 900.0
 
 	# 크리티컬 보너스
 	if is_crit:
