@@ -1476,8 +1476,6 @@ func _execute_hero_action(hero: Hero) -> void:
 
 	# 행동 타이머 리셋
 	hero.reset_action_timer()
-	if skill_id != "basic_attack":
-		hero.reset_skill_action_timer()
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -1648,8 +1646,6 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		skill_data = DataManager.get_skill("basic_attack")
 
 	hero.reset_action_timer()
-	if skill_id != "basic_attack":
-		hero.reset_skill_action_timer()
 
 	var target_type: String = skill_data.get("target", "single_enemy")
 
