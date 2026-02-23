@@ -545,30 +545,30 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	var gravity: float        # 중력 가속도
 
 	if damage >= 100:
-		font_size = 32
+		font_size = 11
 		color = Color(1.0, 0.3, 0.3)
 		text_suffix = "!!"
 		launch_speed = 110.0
 		gravity = 380.0
 	elif damage >= 61:
-		font_size = 26
+		font_size = 9
 		color = Color(1.0, 0.6, 0.2)
 		text_suffix = "!"
 		launch_speed = 95.0
 		gravity = 380.0
 	elif damage >= 36:
-		font_size = 22
+		font_size = 8
 		color = Color(1.0, 0.9, 0.3)
 		text_suffix = "!"
 		launch_speed = 80.0
 		gravity = 360.0
 	elif damage >= 16:
-		font_size = 18
+		font_size = 6
 		color = Color.WHITE
 		launch_speed = 65.0
 		gravity = 340.0
 	else:
-		font_size = 14
+		font_size = 5
 		color = Color(0.9, 0.9, 0.9)
 		launch_speed = 50.0
 		gravity = 320.0
