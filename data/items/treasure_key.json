@@ -1,9 +1,0 @@
-{
-  "id": "treasure_key",
-  "name": "보물상자 열쇠",
-  "description": "잠긴 보물상자를 열 수 있다",
-  "type": "key_item",
-  "category": "dungeon_key",
-  "consumable": true,
-  "target_id": "locked_chest"
-}

@@ -11,15 +11,15 @@ var traits: Dictionary = {}
 var dialogues: Dictionary = {}
 var trinkets: Dictionary = {}
 
-const CLASS_RESOURCE_PATH := "res://data/classes"
-const HERO_RESOURCE_PATH := "res://data/heroes"
-const ENEMY_RESOURCE_PATH := "res://data/enemies"
-const SKILL_RESOURCE_PATH := "res://data/skills"
-const EQUIPMENT_RESOURCE_PATH := "res://data/equipment"
-const ITEM_RESOURCE_PATH := "res://data/items"
-const TRAIT_RESOURCE_PATH := "res://data/traits"
+const CLASS_JSON_PATH := "res://data/classes.json"
+const HERO_JSON_PATH := "res://data/heroes.json"
+const ENEMY_JSON_PATH := "res://data/enemies.json"
+const SKILL_JSON_PATH := "res://data/skills.json"
+const EQUIPMENT_JSON_PATH := "res://data/equipment.json"
+const ITEM_JSON_PATH := "res://data/items.json"
+const TRAIT_JSON_PATH := "res://data/traits.json"
 const DIALOGUE_JSON_DIR_PATH := "res://data/dialogues"
-const TRINKET_RESOURCE_PATH := "res://data/trinkets"
+const TRINKET_JSON_PATH := "res://data/trinkets.json"
 
 
 func _ready() -> void:
@@ -40,58 +40,58 @@ func _load_all_data() -> void:
 
 
 func _load_enemy_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(ENEMY_RESOURCE_PATH, "Enemy")
+	var loaded: Dictionary = _load_json_dictionary(ENEMY_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Enemy resources are empty: " + ENEMY_RESOURCE_PATH)
+		push_error("[DataManager] Enemy data is empty: " + ENEMY_JSON_PATH)
 	return loaded
 
 
 func _load_class_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(CLASS_RESOURCE_PATH, "Class")
+	var loaded: Dictionary = _load_json_dictionary(CLASS_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Class resources are empty: " + CLASS_RESOURCE_PATH)
+		push_error("[DataManager] Class data is empty: " + CLASS_JSON_PATH)
 	return loaded
 
 
 func _load_hero_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(HERO_RESOURCE_PATH, "Hero")
+	var loaded: Dictionary = _load_json_dictionary(HERO_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Hero resources are empty: " + HERO_RESOURCE_PATH)
+		push_error("[DataManager] Hero data is empty: " + HERO_JSON_PATH)
 	return loaded
 
 
 func _load_skill_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(SKILL_RESOURCE_PATH, "Skill")
+	var loaded: Dictionary = _load_json_dictionary(SKILL_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Skill resources are empty: " + SKILL_RESOURCE_PATH)
+		push_error("[DataManager] Skill data is empty: " + SKILL_JSON_PATH)
 	return loaded
 
 
 func _load_equipment_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(EQUIPMENT_RESOURCE_PATH, "Equipment")
+	var loaded: Dictionary = _load_json_dictionary(EQUIPMENT_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Equipment resources are empty: " + EQUIPMENT_RESOURCE_PATH)
+		push_error("[DataManager] Equipment data is empty: " + EQUIPMENT_JSON_PATH)
 	return loaded
 
 
 func _load_item_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(ITEM_RESOURCE_PATH, "Item")
+	var loaded: Dictionary = _load_json_dictionary(ITEM_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Item resources are empty: " + ITEM_RESOURCE_PATH)
+		push_error("[DataManager] Item data is empty: " + ITEM_JSON_PATH)
 	return loaded
 
 
 func _load_trait_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(TRAIT_RESOURCE_PATH, "Trait")
+	var loaded: Dictionary = _load_json_dictionary(TRAIT_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Trait resources are empty: " + TRAIT_RESOURCE_PATH)
+		push_error("[DataManager] Trait data is empty: " + TRAIT_JSON_PATH)
 	return loaded
 
 
 func _load_trinket_data() -> Dictionary:
-	var loaded: Dictionary = _load_resource_dict(TRINKET_RESOURCE_PATH, "Trinket")
+	var loaded: Dictionary = _load_json_dictionary(TRINKET_JSON_PATH)
 	if loaded.is_empty():
-		push_error("[DataManager] Trinket resources are empty: " + TRINKET_RESOURCE_PATH)
+		push_error("[DataManager] Trinket data is empty: " + TRINKET_JSON_PATH)
 	return loaded
 
 
@@ -165,35 +165,6 @@ func _load_json_dictionary(path: String) -> Dictionary:
 		push_error("[DataManager] JSON root must be Dictionary: " + path)
 		return {}
 	return json.data as Dictionary
-
-
-func _load_resource_dict(dir_path: String, label: String) -> Dictionary:
-	var out: Dictionary = {}
-	var dir := DirAccess.open(dir_path)
-	if dir == null:
-		return out
-
-	dir.list_dir_begin()
-	while true:
-		var filename: String = dir.get_next()
-		if filename.is_empty():
-			break
-		if dir.current_is_dir() or not filename.ends_with(".json"):
-			continue
-
-		var file_path: String = dir_path.path_join(filename)
-		var entry_data: Dictionary = _load_json_dictionary(file_path)
-		if entry_data.is_empty():
-			push_error("[DataManager] %s JSON load failed: %s" % [label, file_path])
-			continue
-		var entry_id: String = str(entry_data.get("id", ""))
-		if entry_id.is_empty():
-			entry_id = filename.get_basename()
-			entry_data["id"] = entry_id
-		out[entry_id] = entry_data
-
-	dir.list_dir_end()
-	return out
 
 
 # 직업 (get_class -> get_class_data로 변경, Godot 내장 함수와 충돌 방지)

@@ -1,8 +1,0 @@
-{
-  "id": "ancient_coin",
-  "name": "고대 동전",
-  "description": "오래된 문명의 동전. 수집가에게 비싸게 팔 수 있다.",
-  "type": "material",
-  "category": "treasure",
-  "sell_price": 200
-}

@@ -1,0 +1,175 @@
+{
+  "ancient_coin": {
+    "id": "ancient_coin",
+    "name": "고대 동전",
+    "description": "오래된 문명의 동전. 수집가에게 비싸게 팔 수 있다.",
+    "type": "material",
+    "category": "treasure",
+    "sell_price": 200
+  },
+  "boss_key_1": {
+    "id": "boss_key_1",
+    "name": "보스방 열쇠",
+    "description": "스테이지 1 보스방의 문을 연다",
+    "type": "key_item",
+    "category": "dungeon_key",
+    "consumable": true,
+    "target_id": "boss_door_1",
+    "stage": 1
+  },
+  "boss_key_2": {
+    "id": "boss_key_2",
+    "name": "지하 감옥 열쇠",
+    "description": "스테이지 2 보스방의 문을 연다",
+    "type": "key_item",
+    "category": "dungeon_key",
+    "consumable": true,
+    "target_id": "boss_door_2",
+    "stage": 2
+  },
+  "goblin_ear": {
+    "id": "goblin_ear",
+    "name": "고블린 귀",
+    "description": "고블린에게서 얻은 귀. 의뢰 증거로 쓰인다.",
+    "type": "material",
+    "category": "monster_drop",
+    "sell_price": 5
+  },
+  "guild_key": {
+    "id": "guild_key",
+    "name": "모험가 길드 증표",
+    "description": "모험가 길드에 출입할 수 있다",
+    "type": "key_item",
+    "category": "permanent_key",
+    "consumable": false,
+    "target_id": "guild_hall"
+  },
+  "guild_request": {
+    "id": "guild_request",
+    "name": "길드 의뢰서",
+    "description": "모험가 길드에서 받은 의뢰서다.",
+    "type": "key_item",
+    "category": "trigger",
+    "consumable": true,
+    "quest_id": "guild_quest_1"
+  },
+  "invitation": {
+    "id": "invitation",
+    "name": "초대장",
+    "description": "귀족의 연회 초대장이다.",
+    "type": "key_item",
+    "category": "trigger",
+    "consumable": true,
+    "event_id": "noble_party"
+  },
+  "magic_crystal": {
+    "id": "magic_crystal",
+    "name": "마력 결정",
+    "description": "마력이 응축된 결정체. 장비 강화에 쓰인다.",
+    "type": "material",
+    "category": "rare_material",
+    "sell_price": 100
+  },
+  "merchant_token": {
+    "id": "merchant_token",
+    "name": "상인 조합 증표",
+    "description": "상인 조합의 신뢰를 얻었다. 특별 상품을 구매할 수 있다.",
+    "type": "key_item",
+    "category": "trigger",
+    "consumable": false,
+    "unlock_shop": "special_shop"
+  },
+  "mysterious_letter": {
+    "id": "mysterious_letter",
+    "name": "의문의 편지",
+    "description": "발신인 불명의 편지다.",
+    "type": "key_item",
+    "category": "note",
+    "consumable": false,
+    "readable": true,
+    "content": "동쪽 숲에서 기다리겠다.\n혼자 와라.\n- ?"
+  },
+  "old_diary": {
+    "id": "old_diary",
+    "name": "낡은 일기장",
+    "description": "누군가의 일기장이다. 읽어볼 수 있다.",
+    "type": "key_item",
+    "category": "note",
+    "consumable": false,
+    "readable": true,
+    "content": "1월 3일.\n동굴에서 이상한 빛을 봤다.\n그 빛을 따라가면 안 될 것 같은 느낌이 들었다..."
+  },
+  "quest_goblin_proof": {
+    "id": "quest_goblin_proof",
+    "name": "고블린 증표",
+    "description": "고블린을 처치한 증거. 의뢰 완료에 필요하다.",
+    "type": "key_item",
+    "category": "trigger",
+    "consumable": true,
+    "quest_id": "quest_goblin_hunt",
+    "count_required": 5
+  },
+  "secret_key": {
+    "id": "secret_key",
+    "name": "비밀의 열쇠",
+    "description": "숨겨진 방의 문을 연다",
+    "type": "key_item",
+    "category": "dungeon_key",
+    "consumable": true,
+    "target_id": "secret_room"
+  },
+  "slime_jelly": {
+    "id": "slime_jelly",
+    "name": "슬라임 젤리",
+    "description": "슬라임의 핵. 연금술 재료로 쓰인다.",
+    "type": "material",
+    "category": "monster_drop",
+    "sell_price": 10
+  },
+  "storage_key": {
+    "id": "storage_key",
+    "name": "창고 열쇠",
+    "description": "마을 창고를 이용할 수 있다",
+    "type": "key_item",
+    "category": "permanent_key",
+    "consumable": false,
+    "target_id": "town_storage"
+  },
+  "treasure_key": {
+    "id": "treasure_key",
+    "name": "보물상자 열쇠",
+    "description": "잠긴 보물상자를 열 수 있다",
+    "type": "key_item",
+    "category": "dungeon_key",
+    "consumable": true,
+    "target_id": "locked_chest"
+  },
+  "treasure_map": {
+    "id": "treasure_map",
+    "name": "보물 지도",
+    "description": "어딘가에 숨겨진 보물의 위치가 표시되어 있다.",
+    "type": "key_item",
+    "category": "note",
+    "consumable": false,
+    "readable": true,
+    "content": "[지도에 X 표시가 되어있다]\n'큰 나무 아래, 세 걸음 북쪽'"
+  },
+  "wanted_poster": {
+    "id": "wanted_poster",
+    "name": "수배 전단",
+    "description": "고블린 킹의 수배 전단이다.",
+    "type": "key_item",
+    "category": "note",
+    "consumable": false,
+    "readable": true,
+    "content": "현상금: 1000G\n고블린 킹을 처치하는 자에게 포상금을 지급함.\n- 왕국 기사단"
+  },
+  "wolf_pelt": {
+    "id": "wolf_pelt",
+    "name": "늑대 가죽",
+    "description": "품질 좋은 늑대 가죽. 방어구 제작에 쓰인다.",
+    "type": "material",
+    "category": "monster_drop",
+    "sell_price": 20
+  }
+}

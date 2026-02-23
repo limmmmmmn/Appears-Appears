@@ -1,0 +1,360 @@
+{
+  "bat": {
+    "id": "bat",
+    "name": "박쥐",
+    "type": "normal",
+    "stats": {
+      "atk": 11,
+      "def": 2,
+      "dex": 12,
+      "hp": 16
+    },
+    "rewards": {
+      "exp": 16,
+      "gold_max": 8,
+      "gold_min": 3
+    },
+    "drop_table": [
+      {
+        "item_id": "ring_luck",
+        "chance": 0.01
+      },
+      {
+        "item_id": "boots_speed",
+        "chance": 0.015
+      }
+    ],
+    "skills": [
+      "basic_attack"
+    ],
+    "sprite": "bat",
+    "tags": [
+      "monster",
+      "beast",
+      "flying"
+    ],
+    "damage_type": "physical"
+  },
+  "boss_goblin_king": {
+    "id": "boss_goblin_king",
+    "name": "고블린 킹",
+    "type": "boss",
+    "stats": {
+      "atk": 44,
+      "def": 36,
+      "dex": 12,
+      "hp": 900,
+      "int": 6
+    },
+    "rewards": {
+      "exp": 250,
+      "gold_max": 180,
+      "gold_min": 120
+    },
+    "drop_table": [
+      {
+        "item_id": "crown_legendary",
+        "chance": 1.0
+      },
+      {
+        "item_id": "sword_magic",
+        "chance": 0.12
+      },
+      {
+        "item_id": "shield_magic",
+        "chance": 0.08
+      }
+    ],
+    "skills": [
+      "basic_attack",
+      "power_strike"
+    ],
+    "sprite": "boss_goblin_king",
+    "tags": [
+      "monster",
+      "goblin",
+      "humanoid",
+      "boss"
+    ],
+    "damage_type": "physical"
+  },
+  "boss_slime": {
+    "id": "boss_slime",
+    "name": "슬라임 킹",
+    "type": "boss",
+    "stats": {
+      "atk": 20,
+      "def": 10,
+      "dex": 12,
+      "hp": 280,
+      "int": 6
+    },
+    "rewards": {
+      "exp": 220,
+      "gold_max": 95,
+      "gold_min": 55
+    },
+    "drop_table": [
+      {
+        "item_id": "ring_hp",
+        "chance": 0.2
+      },
+      {
+        "item_id": "shield_common",
+        "chance": 0.12
+      }
+    ],
+    "skills": [
+      "basic_attack",
+      "power_strike"
+    ],
+    "sprite": "slime",
+    "tags": [
+      "monster",
+      "slime",
+      "boss"
+    ],
+    "damage_type": "physical"
+  },
+  "dark_mage": {
+    "id": "dark_mage",
+    "name": "다크 메이지",
+    "type": "elite",
+    "stats": {
+      "atk": 38,
+      "def": 8,
+      "dex": 8,
+      "hp": 70,
+      "int": 24
+    },
+    "rewards": {
+      "exp": 60,
+      "gold_max": 70,
+      "gold_min": 40
+    },
+    "drop_table": [
+      {
+        "item_id": "staff_magic",
+        "chance": 0.08
+      },
+      {
+        "item_id": "robe_magic",
+        "chance": 0.05
+      },
+      {
+        "item_id": "ring_int",
+        "chance": 0.04
+      }
+    ],
+    "skills": [
+      "basic_attack",
+      "fireball"
+    ],
+    "sprite": "dark_mage",
+    "tags": [
+      "humanoid",
+      "mage",
+      "elite"
+    ],
+    "damage_type": "magic"
+  },
+  "dark_sorcerer": {
+    "id": "dark_sorcerer",
+    "name": "다크 소서러",
+    "type": "normal",
+    "stats": {
+      "atk": 26,
+      "def": 6,
+      "dex": 10,
+      "hp": 35,
+      "int": 18
+    },
+    "rewards": {
+      "exp": 22,
+      "gold_max": 30,
+      "gold_min": 18
+    },
+    "drop_table": [
+      {
+        "item_id": "robe_common",
+        "chance": 0.02
+      },
+      {
+        "item_id": "staff_magic",
+        "chance": 0.01
+      },
+      {
+        "item_id": "ring_int",
+        "chance": 0.008
+      }
+    ],
+    "skills": [
+      "basic_attack",
+      "fireball"
+    ],
+    "sprite": "dark_sorcerer",
+    "tags": [
+      "humanoid",
+      "mage"
+    ],
+    "damage_type": "magic"
+  },
+  "dragon": {
+    "id": "dragon",
+    "name": "드래곤",
+    "type": "normal",
+    "stats": {
+      "atk": 36,
+      "def": 16,
+      "dex": 10,
+      "hp": 80,
+      "int": 6
+    },
+    "rewards": {
+      "exp": 30,
+      "gold_max": 40,
+      "gold_min": 25
+    },
+    "drop_table": [
+      {
+        "item_id": "sword_magic",
+        "chance": 0.015
+      },
+      {
+        "item_id": "shield_magic",
+        "chance": 0.01
+      },
+      {
+        "item_id": "ring_hp",
+        "chance": 0.015
+      }
+    ],
+    "skills": [
+      "basic_attack",
+      "fireball"
+    ],
+    "sprite": "dragon",
+    "tags": [
+      "monster",
+      "dragon",
+      "flying"
+    ],
+    "damage_type": "physical"
+  },
+  "golem": {
+    "id": "golem",
+    "name": "골렘",
+    "type": "normal",
+    "stats": {
+      "atk": 24,
+      "def": 20,
+      "dex": 4,
+      "hp": 65
+    },
+    "rewards": {
+      "exp": 20,
+      "gold_max": 25,
+      "gold_min": 15
+    },
+    "drop_table": [
+      {
+        "item_id": "shield_common",
+        "chance": 0.02
+      },
+      {
+        "item_id": "iron_helmet",
+        "chance": 0.015
+      },
+      {
+        "item_id": "heavy_armor_magic",
+        "chance": 0.004
+      }
+    ],
+    "skills": [
+      "basic_attack"
+    ],
+    "sprite": "golem",
+    "tags": [
+      "monster",
+      "golem"
+    ],
+    "damage_type": "physical"
+  },
+  "orc_warrior": {
+    "id": "orc_warrior",
+    "name": "오크 전사",
+    "type": "elite",
+    "stats": {
+      "atk": 32,
+      "def": 22,
+      "dex": 8,
+      "hp": 120
+    },
+    "rewards": {
+      "exp": 50,
+      "gold_max": 50,
+      "gold_min": 30
+    },
+    "drop_table": [
+      {
+        "item_id": "axe_magic",
+        "chance": 0.08
+      },
+      {
+        "item_id": "heavy_armor_magic",
+        "chance": 0.05
+      },
+      {
+        "item_id": "shield_magic",
+        "chance": 0.04
+      }
+    ],
+    "skills": [
+      "basic_attack",
+      "power_strike"
+    ],
+    "sprite": "orc_warrior",
+    "tags": [
+      "monster",
+      "orc",
+      "humanoid",
+      "elite"
+    ],
+    "damage_type": "physical"
+  },
+  "slime": {
+    "id": "slime",
+    "name": "슬라임",
+    "type": "normal",
+    "stats": {
+      "atk": 9,
+      "def": 3,
+      "dex": 8,
+      "hp": 20
+    },
+    "rewards": {
+      "exp": 14,
+      "gold_max": 10,
+      "gold_min": 4
+    },
+    "drop_table": [
+      {
+        "item_id": "ring_hp",
+        "chance": 0.015
+      },
+      {
+        "item_id": "leather_helmet",
+        "chance": 0.01
+      }
+    ],
+    "skills": [
+      "basic_attack"
+    ],
+    "sprite": "slime",
+    "tags": [
+      "monster",
+      "slime"
+    ],
+    "damage_type": "physical"
+  }
+}

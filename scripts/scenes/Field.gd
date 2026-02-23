@@ -185,7 +185,7 @@ func _apply_field_template_fallback() -> void:
 
 
 func _load_field_json(fid: String) -> Dictionary:
-	var json_path: String = "res://data/fields/%s.json" % fid
+	var json_path: String = "res://data/fields.json"
 	if not FileAccess.file_exists(json_path):
 		return {}
 	var file := FileAccess.open(json_path, FileAccess.READ)
@@ -198,7 +198,8 @@ func _load_field_json(fid: String) -> Dictionary:
 		return {}
 	if not (json.data is Dictionary):
 		return {}
-	return json.data as Dictionary
+	var all_fields: Dictionary = json.data as Dictionary
+	return (all_fields.get(fid, {}) as Dictionary).duplicate(true)
 
 
 func _process(_delta: float) -> void:

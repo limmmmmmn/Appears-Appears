@@ -5,7 +5,7 @@ signal field_loaded(area_id: String)
 signal field_enemy_spawned(enemy_id: String, position: Vector2)
 signal battle_generated(field_enemy_id: String, battle_enemies: Array)
 
-const ACT_TEMPLATE_DIR := "res://data/acts"
+const ACT_JSON_PATH := "res://data/acts.json"
 
 const DEFAULT_TILE_TYPES: Dictionary = {
 	"grass": {"can_spawn": true, "walkable": true},
@@ -447,49 +447,43 @@ func _ensure_current_area_selected() -> void:
 
 func _load_act_templates() -> Array[ActTemplate]:
 	var templates: Array[ActTemplate] = []
-	var dir: DirAccess = DirAccess.open(ACT_TEMPLATE_DIR)
-	if dir == null:
+	var all_acts: Dictionary = _load_acts_json()
+	if all_acts.is_empty():
 		return templates
 
-	dir.list_dir_begin()
-	while true:
-		var file_name: String = dir.get_next()
-		if file_name.is_empty():
-			break
-		if dir.current_is_dir():
+	for act_id in all_acts:
+		var data: Dictionary = all_acts[act_id] as Dictionary
+		if data.is_empty():
 			continue
-		if not file_name.ends_with(".json"):
-			continue
-
-		var file_path: String = ACT_TEMPLATE_DIR.path_join(file_name)
-		var template: ActTemplate = _load_act_template_from_json(file_path)
+		var template: ActTemplate = _dict_to_act_template(data)
 		if template == null:
-			push_warning("[FieldManager] 액트 템플릿 로드 실패: " + file_path)
+			push_warning("[FieldManager] 액트 템플릿 변환 실패: " + str(act_id))
 			continue
 		if balance_only_act_1 and template.act_id != "act_1":
 			continue
 		templates.append(template)
-	dir.list_dir_end()
 	return templates
 
 
-func _load_act_template_from_json(path: String) -> ActTemplate:
-	if not FileAccess.file_exists(path):
-		return null
-	var file := FileAccess.open(path, FileAccess.READ)
+func _load_acts_json() -> Dictionary:
+	if not FileAccess.file_exists(ACT_JSON_PATH):
+		push_error("[FieldManager] acts.json not found: " + ACT_JSON_PATH)
+		return {}
+	var file := FileAccess.open(ACT_JSON_PATH, FileAccess.READ)
 	if file == null:
-		return null
+		return {}
 	var text: String = file.get_as_text()
 	file.close()
-
 	var json := JSON.new()
 	if json.parse(text) != OK:
-		push_error("[FieldManager] Act JSON parse failed: " + path)
-		return null
+		push_error("[FieldManager] acts.json parse failed")
+		return {}
 	if not (json.data is Dictionary):
-		return null
-	var data: Dictionary = json.data as Dictionary
+		return {}
+	return json.data as Dictionary
 
+
+func _dict_to_act_template(data: Dictionary) -> ActTemplate:
 	var t := ActTemplate.new()
 	t.act_id = str(data.get("act_id", ""))
 	t.act_name = str(data.get("act_name", ""))
@@ -512,7 +506,6 @@ func _load_act_template_from_json(path: String) -> ActTemplate:
 	t.side_branch_chance = float(data.get("side_branch_chance", 0.12))
 	t.boss_area = (data.get("boss_area", {}) as Dictionary).duplicate(true)
 
-	# Pool arrays: JSON stores field data as inline dictionaries
 	var raw_start: Array = data.get("start_area_pool", []) as Array
 	t.start_area_pool = []
 	for entry in raw_start:
@@ -543,7 +536,6 @@ func _load_act_template_from_json(path: String) -> ActTemplate:
 	for entry in raw_fixed_seq:
 		t.fixed_area_sequence.append(str(entry))
 
-	# elite_pool
 	var raw_elite: Array = data.get("elite_pool", []) as Array
 	for entry in raw_elite:
 		t.elite_pool.append(str(entry))

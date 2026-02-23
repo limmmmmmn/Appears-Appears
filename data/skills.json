@@ -1,0 +1,346 @@
+{
+  "aimed_shot": {
+    "id": "aimed_shot",
+    "name": "조준 사격",
+    "description": "정확히 조준하여 쏜다",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 5.0,
+    "mp_cost": 6,
+    "damage_base": 8,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.3
+    },
+    "effects": [
+      {
+        "type": "ignore_eva",
+        "value": 0.5
+      }
+    ],
+    "default_on": true
+  },
+  "arcane_focus": {
+    "id": "arcane_focus",
+    "name": "마력집중",
+    "description": "다음 마법 스킬의 데미지가 2배가 된다.",
+    "type": "buff",
+    "target": "self",
+    "cooldown": 10.0,
+    "mp_cost": 6,
+    "effects": [
+      {
+        "type": "magic_amp",
+        "value": 2.0,
+        "duration": 30.0
+      }
+    ],
+    "default_on": true
+  },
+  "backstab": {
+    "id": "backstab",
+    "name": "백스탭",
+    "description": "급소를 노린다. 크리티컬 확률 증가",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 4.0,
+    "mp_cost": 5,
+    "damage_base": 3,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.2
+    },
+    "effects": [
+      {
+        "type": "crit_bonus",
+        "value": 30
+      }
+    ],
+    "default_on": true
+  },
+  "basic_attack": {
+    "id": "basic_attack",
+    "name": "기본 공격",
+    "description": "기본적인 물리 공격",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 2.0,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.0
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "charge": {
+    "id": "charge",
+    "name": "돌진",
+    "description": "적에게 돌진하여 데미지를 입히고 ATB를 초기화한다.",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 8.0,
+    "mp_cost": 6,
+    "damage_base": 5,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.5
+    },
+    "effects": [
+      {
+        "type": "reset_atb"
+      }
+    ],
+    "default_on": true
+  },
+  "fireball": {
+    "id": "fireball",
+    "name": "파이어볼",
+    "description": "전투창 내 모든 적에게 화염 피해",
+    "type": "magic",
+    "target": "all_enemies",
+    "cooldown": 8.0,
+    "mp_cost": 12,
+    "damage_base": 15,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 1.0
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "group_heal": {
+    "id": "group_heal",
+    "name": "전체힐",
+    "description": "아군 전체의 HP를 소량 회복한다.",
+    "type": "heal",
+    "target": "all_allies",
+    "cooldown": 10.0,
+    "mp_cost": 14,
+    "base_damage": 8,
+    "scaling": 0.5,
+    "effects": [],
+    "default_on": true
+  },
+  "heal": {
+    "id": "heal",
+    "name": "힐",
+    "description": "아군 한 명의 HP를 회복한다 (필드에서도 사용 가능)",
+    "type": "heal",
+    "target": "single_ally",
+    "cooldown": 4.0,
+    "mp_cost": 8,
+    "effects": [],
+    "default_on": true,
+    "base_damage": 12,
+    "scaling": 0.8,
+    "usable_on_field": true
+  },
+  "healing_light": {
+    "id": "healing_light",
+    "name": "치유의빛",
+    "description": "자기 자신의 HP를 소량 회복한다.",
+    "type": "heal",
+    "target": "self",
+    "cooldown": 6.0,
+    "mp_cost": 5,
+    "base_damage": 8,
+    "scaling": 0.5,
+    "effects": [],
+    "default_on": true
+  },
+  "ice_bolt": {
+    "id": "ice_bolt",
+    "name": "아이스볼트",
+    "description": "단일 적에게 높은 마법 데미지를 주고 ATB를 4초간 50% 느리게 한다.",
+    "type": "magic",
+    "target": "single_enemy",
+    "cooldown": 8.0,
+    "mp_cost": 10,
+    "damage_base": 20,
+    "damage_scaling": {
+      "stat": "int",
+      "multiplier": 1.3
+    },
+    "effects": [
+      {
+        "type": "atb_slow",
+        "value": 0.5,
+        "duration": 4.0
+      }
+    ],
+    "default_on": true
+  },
+  "iron_defense": {
+    "id": "iron_defense",
+    "name": "철벽방어",
+    "description": "자신의 DEF를 10초간 80% 증가시키고 적의 공격을 3회 끌어당긴다.",
+    "type": "buff",
+    "target": "self",
+    "cooldown": 14.0,
+    "mp_cost": 8,
+    "effects": [
+      {
+        "type": "def_up",
+        "value": 0.8,
+        "duration": 10.0
+      },
+      {
+        "type": "taunt",
+        "count": 3
+      }
+    ],
+    "default_on": true
+  },
+  "multi_shot": {
+    "id": "multi_shot",
+    "name": "다연사",
+    "description": "3회 연속으로 화살을 발사한다. 각 타격 배율이 낮다.",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 7.0,
+    "mp_cost": 7,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 0.5
+    },
+    "effects": [
+      {
+        "type": "multi_hit",
+        "count": 3
+      }
+    ],
+    "default_on": true
+  },
+  "poison_arrow": {
+    "id": "poison_arrow",
+    "name": "독화살",
+    "description": "데미지를 주고 5초간 독을 부여한다.",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 8.0,
+    "mp_cost": 6,
+    "damage_base": 3,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 1.0
+    },
+    "effects": [
+      {
+        "type": "dot",
+        "dps": 5,
+        "duration": 5.0
+      }
+    ],
+    "default_on": true
+  },
+  "power_strike": {
+    "id": "power_strike",
+    "name": "강타",
+    "description": "공격력의 2배 데미지 (크리티컬 적용)",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 5.0,
+    "mp_cost": 4,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 2.0
+    },
+    "effects": [],
+    "default_on": true
+  },
+  "resurrect": {
+    "id": "resurrect",
+    "name": "부활",
+    "description": "쓰러진 아군 1명을 HP 30%로 부활시킨다.",
+    "type": "resurrect",
+    "target": "single_ally",
+    "cooldown": 20.0,
+    "mp_cost": 18,
+    "effects": [
+      {
+        "type": "revive",
+        "hp_percent": 0.3
+      }
+    ],
+    "default_on": true
+  },
+  "shield_bash": {
+    "id": "shield_bash",
+    "name": "방패 강타",
+    "description": "공격력 절반 데미지 + 다음 2회 공격을 대신 받음",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 8.0,
+    "mp_cost": 6,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 0.5
+    },
+    "effects": [
+      {
+        "type": "taunt",
+        "count": 2
+      }
+    ],
+    "default_on": true
+  },
+  "smoke_bomb": {
+    "id": "smoke_bomb",
+    "name": "연막",
+    "description": "아군 전체의 회피율을 8초간 25% 증가시킨다.",
+    "type": "buff",
+    "target": "all_allies",
+    "cooldown": 14.0,
+    "mp_cost": 8,
+    "effects": [
+      {
+        "type": "eva_up",
+        "value": 25.0,
+        "duration": 8.0
+      }
+    ],
+    "default_on": true
+  },
+  "vital_strike": {
+    "id": "vital_strike",
+    "name": "급소찌르기",
+    "description": "급소를 노려 일반 적은 15% 확률로 즉사, 보스에게는 큰 데미지를 준다.",
+    "type": "physical",
+    "target": "single_enemy",
+    "cooldown": 10.0,
+    "mp_cost": 10,
+    "damage_base": 0,
+    "damage_scaling": {
+      "stat": "str",
+      "multiplier": 2.5
+    },
+    "effects": [
+      {
+        "type": "instant_kill",
+        "chance": 15
+      }
+    ],
+    "default_on": true
+  },
+  "war_cry": {
+    "id": "war_cry",
+    "name": "전쟁함성",
+    "description": "아군 전체의 ATK를 8초간 30% 증가시킨다.",
+    "type": "buff",
+    "target": "all_allies",
+    "cooldown": 12.0,
+    "mp_cost": 8,
+    "effects": [
+      {
+        "type": "atk_up",
+        "value": 0.3,
+        "duration": 8.0
+      }
+    ],
+    "default_on": true
+  }
+}

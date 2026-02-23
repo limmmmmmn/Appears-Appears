@@ -1,8 +1,0 @@
-{
-  "id": "slime_jelly",
-  "name": "슬라임 젤리",
-  "description": "슬라임의 핵. 연금술 재료로 쓰인다.",
-  "type": "material",
-  "category": "monster_drop",
-  "sell_price": 10
-}

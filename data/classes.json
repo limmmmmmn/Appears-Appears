@@ -1,0 +1,265 @@
+{
+  "archer": {
+    "id": "archer",
+    "name": "궁수",
+    "description": "원거리 물리 공격 전문가",
+    "base_stats": {
+      "def": 10,
+      "dex": 18,
+      "hp": 55,
+      "int": 8,
+      "luk": 12,
+      "str": 20
+    },
+    "growth": {
+      "def": 1,
+      "dex": 3,
+      "hp": 5,
+      "int": 1,
+      "luk": 2,
+      "str": 3
+    },
+    "equip_restrictions": {
+      "can_equip": [
+        "bow",
+        "crossbow",
+        "light_armor",
+        "cloth_armor",
+        "acc"
+      ],
+      "dual_wield": false
+    },
+    "tags": [
+      "ranged",
+      "physical",
+      "speed"
+    ],
+    "skills": [
+      "basic_attack",
+      "aimed_shot",
+      "multi_shot",
+      "poison_arrow"
+    ],
+    "action_speed": 1.8
+  },
+  "cleric": {
+    "id": "cleric",
+    "name": "성직자",
+    "description": "치유와 지원 전문가",
+    "base_stats": {
+      "def": 14,
+      "dex": 10,
+      "hp": 65,
+      "int": 24,
+      "luk": 10,
+      "str": 12
+    },
+    "growth": {
+      "def": 2,
+      "dex": 1,
+      "hp": 5,
+      "int": 3,
+      "luk": 1,
+      "str": 1
+    },
+    "equip_restrictions": {
+      "can_equip": [
+        "staff",
+        "mace",
+        "robe",
+        "medium_armor",
+        "acc"
+      ],
+      "dual_wield": false
+    },
+    "tags": [
+      "magic",
+      "support",
+      "healer"
+    ],
+    "skills": [
+      "basic_attack",
+      "heal",
+      "group_heal",
+      "resurrect"
+    ],
+    "action_speed": 2.5
+  },
+  "knight": {
+    "id": "knight",
+    "name": "기사",
+    "description": "중장갑 탱커",
+    "base_stats": {
+      "def": 24,
+      "dex": 8,
+      "hp": 100,
+      "int": 6,
+      "luk": 8,
+      "str": 20
+    },
+    "growth": {
+      "def": 4,
+      "dex": 1,
+      "hp": 10,
+      "int": 1,
+      "luk": 1,
+      "str": 2
+    },
+    "equip_restrictions": {
+      "can_equip": [
+        "sword",
+        "lance",
+        "shield",
+        "heavy_armor",
+        "helmet",
+        "acc"
+      ],
+      "dual_wield": false
+    },
+    "tags": [
+      "melee",
+      "physical",
+      "tank",
+      "heavy"
+    ],
+    "skills": [
+      "basic_attack",
+      "shield_bash",
+      "iron_defense",
+      "healing_light"
+    ],
+    "action_speed": 3.0
+  },
+  "mage": {
+    "id": "mage",
+    "name": "마법사",
+    "description": "강력한 마법 공격 전문가",
+    "base_stats": {
+      "def": 8,
+      "dex": 11,
+      "hp": 50,
+      "int": 28,
+      "luk": 10,
+      "str": 6
+    },
+    "growth": {
+      "def": 1,
+      "dex": 1,
+      "hp": 4,
+      "int": 4,
+      "luk": 1,
+      "str": 1
+    },
+    "equip_restrictions": {
+      "can_equip": [
+        "staff",
+        "wand",
+        "robe",
+        "cloth_armor",
+        "acc"
+      ],
+      "dual_wield": false
+    },
+    "tags": [
+      "magic",
+      "ranged",
+      "aoe"
+    ],
+    "skills": [
+      "basic_attack",
+      "fireball",
+      "ice_bolt",
+      "arcane_focus"
+    ],
+    "action_speed": 2.5
+  },
+  "thief": {
+    "id": "thief",
+    "name": "도적",
+    "description": "빠른 속도와 이도류 전문가",
+    "base_stats": {
+      "def": 10,
+      "dex": 20,
+      "hp": 55,
+      "int": 8,
+      "luk": 14,
+      "str": 16
+    },
+    "growth": {
+      "def": 1,
+      "dex": 4,
+      "hp": 5,
+      "int": 1,
+      "luk": 3,
+      "str": 2
+    },
+    "equip_restrictions": {
+      "can_equip": [
+        "dagger",
+        "sword",
+        "light_armor",
+        "cloth_armor",
+        "acc"
+      ],
+      "dual_wield": true
+    },
+    "tags": [
+      "melee",
+      "physical",
+      "speed",
+      "dual_wield"
+    ],
+    "skills": [
+      "basic_attack",
+      "backstab",
+      "smoke_bomb",
+      "vital_strike"
+    ],
+    "action_speed": 1.5
+  },
+  "warrior": {
+    "id": "warrior",
+    "name": "전사",
+    "description": "균형 잡힌 근접 전투원",
+    "base_stats": {
+      "def": 18,
+      "dex": 12,
+      "hp": 80,
+      "int": 6,
+      "luk": 8,
+      "str": 24
+    },
+    "growth": {
+      "def": 2,
+      "dex": 1,
+      "hp": 8,
+      "int": 1,
+      "luk": 1,
+      "str": 3
+    },
+    "equip_restrictions": {
+      "can_equip": [
+        "sword",
+        "axe",
+        "shield",
+        "heavy_armor",
+        "medium_armor",
+        "helmet",
+        "acc"
+      ],
+      "dual_wield": false
+    },
+    "tags": [
+      "melee",
+      "physical",
+      "tank"
+    ],
+    "skills": [
+      "basic_attack",
+      "power_strike",
+      "war_cry",
+      "charge"
+    ],
+    "action_speed": 2.2
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "aria": {
+    "id": "aria",
+    "name": "아리아",
+    "class_id": "archer",
+    "sprite_field": "aria_field",
+    "sprite_face": "aria_face",
+    "tags": [
+      "elf",
+      "hunter",
+      "nature"
+    ],
+    "description": "숲에서 온 엘프 궁수. 정확한 사격으로 적을 제압한다."
+  },
+  "elena": {
+    "id": "elena",
+    "name": "엘레나",
+    "class_id": "cleric",
+    "sprite_field": "elena_field",
+    "sprite_face": "elena_face",
+    "tags": [
+      "human",
+      "devout",
+      "healer"
+    ],
+    "description": "신전의 사제. 신성한 힘으로 동료를 치유한다."
+  },
+  "gareth": {
+    "id": "gareth",
+    "name": "가레스",
+    "class_id": "knight",
+    "sprite_field": "gareth_field",
+    "sprite_face": "gareth_face",
+    "tags": [
+      "human",
+      "veteran",
+      "shield"
+    ],
+    "description": "베테랑 중기사. 두꺼운 갑옷과 방패로 동료를 지킨다."
+  },
+  "luna": {
+    "id": "luna",
+    "name": "루나",
+    "class_id": "mage",
+    "sprite_field": "luna_field",
+    "sprite_face": "luna_face",
+    "tags": [
+      "human",
+      "scholar",
+      "magic"
+    ],
+    "description": "마법 학원 출신의 천재 마법사. 강력한 공격 마법을 구사한다."
+  },
+  "roland": {
+    "id": "roland",
+    "name": "롤랜드",
+    "class_id": "warrior",
+    "sprite_field": "roland_field",
+    "sprite_face": "roland_face",
+    "tags": [
+      "human",
+      "noble",
+      "leader"
+    ],
+    "description": "왕국의 젊은 기사. 강인한 체력과 검술로 파티를 이끈다."
+  },
+  "shadow": {
+    "id": "shadow",
+    "name": "섀도우",
+    "class_id": "thief",
+    "sprite_field": "shadow_field",
+    "sprite_face": "shadow_face",
+    "tags": [
+      "human",
+      "assassin",
+      "loner"
+    ],
+    "description": "과거를 숨긴 도적. 빠른 손과 이도류가 특기."
+  }
+}

@@ -1,8 +1,0 @@
-{
-  "id": "magic_crystal",
-  "name": "마력 결정",
-  "description": "마력이 응축된 결정체. 장비 강화에 쓰인다.",
-  "type": "material",
-  "category": "rare_material",
-  "sell_price": 100
-}

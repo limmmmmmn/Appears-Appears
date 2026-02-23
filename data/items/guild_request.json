@@ -1,9 +1,0 @@
-{
-  "id": "guild_request",
-  "name": "길드 의뢰서",
-  "description": "모험가 길드에서 받은 의뢰서다.",
-  "type": "key_item",
-  "category": "trigger",
-  "consumable": true,
-  "quest_id": "guild_quest_1"
-}
