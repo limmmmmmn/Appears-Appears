@@ -2812,14 +2812,6 @@ func _end_battle_victory() -> void:
 		SoundManager.play_victory()
 
 	# HUD 보상 알림 (비차단)
-	if total_exp > 0:
-		if BattleManager and BattleManager.has_method("push_hud_notice"):
-			BattleManager.push_hud_notice("EXP +%d" % total_exp, 2.0, Color.CYAN)
-
-	if total_gold > 0:
-		if BattleManager and BattleManager.has_method("push_hud_notice"):
-			BattleManager.push_hud_notice("Gold +%d" % total_gold, 2.0, Color.YELLOW)
-
 	_apply_heart_rewards(1.0)
 
 	# 보상 처리
