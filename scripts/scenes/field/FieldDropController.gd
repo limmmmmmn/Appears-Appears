@@ -80,7 +80,7 @@ func spawn_battle_drops(
 				if item_data.is_empty():
 					item_data = DataManager.get_item(drop.item_id)
 			if not item_data.is_empty():
-				drop.item_type = str(item_data.get("slot", item_data.get("type", "")))
+				drop.item_type = str(item_data.get("type", item_data.get("slot", "")))
 				drop.item_rarity = str(item_data.get("rarity", "common"))
 		drop.position = Vector2(
 			randf_range(scatter_rect.position.x, scatter_rect.end.x),
