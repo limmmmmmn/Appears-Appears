@@ -2827,6 +2827,11 @@ func _show_next_skill_select() -> void:
 		_show_next_skill_select()
 		return
 
+	# 후보 1개면 팝업 없이 자동 해금
+	if candidates.size() == 1:
+		_on_skill_selected(hero_id, candidates[0])
+		return
+
 	# 3지선다 구성: 후보가 충분하면 셔플 후 선택, 부족하면 반복하여 채움
 	var choices: Array = []
 	if candidates.size() >= SKILL_SELECT_CHOICE_COUNT:
