@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/SkillTemplate.gd" id="1_skill_template"]
+
+[resource]
+script = ExtResource("1_skill_template")
+id = "war_cry"
+name = "전쟁함성"
+description = "아군 전체의 ATK를 8초간 30% 증가시킨다."
+type = "buff"
+target = "all_allies"
+cooldown = 12.0
+mp_cost = 8
+effects = [
+  {
+    "type": "atk_up",
+    "value": 0.3,
+    "duration": 8.0
+  }
+]
+default_on = true

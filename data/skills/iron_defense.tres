@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="SkillTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/SkillTemplate.gd" id="1_skill_template"]
+
+[resource]
+script = ExtResource("1_skill_template")
+id = "iron_defense"
+name = "철벽방어"
+description = "자신의 DEF를 10초간 80% 증가시키고 적의 공격을 3회 끌어당긴다."
+type = "buff"
+target = "self"
+cooldown = 14.0
+mp_cost = 8
+effects = [
+  {
+    "type": "def_up",
+    "value": 0.8,
+    "duration": 10.0
+  },
+  {
+    "type": "taunt",
+    "count": 3
+  }
+]
+default_on = true

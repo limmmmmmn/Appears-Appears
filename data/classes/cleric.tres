@@ -28,5 +28,5 @@ equip_restrictions = {
 "dual_wield": false
 }
 tags = ["magic", "support", "healer"]
-skills = ["basic_attack", "heal"]
+skills = ["basic_attack", "heal", "group_heal", "resurrect"]
 action_speed = 2.5

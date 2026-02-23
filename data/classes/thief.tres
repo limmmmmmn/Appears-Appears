@@ -28,5 +28,5 @@ equip_restrictions = {
 "dual_wield": true
 }
 tags = ["melee", "physical", "speed", "dual_wield"]
-skills = ["basic_attack", "backstab"]
+skills = ["basic_attack", "backstab", "smoke_bomb", "vital_strike"]
 action_speed = 1.5

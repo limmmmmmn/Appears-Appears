@@ -28,5 +28,5 @@ equip_restrictions = {
 "dual_wield": false
 }
 tags = Array[String](["ranged", "physical", "speed"])
-skills = Array[String](["basic_attack", "aimed_shot"])
+skills = Array[String](["basic_attack", "aimed_shot", "multi_shot", "poison_arrow"])
 action_speed = 1.8

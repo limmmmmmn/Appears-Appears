@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="SkillTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/SkillTemplate.gd" id="1_skill_template"]
+
+[resource]
+script = ExtResource("1_skill_template")
+id = "vital_strike"
+name = "급소찌르기"
+description = "급소를 노려 일반 적은 15% 확률로 즉사, 보스에게는 큰 데미지를 준다."
+type = "physical"
+target = "single_enemy"
+cooldown = 10.0
+mp_cost = 10
+damage_base = 0
+damage_scaling = {
+  "stat": "str",
+  "multiplier": 2.5
+}
+effects = [
+  {
+    "type": "instant_kill",
+    "chance": 15
+  }
+]
+default_on = true

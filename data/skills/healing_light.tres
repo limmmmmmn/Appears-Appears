@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/SkillTemplate.gd" id="1_skill_template"]
+
+[resource]
+script = ExtResource("1_skill_template")
+id = "healing_light"
+name = "치유의빛"
+description = "자기 자신의 HP를 소량 회복한다."
+type = "heal"
+target = "self"
+cooldown = 6.0
+mp_cost = 5
+base_damage = 8
+scaling = 0.5
+effects = []
+default_on = true

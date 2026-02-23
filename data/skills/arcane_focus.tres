@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/SkillTemplate.gd" id="1_skill_template"]
+
+[resource]
+script = ExtResource("1_skill_template")
+id = "arcane_focus"
+name = "마력집중"
+description = "다음 마법 스킬의 데미지가 2배가 된다."
+type = "buff"
+target = "self"
+cooldown = 10.0
+mp_cost = 6
+effects = [
+  {
+    "type": "magic_amp",
+    "value": 2.0,
+    "duration": 30.0
+  }
+]
+default_on = true

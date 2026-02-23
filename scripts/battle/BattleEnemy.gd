@@ -245,10 +245,53 @@ func reset_action_timer() -> void:
 
 func get_action_delay() -> float:
 	# 보스는 고정 2.5초, 일반/엘리트는 DEX 기반
+	var base_delay: float
 	if enemy_type == "boss":
-		return 2.5
-	return maxf(0.5, 2.0 - get_dex() * 0.05)
+		base_delay = 2.5
+	else:
+		base_delay = maxf(0.5, 2.0 - get_dex() * 0.05)
+	# ATB 슬로우 디버프 적용
+	if _atb_slow_remaining > 0.0:
+		base_delay *= (1.0 + _atb_slow_value)
+	return base_delay
 #endregion
+
+
+# === 디버프 시스템 ===
+var _dot_remaining: float = 0.0
+var _dot_dps: int = 0
+var _dot_tick_timer: float = 0.0
+var _atb_slow_remaining: float = 0.0
+var _atb_slow_value: float = 0.0  # 0.5 = ATB 50% 느려짐
+
+
+func apply_dot(dps: int, duration: float) -> void:
+	_dot_dps = dps
+	_dot_remaining = duration
+	_dot_tick_timer = 0.0
+
+
+func apply_atb_slow(value: float, duration: float) -> void:
+	_atb_slow_value = value
+	_atb_slow_remaining = duration
+
+
+func tick_debuffs(delta: float) -> void:
+	# 도트 처리
+	if _dot_remaining > 0.0:
+		_dot_remaining -= delta
+		_dot_tick_timer += delta
+		if _dot_tick_timer >= 1.0:
+			_dot_tick_timer -= 1.0
+			take_damage(_dot_dps)
+			show_damage_number(_dot_dps, false)
+		if _dot_remaining <= 0.0:
+			_dot_dps = 0
+	# ATB 슬로우 처리
+	if _atb_slow_remaining > 0.0:
+		_atb_slow_remaining -= delta
+		if _atb_slow_remaining <= 0.0:
+			_atb_slow_value = 0.0
 
 
 #region 보상

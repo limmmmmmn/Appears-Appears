@@ -72,6 +72,9 @@ var is_dead: bool = false
 # 도발 상태 (기사 방패 강타)
 var taunt_count: int = 0
 
+# 버프 시스템: { buff_id: { "remaining": float, "value": float } }
+var buffs: Dictionary = {}
+
 # 장비
 var equipment: Dictionary = {
 	"main_hand": "", "off_hand": "", "head": "", "body": "", "acc1": "", "acc2": ""
@@ -662,6 +665,60 @@ func consume_taunt() -> bool:
 func has_taunt() -> bool:
 	## 도발 상태인지 확인
 	return taunt_count > 0
+
+
+# === 버프 시스템 ===
+func apply_buff(buff_id: String, duration: float, value: float = 0.0) -> void:
+	buffs[buff_id] = { "remaining": duration, "value": value }
+
+
+func has_buff(buff_id: String) -> bool:
+	return buffs.has(buff_id) and buffs[buff_id].get("remaining", 0.0) > 0.0
+
+
+func get_buff_value(buff_id: String) -> float:
+	if not has_buff(buff_id):
+		return 0.0
+	return float(buffs[buff_id].get("value", 0.0))
+
+
+func consume_buff(buff_id: String) -> bool:
+	## 1회성 버프 소모 (마력집중 등)
+	if has_buff(buff_id):
+		buffs.erase(buff_id)
+		return true
+	return false
+
+
+func tick_buffs(delta: float) -> void:
+	var expired: Array[String] = []
+	for buff_id in buffs:
+		buffs[buff_id]["remaining"] -= delta
+		if buffs[buff_id]["remaining"] <= 0.0:
+			expired.append(buff_id)
+	for buff_id in expired:
+		buffs.erase(buff_id)
+
+
+func get_buffed_atk() -> int:
+	var base: int = get_atk()
+	if has_buff("atk_up"):
+		base = int(float(base) * (1.0 + get_buff_value("atk_up")))
+	return base
+
+
+func get_buffed_def() -> int:
+	var base: int = get_defense()
+	if has_buff("def_up"):
+		base = int(float(base) * (1.0 + get_buff_value("def_up")))
+	return base
+
+
+func get_buffed_eva() -> float:
+	var base: float = get_eva()
+	if has_buff("eva_up"):
+		base += get_buff_value("eva_up")
+	return clampf(base, 0.0, 80.0)
 #endregion
 
 

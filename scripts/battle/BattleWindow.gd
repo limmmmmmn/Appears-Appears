@@ -253,12 +253,14 @@ func _process(delta: float) -> void:
 	# 적 행동 타이머 충전 (영웅은 ATBManager에서 중앙 관리)
 	_update_enemy_timers(delta)
 
-	# 초당 마나 +1 자연 회복
+	# 초당 마나 +1 자연 회복 + 영웅 버프 틱
 	_mp_regen_timer += delta
 	if _mp_regen_timer >= 1.0:
 		_mp_regen_timer -= 1.0
 		for hero in _get_alive_heroes_in_battle():
 			hero.restore_mp(1)
+	for hero in _get_alive_heroes_in_battle():
+		hero.tick_buffs(delta)
 
 	# 행동 타임아웃 안전장치
 	if is_processing_action:
@@ -1352,6 +1354,11 @@ func _update_enemy_timers(delta: float) -> void:
 	for enemy in enemies:
 		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
 			continue
+		# 디버프 틱 (도트, ATB 슬로우)
+		enemy.tick_debuffs(delta)
+		if not enemy.is_alive():
+			_on_enemy_defeated(enemy)
+			continue
 		if not enemy.is_action_ready():
 			enemy.action_timer = minf(enemy.action_timer + delta * BATTLE_ATB_FILL_RATE, enemy.get_action_delay())
 #endregion
@@ -1491,26 +1498,38 @@ func _execute_hero_action(hero: Hero) -> void:
 	if is_queued and skill_id != "basic_attack":
 		var skill_type: String = skill_data.get("type", "physical")
 		var target_type: String = skill_data.get("target", "single_enemy")
-		if queued_enemy != null and is_instance_valid(queued_enemy):
+		# 버프/자기 버프 스킬 처리
+		if skill_type == "buff" or skill_type == "resurrect":
+			_execute_special_skill(hero, skill_id, skill_data)
+		elif queued_enemy != null and is_instance_valid(queued_enemy):
 			var enemy_target: BattleEnemy = queued_enemy as BattleEnemy
 			if skill_type == "heal":
 				_execute_heal_on_enemy(hero, skill_id, skill_data, enemy_target)
 			else:
 				_execute_single_attack(hero, skill_id, skill_data, enemy_target)
+				_apply_post_attack_effects(hero, skill_id, skill_data, enemy_target)
 		elif not queued_ally_id.is_empty():
 			var ally: Hero = _find_hero_by_id(queued_ally_id)
 			if skill_type == "heal":
 				_execute_ally_skill(hero, skill_id, skill_data, "single_ally", ally)
+			elif skill_type == "resurrect":
+				_execute_special_skill(hero, skill_id, skill_data)
 			else:
 				_execute_attack_on_ally(hero, skill_id, skill_data, ally)
 		else:
 			match target_type:
+				"self":
+					_execute_special_skill(hero, skill_id, skill_data)
 				"single_ally", "all_allies":
-					_execute_ally_skill(hero, skill_id, skill_data, target_type)
+					if skill_type == "heal":
+						_execute_ally_skill(hero, skill_id, skill_data, target_type)
+					else:
+						_execute_special_skill(hero, skill_id, skill_data)
 				"all_enemies":
 					_execute_aoe_attack(hero, skill_id, skill_data)
 				_:
 					_execute_single_attack(hero, skill_id, skill_data)
+					_apply_post_attack_effects(hero, skill_id, skill_data)
 		# MP 소모
 		var mp_cost: int = int(skill_data.get("mp_cost", 0))
 		if mp_cost > 0:
@@ -1574,6 +1593,27 @@ func _pick_auto_skill(hero: Hero) -> String:
 		var mp_cost: int = int(skill_data.get("mp_cost", 0))
 		if mp_cost > 0 and hero.current_mp < mp_cost:
 			continue
+		# 부활 스킬: 죽은 아군이 없으면 스킵
+		if skill_data.get("type", "") == "resurrect":
+			var has_dead: bool = false
+			if PartyManager != null:
+				for h in PartyManager.get_party_heroes():
+					if h is Hero and h.is_dead:
+						has_dead = true
+						break
+			if not has_dead:
+				continue
+		# 힐 스킬: 모든 아군 HP가 80% 이상이면 스킵
+		if skill_data.get("type", "") == "heal":
+			var needs_heal: bool = false
+			for h in _get_alive_heroes_in_battle():
+				if h.get_hp_percent() < 0.8:
+					needs_heal = true
+					break
+			if skill_data.get("target", "") == "self":
+				needs_heal = hero.get_hp_percent() < 0.8
+			if not needs_heal:
+				continue
 		return skill_id
 	return ""
 
@@ -1755,6 +1795,90 @@ func _get_wounded_heroes() -> Array:
 	return result
 
 
+func _execute_special_skill(hero: Hero, skill_id: String, skill_data: Dictionary) -> void:
+	## 버프/부활 등 특수 스킬 실행
+	var skill_type: String = skill_data.get("type", "buff")
+	var target_type: String = skill_data.get("target", "self")
+	var effects: Array = skill_data.get("effects", [])
+
+	_show_hero_face_chip(hero.id, false, 0, false, 1.0)
+
+	if skill_type == "resurrect":
+		# 죽은 아군 부활
+		var hp_percent: float = 0.3
+		for effect in effects:
+			if effect.get("type", "") == "revive":
+				hp_percent = float(effect.get("hp_percent", 0.3))
+		var dead_hero: Hero = null
+		if PartyManager != null:
+			for h in PartyManager.get_party_heroes():
+				var hero_h: Hero = h as Hero
+				if hero_h != null and hero_h.is_dead:
+					dead_hero = hero_h
+					break
+		if dead_hero != null:
+			dead_hero.revive(hp_percent)
+			if SoundManager != null:
+				SoundManager.play_heal()
+		call_deferred("_emit_party_updated")
+		return
+
+	# 버프 스킬 처리
+	for effect in effects:
+		var eff_type: String = str(effect.get("type", ""))
+		var eff_value: float = float(effect.get("value", 0.0))
+		var eff_duration: float = float(effect.get("duration", 8.0))
+
+		match eff_type:
+			"atk_up", "def_up", "eva_up", "magic_amp":
+				# 대상 결정
+				var buff_targets: Array = []
+				if target_type == "self":
+					buff_targets.append(hero)
+				elif target_type == "all_allies":
+					buff_targets = _get_alive_heroes_in_battle()
+				elif target_type == "single_ally":
+					buff_targets.append(hero)
+				for t in buff_targets:
+					t.apply_buff(eff_type, eff_duration, eff_value)
+			"taunt":
+				var count: int = int(effect.get("count", 2))
+				hero.apply_taunt(count)
+
+	if SoundManager != null:
+		SoundManager.play_heal()
+	call_deferred("_emit_party_updated")
+
+
+func _apply_post_attack_effects(hero: Hero, skill_id: String, skill_data: Dictionary, target: BattleEnemy = null) -> void:
+	## 공격 후 특수 효과 적용 (ATB 초기화, 도트, ATB 슬로우, 즉사 등)
+	var effects: Array = skill_data.get("effects", [])
+	if target == null:
+		# 단일 타겟 공격에서 타겟을 지정하지 않은 경우
+		return
+	for effect in effects:
+		var eff_type: String = str(effect.get("type", ""))
+		match eff_type:
+			"reset_atb":
+				target.reset_action_timer()
+			"dot":
+				var dps: int = int(effect.get("dps", 5))
+				var duration: float = float(effect.get("duration", 5.0))
+				target.apply_dot(dps, duration)
+			"atb_slow":
+				var value: float = float(effect.get("value", 0.5))
+				var duration: float = float(effect.get("duration", 4.0))
+				target.apply_atb_slow(value, duration)
+			"instant_kill":
+				if target.is_alive() and target.enemy_type != "boss":
+					var chance: float = float(effect.get("chance", 15))
+					if randf() * 100.0 < chance:
+						target.take_damage(target.current_hp)
+						target.show_damage_number(target.current_hp, true)
+						if not target.is_alive():
+							_on_enemy_defeated(target)
+
+
 func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary, forced_target: BattleEnemy = null) -> void:
 	## 단일 대상 공격 실행
 	if not has_alive_enemies():
@@ -1770,44 +1894,65 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var skill_name: String = skill_data.get("name", "공격")
 	var skill_type: String = skill_data.get("type", "physical")
 
-	# 명중/회피 판정
-	var hit_rate: float = hero.get_hit_rate()
-	var eva_ignore: float = _get_skill_effect_value(skill_data, "ignore_eva", 0.0)
-	var effective_eva: float = target.get_eva() * (1.0 - eva_ignore)
-	var evade_roll: float = randf() * 100
-	var hit_roll: float = randf() * 100
-	var is_evaded: bool = (evade_roll < effective_eva) or (hit_roll > hit_rate)
+	# 다연사 (multi_hit) 처리
+	var hit_count: int = _get_skill_effect_int(skill_data, "multi_hit", 1)
+	var any_crit: bool = false
 
-	if is_evaded:
-		target.show_miss_text()
-		target.play_evade_effect()
-		return
+	for hit_i in hit_count:
+		if not target.is_alive():
+			break
 
-	# 크리티컬 판정
-	var crit_bonus: float = _get_skill_effect_value(skill_data, "crit_bonus", 0.0)
-	var crit_chance: float = hero.get_crit() + crit_bonus
-	var is_crit: bool = randf() * 100 < crit_chance
+		# 명중/회피 판정
+		var hit_rate: float = hero.get_hit_rate()
+		var eva_ignore: float = _get_skill_effect_value(skill_data, "ignore_eva", 0.0)
+		var effective_eva: float = target.get_eva() * (1.0 - eva_ignore)
+		var evade_roll: float = randf() * 100
+		var hit_roll: float = randf() * 100
+		var is_evaded: bool = (evade_roll < effective_eva) or (hit_roll > hit_rate)
 
-	# 데미지 계산
-	var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit, skill_id)
+		if is_evaded:
+			target.show_miss_text()
+			target.play_evade_effect()
+			continue
 
-	# 클래스별 공격 사운드
-	if SoundManager:
-		SoundManager.play_attack(hero.class_id, is_crit)
+		# 크리티컬 판정
+		var crit_bonus: float = _get_skill_effect_value(skill_data, "crit_bonus", 0.0)
+		var crit_chance: float = hero.get_crit() + crit_bonus
+		var is_crit: bool = randf() * 100 < crit_chance
+		if is_crit:
+			any_crit = true
 
-	target.take_damage(damage)
-	target.play_hit_effect(is_crit)
-	target.show_damage_number(damage, is_crit)
-	_show_hero_face_chip(hero.id, false, 0, is_crit, 1.15)
+		# 데미지 계산
+		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit, skill_id)
+
+		# 마력집중 버프 소모 (마법 스킬에만 적용)
+		if skill_type == "magic" and hero.has_buff("magic_amp") and hit_i == 0:
+			var amp: float = hero.get_buff_value("magic_amp")
+			damage = int(float(damage) * amp)
+			hero.consume_buff("magic_amp")
+
+		# 클래스별 공격 사운드 (첫 타격만)
+		if hit_i == 0 and SoundManager:
+			SoundManager.play_attack(hero.class_id, is_crit)
+
+		target.take_damage(damage)
+		target.play_hit_effect(is_crit)
+		target.show_damage_number(damage, is_crit)
+
+	_show_hero_face_chip(hero.id, false, 0, any_crit, 1.15)
 
 	# 크리티컬 시 진동 효과
-	if is_crit:
+	if any_crit:
 		play_critical_shake()
 
 	# 도발 효과 적용 (방패 강타 등)
 	var taunt_count: int = _get_skill_effect_int(skill_data, "taunt", 0)
 	if taunt_count > 0:
 		hero.apply_taunt(taunt_count)
+
+	# 공격 후 특수 효과 (ATB 초기화, 도트, 슬로우, 즉사 등)
+	if target.is_alive():
+		_apply_post_attack_effects(hero, skill_id, skill_data, target)
 
 	if not target.is_alive():
 		_on_enemy_defeated(target)
@@ -1832,6 +1977,13 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 	if SoundManager:
 		SoundManager.play_attack(hero.class_id, false)
 
+	# 마력집중 버프 소모 (AOE 마법에도 적용)
+	var skill_type: String = skill_data.get("type", "physical")
+	var has_magic_amp: bool = skill_type == "magic" and hero.has_buff("magic_amp")
+	var magic_amp_val: float = hero.get_buff_value("magic_amp") if has_magic_amp else 1.0
+	if has_magic_amp:
+		hero.consume_buff("magic_amp")
+
 	var any_crit: bool = false
 	for target in alive_enemies:
 		_show_skill_particle(target, skill_id, skill_data)
@@ -1839,6 +1991,8 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 		if is_crit:
 			any_crit = true
 		var damage: int = _calc_skill_damage(hero, target, skill_data, is_crit, skill_id)
+		if has_magic_amp:
+			damage = int(float(damage) * magic_amp_val)
 
 		target.take_damage(damage)
 		target.play_hit_effect(is_crit)
@@ -1876,6 +2030,20 @@ func _show_skill_particle(target: BattleEnemy, skill_id: String, skill_data: Dic
 			emoji = "🏹"
 		"backstab":
 			emoji = "🗡️"
+		"charge":
+			emoji = "💨"
+			burst_count = 2
+		"multi_shot":
+			emoji = "🏹"
+			burst_count = 3
+		"poison_arrow":
+			emoji = "☠️"
+		"vital_strike":
+			emoji = "🗡️"
+			burst_count = 2
+		"ice_bolt":
+			emoji = "❄️"
+			burst_count = 2
 		"basic_attack":
 			return
 
@@ -1908,6 +2076,10 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 		var targets: Array = []
 		if forced_target != null and not forced_target.is_dead:
 			targets.append(forced_target)
+		elif target_type == "self":
+			# 자기 자신 회복 (치유의빛)
+			if not hero.is_dead:
+				targets.append(hero)
 		elif target_type == "single_ally":
 			# 가장 체력이 낮은 아군 선택
 			var lowest_hp_hero: Hero = null
@@ -1947,12 +2119,13 @@ func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary,
 	var multiplier: float = scaling.get("multiplier", 1.0)
 	var skill_type: String = skill_data.get("type", "physical")
 	var damage: int = 1
-	var crit_attack_base: float = float(hero.get_atk())
+	var hero_atk: int = hero.get_buffed_atk()  # ATK 버프 반영
+	var crit_attack_base: float = float(hero_atk)
 	if resolved_skill_id == "power_strike":
 		# 강타: 평타 강화가 아니라 스킬, 최종 데미지 = 평타 데미지의 2배
-		var basic_damage: int = _calc_physical_damage(float(hero.get_atk()), target.get_p_def())
+		var basic_damage: int = _calc_physical_damage(float(hero_atk), target.get_p_def())
 		damage = maxi(1, basic_damage * 2)
-		crit_attack_base = float(hero.get_atk()) * 2.0
+		crit_attack_base = float(hero_atk) * 2.0
 	elif skill_type == "magic":
 		var int_stat: int = hero.get_base_stat("wis")
 		var equip_matk_bonus: int = hero.get_magic_attack() - int_stat
@@ -1962,7 +2135,7 @@ func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary,
 	else:
 		var skill_mult: float = float(skill_data.get("skill_multiplier", multiplier))
 		var skill_flat: int = int(skill_data.get("skill_flat_bonus", damage_base))
-		var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
+		var effective_atk: float = float(hero_atk) * skill_mult + float(skill_flat)
 		damage = _calc_physical_damage(effective_atk, target.get_p_def())
 		crit_attack_base = effective_atk
 
@@ -2073,7 +2246,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	if SoundManager:
 		SoundManager.play_enemy_attack()
 
-	var is_evaded := randf() * 100 < target.get_eva()
+	var is_evaded := randf() * 100 < target.get_buffed_eva()
 	if is_evaded:
 		return
 
@@ -2098,7 +2271,8 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 		var magic_damage := _calc_magic_damage(float(attack), target.get_m_def())
 		return _calc_critical_damage_from_attack(float(attack)) if is_crit else magic_damage
 	else:
-		var physical_damage := _calc_physical_damage(float(attack), target.get_p_def())
+		var buffed_def: int = target.get_buffed_def()  # DEF 버프 반영
+		var physical_damage := _calc_physical_damage(float(attack), buffed_def)
 		return _calc_critical_damage_from_attack(float(attack)) if is_crit else physical_damage
 
 

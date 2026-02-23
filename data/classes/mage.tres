@@ -28,5 +28,5 @@ equip_restrictions = {
 "dual_wield": false
 }
 tags = ["magic", "ranged", "aoe"]
-skills = ["basic_attack", "fireball"]
+skills = ["basic_attack", "fireball", "ice_bolt", "arcane_focus"]
 action_speed = 2.5
