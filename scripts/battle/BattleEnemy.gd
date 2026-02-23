@@ -422,16 +422,17 @@ func play_slash_effect(is_crit: bool = false) -> void:
 	tween.set_parallel(true)
 	
 	# 나타나면서 회전하며 이동
-	tween.tween_property(slash, "modulate:a", 1.0, 0.05)
-	tween.tween_property(slash, "position", Vector2(20, 0), 0.18).set_ease(Tween.EASE_OUT)
-	tween.tween_property(slash, "rotation_degrees", 45.0, 0.18).set_ease(Tween.EASE_OUT)
-	
+	tween.tween_property(slash, "modulate:a", 1.0, 0.06)
+	tween.tween_property(slash, "position", Vector2(20, 0), 0.22).set_ease(Tween.EASE_OUT)
+	tween.tween_property(slash, "rotation_degrees", 45.0, 0.22).set_ease(Tween.EASE_OUT)
+
 	# 크리티컬이면 스케일 커짐
 	if is_crit:
-		tween.tween_property(slash, "scale", Vector2(1.0, 1.0), 0.12)
-	
-	# 페이드아웃
-	tween.chain().tween_property(slash, "modulate:a", 0.0, 0.12)
+		tween.tween_property(slash, "scale", Vector2(1.0, 1.0), 0.16)
+
+	# 잠깐 유지 후 페이드아웃
+	tween.chain().tween_interval(0.08)
+	tween.chain().tween_property(slash, "modulate:a", 0.0, 0.15)
 	tween.chain().tween_callback(func(): slash.queue_free())
 
 
@@ -458,31 +459,31 @@ func play_hit_effect(is_crit: bool = false) -> void:
 		_hit_tween.set_parallel(true)
 		
 		# 빨간색 플래시
-		_hit_tween.tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.05)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 3, 3), 0.05)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.05)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.08)
-		
+		_hit_tween.tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.07)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 3, 3), 0.07)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.07)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.12)
+
 		# 강한 흔들림 (스프라이트)
 		var shake_tween := create_tween()
 		for i in range(4):
 			var offset := Vector2(randf_range(-6, 6), randf_range(-4, 4))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.05)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.07)
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.06)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.08)
 	else:
 		# 일반: 깜빡임 + 약한 흔들림
 		_hit_tween.set_parallel(true)
 		
 		# 흰색 플래시
-		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.06)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.1)
-		
+		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.08)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.14)
+
 		# 약한 흔들림 (스프라이트)
 		var shake_tween := create_tween()
 		for i in range(2):
 			var offset := Vector2(randf_range(-3, 3), randf_range(-2, 2))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.05)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.07)
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.06)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.08)
 
 
 func play_attack_effect() -> void:
@@ -546,30 +547,30 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	if damage >= 100:
 		font_size = 42
 		color = Color(1.0, 0.3, 0.3)  # 빨간색
-		duration = 1.5
+		duration = 2.2
 		bounce_scale = 1.8
 		text_suffix = "!!"
 	elif damage >= 61:
 		font_size = 34
 		color = Color(1.0, 0.6, 0.2)  # 주황색
-		duration = 1.2
+		duration = 1.8
 		bounce_scale = 1.6
 		text_suffix = "!"
 	elif damage >= 36:
 		font_size = 28
 		color = Color(1.0, 0.9, 0.3)  # 노란색
-		duration = 1.0
+		duration = 1.5
 		bounce_scale = 1.4
 		text_suffix = "!"
 	elif damage >= 16:
 		font_size = 22
 		color = Color.WHITE
-		duration = 0.8
+		duration = 1.2
 		bounce_scale = 1.2
 	else:
 		font_size = 16
 		color = Color(0.9, 0.9, 0.9)
-		duration = 0.6
+		duration = 1.0
 		bounce_scale = 1.1
 	
 	# 크리티컬 보너스
@@ -612,14 +613,14 @@ func show_damage_number(damage: int, is_crit: bool = false) -> void:
 	tween.tween_property(label, "modulate:a", 1.0, 0.08)
 	tween.tween_property(label, "position:y", label.position.y - 8, 0.12)
 	
-	# Phase 2: 잠깐 머무름 + 살짝 위로
+	# Phase 2: 머무름
 	tween.set_parallel(false)
-	tween.tween_interval(duration * 0.5)
-	
+	tween.tween_interval(duration * 0.55)
+
 	# Phase 3: 천천히 위로 올라가며 페이드아웃
 	tween.set_parallel(true)
-	tween.tween_property(label, "position:y", label.position.y - 30, duration * 0.4)
-	tween.tween_property(label, "modulate:a", 0.0, duration * 0.35)
+	tween.tween_property(label, "position:y", label.position.y - 30, duration * 0.35)
+	tween.tween_property(label, "modulate:a", 0.0, duration * 0.3)
 	
 	# 큰 데미지면 살짝 흔들림 추가
 	if damage >= 61 or is_crit:
