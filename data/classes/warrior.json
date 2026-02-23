@@ -1,0 +1,45 @@
+{
+  "id": "warrior",
+  "name": "전사",
+  "description": "균형 잡힌 근접 전투원",
+  "base_stats": {
+    "def": 18,
+    "dex": 12,
+    "hp": 80,
+    "int": 6,
+    "luk": 8,
+    "str": 24
+  },
+  "growth": {
+    "def": 2,
+    "dex": 1,
+    "hp": 8,
+    "int": 1,
+    "luk": 1,
+    "str": 3
+  },
+  "equip_restrictions": {
+    "can_equip": [
+      "sword",
+      "axe",
+      "shield",
+      "heavy_armor",
+      "medium_armor",
+      "helmet",
+      "acc"
+    ],
+    "dual_wield": false
+  },
+  "tags": [
+    "melee",
+    "physical",
+    "tank"
+  ],
+  "skills": [
+    "basic_attack",
+    "power_strike",
+    "war_cry",
+    "charge"
+  ],
+  "action_speed": 2.2
+}

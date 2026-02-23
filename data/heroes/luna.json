@@ -1,0 +1,13 @@
+{
+  "id": "luna",
+  "name": "루나",
+  "class_id": "mage",
+  "sprite_field": "luna_field",
+  "sprite_face": "luna_face",
+  "tags": [
+    "human",
+    "scholar",
+    "magic"
+  ],
+  "description": "마법 학원 출신의 천재 마법사. 강력한 공격 마법을 구사한다."
+}

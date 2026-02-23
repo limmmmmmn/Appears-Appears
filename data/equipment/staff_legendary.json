@@ -1,0 +1,19 @@
+{
+  "id": "staff_legendary",
+  "name": "세계수의 지팡이",
+  "slot": "main_hand",
+  "type": "staff",
+  "rarity": "legendary",
+  "two_handed": false,
+  "stats": {
+    "atk": 20,
+    "int": 45,
+    "hp": 50,
+    "luk": 10
+  },
+  "special_effect": {
+    "type": "nature_blessing",
+    "value": 0.3
+  },
+  "gear_score": 180
+}

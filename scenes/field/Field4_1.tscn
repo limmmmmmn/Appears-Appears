@@ -1,7 +1,6 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/scenes/Field.gd" id="1_script"]
-[ext_resource type="Resource" path="res://data/fields/field4_1.tres" id="2_field_template"]
 [ext_resource type="PackedScene" path="res://scenes/ui/FieldHUD.tscn" id="3_hud_scene"]
 [ext_resource type="PackedScene" path="res://scenes/field/EnemySpawner.tscn" id="4_enemy_spawner_scene"]
 
@@ -23,7 +22,7 @@ spawn_point = NodePath("SpawnPoint")
 boss_spawn_point = NodePath("BossSpawnPoint")
 tilemap = NodePath("TileMapLayer")
 enemy_spawner_node = NodePath("EnemySpawner")
-field_template = ExtResource("2_field_template")
+field_template_id = "field4_1"
 enable_runtime_field_content = true
 play_area_size = Vector2(512, 288)
 

@@ -1,0 +1,14 @@
+{
+  "id": "helmet_rare",
+  "name": "영웅의 투구",
+  "slot": "head",
+  "type": "helmet",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "def": 12,
+    "str": 5,
+    "hp": 25
+  },
+  "gear_score": 32
+}

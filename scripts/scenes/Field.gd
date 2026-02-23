@@ -58,7 +58,7 @@ const BOSS_TRINKET_CHOICE_COUNT: int = 3
 @export var tilemap: TileMapLayer
 @export var enemy_spawner_node: EnemySpawner
 @export var enemy_spawner_scene: PackedScene = preload("res://scenes/field/EnemySpawner.tscn")
-@export var field_template: FieldTemplate
+@export var field_template_id: String = ""
 @export var default_start_position: Vector2 = Vector2(100.0, 100.0)
 @export var enable_runtime_field_content: bool = false
 @export var play_area_origin: Vector2 = Vector2.ZERO
@@ -150,8 +150,8 @@ func _ready() -> void:
 
 
 func _apply_field_template_fallback() -> void:
-	# 씬 단독 실행 시(현재 area 데이터가 비어있을 때) 내장 필드 템플릿을 적용한다.
-	if field_template == null or FieldManager == null:
+	# 씬 단독 실행 시(현재 area 데이터가 비어있을 때) 필드 JSON 데이터를 적용한다.
+	if field_template_id.is_empty() or FieldManager == null:
 		return
 	if not FieldManager.current_area_data.is_empty():
 		return
@@ -166,18 +166,39 @@ func _apply_field_template_fallback() -> void:
 		if not act_id.is_empty():
 			FieldManager.set_current_act(act_id)
 
-	var area_data: Dictionary = field_template.to_runtime_dict("field")
+	var area_data: Dictionary = _load_field_json(field_template_id)
 	if area_data.is_empty():
 		return
-	var area_id: String = field_template.id
+	var area_id: String = str(area_data.get("id", ""))
+	if area_id.is_empty():
+		area_id = field_template_id
 	if area_id.is_empty():
 		area_id = String(name).to_snake_case()
 	if area_id.is_empty():
 		area_id = "field_start"
 	area_data["id"] = area_id
+	if not area_data.has("type"):
+		area_data["type"] = "field"
 
 	FieldManager.current_area_id = area_id
 	FieldManager.current_area_data = area_data
+
+
+func _load_field_json(fid: String) -> Dictionary:
+	var json_path: String = "res://data/fields/%s.json" % fid
+	if not FileAccess.file_exists(json_path):
+		return {}
+	var file := FileAccess.open(json_path, FileAccess.READ)
+	if file == null:
+		return {}
+	var text: String = file.get_as_text()
+	file.close()
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return {}
+	if not (json.data is Dictionary):
+		return {}
+	return json.data as Dictionary
 
 
 func _process(_delta: float) -> void:

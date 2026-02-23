@@ -1,0 +1,13 @@
+{
+  "id": "staff_uncommon",
+  "name": "견습 마법사의 지팡이",
+  "slot": "main_hand",
+  "type": "staff",
+  "rarity": "uncommon",
+  "two_handed": false,
+  "stats": {
+    "atk": 4,
+    "int": 8
+  },
+  "gear_score": 15
+}

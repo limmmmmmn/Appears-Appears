@@ -1,0 +1,35 @@
+{
+  "id": "slime",
+  "name": "슬라임",
+  "type": "normal",
+  "stats": {
+    "atk": 9,
+    "def": 3,
+    "dex": 8,
+    "hp": 20
+  },
+  "rewards": {
+    "exp": 14,
+    "gold_max": 10,
+    "gold_min": 4
+  },
+  "drop_table": [
+    {
+      "item_id": "ring_hp",
+      "chance": 0.015
+    },
+    {
+      "item_id": "leather_helmet",
+      "chance": 0.01
+    }
+  ],
+  "skills": [
+    "basic_attack"
+  ],
+  "sprite": "slime",
+  "tags": [
+    "monster",
+    "slime"
+  ],
+  "damage_type": "physical"
+}

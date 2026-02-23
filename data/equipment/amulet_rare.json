@@ -1,0 +1,14 @@
+{
+  "id": "amulet_rare",
+  "name": "용맹의 목걸이",
+  "slot": "necklace",
+  "type": "necklace",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "str": 8,
+    "atk": 6,
+    "hp": 25
+  },
+  "gear_score": 35
+}

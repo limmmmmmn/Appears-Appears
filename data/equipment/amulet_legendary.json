@@ -1,0 +1,19 @@
+{
+  "id": "amulet_legendary",
+  "name": "불멸의 심장",
+  "slot": "necklace",
+  "type": "necklace",
+  "rarity": "legendary",
+  "two_handed": false,
+  "stats": {
+    "hp": 150,
+    "def": 25,
+    "str": 10,
+    "int": 10
+  },
+  "special_effect": {
+    "type": "undying",
+    "value": 1.0
+  },
+  "gear_score": 250
+}

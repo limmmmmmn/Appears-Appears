@@ -1,0 +1,13 @@
+{
+  "id": "robe_common",
+  "name": "마법사 로브",
+  "slot": "body",
+  "type": "robe",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "def": 2,
+    "int": 3
+  },
+  "gear_score": 5
+}

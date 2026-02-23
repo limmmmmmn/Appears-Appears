@@ -1,0 +1,15 @@
+{
+  "id": "helmet_epic",
+  "name": "정복자의 투구",
+  "slot": "head",
+  "type": "helmet",
+  "rarity": "epic",
+  "two_handed": false,
+  "stats": {
+    "def": 18,
+    "str": 8,
+    "hp": 45,
+    "spd": 3
+  },
+  "gear_score": 55
+}

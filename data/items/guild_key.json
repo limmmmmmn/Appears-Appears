@@ -1,0 +1,9 @@
+{
+  "id": "guild_key",
+  "name": "모험가 길드 증표",
+  "description": "모험가 길드에 출입할 수 있다",
+  "type": "key_item",
+  "category": "permanent_key",
+  "consumable": false,
+  "target_id": "guild_hall"
+}

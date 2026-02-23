@@ -1,0 +1,18 @@
+{
+  "id": "field1_1",
+  "name": "Field1_1",
+  "scene": "res://scenes/field/Field1_1.tscn",
+  "enemy_count": {
+    "max": 6,
+    "min": 5
+  },
+  "enemy_pool": {
+    "default": {
+      "bat": 35,
+      "golem": 10,
+      "slime": 55
+    }
+  },
+  "elite_chance": 0.02,
+  "field_boss_id": "boss_slime"
+}

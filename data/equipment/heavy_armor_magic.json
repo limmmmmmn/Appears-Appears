@@ -1,0 +1,13 @@
+{
+  "id": "heavy_armor_magic",
+  "name": "오크 대장의 갑옷",
+  "slot": "body",
+  "type": "heavy_armor",
+  "rarity": "magic",
+  "two_handed": false,
+  "stats": {
+    "def": 25,
+    "hp": 30
+  },
+  "gear_score": 38
+}

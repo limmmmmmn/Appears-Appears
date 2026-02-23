@@ -1,0 +1,14 @@
+{
+  "id": "boots_rare",
+  "name": "질풍의 장화",
+  "slot": "boots",
+  "type": "shoes",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "spd": 12,
+    "def": 5,
+    "luk": 4
+  },
+  "gear_score": 32
+}

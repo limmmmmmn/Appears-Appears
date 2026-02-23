@@ -1,0 +1,44 @@
+{
+  "id": "thief",
+  "name": "도적",
+  "description": "빠른 속도와 이도류 전문가",
+  "base_stats": {
+    "def": 10,
+    "dex": 20,
+    "hp": 55,
+    "int": 8,
+    "luk": 14,
+    "str": 16
+  },
+  "growth": {
+    "def": 1,
+    "dex": 4,
+    "hp": 5,
+    "int": 1,
+    "luk": 3,
+    "str": 2
+  },
+  "equip_restrictions": {
+    "can_equip": [
+      "dagger",
+      "sword",
+      "light_armor",
+      "cloth_armor",
+      "acc"
+    ],
+    "dual_wield": true
+  },
+  "tags": [
+    "melee",
+    "physical",
+    "speed",
+    "dual_wield"
+  ],
+  "skills": [
+    "basic_attack",
+    "backstab",
+    "smoke_bomb",
+    "vital_strike"
+  ],
+  "action_speed": 1.5
+}

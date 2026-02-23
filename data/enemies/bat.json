@@ -1,0 +1,36 @@
+{
+  "id": "bat",
+  "name": "박쥐",
+  "type": "normal",
+  "stats": {
+    "atk": 11,
+    "def": 2,
+    "dex": 12,
+    "hp": 16
+  },
+  "rewards": {
+    "exp": 16,
+    "gold_max": 8,
+    "gold_min": 3
+  },
+  "drop_table": [
+    {
+      "item_id": "ring_luck",
+      "chance": 0.01
+    },
+    {
+      "item_id": "boots_speed",
+      "chance": 0.015
+    }
+  ],
+  "skills": [
+    "basic_attack"
+  ],
+  "sprite": "bat",
+  "tags": [
+    "monster",
+    "beast",
+    "flying"
+  ],
+  "damage_type": "physical"
+}

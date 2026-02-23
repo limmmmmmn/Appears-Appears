@@ -1,0 +1,14 @@
+{
+  "id": "chainmail_rare",
+  "name": "드워프제 갑옷",
+  "slot": "body",
+  "type": "medium_armor",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "def": 24,
+    "hp": 35,
+    "str": 4
+  },
+  "gear_score": 48
+}

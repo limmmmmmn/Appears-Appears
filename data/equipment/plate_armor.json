@@ -1,0 +1,13 @@
+{
+  "id": "plate_armor",
+  "name": "판금 갑옷",
+  "slot": "body",
+  "type": "heavy_armor",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "def": 15,
+    "spd": -2
+  },
+  "gear_score": 13
+}

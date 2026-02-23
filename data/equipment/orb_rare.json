@@ -1,0 +1,13 @@
+{
+  "id": "orb_rare",
+  "name": "원소의 오브",
+  "slot": "off_hand",
+  "type": "orb",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "int": 12,
+    "spd": 2
+  },
+  "gear_score": 32
+}

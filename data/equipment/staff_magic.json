@@ -1,0 +1,13 @@
+{
+  "id": "staff_magic",
+  "name": "현자의 지팡이",
+  "slot": "main_hand",
+  "type": "staff",
+  "rarity": "magic",
+  "two_handed": false,
+  "stats": {
+    "atk": 5,
+    "int": 14
+  },
+  "gear_score": 28
+}

@@ -1,0 +1,13 @@
+{
+  "id": "iron_helmet",
+  "name": "철 투구",
+  "slot": "head",
+  "type": "helmet",
+  "rarity": "uncommon",
+  "two_handed": false,
+  "stats": {
+    "def": 5,
+    "hp": 5
+  },
+  "gear_score": 8
+}

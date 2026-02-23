@@ -1,0 +1,16 @@
+{
+  "id": "power_strike",
+  "name": "강타",
+  "description": "공격력의 2배 데미지 (크리티컬 적용)",
+  "type": "physical",
+  "target": "single_enemy",
+  "cooldown": 5.0,
+  "mp_cost": 4,
+  "damage_base": 0,
+  "damage_scaling": {
+    "stat": "str",
+    "multiplier": 2.0
+  },
+  "effects": [],
+  "default_on": true
+}

@@ -1,0 +1,14 @@
+{
+  "id": "circlet_epic",
+  "name": "달빛 왕관",
+  "slot": "head",
+  "type": "circlet",
+  "rarity": "epic",
+  "two_handed": false,
+  "stats": {
+    "int": 18,
+    "luk": 8,
+    "hp": 20
+  },
+  "gear_score": 60
+}

@@ -1,0 +1,43 @@
+{
+  "id": "cleric",
+  "name": "성직자",
+  "description": "치유와 지원 전문가",
+  "base_stats": {
+    "def": 14,
+    "dex": 10,
+    "hp": 65,
+    "int": 24,
+    "luk": 10,
+    "str": 12
+  },
+  "growth": {
+    "def": 2,
+    "dex": 1,
+    "hp": 5,
+    "int": 3,
+    "luk": 1,
+    "str": 1
+  },
+  "equip_restrictions": {
+    "can_equip": [
+      "staff",
+      "mace",
+      "robe",
+      "medium_armor",
+      "acc"
+    ],
+    "dual_wield": false
+  },
+  "tags": [
+    "magic",
+    "support",
+    "healer"
+  ],
+  "skills": [
+    "basic_attack",
+    "heal",
+    "group_heal",
+    "resurrect"
+  ],
+  "action_speed": 2.5
+}

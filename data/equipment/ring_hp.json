@@ -1,0 +1,12 @@
+{
+  "id": "ring_hp",
+  "name": "생명의 반지",
+  "slot": "ring",
+  "type": "ring",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "hp": 20
+  },
+  "gear_score": 5
+}

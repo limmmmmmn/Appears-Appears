@@ -1,0 +1,13 @@
+{
+  "id": "tome_rare",
+  "name": "고대의 마법서",
+  "slot": "off_hand",
+  "type": "tome",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "int": 14,
+    "atk": 3
+  },
+  "gear_score": 35
+}

@@ -1,0 +1,12 @@
+{
+  "id": "bow_common",
+  "name": "사냥꾼의 활",
+  "slot": "main_hand",
+  "type": "bow",
+  "rarity": "common",
+  "two_handed": true,
+  "stats": {
+    "atk": 10
+  },
+  "gear_score": 10
+}

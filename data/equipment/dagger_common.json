@@ -1,0 +1,13 @@
+{
+  "id": "dagger_common",
+  "name": "단검",
+  "slot": "main_hand",
+  "type": "dagger",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "atk": 5,
+    "spd": 2
+  },
+  "gear_score": 7
+}

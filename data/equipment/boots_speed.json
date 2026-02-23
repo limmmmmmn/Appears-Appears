@@ -1,0 +1,12 @@
+{
+  "id": "boots_speed",
+  "name": "신속의 장화",
+  "slot": "boots",
+  "type": "shoes",
+  "rarity": "uncommon",
+  "two_handed": false,
+  "stats": {
+    "spd": 5
+  },
+  "gear_score": 8
+}

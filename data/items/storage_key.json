@@ -1,0 +1,9 @@
+{
+  "id": "storage_key",
+  "name": "창고 열쇠",
+  "description": "마을 창고를 이용할 수 있다",
+  "type": "key_item",
+  "category": "permanent_key",
+  "consumable": false,
+  "target_id": "town_storage"
+}

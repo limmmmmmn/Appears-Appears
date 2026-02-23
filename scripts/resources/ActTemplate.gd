@@ -33,8 +33,8 @@ class_name ActTemplate
 @export var side_branch_chance: float = 0.12
 
 @export_group("Area Pools")
-@export var start_area_pool: Array[FieldTemplate] = []
-@export var field_pool: Array[FieldTemplate] = []
+@export var start_area_pool: Array = []
+@export var field_pool: Array = []
 @export var dungeon_pool: Array[Dictionary] = []
 @export var event_pool: Array[Dictionary] = []
 @export var town_pool: Array = []

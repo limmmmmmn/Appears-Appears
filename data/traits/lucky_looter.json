@@ -1,0 +1,10 @@
+{
+  "id": "lucky_looter",
+  "name": "행운의 약탈자",
+  "description": "아이템 드롭률 +25%",
+  "icon": "🎁",
+  "effect": {
+    "type": "loot_mult",
+    "value": 0.25
+  }
+}

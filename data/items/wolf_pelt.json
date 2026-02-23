@@ -1,0 +1,8 @@
+{
+  "id": "wolf_pelt",
+  "name": "늑대 가죽",
+  "description": "품질 좋은 늑대 가죽. 방어구 제작에 쓰인다.",
+  "type": "material",
+  "category": "monster_drop",
+  "sell_price": 20
+}

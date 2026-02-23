@@ -1,0 +1,12 @@
+{
+  "id": "ring_str",
+  "name": "힘의 반지",
+  "slot": "ring",
+  "type": "ring",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "str": 3
+  },
+  "gear_score": 5
+}

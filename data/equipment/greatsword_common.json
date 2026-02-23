@@ -1,0 +1,12 @@
+{
+  "id": "greatsword_common",
+  "name": "대검",
+  "slot": "main_hand",
+  "type": "sword",
+  "rarity": "common",
+  "two_handed": true,
+  "stats": {
+    "atk": 15
+  },
+  "gear_score": 15
+}

@@ -1,0 +1,14 @@
+{
+  "id": "helmet_magic",
+  "name": "전사의 투구",
+  "slot": "head",
+  "type": "helmet",
+  "rarity": "magic",
+  "two_handed": false,
+  "stats": {
+    "def": 8,
+    "str": 3,
+    "hp": 10
+  },
+  "gear_score": 18
+}

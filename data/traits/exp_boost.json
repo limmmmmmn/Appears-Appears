@@ -1,0 +1,10 @@
+{
+  "id": "exp_boost",
+  "name": "빠른 성장",
+  "description": "경험치 획득량 +15%",
+  "icon": "⭐",
+  "effect": {
+    "type": "exp_mult",
+    "value": 0.15
+  }
+}

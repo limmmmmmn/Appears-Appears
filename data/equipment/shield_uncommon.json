@@ -1,0 +1,13 @@
+{
+  "id": "shield_uncommon",
+  "name": "철 방패",
+  "slot": "off_hand",
+  "type": "shield",
+  "rarity": "uncommon",
+  "two_handed": false,
+  "stats": {
+    "def": 8,
+    "hp": 10
+  },
+  "gear_score": 13
+}

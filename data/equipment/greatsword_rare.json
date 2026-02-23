@@ -1,0 +1,13 @@
+{
+  "id": "greatsword_rare",
+  "name": "파멸의 대검",
+  "slot": "main_hand",
+  "type": "sword",
+  "rarity": "rare",
+  "two_handed": true,
+  "stats": {
+    "atk": 35,
+    "str": 6
+  },
+  "gear_score": 48
+}

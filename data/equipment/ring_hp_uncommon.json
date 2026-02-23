@@ -1,0 +1,13 @@
+{
+  "id": "ring_hp_uncommon",
+  "name": "활력의 반지",
+  "slot": "ring",
+  "type": "ring",
+  "rarity": "uncommon",
+  "two_handed": false,
+  "stats": {
+    "hp": 35,
+    "def": 2
+  },
+  "gear_score": 12
+}

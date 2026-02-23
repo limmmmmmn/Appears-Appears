@@ -1,0 +1,12 @@
+{
+  "id": "boots_common",
+  "name": "가죽 장화",
+  "slot": "boots",
+  "type": "shoes",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "spd": 2
+  },
+  "gear_score": 3
+}

@@ -1,0 +1,23 @@
+{
+  "id": "field3_2",
+  "name": "Field3_2",
+  "scene": "res://scenes/field/Field3_2.tscn",
+  "weight": 1.0,
+  "enemy_count": {
+    "max": 8,
+    "min": 6
+  },
+  "enemy_pool": {
+    "default": {
+      "dark_mage": 35,
+      "dragon": 40,
+      "orc_warrior": 25
+    }
+  },
+  "elite_chance": 0.18,
+  "elite_pool": [
+    "orc_warrior",
+    "dark_mage"
+  ],
+  "field_boss_id": "boss_goblin_king"
+}

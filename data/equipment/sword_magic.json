@@ -1,0 +1,13 @@
+{
+  "id": "sword_magic",
+  "name": "마법검",
+  "slot": "main_hand",
+  "type": "sword",
+  "rarity": "magic",
+  "two_handed": false,
+  "stats": {
+    "atk": 16,
+    "int": 3
+  },
+  "gear_score": 22
+}

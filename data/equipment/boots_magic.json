@@ -1,0 +1,13 @@
+{
+  "id": "boots_magic",
+  "name": "바람걸음 장화",
+  "slot": "boots",
+  "type": "shoes",
+  "rarity": "magic",
+  "two_handed": false,
+  "stats": {
+    "spd": 8,
+    "def": 3
+  },
+  "gear_score": 18
+}

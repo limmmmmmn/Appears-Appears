@@ -1,0 +1,13 @@
+{
+  "id": "hood_common",
+  "name": "천 두건",
+  "slot": "head",
+  "type": "hood",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "def": 1,
+    "int": 2
+  },
+  "gear_score": 3
+}

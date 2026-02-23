@@ -1,0 +1,14 @@
+{
+  "id": "gloves_magic",
+  "name": "전투 장갑",
+  "slot": "gloves",
+  "type": "gloves",
+  "rarity": "magic",
+  "two_handed": false,
+  "stats": {
+    "def": 5,
+    "str": 4,
+    "atk": 2
+  },
+  "gear_score": 18
+}

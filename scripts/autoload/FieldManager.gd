@@ -458,19 +458,97 @@ func _load_act_templates() -> Array[ActTemplate]:
 			break
 		if dir.current_is_dir():
 			continue
-		if not file_name.ends_with(".tres"):
+		if not file_name.ends_with(".json"):
 			continue
 
-		var res_path: String = ACT_TEMPLATE_DIR.path_join(file_name)
-		var template: ActTemplate = load(res_path) as ActTemplate
+		var file_path: String = ACT_TEMPLATE_DIR.path_join(file_name)
+		var template: ActTemplate = _load_act_template_from_json(file_path)
 		if template == null:
-			push_warning("[FieldManager] 액트 템플릿 로드 실패: " + res_path)
+			push_warning("[FieldManager] 액트 템플릿 로드 실패: " + file_path)
 			continue
 		if balance_only_act_1 and template.act_id != "act_1":
 			continue
 		templates.append(template)
 	dir.list_dir_end()
 	return templates
+
+
+func _load_act_template_from_json(path: String) -> ActTemplate:
+	if not FileAccess.file_exists(path):
+		return null
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return null
+	var text: String = file.get_as_text()
+	file.close()
+
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		push_error("[FieldManager] Act JSON parse failed: " + path)
+		return null
+	if not (json.data is Dictionary):
+		return null
+	var data: Dictionary = json.data as Dictionary
+
+	var t := ActTemplate.new()
+	t.act_id = str(data.get("act_id", ""))
+	t.act_name = str(data.get("act_name", ""))
+	t.act_order = int(data.get("act_order", 1))
+	t.terrain_enemies = (data.get("terrain_enemies", {}) as Dictionary).duplicate(true)
+	t.default_enemy_pool = (data.get("default_enemy_pool", {}) as Dictionary).duplicate(true)
+	t.boss_enemy_id = str(data.get("boss_enemy_id", "boss_goblin_king"))
+	t.default_enemy_count = (data.get("default_enemy_count", {"min": 4, "max": 6}) as Dictionary).duplicate(true)
+	t.default_elite_chance = float(data.get("default_elite_chance", 0.2))
+	t.min_regular_areas = int(data.get("min_regular_areas", 5))
+	t.max_regular_areas = int(data.get("max_regular_areas", 7))
+	t.guaranteed_town_count = int(data.get("guaranteed_town_count", 1))
+	t.guaranteed_event_count = int(data.get("guaranteed_event_count", 1))
+	t.guaranteed_dungeon_count = int(data.get("guaranteed_dungeon_count", 1))
+	t.field_weight = float(data.get("field_weight", 0.5))
+	t.dungeon_weight = float(data.get("dungeon_weight", 0.25))
+	t.event_weight = float(data.get("event_weight", 0.15))
+	t.town_weight = float(data.get("town_weight", 0.10))
+	t.skip_link_chance = float(data.get("skip_link_chance", 0.28))
+	t.side_branch_chance = float(data.get("side_branch_chance", 0.12))
+	t.boss_area = (data.get("boss_area", {}) as Dictionary).duplicate(true)
+
+	# Pool arrays: JSON stores field data as inline dictionaries
+	var raw_start: Array = data.get("start_area_pool", []) as Array
+	t.start_area_pool = []
+	for entry in raw_start:
+		t.start_area_pool.append((entry as Dictionary).duplicate(true))
+
+	var raw_field: Array = data.get("field_pool", []) as Array
+	t.field_pool = []
+	for entry in raw_field:
+		t.field_pool.append((entry as Dictionary).duplicate(true))
+
+	var raw_dungeon: Array = data.get("dungeon_pool", []) as Array
+	for entry in raw_dungeon:
+		t.dungeon_pool.append((entry as Dictionary).duplicate(true))
+
+	var raw_event: Array = data.get("event_pool", []) as Array
+	for entry in raw_event:
+		t.event_pool.append((entry as Dictionary).duplicate(true))
+
+	var raw_town: Array = data.get("town_pool", []) as Array
+	for entry in raw_town:
+		t.town_pool.append((entry as Dictionary).duplicate(true))
+
+	var raw_fixed_path: Array = data.get("fixed_area_path", []) as Array
+	for entry in raw_fixed_path:
+		t.fixed_area_path.append((entry as Dictionary).duplicate(true))
+
+	var raw_fixed_seq: Array = data.get("fixed_area_sequence", []) as Array
+	for entry in raw_fixed_seq:
+		t.fixed_area_sequence.append(str(entry))
+
+	# elite_pool
+	var raw_elite: Array = data.get("elite_pool", []) as Array
+	for entry in raw_elite:
+		t.elite_pool.append(str(entry))
+
+	return t
 
 
 func _extract_numeric_suffix(raw_id: String) -> String:

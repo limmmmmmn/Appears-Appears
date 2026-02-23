@@ -1,0 +1,13 @@
+{
+  "id": "gloves_common",
+  "name": "가죽 장갑",
+  "slot": "gloves",
+  "type": "gloves",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "def": 1,
+    "str": 1
+  },
+  "gear_score": 3
+}

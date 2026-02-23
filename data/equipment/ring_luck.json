@@ -1,0 +1,12 @@
+{
+  "id": "ring_luck",
+  "name": "행운의 반지",
+  "slot": "ring",
+  "type": "ring",
+  "rarity": "magic",
+  "two_handed": false,
+  "stats": {
+    "luk": 6
+  },
+  "gear_score": 10
+}

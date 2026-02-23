@@ -1,0 +1,16 @@
+{
+  "id": "fireball",
+  "name": "파이어볼",
+  "description": "전투창 내 모든 적에게 화염 피해",
+  "type": "magic",
+  "target": "all_enemies",
+  "cooldown": 8.0,
+  "mp_cost": 12,
+  "damage_base": 15,
+  "damage_scaling": {
+    "stat": "int",
+    "multiplier": 1.0
+  },
+  "effects": [],
+  "default_on": true
+}

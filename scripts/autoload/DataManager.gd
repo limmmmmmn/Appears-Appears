@@ -178,20 +178,13 @@ func _load_resource_dict(dir_path: String, label: String) -> Dictionary:
 		var filename: String = dir.get_next()
 		if filename.is_empty():
 			break
-		if dir.current_is_dir() or not filename.ends_with(".tres"):
+		if dir.current_is_dir() or not filename.ends_with(".json"):
 			continue
 
-		var resource_path: String = dir_path.path_join(filename)
-		var loaded: Resource = load(resource_path)
-		if loaded == null:
-			push_error("[DataManager] %s resource load failed: %s" % [label, resource_path])
-			continue
-		if not loaded.has_method("to_dict"):
-			push_warning("[DataManager] %s resource missing to_dict(): %s" % [label, resource_path])
-			continue
-
-		var entry_data: Dictionary = loaded.call("to_dict") as Dictionary
+		var file_path: String = dir_path.path_join(filename)
+		var entry_data: Dictionary = _load_json_dictionary(file_path)
 		if entry_data.is_empty():
+			push_error("[DataManager] %s JSON load failed: %s" % [label, file_path])
 			continue
 		var entry_id: String = str(entry_data.get("id", ""))
 		if entry_id.is_empty():

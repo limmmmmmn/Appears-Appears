@@ -1,0 +1,16 @@
+{
+  "id": "resurrect",
+  "name": "부활",
+  "description": "쓰러진 아군 1명을 HP 30%로 부활시킨다.",
+  "type": "resurrect",
+  "target": "single_ally",
+  "cooldown": 20.0,
+  "mp_cost": 18,
+  "effects": [
+    {
+      "type": "revive",
+      "hp_percent": 0.3
+    }
+  ],
+  "default_on": true
+}

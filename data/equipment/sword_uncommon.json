@@ -1,0 +1,12 @@
+{
+  "id": "sword_uncommon",
+  "name": "강철검",
+  "slot": "main_hand",
+  "type": "sword",
+  "rarity": "uncommon",
+  "two_handed": false,
+  "stats": {
+    "atk": 12
+  },
+  "gear_score": 12
+}

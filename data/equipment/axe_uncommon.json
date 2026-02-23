@@ -1,0 +1,13 @@
+{
+  "id": "axe_uncommon",
+  "name": "전투 도끼",
+  "slot": "main_hand",
+  "type": "axe",
+  "rarity": "uncommon",
+  "two_handed": false,
+  "stats": {
+    "atk": 15,
+    "str": 2
+  },
+  "gear_score": 19
+}

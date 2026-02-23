@@ -1,0 +1,9 @@
+{
+  "id": "invitation",
+  "name": "초대장",
+  "description": "귀족의 연회 초대장이다.",
+  "type": "key_item",
+  "category": "trigger",
+  "consumable": true,
+  "event_id": "noble_party"
+}

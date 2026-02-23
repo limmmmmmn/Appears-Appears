@@ -1,0 +1,18 @@
+{
+  "id": "shield_epic",
+  "name": "불굴의 성벽",
+  "slot": "off_hand",
+  "type": "shield",
+  "rarity": "epic",
+  "two_handed": false,
+  "stats": {
+    "def": 28,
+    "hp": 60,
+    "str": 5
+  },
+  "special_effect": {
+    "type": "reflect",
+    "value": 0.1
+  },
+  "gear_score": 65
+}

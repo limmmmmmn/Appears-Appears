@@ -1,0 +1,22 @@
+{
+  "id": "poison_arrow",
+  "name": "독화살",
+  "description": "데미지를 주고 5초간 독을 부여한다.",
+  "type": "physical",
+  "target": "single_enemy",
+  "cooldown": 8.0,
+  "mp_cost": 6,
+  "damage_base": 3,
+  "damage_scaling": {
+    "stat": "str",
+    "multiplier": 1.0
+  },
+  "effects": [
+    {
+      "type": "dot",
+      "dps": 5,
+      "duration": 5.0
+    }
+  ],
+  "default_on": true
+}

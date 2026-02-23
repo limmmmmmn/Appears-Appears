@@ -1,0 +1,13 @@
+{
+  "id": "roland",
+  "name": "롤랜드",
+  "class_id": "warrior",
+  "sprite_field": "roland_field",
+  "sprite_face": "roland_face",
+  "tags": [
+    "human",
+    "noble",
+    "leader"
+  ],
+  "description": "왕국의 젊은 기사. 강인한 체력과 검술로 파티를 이끈다."
+}

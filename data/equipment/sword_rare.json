@@ -1,0 +1,14 @@
+{
+  "id": "sword_rare",
+  "name": "룬 소드",
+  "slot": "main_hand",
+  "type": "sword",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "atk": 22,
+    "str": 5,
+    "spd": 2
+  },
+  "gear_score": 35
+}

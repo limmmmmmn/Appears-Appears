@@ -1,0 +1,19 @@
+{
+  "id": "gloves_epic",
+  "name": "폭풍의 건틀릿",
+  "slot": "gloves",
+  "type": "gloves",
+  "rarity": "epic",
+  "two_handed": false,
+  "stats": {
+    "def": 12,
+    "str": 10,
+    "atk": 8,
+    "spd": 3
+  },
+  "special_effect": {
+    "type": "counter",
+    "value": 0.15
+  },
+  "gear_score": 55
+}

@@ -1,0 +1,12 @@
+{
+  "id": "chainmail",
+  "name": "사슬 갑옷",
+  "slot": "body",
+  "type": "medium_armor",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "def": 10
+  },
+  "gear_score": 10
+}

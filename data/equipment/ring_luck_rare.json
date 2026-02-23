@@ -1,0 +1,13 @@
+{
+  "id": "ring_luck_rare",
+  "name": "도박꾼의 반지",
+  "slot": "ring",
+  "type": "ring",
+  "rarity": "rare",
+  "two_handed": false,
+  "stats": {
+    "luk": 12,
+    "spd": 3
+  },
+  "gear_score": 25
+}

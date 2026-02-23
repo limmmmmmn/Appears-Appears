@@ -1,0 +1,12 @@
+{
+  "id": "sword_common",
+  "name": "철검",
+  "slot": "main_hand",
+  "type": "sword",
+  "rarity": "common",
+  "two_handed": false,
+  "stats": {
+    "atk": 8
+  },
+  "gear_score": 8
+}
