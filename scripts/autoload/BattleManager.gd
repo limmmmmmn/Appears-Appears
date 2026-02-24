@@ -372,7 +372,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 
 	# HP 오브/골드/아이템/EXP는 전투창 위치 기준으로 필드 드롭
 	if victory and (window_enemy_kills > 0 or window_gold > 0 or not window_items.is_empty() or window_exp > 0):
-		var hp_orbs: int = window_enemy_kills
+		var hp_orbs: int = _calc_hp_orbs_from_kills(window_enemy_kills)
 		field_drops_requested.emit(hp_orbs, window_gold, window_items, battle_pos, window_screen_rect, window_exp)
 
 	if was_boss:
@@ -500,10 +500,14 @@ func claim_accumulated_rewards() -> void:
 
 
 func _calc_orb_count(gold: int, item_count: int) -> int:
-	## 보상 규모에 따라 오브 개수 결정 (최소 1, 최대 5)
-	var score: float = gold * 0.05 + item_count * 2.0
-	return clampi(int(score), 1, 5)
+	var score: float = gold * 0.03 + item_count * 1.0
+	return clampi(int(floor(score)), 0, 3)
 
+
+func _calc_hp_orbs_from_kills(kill_count: int) -> int:
+	if kill_count <= 0:
+		return 0
+	return int(ceil(float(kill_count) * 0.5))
 
 func reset_accumulated_rewards() -> void:
 	## 보상 초기화

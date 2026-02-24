@@ -49,6 +49,7 @@ const ORB_HOMING_ACCEL: float = 980.0
 const ORB_HOMING_COLLECT_DISTANCE: float = 10.0
 const ORB_MAGNET_TRIGGER_DISTANCE: float = 78.0
 const GOLD_MAGNET_TRIGGER_DISTANCE: float = 74.0
+const ORB_HOMING_MIN_SCALE: float = 0.36
 
 var drop_type: DropType = DropType.GOLD
 var gold_amount: int = 0
@@ -69,6 +70,8 @@ var _emoji_label: Label = null
 var _is_homing: bool = false
 var _homing_speed: float = 0.0
 var _homing_target: Node2D = null
+var _homing_start_distance: float = 1.0
+var _homing_start_scale: Vector2 = Vector2.ONE
 var _float_tween: Tween = null
 
 
@@ -129,6 +132,10 @@ func _physics_process(delta: float) -> void:
 		return
 	if dist <= 0.001:
 		return
+	var homing_t: float = 1.0 - (dist / maxf(1.0, _homing_start_distance))
+	var shrink_t: float = clampf(homing_t, 0.0, 1.0)
+	var scale_factor: float = lerpf(1.0, ORB_HOMING_MIN_SCALE, shrink_t)
+	scale = _homing_start_scale * scale_factor
 	_homing_speed = minf(ORB_HOMING_MAX_SPEED, _homing_speed + ORB_HOMING_ACCEL * delta)
 	global_position += to_target.normalized() * _homing_speed * delta
 
@@ -200,6 +207,8 @@ func _begin_homing_to_party() -> void:
 		return
 	_is_homing = true
 	_homing_speed = 90.0
+	_homing_start_scale = scale
+	_homing_start_distance = maxf(1.0, global_position.distance_to(_get_homing_target_position()))
 	if _float_tween != null and is_instance_valid(_float_tween):
 		_float_tween.kill()
 	if _icon_sprite != null:
@@ -349,6 +358,7 @@ func _collect_item() -> void:
 func _collect_hp() -> void:
 	var party: Array = PartyManager.get_party() if PartyManager else []
 	var actual_total := 0
+	var actual_by_hero_id: Dictionary = {}
 	for hero in party:
 		if hero == null or hero.is_dead:
 			continue
@@ -356,15 +366,15 @@ func _collect_hp() -> void:
 			continue
 		var actual: int = hero.heal(heal_amount)
 		actual_total += actual
+		if actual > 0:
+			actual_by_hero_id[str(hero.id)] = actual
 	if PartyManager:
 		PartyManager.party_changed.emit()
-	# 항상 팝업 표시 (만피여도 연출)
-	_spawn_heal_popups()
+	_spawn_heal_popups(actual_by_hero_id)
 	if actual_total > 0 and BattleManager:
 		BattleManager.battle_log_received.emit(
-			"💗 파티 전체 HP +%d" % actual_total, Color(0.4, 1.0, 0.4)
+			"HP +%d" % actual_total, Color(0.4, 1.0, 0.4)
 		)
-
 
 func _collect_exp() -> void:
 	## EXP 오브 수집 — 연출용 (EXP는 전투 승리 시 이미 지급됨)
@@ -377,7 +387,7 @@ func _collect_exp() -> void:
 
 
 func _spawn_exp_popups() -> void:
-	_spawn_restore_popups("+%d EXP" % exp_amount, Color(0.45, 0.78, 1.0))
+	return
 
 
 func _open_battle_chest() -> void:
@@ -421,39 +431,55 @@ func _collect_battle_chest() -> void:
 	_show_battle_chest_loot_list(granted_items, chest_gold_amount, chest_hp_orbs)
 
 
-func _spawn_heal_popups() -> void:
-	## 필드 파티원 머리 위에 "+10" 초록색 팝업 연출
-	_spawn_restore_popups("+%d" % heal_amount, Color(0.3, 1.0, 0.3))
+func _spawn_heal_popups(actual_by_hero_id: Dictionary) -> void:
+	if actual_by_hero_id.is_empty():
+		return
+	var field_members: Array = get_tree().get_nodes_in_group("party")
+	for member in field_members:
+		if not is_instance_valid(member) or not member is Node2D:
+			continue
+		var member_2d: Node2D = member as Node2D
+		var member_hero_id: String = str(member.get("hero_id"))
+		if member_hero_id.is_empty():
+			continue
+		var actual: int = int(actual_by_hero_id.get(member_hero_id, 0))
+		if actual <= 0:
+			continue
+		_spawn_popup_for_member(member_2d, "+%d" % actual, Color(0.3, 1.0, 0.3))
 
 
 func _spawn_restore_popups(text: String, color: Color) -> void:
-	## 필드 파티원 머리 위에 팝업 연출
 	var field_members: Array = get_tree().get_nodes_in_group("party")
 
 	for member in field_members:
 		if not is_instance_valid(member) or not member is Node2D:
 			continue
 		var member_2d: Node2D = member as Node2D
-		var popup := Label.new()
-		popup.text = text
-		popup.add_theme_font_size_override("font_size", 10)
-		popup.add_theme_color_override("font_color", color)
-		popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-		popup.add_theme_constant_override("outline_size", 3)
-		popup.z_index = 100
-		popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		popup.position = member_2d.global_position + Vector2(-10, -20)
-		get_tree().current_scene.add_child(popup)
+		_spawn_popup_for_member(member_2d, text, color)
 
-		var start_y: float = popup.position.y
-		var tween := popup.create_tween()
-		tween.set_parallel(true)
-		tween.tween_property(popup, "position:y", start_y - 20.0, 0.6) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-		tween.tween_property(popup, "modulate:a", 0.0, 0.6) \
-			.set_ease(Tween.EASE_IN).set_delay(0.3)
-		tween.chain().tween_callback(popup.queue_free)
 
+func _spawn_popup_for_member(member_2d: Node2D, text: String, color: Color) -> void:
+	if member_2d == null or not is_instance_valid(member_2d):
+		return
+	var popup := Label.new()
+	popup.text = text
+	popup.add_theme_font_size_override("font_size", 10)
+	popup.add_theme_color_override("font_color", color)
+	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	popup.add_theme_constant_override("outline_size", 3)
+	popup.z_index = 100
+	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	popup.position = member_2d.global_position + Vector2(-10, -20)
+	get_tree().current_scene.add_child(popup)
+
+	var start_y: float = popup.position.y
+	var tween := popup.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(popup, "position:y", start_y - 20.0, 0.6) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(popup, "modulate:a", 0.0, 0.6) \
+		.set_ease(Tween.EASE_IN).set_delay(0.3)
+	tween.chain().tween_callback(popup.queue_free)
 
 func _play_collect_anim() -> void:
 	var tween := create_tween()

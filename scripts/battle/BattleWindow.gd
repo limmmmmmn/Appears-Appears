@@ -102,6 +102,7 @@ const TOOLTIP_SCENE = preload("res://scenes/ui/Tooltip.tscn")
 const BASE_ENEMIES_PER_WINDOW: int = 3
 const BATTLE_ATB_FILL_RATE: float = 0.85
 const ENEMY_ROW_GAP: int = 5
+const SHOW_HERO_FACE_CHIPS: bool = false
 
 # === Mother 2 스타일 배경 효과 ===
 var background: ColorRect = null
@@ -211,7 +212,8 @@ func _ready() -> void:
 	_setup_battle_top_bar()
 	_setup_info_bar()
 	_setup_pause_controls()
-	_ensure_face_chip_layer()
+	if SHOW_HERO_FACE_CHIPS:
+		_ensure_face_chip_layer()
 	_reset_local_progression()
 
 
@@ -1425,6 +1427,8 @@ func _get_alive_heroes_in_battle(_require_face_chip: bool = true) -> Array:
 
 
 func _prime_party_face_chips_and_locks() -> void:
+	if not SHOW_HERO_FACE_CHIPS:
+		return
 	## 모든 히어로를 이 전투창에 표시 (락 무시)
 	var heroes: Array = _get_alive_heroes_in_battle(false)
 	for hero_any in heroes:
@@ -1442,6 +1446,8 @@ func _has_face_chip_in_this_window(hero_id: String) -> bool:
 
 
 func add_joined_hero_token(hero_id: String) -> bool:
+	if not SHOW_HERO_FACE_CHIPS:
+		return true
 	if hero_id.is_empty():
 		return false
 	if not _can_accept_face_chip():
@@ -1487,6 +1493,16 @@ func _execute_hero_action(hero: Hero) -> void:
 			skill_data = DataManager.get_skill("basic_attack")
 		else:
 			return
+	elif skill_id != "basic_attack":
+		var required_mp: int = int(skill_data.get("mp_cost", 0))
+		if required_mp > 0 and hero.current_mp < required_mp:
+			skill_id = "basic_attack"
+			skill_data = DataManager.get_skill("basic_attack")
+			is_queued = false
+		elif _should_skip_skill_due_to_active_buff(hero, skill_data):
+			skill_id = "basic_attack"
+			skill_data = DataManager.get_skill("basic_attack")
+			is_queued = false
 
 	# 행동 타이머 리셋
 	hero.reset_action_timer()
@@ -1534,7 +1550,6 @@ func _execute_hero_action(hero: Hero) -> void:
 		var mp_cost: int = int(skill_data.get("mp_cost", 0))
 		if mp_cost > 0:
 			hero.use_mp(mp_cost)
-		CooldownManager.start_cooldown(hero.id, skill_id)
 	else:
 		# 기본공격
 		var target_type: String = skill_data.get("target", "single_enemy")
@@ -1583,8 +1598,6 @@ func _pick_auto_skill(hero: Hero) -> String:
 		var skill_id: String = str(sid)
 		if not hero.unlocked_skills.has(skill_id):
 			continue
-		if not CooldownManager.is_skill_ready(hero.id, skill_id):
-			continue
 		if not hero.is_skill_enabled(skill_id):
 			continue
 		var skill_data: Dictionary = DataManager.get_skill(skill_id)
@@ -1592,6 +1605,8 @@ func _pick_auto_skill(hero: Hero) -> String:
 			continue
 		var mp_cost: int = int(skill_data.get("mp_cost", 0))
 		if mp_cost > 0 and hero.current_mp < mp_cost:
+			continue
+		if _should_skip_skill_due_to_active_buff(hero, skill_data):
 			continue
 		# 부활 스킬: 죽은 아군이 없으면 스킵
 		if skill_data.get("type", "") == "resurrect":
@@ -1632,17 +1647,72 @@ func execute_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy 
 	var hero: Hero = _find_hero_by_id(hero_id)
 	if hero == null or hero.is_dead:
 		return
-	if not CooldownManager.is_skill_ready(hero_id, skill_id):
-		return
 
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	if skill_data.is_empty():
+		return
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	if mp_cost > 0 and hero.current_mp < mp_cost:
+		return
+	if _should_skip_skill_due_to_active_buff(hero, skill_data):
 		return
 
 	# 스킬 예약 (ATB는 리셋하지 않음 — 현재 게이지 유지)
 	hero.queued_skill = skill_id
 	hero.queued_skill_enemy = enemy_target
 	hero.queued_skill_ally_id = ally_target_id
+
+
+func _is_effect_already_active_on_target(target: Hero, effect: Dictionary) -> bool:
+	if target == null:
+		return true
+	var eff_type: String = str(effect.get("type", ""))
+	match eff_type:
+		"atk_up", "def_up", "eva_up", "magic_amp":
+			return target.has_buff(eff_type)
+		"taunt":
+			return target.has_taunt()
+		_:
+			return false
+
+
+func _should_skip_skill_due_to_active_buff(hero: Hero, skill_data: Dictionary) -> bool:
+	if hero == null or skill_data.is_empty():
+		return false
+
+	var effects: Array = skill_data.get("effects", [])
+	if effects.is_empty():
+		return false
+
+	var buff_effects: Array = []
+	for e in effects:
+		var eff: Dictionary = e as Dictionary
+		var eff_type: String = str(eff.get("type", ""))
+		if eff_type in ["atk_up", "def_up", "eva_up", "magic_amp", "taunt"]:
+			buff_effects.append(eff)
+	if buff_effects.is_empty():
+		return false
+
+	var target_type: String = str(skill_data.get("target", "self"))
+	var targets: Array[Hero] = []
+	match target_type:
+		"all_allies":
+			for h in _get_alive_heroes_in_battle():
+				if h is Hero:
+					targets.append(h as Hero)
+		"single_ally", "self":
+			targets.append(hero)
+		_:
+			targets.append(hero)
+
+	if targets.is_empty():
+		return false
+
+	for t in targets:
+		for eff in buff_effects:
+			if not _is_effect_already_active_on_target(t, eff):
+				return false
+	return true
 
 
 func _execute_heal_on_enemy(hero: Hero, skill_id: String, skill_data: Dictionary, target: BattleEnemy) -> void:
@@ -1782,8 +1852,6 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 			_execute_single_attack(hero, skill_id, skill_data)
 
 	# 스킬 쿨타임 시작
-	if skill_id != "basic_attack":
-		CooldownManager.start_cooldown(hero.id, skill_id)
 
 
 func _get_wounded_heroes() -> Array:
@@ -2311,6 +2379,8 @@ func _show_hero_face_chip(
 	is_crit: bool = false,
 	_hold_time: float = 0.95
 ) -> void:
+	if not SHOW_HERO_FACE_CHIPS:
+		return
 	if hero_id.is_empty():
 		return
 	if battle_area == null:

@@ -60,7 +60,6 @@ func _build_ui() -> void:
 		var skill_name: String = skill_data.get("name", skill_id)
 		var skill_desc: String = skill_data.get("description", "")
 		var skill_type: String = skill_data.get("type", "")
-		var cooldown: float = float(skill_data.get("cooldown", 0.0))
 
 		var type_label: String = ""
 		match skill_type:
@@ -73,9 +72,9 @@ func _build_ui() -> void:
 		var is_owned: bool = owned.has(skill_id)
 		if is_owned and _hero:
 			var cur_lv: int = _hero.get_skill_level(skill_id)
-			btn.text = "%s %s Lv.%d → Lv.%d  CD:%.0fs\n%s" % [type_label, skill_name, cur_lv, cur_lv + 1, cooldown, skill_desc]
+			btn.text = "%s %s Lv.%d → Lv.%d\n%s" % [type_label, skill_name, cur_lv, cur_lv + 1, skill_desc]
 		else:
-			btn.text = "%s %s  CD:%.0fs\n%s" % [type_label, skill_name, cooldown, skill_desc]
+			btn.text = "%s %s\n%s" % [type_label, skill_name, skill_desc]
 
 		btn.custom_minimum_size = Vector2(220, 40)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL

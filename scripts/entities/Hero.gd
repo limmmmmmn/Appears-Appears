@@ -16,7 +16,6 @@ const BENCH_EXP_RATIO: float = 0.5
 # 성장/전투 상수
 const SEED_CAP: int = 99
 const AGI_CRIT_RATIO: float = 0.003 # 민첩 100 -> 크리 30%
-const DEFAULT_SKILL_UNLOCK_LEVELS: Array[int] = [2, 5, 10, 15]
 
 # 행동 타이머 상수 (내부 ATB)
 const ACTION_INTERVAL: float = 5.0     # 행동 간격 기준값
@@ -199,25 +198,10 @@ func _setup_skill_unlocks(class_data: Dictionary) -> void:
 	unlocked_skills.clear()
 
 	var class_skills: Array = DataManager.get_class_skills(class_id)
-	var custom_unlocks: Dictionary = class_data.get("skill_unlocks", {})
-	var idx: int = 0
 
 	for skill_id in class_skills:
 		var sid: String = str(skill_id)
-		if sid == "basic_attack":
-			skill_unlock_levels[sid] = 1
-			continue
-
-		if custom_unlocks.has(sid):
-			skill_unlock_levels[sid] = int(custom_unlocks[sid])
-		else:
-			var unlock_level: int = DEFAULT_SKILL_UNLOCK_LEVELS[min(idx, DEFAULT_SKILL_UNLOCK_LEVELS.size() - 1)]
-			skill_unlock_levels[sid] = unlock_level
-			idx += 1
-
-	for sid in skill_unlock_levels.keys():
-		if int(skill_unlock_levels[sid]) <= level:
-			unlocked_skills.append(str(sid))
+		skill_unlock_levels[sid] = 1
 
 	if not unlocked_skills.has("basic_attack"):
 		unlocked_skills.append("basic_attack")
@@ -481,16 +465,7 @@ func _get_growth_value_for_level(stat: String, lv: int) -> int:
 
 
 func _unlock_skills_for_level(new_level: int) -> Array:
-	var newly_unlocked: Array = []
-	for sid in skill_unlock_levels.keys():
-		var skill_id: String = str(sid)
-		# 레벨 2 스킬은 3지선다 팝업으로 선택하므로 자동 해금 건너뜀
-		if int(skill_unlock_levels[skill_id]) == 2 and skill_id != "basic_attack":
-			continue
-		if int(skill_unlock_levels[skill_id]) == new_level and not unlocked_skills.has(skill_id):
-			unlocked_skills.append(skill_id)
-			newly_unlocked.append(skill_id)
-	return newly_unlocked
+	return []
 
 
 func set_progress(saved_level: int, saved_exp: int, saved_level_stats: Dictionary = {}, saved_unlocked_skills: Array = []) -> void:
@@ -515,22 +490,11 @@ func set_progress(saved_level: int, saved_exp: int, saved_level_stats: Dictionar
 			if level_stats.has(normalized):
 				level_stats[normalized] = int(saved_level_stats[key])
 
+	_setup_skill_unlocks(DataManager.get_class_data(class_id))
 	if not saved_unlocked_skills.is_empty():
 		unlocked_skills.clear()
 		for sid in saved_unlocked_skills:
 			unlocked_skills.append(str(sid))
-	else:
-		# 기존 세이브 호환
-		_setup_skill_unlocks(DataManager.get_class_data(class_id))
-
-	# 현재 레벨에 맞게 재해금 보정 (레벨 2 스킬은 팝업 선택이므로 자동 재해금 제외)
-	for sid in skill_unlock_levels.keys():
-		var skill_id: String = str(sid)
-		var unlock_lv: int = int(skill_unlock_levels[skill_id])
-		if unlock_lv == 2 and skill_id != "basic_attack":
-			continue
-		if unlock_lv <= level and not unlocked_skills.has(skill_id):
-			unlocked_skills.append(skill_id)
 
 	if not unlocked_skills.has("basic_attack"):
 		unlocked_skills.append("basic_attack")
@@ -808,7 +772,7 @@ func level_up_skill(skill_id: String) -> int:
 
 
 func get_usable_skills() -> Array:
-	## 토글 ON이고 쿨타임이 없는 스킬 목록 반환 (기본 공격 제외, ATB 무관)
+	## 토글 ON + MP 충분한 스킬 목록 반환 (기본 공격 제외, ATB 무관)
 	var result: Array = []
 	var skills: Array = get_available_skills()
 	for skill_id in skills:
@@ -817,17 +781,21 @@ func get_usable_skills() -> Array:
 		# 토글이 OFF면 스킵
 		if not is_skill_enabled(skill_id):
 			continue
-		# 쿨타임 체크
-		if CooldownManager.is_skill_ready(id, skill_id):
-			result.append(skill_id)
+		var skill_data: Dictionary = DataManager.get_skill(skill_id)
+		var mp_cost: int = int(skill_data.get("mp_cost", 0))
+		if mp_cost > 0 and current_mp < mp_cost:
+			continue
+		result.append(skill_id)
 	return result
 
 
 func can_use_skill(skill_id: String) -> bool:
-	## 해당 스킬을 사용할 수 있는지 확인 (기본공격=ATB, 액티브=쿨타임만)
+	## 해당 스킬을 사용할 수 있는지 확인 (기본공격=ATB, 스킬=MP+ATB)
 	if skill_id == "basic_attack":
 		return is_action_ready()
-	return CooldownManager.is_skill_ready(id, skill_id)
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	var mp_cost: int = int(skill_data.get("mp_cost", 0))
+	return is_action_ready() and current_mp >= mp_cost
 #endregion
 
 

@@ -1367,6 +1367,9 @@ func _rebuild_field_party_formation() -> void:
 	if not PartyManager:
 		return
 	var party_members: Array = PartyManager.get_party()
+	var field_order_members: Array = _get_field_order_members_dead_last(party_members)
+	if field_order_members.is_empty():
+		return
 	if party_members.is_empty():
 		return
 
@@ -1385,18 +1388,33 @@ func _rebuild_field_party_formation() -> void:
 	# 새 리더 (항상 생존자 우선 정렬된 party[0])
 	party_leader = party_leader_scene.instantiate() as PartyMember
 	add_child(party_leader)
-	party_leader.setup_as_leader(party_members[0], start_pos)
+	party_leader.setup_as_leader(field_order_members[0], start_pos)
 
 	# 팔로워 재생성
-	if party_members.size() > 1:
-		for i in range(1, party_members.size()):
+	if field_order_members.size() > 1:
+		for i in range(1, field_order_members.size()):
 			var follower: PartyMember = party_follower_scene.instantiate()
 			add_child(follower)
-			follower.setup_as_follower(party_members[i], party_leader, i)
+			follower.setup_as_follower(field_order_members[i], party_leader, i)
 			party_followers.append(follower)
 
 	# 카메라 한 번 더 보정
 	_apply_camera_limits()
+
+
+func _get_field_order_members_dead_last(party_members: Array) -> Array:
+	var alive: Array = []
+	var dead: Array = []
+	for hero_any in party_members:
+		var hero: Hero = hero_any as Hero
+		if hero == null:
+			continue
+		if hero.is_dead:
+			dead.append(hero)
+		else:
+			alive.append(hero)
+	alive.append_array(dead)
+	return alive
 
 
 func _on_restart_game() -> void:

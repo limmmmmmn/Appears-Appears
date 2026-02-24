@@ -313,8 +313,6 @@ func _find_available_healer() -> Hero:
 			continue
 		if hero.class_id != "cleric":
 			continue
-		if CooldownManager and not CooldownManager.is_skill_ready(hero.id, "heal"):
-			continue
 		# MP 확인
 		var skill_data_check: Dictionary = DataManager.get_skill("heal")
 		var mp_cost: int = int(skill_data_check.get("mp_cost", 0))
@@ -339,8 +337,6 @@ func _execute_field_heal(healer: Hero, target: Hero) -> void:
 	if mp_cost > 0:
 		healer.use_mp(mp_cost)
 
-	if CooldownManager:
-		CooldownManager.start_cooldown(healer.id, "heal")
 	if SoundManager:
 		SoundManager.play_heal()
 

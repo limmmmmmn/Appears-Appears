@@ -26,7 +26,6 @@ func add_hero_by_id(hero_id: String) -> bool:
 	if hero.id.is_empty():
 		return false
 	party.append(hero)
-	_reorder_party_alive_first()
 	party_changed.emit()
 	return true
 
@@ -111,7 +110,6 @@ func get_party_average_luk() -> float:
 func on_hero_damaged(hero: Hero, damage: int) -> void:
 	hero.take_damage(damage)
 	if hero.is_dead:
-		_reorder_party_alive_first()
 		hero_died.emit(hero)
 		party_changed.emit()
 		if is_party_wiped():
