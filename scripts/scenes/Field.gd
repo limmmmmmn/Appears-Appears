@@ -1876,10 +1876,10 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int = 0) -> void:
+func _on_field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int = 0, mp_orbs: int = 0) -> void:
 	if drop_controller == null:
 		return
-	drop_controller.spawn_battle_drops(hp_orbs, gold_amount, item_ids, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z, exp_amount)
+	drop_controller.spawn_battle_drops(hp_orbs, gold_amount, item_ids, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z, exp_amount, mp_orbs)
 
 
 #=============================================================================

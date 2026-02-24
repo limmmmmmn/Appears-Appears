@@ -3,7 +3,7 @@ class_name FieldDrop
 ## 필드 드롭 오브젝트: 전투 종료 후 필드에 떨어지는 보상
 ## 플레이어가 위를 지나가면 수집
 
-enum DropType { GOLD, ITEM, HP_ORB, BATTLE_CHEST, EXP_ORB }
+enum DropType { GOLD, ITEM, HP_ORB, BATTLE_CHEST, EXP_ORB, MP_ORB }
 
 const DROP_ICONS := {
 	DropType.GOLD: "🪙",
@@ -11,6 +11,7 @@ const DROP_ICONS := {
 	DropType.HP_ORB: "💗",
 	DropType.BATTLE_CHEST: "🎁",
 	DropType.EXP_ORB: "✦",
+	DropType.MP_ORB: "💙",
 }
 const DROP_COLORS := {
 	DropType.GOLD: Color(1.0, 0.9, 0.3),
@@ -18,6 +19,7 @@ const DROP_COLORS := {
 	DropType.HP_ORB: Color(1.0, 0.4, 0.6),
 	DropType.BATTLE_CHEST: Color(0.95, 0.8, 0.32),
 	DropType.EXP_ORB: Color(0.45, 0.78, 1.0),
+	DropType.MP_ORB: Color(0.35, 0.55, 1.0),
 }
 
 const ITEM_TYPE_ICONS: Dictionary = {
@@ -102,7 +104,7 @@ func _ready() -> void:
 
 	body_entered.connect(_on_body_entered)
 
-	if drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.ITEM or drop_type == DropType.BATTLE_CHEST or drop_type == DropType.EXP_ORB:
+	if drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.ITEM or drop_type == DropType.BATTLE_CHEST or drop_type == DropType.EXP_ORB or drop_type == DropType.MP_ORB:
 		call_deferred("_start_hp_orb_sequence")
 	else:
 		# 즉시 활성화 (기존 동작 유지)
@@ -115,7 +117,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _collected:
 		return
-	if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB) and not _is_homing:
+	if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB or drop_type == DropType.MP_ORB) and not _is_homing:
 		var magnet_target: Node2D = _resolve_homing_target()
 		if magnet_target != null and is_instance_valid(magnet_target):
 			var trigger_dist: float = global_position.distance_to(magnet_target.global_position)
@@ -308,7 +310,7 @@ func _on_body_entered(body: Node2D) -> void:
 	if _collected:
 		return
 	if body.is_in_group("party_leader") or body.is_in_group("party"):
-		if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB) and not _is_homing:
+		if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB or drop_type == DropType.MP_ORB) and not _is_homing:
 			_begin_homing_to_party()
 			return
 		if drop_type == DropType.BATTLE_CHEST:
@@ -331,6 +333,8 @@ func collect() -> void:
 			_collect_item()
 		DropType.HP_ORB:
 			_collect_hp()
+		DropType.MP_ORB:
+			_collect_mp()
 		DropType.EXP_ORB:
 			_collect_exp()
 
@@ -356,25 +360,31 @@ func _collect_item() -> void:
 
 
 func _collect_hp() -> void:
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	var actual_total := 0
-	var actual_by_hero_id: Dictionary = {}
-	for hero in party:
-		if hero == null or hero.is_dead:
-			continue
-		if hero.current_hp >= hero.get_max_hp():
-			continue
-		var actual: int = hero.heal(heal_amount)
-		actual_total += actual
-		if actual > 0:
-			actual_by_hero_id[str(hero.id)] = actual
-	if PartyManager:
-		PartyManager.party_changed.emit()
-	_spawn_heal_popups(actual_by_hero_id)
-	if actual_total > 0 and BattleManager:
-		BattleManager.battle_log_received.emit(
-			"HP +%d" % actual_total, Color(0.4, 1.0, 0.4)
-		)
+	## HP 오브 수집 — 포션 인벤토리 충전 (필드에서 줍기)
+	var panel = _resolve_party_panel()
+	if panel != null:
+		panel.add_hp_orbs(1)
+
+
+func _collect_mp() -> void:
+	## MP 오브 수집 — 포션 인벤토리 충전 (필드에서 줍기)
+	var panel = _resolve_party_panel()
+	if panel != null:
+		panel.add_mp_orbs(1)
+
+
+func _resolve_party_panel():
+	var field_node = get_tree().current_scene
+	if field_node == null:
+		return null
+	if field_node.has_method("get_hud"):
+		var field_hud = field_node.get_hud()
+		if field_hud != null:
+			if field_hud.has_method("get_party_panel"):
+				return field_hud.get_party_panel()
+			if "party_panel" in field_hud:
+				return field_hud.party_panel
+	return null
 
 func _collect_exp() -> void:
 	## EXP 오브 수집 — 연출용 (EXP는 전투 승리 시 이미 지급됨)
@@ -419,14 +429,10 @@ func _collect_battle_chest() -> void:
 				InventoryManager.add_item(item_id)
 
 	if chest_hp_orbs > 0:
-		var total_heal: int = chest_hp_orbs * HP_PER_ORB
-		var party: Array = PartyManager.get_party() if PartyManager else []
-		for hero in party:
-			if hero == null or hero.is_dead:
-				continue
-			hero.heal(total_heal)
-		if PartyManager:
-			PartyManager.party_changed.emit()
+		# 포션 오브 충전 (직접 회복 안 함)
+		var panel = _resolve_party_panel()
+		if panel != null:
+			panel.add_hp_orbs(chest_hp_orbs)
 
 	_show_battle_chest_loot_list(granted_items, chest_gold_amount, chest_hp_orbs)
 
@@ -510,7 +516,7 @@ func _build_drop_texture() -> Texture2D:
 			var py: int = y - OBJECT_SIZE / 2
 			var inside: bool = false
 			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB:
+				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB, DropType.MP_ORB:
 					inside = float(px * px + py * py) <= 36.0
 				_:
 					inside = x >= 4 and x <= 11 and y >= 4 and y <= 11
@@ -520,7 +526,7 @@ func _build_drop_texture() -> Texture2D:
 
 			var edge: bool = false
 			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB:
+				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB, DropType.MP_ORB:
 					edge = float(px * px + py * py) >= 28.0
 				_:
 					edge = false

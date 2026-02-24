@@ -20,7 +20,7 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int)
+signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int, mp_orbs: int)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
@@ -373,7 +373,8 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	# HP 오브/골드/아이템/EXP는 전투창 위치 기준으로 필드 드롭
 	if victory and (window_enemy_kills > 0 or window_gold > 0 or not window_items.is_empty() or window_exp > 0):
 		var hp_orbs: int = _calc_hp_orbs_from_kills(window_enemy_kills)
-		field_drops_requested.emit(hp_orbs, window_gold, window_items, battle_pos, window_screen_rect, window_exp)
+		var mp_orbs: int = _calc_mp_orbs_from_kills(window_enemy_kills)
+		field_drops_requested.emit(hp_orbs, window_gold, window_items, battle_pos, window_screen_rect, window_exp, mp_orbs)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -493,7 +494,7 @@ func claim_accumulated_rewards() -> void:
 
 	if accumulated_gold > 0 or not items_arr.is_empty() or accumulated_exp > 0:
 		var hp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
-		field_drops_requested.emit(hp_orbs, accumulated_gold, items_arr, last_battle_pos, last_window_rect, accumulated_exp)
+		field_drops_requested.emit(hp_orbs, accumulated_gold, items_arr, last_battle_pos, last_window_rect, accumulated_exp, 0)
 
 	# 초기화
 	reset_accumulated_rewards()
@@ -505,9 +506,17 @@ func _calc_orb_count(gold: int, item_count: int) -> int:
 
 
 func _calc_hp_orbs_from_kills(kill_count: int) -> int:
+	## 적 하나당 HP 오브 1개
 	if kill_count <= 0:
 		return 0
-	return int(ceil(float(kill_count) * 0.5))
+	return kill_count
+
+
+func _calc_mp_orbs_from_kills(kill_count: int) -> int:
+	## MP 오브는 더 적게 — 적 3마리당 1개
+	if kill_count <= 0:
+		return 0
+	return int(floor(float(kill_count) / 3.0))
 
 func reset_accumulated_rewards() -> void:
 	## 보상 초기화

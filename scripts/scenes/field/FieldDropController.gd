@@ -16,12 +16,13 @@ func spawn_battle_drops(
 	window_rect: Rect2,
 	party_leader: Node2D,
 	world_effect_z: int,
-	exp_amount: int = 0
+	exp_amount: int = 0,
+	mp_orbs: int = 0
 ) -> void:
 	if host == null:
 		return
 
-	if hp_orbs <= 0 and gold_amount <= 0 and item_ids.is_empty() and exp_amount <= 0:
+	if hp_orbs <= 0 and gold_amount <= 0 and item_ids.is_empty() and exp_amount <= 0 and mp_orbs <= 0:
 		return
 
 	var equip_item_ids: Array[String] = []
@@ -52,6 +53,9 @@ func spawn_battle_drops(
 
 	for _i in range(hp_orbs):
 		drops.append({"type": FieldDrop.DropType.HP_ORB, "delay": delay})
+		delay += DELAY_STEP
+	for _i in range(mp_orbs):
+		drops.append({"type": FieldDrop.DropType.MP_ORB, "delay": delay})
 		delay += DELAY_STEP
 	var gold_chunks: Array[int] = _split_gold_into_drop_chunks(gold_amount)
 	for chunk in gold_chunks:

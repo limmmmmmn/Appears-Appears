@@ -2976,9 +2976,6 @@ func _show_hero_face_chip(
 
 	_layout_persistent_face_chips(is_new_panel)
 
-	if damage_number > 0:
-		_spawn_face_chip_damage_number(panel, damage_number, is_crit)
-
 	if is_new_panel:
 		var show_tw := create_tween()
 		show_tw.set_parallel(true)
@@ -3765,53 +3762,11 @@ func _finalize_victory_close() -> void:
 
 
 func _play_victory_text_then_close() -> void:
-	var host: Control = battle_area if battle_area != null else self
-
-	# 드퀘풍 메시지 박스 — host(PanelContainer) 위치 기준, self에 추가
-	var box_w: int = int(host.size.x * 0.8)
-	var box_h: int = 28
-	var area_pos: Vector2 = host.position if host != self else Vector2.ZERO
-	var box_x: int = int(area_pos.x + (host.size.x - box_w) * 0.5)
-	var box_y: int = int(area_pos.y + host.size.y - box_h - 6)
-
-	var box := Panel.new()
-	box.name = "VictoryBox"
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.z_index = 220
-	box.custom_minimum_size = Vector2(box_w, box_h)
-	box.size = Vector2(box_w, box_h)
-	box.position = Vector2(box_x, box_y)
-	box.top_level = true
-
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.0, 0.0, 0.12, 0.92)
-	style.border_color = Color(0.85, 0.85, 0.85)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(2)
-	style.content_margin_left = 6
-	style.content_margin_right = 6
-	box.add_theme_stylebox_override("panel", style)
-	self.add_child(box)
-	# top_level=true이므로 global_position 직접 설정
-	box.global_position = host.global_position + Vector2(
-		(host.size.x - box_w) * 0.5,
-		host.size.y - box_h - 6
-	)
-
-	var lbl := Label.new()
-	lbl.text = "승리했다!"
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.position = Vector2.ZERO
-	lbl.size = Vector2(box_w, box_h)
-	lbl.add_theme_font_size_override("font_size", 11)
-	lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(lbl)
+	## 하단 로그 박스에 승리 메시지 표시 후 닫기
+	show_battle_text(["승리했다!"])
 
 	var tw := create_tween()
 	tw.tween_interval(1.2)
-	tw.tween_callback(box.queue_free)
 	tw.tween_callback(_finalize_victory_close)
 
 
@@ -3951,7 +3906,6 @@ func _show_rebel_up_popups(hero: Hero, gain_result: Dictionary) -> void:
 			SoundManager.play_level_up()
 		if BattleManager and BattleManager.has_method("push_hud_notice"):
 			BattleManager.push_hud_notice("%s Lv.%d Rebel Up!" % [hero.hero_name, lv], 2.0, Color(0.6, 0.95, 1.0))
-		_show_rebel_up_popup("⬆ Rebel Up! %s Lv.%d" % [hero.hero_name, lv])
 
 
 func _show_rebel_up_popup(text: String) -> void:

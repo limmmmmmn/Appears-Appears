@@ -101,6 +101,12 @@ var _prev_hp: int = -1
 # 트윈
 var _shake_tween: Tween
 
+# 포션 버튼
+var _hp_potion_btn: Button = null
+var _mp_potion_btn: Button = null
+signal hp_potion_requested(hero_index: int)
+signal mp_potion_requested(hero_index: int)
+
 # 장비 관련 (호환성)
 var equip_rows: Dictionary = {}
 var equip_panel: PanelContainer
@@ -112,6 +118,89 @@ func _ready() -> void:
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
 	gui_input.connect(_on_gui_input)
+	_create_potion_buttons()
+
+
+#region 포션 버튼
+const POTION_BTN_W: float = 16.0
+const POTION_BTN_H: float = 26.0
+const POTION_BTN_GAP: float = 2.0
+const HP_ORB_COLOR := Color(0.85, 0.18, 0.18, 1.0)      # 붉은 오브
+const HP_ORB_BG    := Color(0.25, 0.06, 0.06, 0.9)
+const MP_ORB_COLOR := Color(0.18, 0.35, 0.9, 1.0)        # 푸른 오브
+const MP_ORB_BG    := Color(0.06, 0.08, 0.25, 0.9)
+
+func _create_potion_buttons() -> void:
+	## 히어로 카드 오른쪽에 HP/MP 포션 버튼 세로 배치
+	_hp_potion_btn = _make_orb_button("●", HP_ORB_COLOR, HP_ORB_BG, "HP 포션 사용")
+	_hp_potion_btn.pressed.connect(func(): hp_potion_requested.emit(hero_index))
+	add_child(_hp_potion_btn)
+
+	_mp_potion_btn = _make_orb_button("●", MP_ORB_COLOR, MP_ORB_BG, "MP 포션 사용")
+	_mp_potion_btn.pressed.connect(func(): mp_potion_requested.emit(hero_index))
+	add_child(_mp_potion_btn)
+
+
+func _make_orb_button(text: String, orb_color: Color, bg_color: Color, tip: String) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.tooltip_text = tip
+	btn.custom_minimum_size = Vector2(POTION_BTN_W, POTION_BTN_H)
+	btn.size = Vector2(POTION_BTN_W, POTION_BTN_H)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	btn.add_theme_font_size_override("font_size", 9)
+	btn.add_theme_color_override("font_color", orb_color)
+	btn.add_theme_color_override("font_hover_color", orb_color.lightened(0.3))
+	btn.add_theme_color_override("font_pressed_color", Color.WHITE)
+	# 스타일
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg_color
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = orb_color.darkened(0.3)
+	style.content_margin_left = 1
+	style.content_margin_right = 1
+	style.content_margin_top = 1
+	style.content_margin_bottom = 1
+	btn.add_theme_stylebox_override("normal", style)
+	var hover_s := style.duplicate()
+	hover_s.bg_color = bg_color.lightened(0.15)
+	hover_s.border_color = orb_color
+	btn.add_theme_stylebox_override("hover", hover_s)
+	var pressed_s := style.duplicate()
+	pressed_s.bg_color = orb_color.darkened(0.4)
+	pressed_s.border_color = orb_color.lightened(0.2)
+	btn.add_theme_stylebox_override("pressed", pressed_s)
+	return btn
+
+
+func _layout_potion_buttons() -> void:
+	if _hp_potion_btn == null or _mp_potion_btn == null:
+		return
+	var btn_x: float = size.x - POTION_BTN_W - 2.0
+	var total_h: float = POTION_BTN_H * 2.0 + POTION_BTN_GAP
+	var start_y: float = floorf((size.y - total_h) * 0.5)
+	_hp_potion_btn.position = Vector2(btn_x, start_y)
+	_hp_potion_btn.size = Vector2(POTION_BTN_W, POTION_BTN_H)
+	_mp_potion_btn.position = Vector2(btn_x, start_y + POTION_BTN_H + POTION_BTN_GAP)
+	_mp_potion_btn.size = Vector2(POTION_BTN_W, POTION_BTN_H)
+
+
+func set_potion_enabled(hp_enabled: bool, mp_enabled: bool) -> void:
+	if _hp_potion_btn:
+		_hp_potion_btn.disabled = not hp_enabled
+		_hp_potion_btn.modulate.a = 1.0 if hp_enabled else 0.35
+	if _mp_potion_btn:
+		_mp_potion_btn.disabled = not mp_enabled
+		_mp_potion_btn.modulate.a = 1.0 if mp_enabled else 0.35
+#endregion
 
 
 #region 리사이즈 — 카드 폭이 바뀔 때 바/라벨 재배치
@@ -126,8 +215,12 @@ func _relayout() -> void:
 	if w <= 0:
 		return
 
-	# 우측 영역: 페이스칩 오른쪽부터 카드 끝까지
-	var right_w: float = w - face_area_w - inner_pad
+	# 포션 버튼 레이아웃
+	_layout_potion_buttons()
+
+	# 우측 영역: 페이스칩 오른쪽부터 포션 버튼 왼쪽까지
+	var potion_area: float = POTION_BTN_W + 4.0
+	var right_w: float = w - face_area_w - inner_pad - potion_area
 	var right_x: float = face_area_w
 
 	# 페이스칩 세로 중앙 배치
