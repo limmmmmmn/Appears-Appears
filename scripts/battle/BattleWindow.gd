@@ -39,14 +39,14 @@ var window_mode: WindowMode = WindowMode.NORMAL
 
 # === UI 참조 ===
 @onready var enemy_container: Container = $MainVBox/BattleArea/EnemyContainer
-@onready var run_button: Button = %RunButton
-@onready var block_entry_button: Button = $MainVBox/ButtonBar/BlockEntryButton
-@onready var battle_close_button: Button = $MainVBox/TopBar/CloseButton
 @onready var battle_area: PanelContainer = $MainVBox/BattleArea
 @onready var main_vbox: VBoxContainer = $MainVBox
-@onready var top_bar: HBoxContainer = $MainVBox/TopBar
-@onready var info_bar: PanelContainer = $MainVBox/InfoBar
-@onready var info_label: Label = $MainVBox/InfoBar/InfoLabel
+var run_button: Button = null
+var block_entry_button: Button = null  # 더 이상 사용하지 않음
+var battle_close_button: Button = null  # 더 이상 사용하지 않음
+var top_bar: HBoxContainer = null  # 더 이상 사용하지 않음
+var info_bar: PanelContainer = null  # 더 이상 사용하지 않음
+var info_label: Label = null  # 더 이상 사용하지 않음
 var entry_blocked: bool = false
 var top_left_status_label: Label = null
 var top_right_status_label: Label = null
@@ -67,7 +67,7 @@ var active_traits: Array = []  # 현재 전투에 적용되는 특성 목록
 var _knight_used_first: Dictionary = {}  # hero_id -> bool (전투창당 첫 공격 스킬 사용 여부)
 
 # === 행동 처리 ===
-const ACTION_DELAY: float = 0.3  # 행동 사이 딜레sd이 (초)
+const ACTION_DELAY: float = 0.3  # 행동 사이 딜레이 (초)
 var is_processing_action: bool = false
 var is_battle_paused: bool = false  # 전투 정지 상태
 var _event_step_mode: bool = false
@@ -84,6 +84,25 @@ const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 
 # === 초당 마나 자연 회복 ===
 var _mp_regen_timer: float = 0.0
+
+# === 턴제 전투 시스템 ===
+const USE_TURN_BASED: bool = true
+const TURN_POST_DELAY: float = 0.30  # 결과 타이핑 완료 후 다음 턴까지 대기 (한 박자 쉼)
+const BEAT_BEFORE_ATTACK: float = 0.28  # 선언 타이핑 후 → 타격 전 긴장감 비트
+const BEAT_ANIM_WAIT: float = 0.32  # 타격 애니메이션(슬래시) 재생 대기
+const BEAT_AFTER_HIT: float = 0.22  # 피격 이펙트 후 → 결과 타이핑 전 여운 비트
+var _turn_queue: Array = []  # 이번 라운드 행동 순서 (Hero | BattleEnemy)
+var _turn_index: int = 0  # 현재 턴 인덱스
+var _turn_delay_timer: float = 0.0  # 턴 사이 대기 타이머
+# phase: 0=다음유닛, 1=선언타이핑, 2=선언후비트, 3=애니메이션대기, 4=피격+결과, 5=결과타이핑, 6=완료대기
+var _turn_phase: int = 0
+var _turn_current_unit = null  # 현재 행동 중인 유닛
+var _turn_action_line: String = ""  # 행동 선언 텍스트
+var _turn_result_lines: Array[String] = []  # 결과 텍스트들
+var _turn_pending_attack: Callable = Callable()  # 지연 실행할 공격 콜백
+var _turn_collecting_results: bool = false  # true일 때 show_battle_text가 결과를 수집
+var _turn_stage_hits: bool = false  # true일 때 피격이펙트+데미지숫자를 지연 큐에 저장
+var _turn_staged_hits: Array = []  # [{target, damage, is_crit, is_enemy_target}] 지연 큐
 
 
 # === 레벨업 스킬 선택 ===
@@ -176,27 +195,29 @@ var event_right_bubble: PanelContainer = null
 var event_left_bubble_label: Label = null
 var event_right_bubble_label: Label = null
 
+# === 전투 로그 (고전 RPG 스타일 + 타이핑 연출) ===
+@onready var battle_log_panel: PanelContainer = $MainVBox/BattleLogPanel
+@onready var battle_log_label: RichTextLabel = $MainVBox/BattleLogPanel/BattleLogLabel
+const BATTLE_LOG_FONT_SIZE: int = 10
+const TYPEWRITER_CHAR_DELAY: float = 0.006  # 한 글자당 대기 시간 (초고속 타이핑)
+const TYPEWRITER_LINE_PAUSE: float = 0.03  # 줄 사이 대기 (빠르게)
+var _tw_lines: Array[String] = []  # 순차 표시할 줄 목록
+var _tw_current_line: int = 0  # 현재 표시 중인 줄 인덱스
+var _tw_char_index: int = 0  # 현재 줄에서 표시된 글자 수
+var _tw_timer: float = 0.0  # 타이핑 타이머
+var _tw_done: bool = true  # 모든 줄 타이핑 완료 여부
+var _tw_displayed: Array[String] = []  # 이미 완료된 줄들
+var _tw_callback: Callable = Callable()  # 줄 사이 콜백 (공격 연출용)
+var _tw_callback_after_line: int = -1  # 콜백 실행 시점 (이 줄 타이핑 후)
+var _tw_callback_fired: bool = false
+var _tw_pause_timer: float = 0.0  # 줄 사이/콜백 후 대기
+
 
 func _ready() -> void:
 	visible = false
 	set_process(false)
 	process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 입력 받기
 	add_to_group("battle_windows")
-
-	if run_button:
-		run_button.visible = true
-		run_button.pressed.connect(_on_run_button_pressed)
-		run_button.mouse_entered.connect(_on_run_button_mouse_entered)
-		run_button.mouse_exited.connect(_on_run_button_mouse_exited)
-		_apply_run_button_style()
-	if block_entry_button:
-		block_entry_button.visible = true
-		if not block_entry_button.toggled.is_connected(_on_block_entry_toggled):
-			block_entry_button.toggled.connect(_on_block_entry_toggled)
-		_update_block_entry_button_state()
-
-	if battle_close_button:
-		battle_close_button.pressed.connect(_on_close_pressed)
 
 	# 마우스 GUI 입력 연결
 	gui_input.connect(_on_gui_input)
@@ -209,9 +230,11 @@ func _ready() -> void:
 
 	# 적 호버 툴팁 생성
 	_setup_enemy_tooltip()
-	_setup_battle_top_bar()
-	_setup_info_bar()
 	_setup_pause_controls()
+
+	# DQ 스타일 전투 UI 생성
+	_create_run_button_overlay()
+	_setup_battle_log()
 	if SHOW_HERO_FACE_CHIPS:
 		_ensure_face_chip_layer()
 	_reset_local_progression()
@@ -242,45 +265,77 @@ func _process(delta: float) -> void:
 		return
 
 	if pending_victory:
+		# 턴제 모드: 진행 중인 연출이 모두 끝날 때까지 승리 처리 보류
+		if USE_TURN_BASED:
+			_update_typewriter(delta)
+			# 남은 단계별 연출 진행 (피격 이펙트 → 결과 타이핑)
+			if not _turn_staged_hits.is_empty():
+				_play_staged_hits()
+				if _turn_result_lines.size() > 0:
+					_start_result_typewriter()
+				return
+			if not _tw_done:
+				return
 		var now_ms: int = Time.get_ticks_msec()
 		var min_visible_ms: int = int(MIN_BATTLE_VISIBLE_TIME * 1000.0)
 		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
 		if can_finish:
 			pending_victory = false
+			clear_battle_log()
 			_end_battle_victory()
 			return
 
 	_update_background_effect(delta)
+	_update_run_button_position()
 
-	# 적 행동 타이머 충전 (영웅은 ATBManager에서 중앙 관리)
-	_update_enemy_timers(delta)
+	if USE_TURN_BASED:
+		# === 턴제 모드 ===
+		# 타이핑 연출 업데이트
+		_update_typewriter(delta)
 
-	# 초당 마나 +1 자연 회복 + 영웅 버프 틱
-	_mp_regen_timer += delta
-	if _mp_regen_timer >= 1.0:
-		_mp_regen_timer -= 1.0
+		# 마나 회복 + 버프 틱 (턴마다가 아니라 시간 기반 유지)
+		_mp_regen_timer += delta
+		if _mp_regen_timer >= 1.0:
+			_mp_regen_timer -= 1.0
+			for hero in _get_alive_heroes_in_battle():
+				hero.restore_mp(1)
 		for hero in _get_alive_heroes_in_battle():
-			hero.restore_mp(1)
-	for hero in _get_alive_heroes_in_battle():
-		hero.tick_buffs(delta)
+			hero.tick_buffs(delta)
+		# 적 디버프 틱
+		for enemy in enemies:
+			if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
+				enemy.tick_debuffs(delta)
+				if not enemy.is_alive():
+					_on_enemy_defeated(enemy)
 
-	# 행동 타임아웃 안전장치
-	if is_processing_action:
-		_action_process_timer += delta
-		if _action_process_timer > ACTION_TIMEOUT:
-			push_warning("[BattleWindow] 행동 처리 타임아웃 (%.1fs) - 강제 해제" % ACTION_TIMEOUT)
-			is_processing_action = false
+		if not is_battle_paused:
+			_process_turn_based(delta)
+	else:
+		# === ATB 모드 (기존) ===
+		# 적 행동 타이머 충전 (영웅은 ATBManager에서 중앙 관리)
+		_update_enemy_timers(delta)
+
+		# 초당 마나 +1 자연 회복 + 영웅 버프 틱
+		_mp_regen_timer += delta
+		if _mp_regen_timer >= 1.0:
+			_mp_regen_timer -= 1.0
+			for hero in _get_alive_heroes_in_battle():
+				hero.restore_mp(1)
+		for hero in _get_alive_heroes_in_battle():
+			hero.tick_buffs(delta)
+
+		# 행동 타임아웃 안전장치
+		if is_processing_action:
+			_action_process_timer += delta
+			if _action_process_timer > ACTION_TIMEOUT:
+				push_warning("[BattleWindow] 행동 처리 타임아웃 (%.1fs) - 강제 해제" % ACTION_TIMEOUT)
+				is_processing_action = false
+				_action_process_timer = 0.0
+
+		# 행동 준비된 유닛 즉시 행동 (정지 상태면 스킵)
+		if not is_processing_action and not is_battle_paused:
 			_action_process_timer = 0.0
-
-	# 행동 준비된 유닛 즉시 행동 (정지 상태면 스킵)
-	if not is_processing_action and not is_battle_paused:
-		_action_process_timer = 0.0
-		_process_ready_unit()
-
-
-func _update_run_button_position() -> void:
-	## 버튼은 ButtonBar 레이아웃으로 배치됨 (top_level 수동 이동 없음)
-	return
+			_process_ready_unit()
 
 
 func _setup_pause_controls() -> void:
@@ -328,20 +383,21 @@ func _update_pause_visual(delta: float) -> void:
 func _apply_run_button_style() -> void:
 	if run_button == null:
 		return
-	run_button.text = "도주 50%"
-	run_button.add_theme_font_size_override("font_size", 10)
-	run_button.custom_minimum_size = Vector2(104, 24)
+	run_button.text = "도주"
+	run_button.add_theme_font_size_override("font_size", 9)
+	run_button.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	run_button.custom_minimum_size = Vector2(44, 18)
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.56, 0.44, 0.12, 0.95)
+	normal.bg_color = Color(0.0, 0.0, 0.0, 0.75)
 	normal.border_width_left = 1
 	normal.border_width_top = 1
 	normal.border_width_right = 1
 	normal.border_width_bottom = 1
-	normal.border_color = Color(0.95, 0.78, 0.26, 0.95)
-	normal.corner_radius_top_left = 6
-	normal.corner_radius_top_right = 6
-	normal.corner_radius_bottom_left = 6
-	normal.corner_radius_bottom_right = 6
+	normal.border_color = Color(1.0, 1.0, 1.0, 0.8)
+	normal.corner_radius_top_left = 2
+	normal.corner_radius_top_right = 2
+	normal.corner_radius_bottom_left = 2
+	normal.corner_radius_bottom_right = 2
 	var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
 	if hover:
 		hover.bg_color = Color(0.66, 0.52, 0.16, 0.98)
@@ -358,9 +414,10 @@ func _apply_run_button_style() -> void:
 func _apply_claim_button_style() -> void:
 	if run_button == null:
 		return
-	run_button.text = "보상받기"
-	run_button.add_theme_font_size_override("font_size", 10)
-	run_button.custom_minimum_size = Vector2(104, 24)
+	run_button.text = "보상"
+	run_button.add_theme_font_size_override("font_size", 9)
+	run_button.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	run_button.custom_minimum_size = Vector2(44, 18)
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.14, 0.42, 0.2, 0.96)
 	normal.border_width_left = 1
@@ -453,14 +510,10 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 	waiting_reward_claim = false
 	_clear_reward_claim_button()
 	entry_blocked = false
-	_update_block_entry_button_state()
-	if block_entry_button and is_instance_valid(block_entry_button):
-		block_entry_button.visible = true
+	clear_battle_log()
 	if run_button:
 		_apply_run_button_style()
 		run_button.visible = true
-	if top_bar:
-		top_bar.visible = true
 
 	# 보상 초기화
 	total_exp = 0
@@ -709,6 +762,17 @@ func _start_battle() -> void:
 	_prime_party_face_chips_and_locks()
 	set_process(true)
 	_reset_enemy_timers()
+
+	# 턴제 모드 초기화
+	if USE_TURN_BASED:
+		ATBManager.turn_based_active = true
+		_turn_queue.clear()
+		_turn_index = 0
+		_turn_phase = 0
+		_turn_delay_timer = 0.0
+		_turn_collecting_results = false
+		_turn_stage_hits = false
+		_turn_staged_hits.clear()
 #endregion
 
 
@@ -1412,6 +1476,378 @@ func _process_ready_unit() -> void:
 #endregion
 
 
+#region 턴제 전투 시스템
+func _build_turn_queue() -> void:
+	## 라운드 시작: 아군 + 적 전원을 속도(DEX) 내림차순으로 정렬
+	_turn_queue.clear()
+	_turn_index = 0
+
+	# 아군 수집
+	for hero in _get_alive_heroes_in_battle():
+		if hero != null and not hero.is_dead:
+			_turn_queue.append(hero)
+
+	# 적 수집
+	for enemy in enemies:
+		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
+			_turn_queue.append(enemy)
+
+	# DEX 내림차순 정렬 (빠른 유닛 먼저 행동)
+	_turn_queue.sort_custom(func(a, b):
+		var dex_a: int = a.get_dex() if a.has_method("get_dex") else 0
+		var dex_b: int = b.get_dex() if b.has_method("get_dex") else 0
+		return dex_a > dex_b
+	)
+
+
+func _play_staged_hits() -> void:
+	## 지연 큐에 저장된 피격 이펙트 + 데미지 숫자를 한꺼번에 재생
+	var total_enemy_damage: int = 0  # 적이 아군에게 준 총 데미지 (흔들림 계산용)
+	for hit in _turn_staged_hits:
+		var is_crit: bool = hit.get("is_crit", false)
+		var dmg: int = int(hit.get("damage", 0))
+		if hit.get("is_enemy_target", true):
+			# 아군이 적을 때림: 반짝 + 데미지 숫자 (전투창 흔들림 없음)
+			var target = hit.get("target")
+			if target != null and is_instance_valid(target):
+				target.play_hit_effect(is_crit)
+				target.show_damage_number(dmg, is_crit)
+		else:
+			# 적이 아군을 때림: 페이스칩 피격 + 전투창 흔들림
+			var hero_id: String = str(hit.get("hero_id", ""))
+			if not hero_id.is_empty():
+				_show_hero_face_chip(hero_id, true, dmg, is_crit, 1.25)
+			total_enemy_damage += dmg
+	# 적에게 맞았을 때만 전투창 흔들림 (데미지에 비례)
+	if total_enemy_damage > 0:
+		play_enemy_hit_shake(total_enemy_damage)
+	_turn_staged_hits.clear()
+
+
+func _process_turn_based(delta: float) -> void:
+	## 턴제 메인 루프 (단계별 연출)
+	## phase 0: 다음 유닛 선택
+	## phase 1: 선언 타이핑 ("롤랜드의 공격!")
+	## phase 2: 비트 → 타격 애니메이션 실행 (슬래시/파티클, 데미지 계산)
+	## phase 3: 타격 애니메이션 대기
+	## phase 4: 피격 이펙트 (반짝반짝) + 비트
+	## phase 5: 결과 타이핑 ("슬라임에게 35의 데미지!")
+	## phase 6: 빠르게 다음 턴
+	if current_state != BattleState.RUNNING:
+		return
+
+	# --- phase 6: 완료 → 빠르게 다음 턴 ---
+	if _turn_phase == 6:
+		_turn_delay_timer -= delta
+		if _turn_delay_timer > 0.0:
+			return
+		_turn_phase = 0
+
+	# --- phase 5: 결과 타이핑 대기 ---
+	if _turn_phase == 5:
+		# 비트 타이머가 남아있으면 대기 (피격 후 잠깐 쉼)
+		if _turn_delay_timer > 0.0:
+			_turn_delay_timer -= delta
+			if _turn_delay_timer > 0.0:
+				return
+			# 비트 완료 → 결과 타이핑 시작
+			if _turn_result_lines.size() > 0:
+				_start_result_typewriter()
+			else:
+				_tw_done = true
+		if not is_typewriter_done():
+			return
+		# 타이핑 완료 → 전투 종료 체크 후 빠르게 넘김
+		_check_battle_end()
+		is_processing_action = false
+		if is_inside_tree():
+			ATBManager.action_executed.emit()
+		_turn_phase = 6
+		_turn_delay_timer = TURN_POST_DELAY
+		return
+
+	# --- phase 4: 피격 이펙트 재생 ---
+	if _turn_phase == 4:
+		_turn_delay_timer -= delta
+		if _turn_delay_timer > 0.0:
+			return
+		# 피격 이펙트 재생 (반짝반짝 + 데미지 숫자)
+		_play_staged_hits()
+		# 결과 타이핑 단계로 (비트 후 시작)
+		_turn_phase = 5
+		_turn_delay_timer = BEAT_AFTER_HIT
+		return
+
+	# --- phase 3: 타격 애니메이션 대기 ---
+	if _turn_phase == 3:
+		_turn_delay_timer -= delta
+		if _turn_delay_timer > 0.0:
+			return
+		# 애니메이션 끝남 → 피격 이펙트 단계로
+		_turn_phase = 4
+		_turn_delay_timer = 0.0  # 즉시 피격 재생
+		return
+
+	# --- phase 2: 선언 후 비트 → 공격 실행 ---
+	if _turn_phase == 2:
+		_turn_delay_timer -= delta
+		if _turn_delay_timer > 0.0:
+			return
+		# 비트 완료 → 공격 실행 (슬래시/파티클 + 데미지 계산, 피격이펙트는 지연)
+		is_processing_action = true
+		if _turn_pending_attack.is_valid():
+			_turn_pending_attack.call()
+		_turn_pending_attack = Callable()
+		# 타격 애니메이션 대기
+		_turn_phase = 3
+		_turn_delay_timer = BEAT_ANIM_WAIT
+		return
+
+	# --- phase 1: 선언 타이핑 대기 ---
+	if _turn_phase == 1:
+		if not is_typewriter_done():
+			return
+		# 선언 타이핑 완료 → 비트 후 공격
+		_turn_phase = 2
+		_turn_delay_timer = BEAT_BEFORE_ATTACK
+		return
+
+	# --- phase 0: 다음 유닛 선택 ---
+	# 큐가 비었거나 인덱스 초과 → 새 라운드
+	if _turn_queue.is_empty() or _turn_index >= _turn_queue.size():
+		_build_turn_queue()
+		if _turn_queue.is_empty():
+			return
+
+	# 유닛 가져오기
+	var unit = _turn_queue[_turn_index]
+	_turn_index += 1
+
+	# 해제된 인스턴스 스킵
+	if unit == null or not is_instance_valid(unit):
+		return
+
+	# 죽은 유닛 스킵
+	if unit is Hero:
+		if unit.is_dead:
+			return
+	elif unit is BattleEnemy:
+		if not unit.is_alive():
+			return
+
+	# 행동 준비: 선언 줄 + 공격 콜백 설정
+	_turn_current_unit = unit
+	_turn_action_line = ""
+	_turn_result_lines.clear()
+	_turn_pending_attack = Callable()
+	_turn_staged_hits.clear()
+
+	if unit is Hero:
+		_prepare_hero_turn(unit)
+	elif unit is BattleEnemy:
+		_prepare_enemy_turn(unit)
+
+	# 선언 줄 타이핑 시작
+	if not _turn_action_line.is_empty():
+		start_typewriter([_turn_action_line])
+		_turn_phase = 1
+	else:
+		# 선언 없으면 바로 비트 → 공격
+		_turn_phase = 2
+		_turn_delay_timer = BEAT_BEFORE_ATTACK
+
+
+func _start_result_typewriter() -> void:
+	## 선언 줄 이후에 결과 줄들을 이어서 타이핑
+	if battle_log_label == null:
+		_turn_phase = 5
+		return
+	# 이미 표시된 선언 줄 위에 결과 줄들을 이어서 타이핑
+	var all_lines: Array = []
+	all_lines.append(_turn_action_line)
+	all_lines.append_array(_turn_result_lines)
+	# 선언 줄은 이미 표시 완료 → 결과만 타이핑
+	_tw_lines.clear()
+	for l in all_lines:
+		_tw_lines.append(str(l))
+	_tw_current_line = 1  # 0번(선언)은 이미 완료
+	_tw_char_index = 0
+	_tw_timer = 0.0
+	_tw_done = false
+	_tw_displayed.clear()
+	_tw_displayed.append(_turn_action_line)  # 선언 줄은 이미 완료된 것으로
+	_tw_callback = Callable()
+	_tw_callback_after_line = -1
+	_tw_callback_fired = false
+	_tw_pause_timer = 0.0
+	_turn_phase = 5
+
+
+func _prepare_hero_turn(hero: Hero) -> void:
+	## 턴제: 영웅 행동 선언 줄 설정 + 공격 콜백 준비
+	if hero == null or hero.is_dead:
+		return
+
+	# 스킬 결정 (선언 줄용)
+	var skill_id: String = ""
+	if not hero.queued_skill.is_empty():
+		skill_id = hero.queued_skill
+	else:
+		var auto_skill: String = _pick_auto_skill(hero)
+		if not auto_skill.is_empty():
+			skill_id = auto_skill
+		else:
+			skill_id = "basic_attack"
+
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	if skill_data.is_empty() or skill_id == "basic_attack":
+		_turn_action_line = hero.hero_name + "의 공격!"
+	else:
+		var mp_cost: int = int(skill_data.get("mp_cost", 0))
+		if (mp_cost > 0 and hero.current_mp < mp_cost) or _should_skip_skill_due_to_active_buff(hero, skill_data):
+			_turn_action_line = hero.hero_name + "의 공격!"
+		else:
+			var sn: String = skill_data.get("name", "스킬")
+			var skill_type: String = skill_data.get("type", "physical")
+			if skill_type in ["buff", "heal", "resurrect"]:
+				_turn_action_line = hero.hero_name + "은(는) " + sn + "을(를) 사용!"
+			else:
+				_turn_action_line = hero.hero_name + "은(는) " + sn + "을(를) 사용!"
+
+	# 공격 콜백: 실제 실행은 선언 타이핑 완료 후
+	_turn_pending_attack = func():
+		_turn_collecting_results = true
+		_turn_stage_hits = true
+		_turn_staged_hits.clear()
+		_execute_hero_action_turn(hero)
+		_turn_stage_hits = false
+		_turn_collecting_results = false
+
+
+func _prepare_enemy_turn(enemy: BattleEnemy) -> void:
+	## 턴제: 적 행동 선언 줄 설정 + 공격 콜백 준비
+	if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
+		return
+
+	_turn_action_line = enemy.enemy_name + "의 공격!"
+
+	_turn_pending_attack = func():
+		_turn_collecting_results = true
+		_turn_stage_hits = true
+		_turn_staged_hits.clear()
+		_execute_enemy_action(enemy)
+		_turn_stage_hits = false
+		_turn_collecting_results = false
+
+
+func _execute_hero_action_turn(hero: Hero) -> void:
+	## 턴제용 영웅 행동: ATB 체크 없이 바로 실행
+	if hero == null or hero.is_dead:
+		return
+
+	# 스킬 선택: 예약 스킬 우선, 없으면 자동 선택
+	var skill_id: String = ""
+	if not hero.queued_skill.is_empty():
+		skill_id = hero.queued_skill
+	else:
+		var auto_skill: String = _pick_auto_skill(hero)
+		if not auto_skill.is_empty():
+			skill_id = auto_skill
+		else:
+			skill_id = "basic_attack"
+
+	# 예약 스킬 타겟 정보 저장 후 클리어
+	var queued_enemy: Object = hero.queued_skill_enemy
+	var queued_ally_id: String = hero.queued_skill_ally_id
+	var is_queued: bool = not hero.queued_skill.is_empty()
+	hero.queued_skill = ""
+	hero.queued_skill_enemy = null
+	hero.queued_skill_ally_id = ""
+
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+
+	if skill_data.is_empty():
+		skill_id = "basic_attack"
+		skill_data = DataManager.get_skill("basic_attack")
+	elif skill_id != "basic_attack":
+		var required_mp: int = int(skill_data.get("mp_cost", 0))
+		if required_mp > 0 and hero.current_mp < required_mp:
+			skill_id = "basic_attack"
+			skill_data = DataManager.get_skill("basic_attack")
+			is_queued = false
+		elif _should_skip_skill_due_to_active_buff(hero, skill_data):
+			skill_id = "basic_attack"
+			skill_data = DataManager.get_skill("basic_attack")
+			is_queued = false
+
+	# 히어로 카드 공격 애니메이션
+	BattleManager.hero_attacked.emit(hero.id)
+
+	# 예약 스킬이면 저장된 타겟으로 실행
+	if is_queued and skill_id != "basic_attack":
+		var skill_type: String = skill_data.get("type", "physical")
+		var target_type: String = skill_data.get("target", "single_enemy")
+		if skill_type == "buff" or skill_type == "resurrect":
+			_execute_special_skill(hero, skill_id, skill_data)
+		elif queued_enemy != null and is_instance_valid(queued_enemy):
+			var enemy_target: BattleEnemy = queued_enemy as BattleEnemy
+			if skill_type == "heal":
+				_execute_heal_on_enemy(hero, skill_id, skill_data, enemy_target)
+			else:
+				_execute_single_attack(hero, skill_id, skill_data, enemy_target)
+				_apply_post_attack_effects(hero, skill_id, skill_data, enemy_target)
+		elif not queued_ally_id.is_empty():
+			var ally: Hero = _find_hero_by_id(queued_ally_id)
+			if skill_type == "heal":
+				_execute_ally_skill(hero, skill_id, skill_data, "single_ally", ally)
+			elif skill_type == "resurrect":
+				_execute_special_skill(hero, skill_id, skill_data)
+			else:
+				_execute_attack_on_ally(hero, skill_id, skill_data, ally)
+		else:
+			match target_type:
+				"self":
+					_execute_special_skill(hero, skill_id, skill_data)
+				"single_ally", "all_allies":
+					if skill_type == "heal":
+						_execute_ally_skill(hero, skill_id, skill_data, target_type)
+					else:
+						_execute_special_skill(hero, skill_id, skill_data)
+				"all_enemies":
+					_execute_aoe_attack(hero, skill_id, skill_data)
+				_:
+					_execute_single_attack(hero, skill_id, skill_data)
+					_apply_post_attack_effects(hero, skill_id, skill_data)
+		# MP 소모
+		var mp_cost: int = int(skill_data.get("mp_cost", 0))
+		if mp_cost > 0:
+			hero.use_mp(mp_cost)
+	else:
+		# 기본공격 또는 자동 스킬
+		if skill_id != "basic_attack":
+			var mp_cost: int = int(skill_data.get("mp_cost", 0))
+			if mp_cost > 0:
+				hero.use_mp(mp_cost)
+		var target_type: String = skill_data.get("target", "single_enemy")
+		var skill_type: String = skill_data.get("type", "physical")
+		if skill_type == "buff" or skill_type == "resurrect":
+			_execute_special_skill(hero, skill_id, skill_data)
+		elif skill_type == "heal":
+			_execute_ally_skill(hero, skill_id, skill_data, target_type)
+		else:
+			match target_type:
+				"single_ally", "all_allies":
+					_execute_ally_skill(hero, skill_id, skill_data, target_type)
+				"all_enemies":
+					_execute_aoe_attack(hero, skill_id, skill_data)
+				_:
+					_execute_single_attack(hero, skill_id, skill_data)
+		# 기본 공격 시 마나 +2 회복
+		if skill_id == "basic_attack":
+			hero.restore_mp(2)
+#endregion
+
+
 func _get_alive_heroes_in_battle(_require_face_chip: bool = true) -> Array:
 	## 모든 살아있는 히어로가 모든 전투창에서 행동 가능
 	var result: Array = []
@@ -1719,18 +2155,21 @@ func _execute_heal_on_enemy(hero: Hero, skill_id: String, skill_data: Dictionary
 	## 힐 스킬을 적에게 사용 → 적 체력 회복
 	if target == null or not target.is_alive():
 		return
+	var sn: String = skill_data.get("name", "스킬")
 	var heal_amount: int = _calc_heal_amount(hero, skill_data, skill_id)
 	var actual_heal: int = target.heal(heal_amount)
 	if SoundManager:
 		SoundManager.play_heal()
 	if target.has_method("show_heal_number"):
 		target.show_heal_number(actual_heal)
+	show_battle_text([hero.hero_name + "은(는) " + sn + "을(를) 사용!", target.enemy_name + "의 HP가 " + str(actual_heal) + " 회복되었다!"])
 
 
 func _execute_attack_on_ally(hero: Hero, skill_id: String, skill_data: Dictionary, target: Hero) -> void:
 	## 공격 스킬을 아군에게 사용 → 아군에게 데미지
 	if target == null or target.is_dead:
 		return
+	var sn: String = skill_data.get("name", "스킬")
 	# 간이 데미지 계산 (방어 무시, 순수 공격력 기반)
 	var damage_base: int = int(skill_data.get("damage_base", 0))
 	var scaling: Dictionary = skill_data.get("damage_scaling", {"stat": "str", "multiplier": 1.0})
@@ -1752,6 +2191,7 @@ func _execute_attack_on_ally(hero: Hero, skill_id: String, skill_data: Dictionar
 	var actual: int = target.take_damage(damage)
 	if SoundManager:
 		SoundManager.play_attack(hero.class_id, false)
+	show_battle_text([hero.hero_name + "은(는) " + sn + "을(를) 사용!", target.hero_name + "에게 " + str(damage) + "의 데미지!"])
 	call_deferred("_emit_party_updated")
 
 
@@ -1868,6 +2308,7 @@ func _execute_special_skill(hero: Hero, skill_id: String, skill_data: Dictionary
 	var skill_type: String = skill_data.get("type", "buff")
 	var target_type: String = skill_data.get("target", "self")
 	var effects: Array = skill_data.get("effects", [])
+	var sn: String = skill_data.get("name", "스킬")
 
 	_show_hero_face_chip(hero.id, false, 0, false, 1.0)
 
@@ -1886,12 +2327,16 @@ func _execute_special_skill(hero: Hero, skill_id: String, skill_data: Dictionary
 					break
 		if dead_hero != null:
 			dead_hero.revive(hp_percent)
+			show_battle_text([hero.hero_name + "은(는) " + sn + "을(를) 사용!", dead_hero.hero_name + "이(가) 되살아났다!"])
 			if SoundManager != null:
 				SoundManager.play_heal()
+		else:
+			show_battle_text([hero.hero_name + "은(는) " + sn + "을(를) 사용!", "그러나 효과가 없었다!"])
 		call_deferred("_emit_party_updated")
 		return
 
 	# 버프 스킬 처리
+	var buff_desc_lines: Array = [hero.hero_name + "은(는) " + sn + "을(를) 사용!"]
 	for effect in effects:
 		var eff_type: String = str(effect.get("type", ""))
 		var eff_value: float = float(effect.get("value", 0.0))
@@ -1909,10 +2354,23 @@ func _execute_special_skill(hero: Hero, skill_id: String, skill_data: Dictionary
 					buff_targets.append(hero)
 				for t in buff_targets:
 					t.apply_buff(eff_type, eff_duration, eff_value)
+				# 버프 종류별 설명
+				var buff_name: String = ""
+				match eff_type:
+					"atk_up": buff_name = "공격력"
+					"def_up": buff_name = "방어력"
+					"eva_up": buff_name = "회피율"
+					"magic_amp": buff_name = "마력"
+				if target_type == "self":
+					buff_desc_lines.append(hero.hero_name + "의 " + buff_name + "이(가) 올랐다!")
+				else:
+					buff_desc_lines.append("아군 전체의 " + buff_name + "이(가) 올랐다!")
 			"taunt":
 				var count: int = int(effect.get("count", 2))
 				hero.apply_taunt(count)
+				buff_desc_lines.append(hero.hero_name + "은(는) 적의 주의를 끌었다!")
 
+	show_battle_text(buff_desc_lines)
 	if SoundManager != null:
 		SoundManager.play_heal()
 	call_deferred("_emit_party_updated")
@@ -1955,6 +2413,14 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	var target: BattleEnemy = forced_target if (forced_target != null and forced_target.is_alive()) else _select_smart_target(hero)
 	if target == null:
 		return
+	# 행동 선언 로그
+	var action_line: String
+	if skill_id == "basic_attack":
+		action_line = hero.hero_name + "의 공격!"
+	else:
+		var sn: String = skill_data.get("name", "")
+		action_line = hero.hero_name + "은(는) " + sn + "을(를) 사용!"
+
 	_show_hero_face_chip(hero.id, false, 0, false, 0.95)
 	if skill_id != "basic_attack":
 		_show_skill_particle(target, skill_id, skill_data)
@@ -1965,6 +2431,8 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 	# 다연사 (multi_hit) 처리
 	var hit_count: int = _get_skill_effect_int(skill_data, "multi_hit", 1)
 	var any_crit: bool = false
+	var total_damage: int = 0
+	var miss_count: int = 0
 
 	for hit_i in hit_count:
 		if not target.is_alive():
@@ -1979,6 +2447,7 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 		var is_evaded: bool = (evade_roll < effective_eva) or (hit_roll > hit_rate)
 
 		if is_evaded:
+			miss_count += 1
 			target.show_miss_text()
 			target.play_evade_effect()
 			continue
@@ -2003,14 +2472,35 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 		if hit_i == 0 and SoundManager:
 			SoundManager.play_attack(hero.class_id, is_crit)
 
+		total_damage += damage
 		target.take_damage(damage)
-		target.play_hit_effect(is_crit)
-		target.show_damage_number(damage, is_crit)
+		if _turn_stage_hits:
+			# 턴제: 피격 이펙트/데미지숫자를 지연 큐에 저장
+			_turn_staged_hits.append({
+				"target": target, "damage": damage, "is_crit": is_crit,
+				"is_enemy_target": true, "any_crit": any_crit
+			})
+		else:
+			target.play_hit_effect(is_crit)
+			target.show_damage_number(damage, is_crit)
 
 	_show_hero_face_chip(hero.id, false, 0, any_crit, 1.15)
 
-	# 크리티컬 시 진동 효과
-	if any_crit:
+	# 결과 로그 (고전 RPG 스타일: 한번에 2줄 표시)
+	var log_lines: Array = [action_line]
+	if miss_count > 0 and total_damage == 0:
+		log_lines.append(target.enemy_name + "은(는) 공격을 피했다!")
+	elif total_damage > 0:
+		var result_line: String = target.enemy_name + "에게 " + str(total_damage) + "의 데미지!"
+		if any_crit:
+			result_line += " 회심의 일격!"
+		log_lines.append(result_line)
+	if not target.is_alive():
+		log_lines.append(target.enemy_name + "을(를) 쓰러뜨렸다!")
+	show_battle_text(log_lines)
+
+	# 크리티컬 시 진동 효과 (스테이징 시 지연)
+	if any_crit and not _turn_stage_hits:
 		play_critical_shake()
 
 	# 도발 효과 적용 (방패 강타 등)
@@ -2053,6 +2543,8 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 		hero.consume_buff("magic_amp")
 
 	var any_crit: bool = false
+	var aoe_total_damage: int = 0
+	var aoe_defeated: Array[String] = []
 	for target in alive_enemies:
 		_show_skill_particle(target, skill_id, skill_data)
 		var is_crit: bool = randf() * 100 < hero.get_crit()
@@ -2062,15 +2554,30 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 		if has_magic_amp:
 			damage = int(float(damage) * magic_amp_val)
 
+		aoe_total_damage += damage
 		target.take_damage(damage)
-		target.play_hit_effect(is_crit)
-		target.show_damage_number(damage, is_crit)
+		if _turn_stage_hits:
+			_turn_staged_hits.append({
+				"target": target, "damage": damage, "is_crit": is_crit,
+				"is_enemy_target": true, "any_crit": is_crit
+			})
+		else:
+			target.play_hit_effect(is_crit)
+			target.show_damage_number(damage, is_crit)
 
 		if not target.is_alive():
+			aoe_defeated.append(target.enemy_name)
 			_on_enemy_defeated(target)
-	
-	# 크리티컬이 하나라도 있으면 진동
-	if any_crit:
+
+	# 고전 RPG 스타일 로그
+	var log_lines: Array = [hero.hero_name + "은(는) " + skill_name + "을(를) 사용!"]
+	log_lines.append("전체에 " + str(aoe_total_damage) + "의 데미지!")
+	for defeated_name in aoe_defeated:
+		log_lines.append(defeated_name + "을(를) 쓰러뜨렸다!")
+	show_battle_text(log_lines)
+
+	# 크리티컬이 하나라도 있으면 진동 (스테이징 시 지연)
+	if any_crit and not _turn_stage_hits:
 		play_critical_shake()
 	_show_hero_face_chip(hero.id, false, 0, any_crit, 1.2)
 
@@ -2139,6 +2646,7 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 	## 아군 대상 스킬 실행 (힐 등)
 	var skill_name: String = skill_data.get("name", "스킬")
 	var skill_type: String = skill_data.get("type", "utility")
+	var action_line: String = hero.hero_name + "은(는) " + skill_name + "을(를) 사용!"
 
 	if skill_type == "heal":
 		var targets: Array = []
@@ -2170,12 +2678,16 @@ func _execute_ally_skill(hero: Hero, skill_id: String, skill_data: Dictionary, t
 			if SoundManager != null:
 				SoundManager.play_heal()
 
+		var log_lines: Array = [action_line]
 		for target in targets:
 			var heal_amount: int = _calc_heal_amount(hero, skill_data, skill_id)
 			var actual_heal: int = target.heal(heal_amount)
+			log_lines.append(target.hero_name + "의 HP가 " + str(heal_amount) + " 회복되었다!")
 
+		show_battle_text(log_lines)
 		call_deferred("_emit_party_updated")
 	else:
+		show_battle_text([action_line])
 		pass
 
 
@@ -2306,7 +2818,6 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 		else:
 			alive_heroes.sort_custom(func(a, b): return a.get_hp_percent() < b.get_hp_percent())
 			target = alive_heroes[0]
-	_show_hero_face_chip(target.id, true, 0, false, 0.95)
 
 	enemy.play_attack_effect()
 
@@ -2314,8 +2825,11 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	if SoundManager:
 		SoundManager.play_enemy_attack()
 
+	var action_line: String = enemy.enemy_name + "의 공격!"
+
 	var is_evaded := randf() * 100 < target.get_buffed_eva()
 	if is_evaded:
+		show_battle_text([action_line, target.hero_name + "은(는) 공격을 피했다!"])
 		return
 
 	var is_crit := randf() * 100 < enemy.get_crit()
@@ -2324,13 +2838,30 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	# 도발 상태였으면 카운트 소모
 	var was_taunting := target.consume_taunt()
 
-	PartyManager.on_hero_damaged(target, damage)
-	_show_hero_face_chip(target.id, true, damage, is_crit, 1.25)
-	BattleManager.hero_damaged.emit(target.id)
+	if _turn_stage_hits:
+		# 턴제: 데미지 적용은 하되 시각 피드백은 지연
+		PartyManager.on_hero_damaged(target, damage)
+		BattleManager.hero_damaged.emit(target.id)
+		_turn_staged_hits.append({
+			"target": target, "damage": damage, "is_crit": is_crit,
+			"is_enemy_target": false, "hero_id": target.id
+		})
+	else:
+		PartyManager.on_hero_damaged(target, damage)
+		_show_hero_face_chip(target.id, true, damage, is_crit, 1.25)
+		BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
 
+	# 고전 RPG 스타일 로그
+	var log_lines: Array = [action_line]
+	var result_line: String = target.hero_name + "에게 " + str(damage) + "의 데미지!"
+	if is_crit:
+		result_line += " 회심의 일격!"
+	log_lines.append(result_line)
 	if target.is_dead:
+		log_lines.append(target.hero_name + "은(는) 쓰러졌다!")
 		call_deferred("_emit_party_updated")
+	show_battle_text(log_lines)
 
 
 func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
@@ -3059,6 +3590,8 @@ func _end_battle_victory() -> void:
 	current_state = BattleState.VICTORY
 	set_process(false)
 
+	clear_battle_log()
+
 	# 도주 버튼 숨기기
 	if run_button:
 		run_button.visible = false
@@ -3642,6 +4175,154 @@ var shake_time: float = 0.0
 var shake_intensity: float = 0.0
 var shake_original_pos: Vector2 = Vector2.ZERO
 
+# === 도주 버튼 (전투 화면 우측 하단 오버레이) ===
+
+func _create_run_button_overlay() -> void:
+	if run_button != null and is_instance_valid(run_button):
+		return
+	if battle_area == null:
+		return
+
+	run_button = Button.new()
+	run_button.text = "도주"
+	run_button.custom_minimum_size = Vector2(52, 20)
+	run_button.add_theme_font_size_override("font_size", 9)
+	run_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	run_button.focus_mode = Control.FOCUS_NONE
+	run_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	run_button.top_level = true
+	run_button.z_index = 10
+	_apply_run_button_style()
+
+	run_button.pressed.connect(_on_run_button_pressed)
+	run_button.mouse_entered.connect(_on_run_button_mouse_entered)
+	run_button.mouse_exited.connect(_on_run_button_mouse_exited)
+	add_child(run_button)
+
+
+func _update_run_button_position() -> void:
+	if run_button == null or not is_instance_valid(run_button):
+		return
+	if battle_area == null:
+		return
+	var area_global: Vector2 = battle_area.global_position
+	var area_size: Vector2 = battle_area.size
+	var bx: float = area_global.x + area_size.x - run_button.size.x - 6.0
+	var by: float = area_global.y + area_size.y - run_button.size.y - 6.0
+	run_button.global_position = Vector2(bx, by)
+
+
+# === 전투 로그 시스템 (고전 RPG 스타일 + 타이핑 연출) ===
+
+func _setup_battle_log() -> void:
+	if battle_log_label == null:
+		battle_log_label = get_node_or_null("MainVBox/BattleLogPanel/BattleLogLabel")
+	if battle_log_label != null:
+		battle_log_label.add_theme_font_size_override("normal_font_size", BATTLE_LOG_FONT_SIZE)
+		battle_log_label.add_theme_color_override("default_color", Color(1.0, 1.0, 1.0, 1.0))
+		battle_log_label.text = ""
+	_tw_done = true
+
+
+func start_typewriter(lines: Array, callback: Callable = Callable(), callback_after_line: int = -1) -> void:
+	## 타이핑 연출 시작: lines를 한 글자씩 순차 표시
+	_tw_lines.clear()
+	for l in lines:
+		_tw_lines.append(str(l))
+	_tw_current_line = 0
+	_tw_char_index = 0
+	_tw_timer = 0.0
+	_tw_done = false
+	_tw_displayed.clear()
+	_tw_callback = callback
+	_tw_callback_after_line = callback_after_line
+	_tw_callback_fired = false
+	_tw_pause_timer = 0.0
+	if battle_log_label != null:
+		battle_log_label.text = ""
+
+
+func _update_typewriter(delta: float) -> void:
+	## _process에서 호출: 타이핑 애니메이션 진행
+	if _tw_done:
+		return
+	if battle_log_label == null:
+		_tw_done = true
+		return
+
+	# 줄 사이/콜백 대기 중
+	if _tw_pause_timer > 0.0:
+		_tw_pause_timer -= delta
+		return
+
+	# 모든 줄 완료 체크
+	if _tw_current_line >= _tw_lines.size():
+		_tw_done = true
+		return
+
+	# 콜백 실행 (해당 줄 타이핑 완료 후, 다음 줄 시작 전)
+	if _tw_callback_after_line >= 0 and _tw_current_line == _tw_callback_after_line + 1 and not _tw_callback_fired:
+		_tw_callback_fired = true
+		if _tw_callback.is_valid():
+			_tw_callback.call()
+		_tw_pause_timer = TYPEWRITER_LINE_PAUSE
+		return
+
+	_tw_timer += delta
+	if _tw_timer < TYPEWRITER_CHAR_DELAY:
+		return
+	_tw_timer -= TYPEWRITER_CHAR_DELAY
+
+	var current_text: String = _tw_lines[_tw_current_line]
+	_tw_char_index += 1
+
+	# 현재 줄 표시 업데이트
+	var partial: String = current_text.substr(0, _tw_char_index)
+	var display_lines: Array[String] = _tw_displayed.duplicate()
+	display_lines.append(partial)
+	battle_log_label.text = "\n".join(display_lines)
+
+	# 현재 줄 완료
+	if _tw_char_index >= current_text.length():
+		_tw_displayed.append(current_text)
+		_tw_current_line += 1
+		_tw_char_index = 0
+		_tw_pause_timer = TYPEWRITER_LINE_PAUSE
+
+
+func is_typewriter_done() -> bool:
+	return _tw_done
+
+
+func show_battle_text(lines: Array) -> void:
+	## 턴제 결과 수집 중이면 결과에 추가 (선언 줄 제외, 결과만)
+	if _turn_collecting_results:
+		# 첫 줄(선언)은 이미 _turn_action_line에 있으므로 결과만 수집
+		for i in lines.size():
+			if i > 0:  # 첫 줄(선언) 스킵
+				_turn_result_lines.append(str(lines[i]))
+		return
+	## 즉시 표시 (타이핑 없이) — ATB 모드 호환용
+	if battle_log_label == null:
+		battle_log_label = get_node_or_null("MainVBox/BattleLogPanel/BattleLogLabel")
+	if battle_log_label == null:
+		return
+	battle_log_label.text = "\n".join(lines)
+	_tw_done = true
+
+
+func clear_battle_log() -> void:
+	if battle_log_label != null:
+		battle_log_label.text = ""
+	_tw_done = true
+	_tw_lines.clear()
+	_tw_displayed.clear()
+
+
+func show_skill_action_message(text: String) -> void:
+	show_battle_text([text])
+
+
 func _setup_background_shader() -> void:
 	background = get_node_or_null("MainVBox/BattleArea/Background")
 	if not background:
@@ -3700,21 +4381,33 @@ func _init_background_effect() -> void:
 
 
 func play_critical_shake() -> void:
-	## 크리티컬 공격 시 진동 효과
-	if not is_shaking:
-		shake_original_pos = position  # 현재 위치 저장
-	is_shaking = true
-	shake_time = 0.3
-	shake_intensity = 8.0
+	## 크리티컬 공격 시 진동 효과 (아군 공격용 — 현재 비활성)
+	pass
 
 
 func play_skill_shake() -> void:
-	## 강타 등 스킬 사용 시 진동 효과
+	## 강타 등 스킬 사용 시 진동 효과 (아군 공격용 — 현재 비활성)
+	pass
+
+
+func play_enemy_hit_shake(damage: int) -> void:
+	## 적에게 맞았을 때 전투창 흔들림 — 데미지에 비례
 	if not is_shaking:
 		shake_original_pos = position
 	is_shaking = true
-	shake_time = 0.2
-	shake_intensity = 5.0
+	# 데미지 구간별 흔들림 강도
+	if damage >= 80:
+		shake_time = 0.40
+		shake_intensity = 24.0
+	elif damage >= 40:
+		shake_time = 0.34
+		shake_intensity = 18.0
+	elif damage >= 15:
+		shake_time = 0.28
+		shake_intensity = 12.0
+	else:
+		shake_time = 0.22
+		shake_intensity = 8.0
 
 
 func play_aoe_flash() -> void:

@@ -422,17 +422,17 @@ func play_slash_effect(is_crit: bool = false) -> void:
 	tween.set_parallel(true)
 	
 	# 나타나면서 회전하며 이동
-	tween.tween_property(slash, "modulate:a", 1.0, 0.06)
-	tween.tween_property(slash, "position", Vector2(20, 0), 0.22).set_ease(Tween.EASE_OUT)
-	tween.tween_property(slash, "rotation_degrees", 45.0, 0.22).set_ease(Tween.EASE_OUT)
+	tween.tween_property(slash, "modulate:a", 1.0, 0.08)
+	tween.tween_property(slash, "position", Vector2(20, 0), 0.30).set_ease(Tween.EASE_OUT)
+	tween.tween_property(slash, "rotation_degrees", 45.0, 0.30).set_ease(Tween.EASE_OUT)
 
 	# 크리티컬이면 스케일 커짐
 	if is_crit:
-		tween.tween_property(slash, "scale", Vector2(1.0, 1.0), 0.16)
+		tween.tween_property(slash, "scale", Vector2(1.0, 1.0), 0.22)
 
 	# 잠깐 유지 후 페이드아웃
-	tween.chain().tween_interval(0.08)
-	tween.chain().tween_property(slash, "modulate:a", 0.0, 0.15)
+	tween.chain().tween_interval(0.12)
+	tween.chain().tween_property(slash, "modulate:a", 0.0, 0.20)
 	tween.chain().tween_callback(func(): slash.queue_free())
 
 
@@ -457,78 +457,78 @@ func play_hit_effect(is_crit: bool = false) -> void:
 	if is_crit:
 		# 크리티컬: 강한 깜빡임 + 강한 흔들림 + 빨간 틴트
 		_hit_tween.set_parallel(true)
-		
+
 		# 빨간색 플래시
-		_hit_tween.tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.07)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 3, 3), 0.07)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.07)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.12)
+		_hit_tween.tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.10)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 3, 3), 0.10)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color(3, 0.5, 0.5), 0.10)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.16)
 
 		# 강한 흔들림 (스프라이트)
 		var shake_tween := create_tween()
 		for i in range(4):
 			var offset := Vector2(randf_range(-6, 6), randf_range(-4, 4))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.06)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.08)
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.08)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.10)
 	else:
 		# 일반: 깜빡임 + 약한 흔들림
 		_hit_tween.set_parallel(true)
-		
+
 		# 흰색 플래시
-		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.08)
-		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.14)
+		_hit_tween.tween_property(sprite, "modulate", Color(2.5, 2.5, 2.5), 0.12)
+		_hit_tween.chain().tween_property(sprite, "modulate", Color.WHITE, 0.18)
 
 		# 약한 흔들림 (스프라이트)
 		var shake_tween := create_tween()
 		for i in range(2):
 			var offset := Vector2(randf_range(-3, 3), randf_range(-2, 2))
-			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.06)
-		shake_tween.tween_property(sprite, "position", original_pos, 0.08)
+			shake_tween.tween_property(sprite, "position", original_pos + offset, 0.08)
+		shake_tween.tween_property(sprite, "position", original_pos, 0.10)
 
 
 func play_attack_effect() -> void:
-	## 공격 이펙트 - 스프라이트를 앞으로 (아래로)
+	## 공격 이펙트 - 스프라이트를 앞으로 크게 돌진
 	if not sprite:
 		return
 	var original_pos := sprite.position
 	var tween := create_tween()
-	tween.tween_property(sprite, "position:y", sprite.position.y + 10, 0.13)
-	tween.tween_property(sprite, "position:y", original_pos.y, 0.16)
+	tween.tween_property(sprite, "position:y", sprite.position.y + 22, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(sprite, "position:y", original_pos.y, 0.24).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 
 func play_evade_effect() -> void:
 	## 회피 이펙트 - 스프라이트를 옆으로 + 사운드
 	if not sprite:
 		return
-	
+
 	# 사운드 재생
 	if SoundManager:
 		SoundManager.play_miss()
-	
+
 	var original_pos := sprite.position
 	var tween := create_tween()
-	tween.tween_property(sprite, "position:x", sprite.position.x + 12, 0.08)
-	tween.tween_property(sprite, "position:x", original_pos.x, 0.12)
+	tween.tween_property(sprite, "position:x", sprite.position.x + 12, 0.12)
+	tween.tween_property(sprite, "position:x", original_pos.x, 0.16)
 
 
 func play_death_effect() -> void:
 	## 사망 이펙트 - 스프라이트 페이드아웃 + 사운드
 	if not sprite:
 		return
-	
+
 	# 사운드 재생
 	if SoundManager:
 		SoundManager.play_death()
-	
+
 	var tween := create_tween()
-	
+
 	# 깜빡임 3회
 	for i in range(3):
-		tween.tween_property(sprite, "modulate:a", 0.3, 0.06)
-		tween.tween_property(sprite, "modulate:a", 1.0, 0.06)
-	
+		tween.tween_property(sprite, "modulate:a", 0.3, 0.09)
+		tween.tween_property(sprite, "modulate:a", 1.0, 0.09)
+
 	# 페이드아웃
-	tween.tween_property(sprite, "modulate:a", 0.0, 0.2)
+	tween.tween_property(sprite, "modulate:a", 0.0, 0.30)
 	tween.finished.connect(func(): visible = false)
 
 

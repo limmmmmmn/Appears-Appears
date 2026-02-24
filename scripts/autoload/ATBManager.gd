@@ -6,6 +6,9 @@ extends Node
 signal action_executed  # 액션 실행됨 (RightPartyPanel 쿨다운 업데이트용)
 const BATTLE_ATB_FILL_RATE: float = 0.85
 
+# 턴제 모드일 때 ATB 충전 비활성화
+var turn_based_active: bool = false
+
 
 func _ready() -> void:
 	set_process(true)
@@ -23,7 +26,10 @@ func _update_hero_timers(delta: float) -> void:
 	## (스킬은 ATB 무관, 쿨타임만 사용)
 	if not PartyManager:
 		return
+	# 턴제 모드: 전투 중 영웅 타이머 충전하지 않음
 	var has_active_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
+	if turn_based_active and has_active_battle:
+		return
 	for hero in PartyManager.get_alive_heroes():
 		var delay: float = maxf(0.001, hero.get_action_delay())
 		if has_active_battle:
