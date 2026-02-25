@@ -11,5 +11,3 @@ grow_vertical = 2
 size_flags_horizontal = 0
 mouse_filter = 2
 script = ExtResource("1_script")
-card_gap = 6
-panel_width = 120

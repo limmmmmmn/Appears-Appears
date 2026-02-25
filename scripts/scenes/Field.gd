@@ -32,9 +32,7 @@ const SANCTUARY_HEAL_RADIUS: float = 34.0
 const SANCTUARY_HEAL_INTERVAL: float = 0.28
 const SANCTUARY_HP_PER_TICK: int = 1
 const RECRUIT_EVENT_LINE_INTERVAL: float = 1.55
-const EVENT_WINDOW_SCENE := preload("res://scenes/event/EventWindow.tscn")
 const REWARD_WINDOW_SCENE := preload("res://scenes/ui/RewardWindow.tscn")
-const WINDOW_SHELL_SCRIPT := preload("res://scripts/ui/window/WindowShell.gd")
 const FIELD_LAYOUT_HELPER_SCRIPT := preload("res://scripts/scenes/field/FieldLayoutHelper.gd")
 const FIELD_PARTY_CHATTER_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPartyChatterController.gd")
 const FIELD_PAUSE_OVERLAY_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldPauseOverlayController.gd")
@@ -42,11 +40,6 @@ const FIELD_DROP_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldD
 const FIELD_TREASURE_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldTreasureController.gd")
 const FIELD_BOSS_CONTROLLER_SCRIPT := preload("res://scripts/scenes/field/FieldBossController.gd")
 const RECRUIT_NPC_SCENE := preload("res://scenes/field/RecruitNPC.tscn")
-const EVENT_WINDOW_MARGIN: float = 20.0
-const EVENT_CENTER_SAFE_SIZE: float = 100.0
-const EVENT_HUD_TOP_HEIGHT: float = 32.0
-const EVENT_HUD_BOTTOM_HEIGHT: float = 60.0
-const EVENT_WINDOW_SIZE_FALLBACK := Vector2(280, 200)
 const FIELD_WORLD_OBJECT_Z: int = 48
 const FIELD_WORLD_EFFECT_Z: int = 52
 const BOSS_TRINKET_CHOICE_COUNT: int = 3
@@ -983,37 +976,6 @@ func _resolve_recruit_event_speaker_node(speaker_side: String) -> Node2D:
 	return null
 
 
-func _get_event_window_spawn_position() -> Vector2:
-	var viewport_size: Vector2 = get_viewport_rect().size
-	var window_size: Vector2 = EVENT_WINDOW_SIZE_FALLBACK
-	if recruit_event_window:
-		var cm: Vector2 = recruit_event_window.custom_minimum_size
-		if cm != Vector2.ZERO:
-			window_size = cm
-		elif recruit_event_window.size != Vector2.ZERO:
-			window_size = recruit_event_window.size
-
-	var existing_rects: Array[Rect2] = []
-	if BattleManager:
-		for bid in BattleManager.active_battles:
-			var bd: Dictionary = BattleManager.active_battles[bid]
-			var window_ref: Variant = bd.get("window")
-			if window_ref != null and is_instance_valid(window_ref):
-				var w: Control = window_ref as Control
-				if w != null:
-					existing_rects.append(Rect2(w.position, window_size))
-
-	return WINDOW_SHELL_SCRIPT.calculate_spawn_position(
-		window_size,
-		viewport_size,
-		existing_rects,
-		EVENT_WINDOW_MARGIN,
-		EVENT_HUD_TOP_HEIGHT,
-		EVENT_HUD_BOTTOM_HEIGHT,
-		EVENT_CENTER_SAFE_SIZE
-	)
-
-
 func _close_blocking_ui_for_recruit_followup() -> void:
 	if hud == null:
 		return
@@ -1875,10 +1837,10 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int = 0, mp_orbs: int = 0) -> void:
+func _on_field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int = 0) -> void:
 	if drop_controller == null:
 		return
-	drop_controller.spawn_battle_drops(hp_orbs, gold_amount, item_ids, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z, exp_amount, mp_orbs)
+	drop_controller.spawn_battle_drops(hp_orbs, gold_amount, item_ids, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z, exp_amount)
 
 
 #=============================================================================

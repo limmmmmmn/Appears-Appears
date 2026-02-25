@@ -1,55 +1,75 @@
 extends Control
 class_name HeroCard
-## 히어로 박스 — 고전 RPG 스타일
-## 레이아웃: 좌측 페이스칩 | 우측 이름+레벨, HP바, MP바, ATB바
+## 히어로 카드 — 페이스칩 + 스킬별 ATB 바
+## 레이아웃: 좌측 페이스칩(+HP 오버레이) + 이름/레벨 | 우측 스킬 ATB 바 ×3
 
-#region 상수 / 인스펙터 조정 가능 레이아웃
-# 레이아웃 치수 (인스펙터에서 조정 가능)
+#region 상수 / 레이아웃
 @export_group("Layout")
-@export var name_row_h: int = 14           ## 이름/레벨 행 높이
-@export var bar_row_h: int = 12            ## HP/MP/ATB 행 높이 (라벨+바 통합)
-@export var bar_thickness: int = 8         ## 바 ColorRect 실제 높이
-@export var row_gap: int = 2               ## 행 사이 간격
-@export var inner_pad: int = 4             ## 내부 패딩
-@export var border_width: int = 1          ## 테두리 두께
+@export var name_row_h: int = 14
+@export var bar_row_h: int = 12
+@export var bar_thickness: int = 8
+@export var row_gap: int = 2
+@export var inner_pad: int = 4
+@export var border_width: int = 1
 
 @export_group("Face Chip")
-@export var face_size: int = 40            ## 페이스칩 크기 (정사각형)
-@export var face_gap: int = 4              ## 페이스칩과 바 사이 간격
+@export var face_size: int = 40
+@export var face_gap: int = 4
 
 @export_group("Bar Labels")
-@export var bar_label_w: int = 18          ## "HP"/"MP"/"ATB" 라벨 너비
-@export var bar_num_min_w: int = 32        ## 숫자 표시 최소 너비
+@export var bar_label_w: int = 18
+@export var bar_num_min_w: int = 32
 
-## 페이스칩 영역 폭 (inner_pad + face_size + face_gap)
 var face_area_w: int:
 	get: return inner_pad + face_size + face_gap
 
-# 색상 — 고전 RPG 테두리 박스
+# 새 레이아웃 상수
+const FACE_TOP_Y: int = 2
+const NAME_LABEL_Y: int = 42
+const LEVEL_LABEL_Y: int = 51
+const LABEL_H: int = 9
+
+# 색상 — 카드 배경/테두리
 const BG_COLOR := Color(0.06, 0.06, 0.1, 0.92)
 const BORDER_COLOR := Color(0.55, 0.6, 0.75, 0.9)
 const BORDER_COLOR_SELECTED := Color(1.0, 0.88, 0.28, 1.0)
 const BORDER_COLOR_HOVER := Color(0.7, 0.75, 0.9, 1.0)
 
-# HP 바 색상 (비율별)
+# HP 바 색상 (레거시 — 숨김 상태이지만 호환용 유지)
 const HP_COLOR_HIGH := Color(0.25, 0.78, 0.25)
 const HP_COLOR_MID := Color(0.92, 0.72, 0.2)
 const HP_COLOR_LOW := Color(0.92, 0.22, 0.22)
 const HP_BG_COLOR := Color(0.12, 0.12, 0.15, 0.9)
 
-# MP 바 색상
-const MP_COLOR := Color(0.3, 0.5, 0.95)
-const MP_BG_COLOR := Color(0.1, 0.1, 0.18, 0.9)
+# 데미지 오버레이 (페이스칩 위 빨간색)
+const DAMAGE_OVERLAY_COLOR := Color(0.85, 0.1, 0.1, 0.55)
 
-# ATB 바 색상
+# 스킬 ATB 바 (기본공격 1줄 + 클래스 스킬 3줄 = 4줄)
+const SKILL_BAR_X: int = 48
+const SKILL_BAR_W: int = 108
+const SKILL_BAR_H: int = 13
+const SKILL_BAR_GAP: int = 1
+const SKILL_BAR_TOP_Y: int = 2
+const SKILL_BAR_COUNT: int = 4  # 기본공격 + 스킬 3개
 const ATB_BG_COLOR := Color(0.1, 0.1, 0.14, 0.85)
-const ATB_FILL_LOW := Color(0.2, 0.3, 0.5, 0.7)
-const ATB_FILL_HIGH := Color(0.4, 0.75, 1.0, 0.95)
-const ATB_FILL_READY := Color(0.25, 0.9, 0.35, 0.95)
-const ATB_FILL_QUEUED_PHYS := Color(1.0, 0.55, 0.25, 0.95)
-const ATB_FILL_QUEUED_MAG := Color(0.6, 0.5, 1.0, 0.95)
-const ATB_FILL_QUEUED_HEAL := Color(0.4, 0.9, 0.8, 0.95)
-const ATB_FILL_QUEUED_READY := Color(1.0, 0.85, 0.2, 0.95)
+
+# 기본공격 ATB 바 색상
+const BASIC_ATK_COLOR := Color(0.7, 0.7, 0.7, 0.8)
+const BASIC_ATK_READY := Color(1.0, 1.0, 0.9, 0.95)
+
+# 스킬 타입별 색상 (충전 중)
+const SKILL_COLOR_PHYSICAL := Color(0.9, 0.45, 0.2, 0.85)
+const SKILL_COLOR_MAGIC := Color(0.45, 0.35, 0.9, 0.85)
+const SKILL_COLOR_HEAL := Color(0.25, 0.8, 0.5, 0.85)
+const SKILL_COLOR_BUFF := Color(0.8, 0.7, 0.2, 0.85)
+const SKILL_COLOR_RESURRECT := Color(0.8, 0.8, 0.2, 0.85)
+
+# 스킬 타입별 색상 (준비 완료)
+const SKILL_READY_PHYSICAL := Color(1.0, 0.7, 0.3, 0.95)
+const SKILL_READY_MAGIC := Color(0.7, 0.6, 1.0, 0.95)
+const SKILL_READY_HEAL := Color(0.4, 1.0, 0.7, 0.95)
+const SKILL_READY_BUFF := Color(1.0, 0.9, 0.3, 0.95)
+const SKILL_READY_RESURRECT := Color(1.0, 1.0, 0.5, 0.95)
 
 # 사망 오버레이
 const DEATH_OVERLAY_COLOR := Color(0.08, 0.08, 0.08, 0.7)
@@ -65,6 +85,7 @@ signal equipment_dropped(hero_index: int, item_id: String)
 signal field_heal_requested(hero_index: int)
 signal card_selected(hero_index: int)
 signal card_hovered(hero_index: int, is_hovered: bool)
+signal face_chip_clicked(hero_index: int)
 #endregion
 
 
@@ -101,15 +122,21 @@ var _prev_hp: int = -1
 # 트윈
 var _shake_tween: Tween
 
-# 포션 버튼
-var _hp_potion_btn: Button = null
-var _mp_potion_btn: Button = null
-signal hp_potion_requested(hero_index: int)
-signal mp_potion_requested(hero_index: int)
+# 데미지 오버레이
+var _damage_overlay: ColorRect = null
+
+# 스킬 ATB 바: Array of { bg: ColorRect, fill: ColorRect, label: Label, skill_id: String, skill_type: String }
+var _skill_bars: Array[Dictionary] = []
+var _skill_bar_container: Control = null
+var _skill_bar_skill_ids: Array = []
 
 # 장비 관련 (호환성)
 var equip_rows: Dictionary = {}
 var equip_panel: PanelContainer
+
+# 레거시 호환 (PartyPanel에서 아직 참조)
+signal hp_potion_requested(hero_index: int)
+signal mp_potion_requested(hero_index: int)
 #endregion
 
 
@@ -118,92 +145,138 @@ func _ready() -> void:
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
 	gui_input.connect(_on_gui_input)
-	_create_potion_buttons()
+	_hide_legacy_bars()
+	_create_damage_overlay()
 
 
-#region 포션 버튼
-const POTION_BTN_W: float = 16.0
-const POTION_BTN_H: float = 26.0
-const POTION_BTN_GAP: float = 2.0
-const HP_ORB_COLOR := Color(0.85, 0.18, 0.18, 1.0)      # 붉은 오브
-const HP_ORB_BG    := Color(0.25, 0.06, 0.06, 0.9)
-const MP_ORB_COLOR := Color(0.18, 0.35, 0.9, 1.0)        # 푸른 오브
-const MP_ORB_BG    := Color(0.06, 0.08, 0.25, 0.9)
-
-func _create_potion_buttons() -> void:
-	## 히어로 카드 오른쪽에 HP/MP 포션 버튼 세로 배치
-	_hp_potion_btn = _make_orb_button("●", HP_ORB_COLOR, HP_ORB_BG, "HP 포션 사용")
-	_hp_potion_btn.pressed.connect(func(): hp_potion_requested.emit(hero_index))
-	add_child(_hp_potion_btn)
-
-	_mp_potion_btn = _make_orb_button("●", MP_ORB_COLOR, MP_ORB_BG, "MP 포션 사용")
-	_mp_potion_btn.pressed.connect(func(): mp_potion_requested.emit(hero_index))
-	add_child(_mp_potion_btn)
-
-
-func _make_orb_button(text: String, orb_color: Color, bg_color: Color, tip: String) -> Button:
-	var btn := Button.new()
-	btn.text = text
-	btn.tooltip_text = tip
-	btn.custom_minimum_size = Vector2(POTION_BTN_W, POTION_BTN_H)
-	btn.size = Vector2(POTION_BTN_W, POTION_BTN_H)
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	btn.add_theme_font_size_override("font_size", 9)
-	btn.add_theme_color_override("font_color", orb_color)
-	btn.add_theme_color_override("font_hover_color", orb_color.lightened(0.3))
-	btn.add_theme_color_override("font_pressed_color", Color.WHITE)
-	# 스타일
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg_color
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = orb_color.darkened(0.3)
-	style.content_margin_left = 1
-	style.content_margin_right = 1
-	style.content_margin_top = 1
-	style.content_margin_bottom = 1
-	btn.add_theme_stylebox_override("normal", style)
-	var hover_s := style.duplicate()
-	hover_s.bg_color = bg_color.lightened(0.15)
-	hover_s.border_color = orb_color
-	btn.add_theme_stylebox_override("hover", hover_s)
-	var pressed_s := style.duplicate()
-	pressed_s.bg_color = orb_color.darkened(0.4)
-	pressed_s.border_color = orb_color.lightened(0.2)
-	btn.add_theme_stylebox_override("pressed", pressed_s)
-	return btn
-
-
-func _layout_potion_buttons() -> void:
-	if _hp_potion_btn == null or _mp_potion_btn == null:
-		return
-	var btn_x: float = size.x - POTION_BTN_W - 2.0
-	var total_h: float = POTION_BTN_H * 2.0 + POTION_BTN_GAP
-	var start_y: float = floorf((size.y - total_h) * 0.5)
-	_hp_potion_btn.position = Vector2(btn_x, start_y)
-	_hp_potion_btn.size = Vector2(POTION_BTN_W, POTION_BTN_H)
-	_mp_potion_btn.position = Vector2(btn_x, start_y + POTION_BTN_H + POTION_BTN_GAP)
-	_mp_potion_btn.size = Vector2(POTION_BTN_W, POTION_BTN_H)
-
-
-func set_potion_enabled(hp_enabled: bool, mp_enabled: bool) -> void:
-	if _hp_potion_btn:
-		_hp_potion_btn.disabled = not hp_enabled
-		_hp_potion_btn.modulate.a = 1.0 if hp_enabled else 0.35
-	if _mp_potion_btn:
-		_mp_potion_btn.disabled = not mp_enabled
-		_mp_potion_btn.modulate.a = 1.0 if mp_enabled else 0.35
+#region 레거시 바 숨기기
+func _hide_legacy_bars() -> void:
+	for node in [_hp_bar_bg, _hp_bar_fill, _hp_label_tag, _hp_label_num,
+				 _mp_bar_bg, _mp_bar_fill, _mp_label_tag, _mp_label_num,
+				 _atb_bar_bg, _atb_bar_fill, _atb_label_tag]:
+		if node:
+			node.visible = false
 #endregion
 
 
-#region 리사이즈 — 카드 폭이 바뀔 때 바/라벨 재배치
+#region 데미지 오버레이 (페이스칩 위 빨간색 채움)
+func _create_damage_overlay() -> void:
+	_damage_overlay = ColorRect.new()
+	_damage_overlay.color = DAMAGE_OVERLAY_COLOR
+	_damage_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_damage_overlay.size = Vector2(face_size, 0)
+	_damage_overlay.position = Vector2(inner_pad, FACE_TOP_Y + face_size)
+	if _content:
+		_content.add_child(_damage_overlay)
+
+
+func _update_damage_overlay(hp_ratio: float) -> void:
+	if _damage_overlay == null:
+		return
+	var loss: float = 1.0 - clampf(hp_ratio, 0.0, 1.0)
+	var overlay_h: float = float(face_size) * loss
+	_damage_overlay.size = Vector2(face_size, overlay_h)
+	_damage_overlay.position = Vector2(inner_pad, float(FACE_TOP_Y) + float(face_size) - overlay_h)
+#endregion
+
+
+#region 스킬 ATB 바
+func _create_skill_atb_bars(hero: Hero) -> void:
+	if _skill_bar_container != null and is_instance_valid(_skill_bar_container):
+		_skill_bar_container.queue_free()
+	_skill_bars.clear()
+	_skill_bar_skill_ids.clear()
+
+	_skill_bar_container = Control.new()
+	_skill_bar_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skill_bar_container.position = Vector2.ZERO
+	_skill_bar_container.size = size
+	if _content:
+		_content.add_child(_skill_bar_container)
+
+	var skill_ids: Array = _get_display_skill_ids(hero)
+	_skill_bar_skill_ids = skill_ids.duplicate()
+
+	for i in range(mini(skill_ids.size(), SKILL_BAR_COUNT)):
+		var skill_id: String = skill_ids[i]
+		var skill_data: Dictionary = DataManager.get_skill(skill_id)
+		var skill_type: String = str(skill_data.get("type", "physical"))
+		var skill_name: String = str(skill_data.get("name", skill_id))
+		var is_basic: bool = (skill_id == "basic_attack")
+
+		var bar_y: int = SKILL_BAR_TOP_Y + i * (SKILL_BAR_H + SKILL_BAR_GAP)
+
+		# 배경
+		var bg := ColorRect.new()
+		bg.position = Vector2(SKILL_BAR_X, bar_y)
+		bg.size = Vector2(SKILL_BAR_W, SKILL_BAR_H)
+		bg.color = ATB_BG_COLOR
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_skill_bar_container.add_child(bg)
+
+		# 채움
+		var fill := ColorRect.new()
+		fill.position = Vector2(SKILL_BAR_X, bar_y)
+		fill.size = Vector2(0, SKILL_BAR_H)
+		fill.color = BASIC_ATK_COLOR if is_basic else _get_skill_type_color(skill_type, false)
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_skill_bar_container.add_child(fill)
+
+		# 스킬 이름 라벨
+		var lbl := Label.new()
+		lbl.position = Vector2(SKILL_BAR_X + 2, bar_y)
+		lbl.size = Vector2(SKILL_BAR_W - 4, SKILL_BAR_H)
+		lbl.text = skill_name
+		lbl.add_theme_font_size_override("font_size", 7)
+		lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 0.7))
+		lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.6))
+		lbl.add_theme_constant_override("outline_size", 2)
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		lbl.clip_text = true
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_skill_bar_container.add_child(lbl)
+
+		_skill_bars.append({
+			"bg": bg,
+			"fill": fill,
+			"label": lbl,
+			"skill_id": skill_id,
+			"skill_type": skill_type,
+			"is_basic": is_basic,
+		})
+
+
+func _get_display_skill_ids(hero: Hero) -> Array:
+	var result: Array = ["basic_attack"]  # 기본공격 항상 맨 위
+	for sid in hero.get_skill_priority_list():
+		if sid != "basic_attack":
+			result.append(sid)
+	if result.size() <= 1:
+		for sid in hero.unlocked_skills:
+			if sid != "basic_attack" and not result.has(sid):
+				result.append(sid)
+	return result
+
+
+func _get_skill_type_color(skill_type: String, is_ready: bool) -> Color:
+	match skill_type:
+		"physical":
+			return SKILL_READY_PHYSICAL if is_ready else SKILL_COLOR_PHYSICAL
+		"magic":
+			return SKILL_READY_MAGIC if is_ready else SKILL_COLOR_MAGIC
+		"heal":
+			return SKILL_READY_HEAL if is_ready else SKILL_COLOR_HEAL
+		"buff":
+			return SKILL_READY_BUFF if is_ready else SKILL_COLOR_BUFF
+		"resurrect":
+			return SKILL_READY_RESURRECT if is_ready else SKILL_COLOR_RESURRECT
+		_:
+			return SKILL_READY_PHYSICAL if is_ready else SKILL_COLOR_PHYSICAL
+#endregion
+
+
+#region 리사이즈
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_relayout()
@@ -215,63 +288,36 @@ func _relayout() -> void:
 	if w <= 0:
 		return
 
-	# 포션 버튼 레이아웃
-	_layout_potion_buttons()
-
-	# 우측 영역: 페이스칩 오른쪽부터 포션 버튼 왼쪽까지
-	var potion_area: float = POTION_BTN_W + 4.0
-	var right_w: float = w - face_area_w - inner_pad - potion_area
-	var right_x: float = face_area_w
-
-	# 페이스칩 세로 중앙 배치
+	# 페이스칩: 좌상단
 	if _face_chip:
-		var face_y: float = maxf(inner_pad, floorf((h - face_size) * 0.5))
-		_face_chip.position = Vector2(inner_pad, face_y)
+		_face_chip.position = Vector2(inner_pad, FACE_TOP_Y)
 		_face_chip.size = Vector2(face_size, face_size)
 
-	# 이름/레벨 라벨
+	# 이름 라벨: 페이스칩 아래
 	if _name_label:
-		_name_label.position.x = right_x
-		_name_label.size = Vector2(right_w * 0.6, name_row_h)
+		_name_label.position = Vector2(inner_pad, NAME_LABEL_Y)
+		_name_label.size = Vector2(face_size, LABEL_H)
+		_name_label.add_theme_font_size_override("font_size", 7)
+		_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_name_label.clip_text = true
+
+	# 레벨 라벨: 이름 아래
 	if _level_label:
-		_level_label.position.x = right_x
-		_level_label.size = Vector2(right_w, name_row_h)
+		_level_label.position = Vector2(inner_pad, LEVEL_LABEL_Y)
+		_level_label.size = Vector2(face_size, LABEL_H)
+		_level_label.add_theme_font_size_override("font_size", 7)
+		_level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	# HP/MP/ATB 바 — 라벨 오른쪽
-	var bar_x: float = right_x + bar_label_w + 2
-	var bar_w: float = right_w - bar_label_w - 2
-	if _hp_bar_bg:
-		_hp_bar_bg.position.x = bar_x
-		_hp_bar_bg.size.x = bar_w
-	if _hp_bar_fill:
-		_hp_bar_fill.position.x = bar_x
-	if _hp_label_num:
-		_hp_label_num.position.x = bar_x
-		_hp_label_num.size.x = bar_w
-
-	# MP 바
-	if _mp_bar_bg:
-		_mp_bar_bg.position.x = bar_x
-		_mp_bar_bg.size.x = bar_w
-	if _mp_bar_fill:
-		_mp_bar_fill.position.x = bar_x
-	if _mp_label_num:
-		_mp_label_num.position.x = bar_x
-		_mp_label_num.size.x = bar_w
-
-	# ATB 바
-	if _atb_bar_bg:
-		_atb_bar_bg.position.x = bar_x
-		_atb_bar_bg.size.x = bar_w
+	# 데미지 오버레이
+	if _damage_overlay and _hero_ref:
+		_update_damage_overlay(_hero_ref.get_hp_percent())
 #endregion
 
 
 #region _draw — 테두리
 func _draw() -> void:
 	var rect := Rect2(Vector2.ZERO, size)
-	# 배경
 	draw_rect(rect, BG_COLOR)
-	# 테두리
 	var border_col := BORDER_COLOR
 	if _is_selected:
 		border_col = BORDER_COLOR_SELECTED
@@ -293,14 +339,12 @@ func update_from_hero(hero: Hero) -> void:
 		return
 	_hero_ref = hero
 	hero_id = hero.id
-	# 페이스칩
 	if _face_chip and SpriteManager:
 		_face_chip.texture = SpriteManager.get_hero_face_sprite(hero.id)
 	update_name(hero.hero_name)
 	update_level(hero.level)
 	update_hp(hero.current_hp, hero.get_max_hp())
-	update_mp(hero)
-	update_atb(hero)
+	update_skill_atb_bars(hero)
 	set_dead(hero.is_dead)
 
 
@@ -317,86 +361,51 @@ func update_level(lv: int) -> void:
 func update_hp(current: int, max_hp: int) -> void:
 	_cached_max_hp = max_hp
 	var ratio: float = clampf(float(current) / float(max_hp), 0.0, 1.0) if max_hp > 0 else 1.0
-
-	# 바 너비
-	if _hp_bar_fill and _hp_bar_bg:
-		var bar_w: float = _hp_bar_bg.size.x
-		_hp_bar_fill.size.x = bar_w * ratio
-
-	# 바 색상 (비율별)
-	if _hp_bar_fill:
-		if ratio > 0.6:
-			_hp_bar_fill.color = HP_COLOR_HIGH
-		elif ratio > 0.3:
-			_hp_bar_fill.color = HP_COLOR_MID
-		else:
-			_hp_bar_fill.color = HP_COLOR_LOW
-
-	# 숫자 텍스트
-	if _hp_label_num:
-		_hp_label_num.text = "%d/%d" % [current, max_hp]
-
+	_update_damage_overlay(ratio)
 	_prev_hp = current
 
 
-func update_mp(hero: Hero) -> void:
-	## MP 바 갱신 — Hero에 MP 시스템이 없으면 빈 바 표시
-	if _mp_bar_fill == null or _mp_bar_bg == null:
-		return
-	var current_mp: int = 0
-	var max_mp: int = 0
-	if hero != null:
-		if "current_mp" in hero:
-			current_mp = int(hero.get("current_mp"))
-		if hero.has_method("get_max_mp"):
-			max_mp = int(hero.get_max_mp())
-		elif "max_mp" in hero:
-			max_mp = int(hero.get("max_mp"))
-
-	var bar_w: float = _mp_bar_bg.size.x
-	if max_mp > 0:
-		var ratio: float = clampf(float(current_mp) / float(max_mp), 0.0, 1.0)
-		_mp_bar_fill.size.x = bar_w * ratio
-	else:
-		_mp_bar_fill.size.x = 0
-
-	if _mp_label_num:
-		if max_mp > 0:
-			_mp_label_num.text = "%d/%d" % [current_mp, max_mp]
-		else:
-			_mp_label_num.text = ""
+func update_mp(_hero: Hero) -> void:
+	pass
 
 
 func update_atb(hero: Hero) -> void:
-	if hero == null or _atb_bar_fill == null or _atb_bar_bg == null:
+	update_skill_atb_bars(hero)
+
+
+func update_skill_atb_bars(hero: Hero) -> void:
+	if hero == null:
 		return
-	var action_delay: float = maxf(0.001, hero.get_action_delay())
-	var ratio: float = clampf(hero.action_timer / action_delay, 0.0, 1.0)
-	var bar_w: float = _atb_bar_bg.size.x
-	_atb_bar_fill.size.x = bar_w * ratio
-	_atb_bar_fill.color = _calc_atb_color(hero, ratio)
+	var current_ids: Array = _get_display_skill_ids(hero)
+	# 바가 아직 없거나 스킬 구성이 바뀌면 재생성
+	if _skill_bars.is_empty() and not current_ids.is_empty():
+		_create_skill_atb_bars(hero)
+	elif not _skill_bars.is_empty() and current_ids != _skill_bar_skill_ids:
+		_create_skill_atb_bars(hero)
 
+	for bar_data in _skill_bars:
+		var skill_id: String = bar_data["skill_id"]
+		var skill_type: String = bar_data["skill_type"]
+		var is_basic: bool = bar_data.get("is_basic", false)
+		var fill: ColorRect = bar_data["fill"]
+		var lbl: Label = bar_data["label"]
 
-func _calc_atb_color(hero: Hero, ratio: float) -> Color:
-	# 예약 스킬이 있으면 스킬 타입별 색상
-	if not hero.queued_skill.is_empty():
-		if ratio >= 0.999:
-			return ATB_FILL_QUEUED_READY
-		var queued_data: Dictionary = DataManager.get_skill(hero.queued_skill)
-		var queued_type: String = str(queued_data.get("type", "physical"))
-		if queued_type == "magic":
-			return ATB_FILL_QUEUED_MAG
-		if queued_type == "heal":
-			return ATB_FILL_QUEUED_HEAL
-		return ATB_FILL_QUEUED_PHYS
-	if ratio >= 0.999:
-		return ATB_FILL_READY
-	# 점점 밝아지는 효과
-	return ATB_FILL_LOW.lerp(ATB_FILL_HIGH, ratio)
+		var percent: float = hero.get_skill_atb_percent(skill_id)
+		var is_ready: bool = hero.is_skill_atb_ready(skill_id)
+
+		fill.size.x = float(SKILL_BAR_W) * percent
+		if is_basic:
+			fill.color = BASIC_ATK_READY if is_ready else BASIC_ATK_COLOR
+		else:
+			fill.color = _get_skill_type_color(skill_type, is_ready)
+
+		if is_ready:
+			lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 0.8, 1.0))
+		else:
+			lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 0.7))
 
 
 func update_exp(_percent: float) -> void:
-	# EXP 바는 새 디자인에서 제거 (레벨업 버튼 사용)
 	pass
 #endregion
 
@@ -419,21 +428,19 @@ func set_selected(selected: bool) -> void:
 func set_dead(is_dead: bool) -> void:
 	if _death_overlay:
 		_death_overlay.visible = is_dead
-	if _atb_bar_bg:
-		_atb_bar_bg.visible = not is_dead
-	if _atb_label_tag:
-		_atb_label_tag.visible = not is_dead
-	if _atb_bar_fill:
-		_atb_bar_fill.visible = not is_dead
+	if _skill_bar_container:
+		_skill_bar_container.visible = not is_dead
 	if _face_chip:
 		_face_chip.modulate = Color(0.3, 0.3, 0.3) if is_dead else Color.WHITE
+	if _damage_overlay:
+		_damage_overlay.visible = not is_dead
+
+func set_potion_enabled(_hp_enabled: bool, _mp_enabled: bool) -> void:
+	pass
 #endregion
 
 
 #region 기존 하위 호환 API (PartyPanel에서 사용)
-func update_skill_atb_bars(hero: Hero) -> void:
-	update_atb(hero)
-
 var hp_reference: int = 100
 
 func is_expanded() -> bool:
@@ -518,7 +525,11 @@ func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			card_selected.emit(hero_index)
+			var face_rect := Rect2(Vector2(inner_pad, FACE_TOP_Y), Vector2(face_size, face_size))
+			if face_rect.has_point(mb.position):
+				face_chip_clicked.emit(hero_index)
+			else:
+				card_selected.emit(hero_index)
 
 
 func _on_mouse_entered() -> void:

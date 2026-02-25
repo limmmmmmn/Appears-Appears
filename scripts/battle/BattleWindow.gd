@@ -1488,8 +1488,7 @@ func _execute_hero_action(hero: Hero) -> void:
 		else:
 			return
 	elif skill_id != "basic_attack":
-		var required_mp: int = int(skill_data.get("mp_cost", 0))
-		if required_mp > 0 and hero.current_mp < required_mp:
+		if not hero.is_skill_atb_ready(skill_id):
 			skill_id = "basic_attack"
 			skill_data = DataManager.get_skill("basic_attack")
 			is_queued = false
@@ -1498,8 +1497,11 @@ func _execute_hero_action(hero: Hero) -> void:
 			skill_data = DataManager.get_skill("basic_attack")
 			is_queued = false
 
-	# 행동 타이머 리셋
-	hero.reset_action_timer()
+	# 행동 타이머 리셋 (기본공격 ATB + 스킬 ATB)
+	if skill_id == "basic_attack":
+		hero.reset_action_timer()
+	else:
+		hero.reset_skill_atb(skill_id)
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -1540,10 +1542,7 @@ func _execute_hero_action(hero: Hero) -> void:
 				_:
 					_execute_single_attack(hero, skill_id, skill_data)
 					_apply_post_attack_effects(hero, skill_id, skill_data)
-		# MP 소모
-		var mp_cost: int = int(skill_data.get("mp_cost", 0))
-		if mp_cost > 0:
-			hero.use_mp(mp_cost)
+		# 스킬 ATB는 이미 리셋됨 (행동 타이머 리셋 단계에서)
 	else:
 		# 기본공격
 		var target_type: String = skill_data.get("target", "single_enemy")
@@ -1584,7 +1583,7 @@ func _select_hero_skill(hero: Hero) -> String:
 
 
 func _pick_auto_skill(hero: Hero) -> String:
-	## 작전 우선순위에 따라 쿨다운·MP가 충분한 스킬 자동 선택
+	## 작전 우선순위에 따라 스킬 ATB가 충전된 스킬 자동 선택
 	var priority_list: Array = hero.get_skill_priority_list()
 	for sid in priority_list:
 		var skill_id: String = str(sid)
@@ -1592,11 +1591,10 @@ func _pick_auto_skill(hero: Hero) -> String:
 			continue
 		if not hero.is_skill_enabled(skill_id):
 			continue
+		if not hero.is_skill_atb_ready(skill_id):
+			continue
 		var skill_data: Dictionary = DataManager.get_skill(skill_id)
 		if skill_data.is_empty():
-			continue
-		var mp_cost: int = int(skill_data.get("mp_cost", 0))
-		if mp_cost > 0 and hero.current_mp < mp_cost:
 			continue
 		if _should_skip_skill_due_to_active_buff(hero, skill_data):
 			continue
@@ -1643,8 +1641,7 @@ func execute_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy 
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	if skill_data.is_empty():
 		return
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	if mp_cost > 0 and hero.current_mp < mp_cost:
+	if not hero.is_skill_atb_ready(skill_id):
 		return
 	if _should_skip_skill_due_to_active_buff(hero, skill_data):
 		return
@@ -2359,11 +2356,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	# 도발 상태인 영웅이 있으면 우선 타겟
 	var target: Hero = _find_taunt_target(alive_heroes)
 	if target == null:
-		if enemy.enemy_type == "boss":
-			target = alive_heroes[randi() % alive_heroes.size()]
-		else:
-			alive_heroes.sort_custom(func(a, b): return a.get_hp_percent() < b.get_hp_percent())
-			target = alive_heroes[0]
+		target = _pick_enemy_target(alive_heroes, enemy)
 
 	enemy.play_attack_effect()
 
@@ -2446,6 +2439,37 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 		if hero.has_taunt():
 			return hero
 	return null
+
+
+func _pick_enemy_target(alive_heroes: Array, enemy: BattleEnemy) -> Hero:
+	## 가중치 기반 타겟 선택 — 골고루 때리되, HP 낮은 영웅이 약간 더 맞음
+	## 보스: 완전 균등 랜덤
+	if alive_heroes.size() == 1:
+		return alive_heroes[0]
+
+	if enemy.enemy_type == "boss":
+		return alive_heroes[randi() % alive_heroes.size()]
+
+	# 일반/엘리트: 가중치 랜덤
+	# 기본 가중치 1.0 + HP% 낮을수록 보너스 (최대 +0.5)
+	# → HP 100% 영웅 = 1.0, HP 0% 영웅 = 1.5
+	# 4명 파티 기준: 25% vs 37.5% 정도 차이 (완전 집중은 아님)
+	var weights: Array[float] = []
+	var total: float = 0.0
+	for hero in alive_heroes:
+		var hp_pct: float = hero.get_hp_percent()
+		var w: float = 1.0 + (1.0 - hp_pct) * 0.5
+		weights.append(w)
+		total += w
+
+	var roll: float = randf() * total
+	var acc: float = 0.0
+	for i in range(alive_heroes.size()):
+		acc += weights[i]
+		if roll <= acc:
+			return alive_heroes[i]
+
+	return alive_heroes[alive_heroes.size() - 1]
 
 
 func _show_hero_face_chip(

@@ -66,8 +66,10 @@ var skill_levels: Dictionary = {}   # { skill_id: int } — 기본 1, 중복 선
 
 # 현재 상태
 var current_hp: int = 0
-var current_mp: int = 0
 var is_dead: bool = false
+
+# 스킬별 독립 ATB 타이머: { skill_id: float }
+var skill_atb_timers: Dictionary = {}
 
 # 도발 상태 (기사 방패 강타)
 var taunt_count: int = 0
@@ -89,9 +91,8 @@ var tags: Array = []
 var portrait: String = ""
 var field_sprite: String = ""
 
-# 행동 타이머 (내부 ATB, UI 비노출)
+# 행동 타이머 (기본공격 ATB)
 var action_timer: float = 0.0
-var skill_action_timer: float = 0.0
 
 # 예약 스킬: 자동 선택 또는 수동 예약 시 다음 행동에 사용
 var queued_skill: String = ""
@@ -163,8 +164,8 @@ func _initialize(hero_id: String) -> void:
 	_setup_skill_unlocks(class_data)
 
 	current_hp = get_max_hp()
-	current_mp = get_max_mp()
 	_init_skill_toggles()
+	_init_skill_atb_timers()
 
 
 func _build_growth_table(class_data: Dictionary) -> Dictionary:
@@ -214,6 +215,8 @@ func _setup_skill_unlocks(class_data: Dictionary) -> void:
 	for skill_id in class_skills:
 		var sid: String = str(skill_id)
 		skill_unlock_levels[sid] = 1
+		if not unlocked_skills.has(sid):
+			unlocked_skills.append(sid)
 
 	if not unlocked_skills.has("basic_attack"):
 		unlocked_skills.append("basic_attack")
@@ -293,9 +296,8 @@ func get_max_hp() -> int:
 
 
 func get_max_mp() -> int:
-	var f: Dictionary = DataManager.get_formula("stats", "mp")
-	var mult: int = int(f.get("multiplier", 3))
-	return get_base_stat("wis") * mult + _get_equipment_stat("mp")
+	## (레거시 호환 — MP 시스템 삭제됨. 0 반환)
+	return 0
 
 
 func get_str() -> int:
@@ -516,6 +518,9 @@ func set_progress(saved_level: int, saved_exp: int, saved_level_stats: Dictionar
 	if not unlocked_skills.has("basic_attack"):
 		unlocked_skills.append("basic_attack")
 
+	_init_skill_toggles()
+	_init_skill_atb_timers()
+
 	if level >= MAX_LEVEL:
 		current_exp = 0
 	else:
@@ -540,21 +545,14 @@ func heal(amount: int) -> int:
 	return actual
 
 
-func use_mp(amount: int) -> bool:
-	## MP 소모. 충분하면 차감 후 true, 부족하면 false
-	if amount <= 0:
-		return true
-	if current_mp < amount:
-		return false
-	current_mp -= amount
+func use_mp(_amount: int) -> bool:
+	## (레거시 호환 — MP 시스템 삭제됨)
 	return true
 
 
-func restore_mp(amount: int) -> int:
-	## MP 회복. 실제 회복량 반환
-	var actual := mini(amount, get_max_mp() - current_mp)
-	current_mp += actual
-	return actual
+func restore_mp(_amount: int) -> int:
+	## (레거시 호환 — MP 시스템 삭제됨)
+	return 0
 
 
 func revive(hp_percent: float = 0.3) -> void:
@@ -562,11 +560,12 @@ func revive(hp_percent: float = 0.3) -> void:
 		return
 	is_dead = false
 	current_hp = int(get_max_hp() * hp_percent)
-	current_mp = int(get_max_mp() * hp_percent)
+	reset_all_skill_atb()
 
 
-# === 행동 타이머 ===
+# === 행동 타이머 (스킬별 독립 ATB) ===
 func is_action_ready() -> bool:
+	## 기본공격 ATB 준비 완료 여부
 	return action_timer >= get_action_delay()
 
 
@@ -574,27 +573,9 @@ func reset_action_timer() -> void:
 	action_timer = 0.0
 
 
-func is_skill_action_ready() -> bool:
-	return skill_action_timer >= get_skill_action_delay()
-
-
-func reset_skill_action_timer() -> void:
-	skill_action_timer = 0.0
-
-
 func get_action_delay() -> float:
-	var f: Dictionary = DataManager.get_formula("atb", "hero_action")
-	var base_speed: float = _get_class_action_speed()
-	var dex_red: float = float(f.get("dex_reduction", 0.02))
-	return maxf(float(f.get("min_delay", 0.5)), base_speed - get_dex() * dex_red)
-
-
-func get_skill_action_delay() -> float:
-	var f: Dictionary = DataManager.get_formula("atb", "hero_skill")
-	var base_speed: float = _get_class_action_speed()
-	var spd_mult: float = float(f.get("speed_multiplier", 1.6))
-	var dex_red: float = float(f.get("dex_reduction", 0.015))
-	return maxf(float(f.get("min_delay", 1.0)), base_speed * spd_mult - get_dex() * dex_red)
+	## 기본공격 ATB 딜레이 = action_speed (classes.json)
+	return _get_class_action_speed()
 
 
 func _get_class_action_speed() -> float:
@@ -603,6 +584,62 @@ func _get_class_action_speed() -> float:
 		return 2.0
 	var class_data: Dictionary = DataManager.get_class_data(class_id)
 	return float(class_data.get("action_speed", 2.0))
+
+
+# === 스킬별 ATB ===
+func _init_skill_atb_timers() -> void:
+	## 해금된 스킬마다 타이머 초기화
+	skill_atb_timers.clear()
+	for skill_id in unlocked_skills:
+		if skill_id == "basic_attack":
+			continue
+		skill_atb_timers[skill_id] = 0.0
+
+
+func get_skill_atb_cost(skill_id: String) -> float:
+	## skills.json의 atb_cost 반환 (기본공격=0)
+	if skill_id == "basic_attack":
+		return 0.0
+	var skill_data: Dictionary = DataManager.get_skill(skill_id)
+	return float(skill_data.get("atb_cost", 0.0))
+
+
+func is_skill_atb_ready(skill_id: String) -> bool:
+	## 스킬 ATB가 atb_cost 이상 차 있는지
+	if skill_id == "basic_attack":
+		return is_action_ready()
+	var cost: float = get_skill_atb_cost(skill_id)
+	if cost <= 0.0:
+		return true
+	var current: float = float(skill_atb_timers.get(skill_id, 0.0))
+	return current >= cost
+
+
+func reset_skill_atb(skill_id: String) -> void:
+	## 스킬 사용 후 해당 스킬 ATB를 0으로 리셋
+	if skill_id != "basic_attack":
+		skill_atb_timers[skill_id] = 0.0
+
+
+func reset_all_skill_atb() -> void:
+	## 모든 스킬 ATB 리셋 (부활 등)
+	for skill_id in skill_atb_timers.keys():
+		skill_atb_timers[skill_id] = 0.0
+	action_timer = 0.0
+
+
+func get_skill_atb_percent(skill_id: String) -> float:
+	## UI 표시용: 스킬 ATB 진행률 (0.0~1.0)
+	if skill_id == "basic_attack":
+		var delay: float = get_action_delay()
+		if delay <= 0.0:
+			return 1.0
+		return clampf(action_timer / delay, 0.0, 1.0)
+	var cost: float = get_skill_atb_cost(skill_id)
+	if cost <= 0.0:
+		return 1.0
+	var current: float = float(skill_atb_timers.get(skill_id, 0.0))
+	return clampf(current / cost, 0.0, 1.0)
 
 
 func apply_seed_bonus(stat: String, value: int) -> void:
@@ -793,30 +830,25 @@ func level_up_skill(skill_id: String) -> int:
 
 
 func get_usable_skills() -> Array:
-	## 토글 ON + MP 충분한 스킬 목록 반환 (기본 공격 제외, ATB 무관)
+	## 토글 ON + 스킬 ATB 충전 완료된 스킬 목록 반환 (기본 공격 제외)
 	var result: Array = []
 	var skills: Array = get_available_skills()
 	for skill_id in skills:
 		if skill_id == "basic_attack":
 			continue
-		# 토글이 OFF면 스킵
 		if not is_skill_enabled(skill_id):
 			continue
-		var skill_data: Dictionary = DataManager.get_skill(skill_id)
-		var mp_cost: int = int(skill_data.get("mp_cost", 0))
-		if mp_cost > 0 and current_mp < mp_cost:
+		if not is_skill_atb_ready(skill_id):
 			continue
 		result.append(skill_id)
 	return result
 
 
 func can_use_skill(skill_id: String) -> bool:
-	## 해당 스킬을 사용할 수 있는지 확인 (기본공격=ATB, 스킬=MP+ATB)
+	## 해당 스킬을 사용할 수 있는지 확인 (기본공격=ATB, 스킬=스킬ATB)
 	if skill_id == "basic_attack":
 		return is_action_ready()
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	return is_action_ready() and current_mp >= mp_cost
+	return is_skill_atb_ready(skill_id)
 #endregion
 
 

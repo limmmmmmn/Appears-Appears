@@ -1,101 +1,69 @@
 extends Node
-## CooldownManager: 글로벌 스킬 쿨타임 관리
-## 전투창과 무관하게 공용으로 쿨타임이 흐름
-
-# 쿨타임 데이터: {hero_id: {skill_id: remaining_time}}
-var cooldowns: Dictionary = {}
+## CooldownManager: 스킬별 ATB 상태 조회 래퍼
+## 실제 타이머는 Hero.skill_atb_timers + ATBManager가 관리
+## 기존 인터페이스 유지 (레거시 호환)
 
 
-func _process(delta: float) -> void:
-	_update_cooldowns(delta)
-
-
-func _update_cooldowns(delta: float) -> void:
-	## 모든 쿨타임 감소
-	for hero_id in cooldowns.keys():
-		var hero_cooldowns: Dictionary = cooldowns[hero_id]
-		var skills_to_remove: Array = []
-
-		for skill_id in hero_cooldowns.keys():
-			hero_cooldowns[skill_id] -= delta
-			if hero_cooldowns[skill_id] <= 0:
-				skills_to_remove.append(skill_id)
-
-		for skill_id in skills_to_remove:
-			hero_cooldowns.erase(skill_id)
+func _process(_delta: float) -> void:
+	# 타이머 충전은 ATBManager가 담당, 여기선 아무것도 안 함
+	pass
 
 
 func start_cooldown(hero_id: String, skill_id: String) -> void:
-	## 스킬 쿨타임 시작
-	var base_cooldown: float = _get_base_cooldown(skill_id)
-	if base_cooldown <= 0:
+	## 스킬 사용 후 ATB 리셋 (기존 쿨다운 시작 → 스킬 ATB 리셋)
+	if PartyManager == null:
 		return
-
-	var dex: int = 0
-	if PartyManager and PartyManager.has_method("get_hero_by_id"):
-		var hero: Hero = PartyManager.get_hero_by_id(hero_id)
-		if hero:
-			dex = hero.get_dex()
-
-	# action_delay = base_cooldown - (DEX * 0.05), min 0.5
-	var cooldown_time: float = maxf(0.5, base_cooldown - float(dex) * 0.05)
-	if cooldown_time <= 0:
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+	if hero == null:
 		return
-
-	if not cooldowns.has(hero_id):
-		cooldowns[hero_id] = {}
-
-	cooldowns[hero_id][skill_id] = cooldown_time
+	hero.reset_skill_atb(skill_id)
 
 
 func is_skill_ready(hero_id: String, skill_id: String) -> bool:
-	## 스킬 사용 가능 여부 (쿨타임 없음)
-	if not cooldowns.has(hero_id):
+	## 스킬 ATB 충전 완료 여부
+	if PartyManager == null:
 		return true
-	if not cooldowns[hero_id].has(skill_id):
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+	if hero == null:
 		return true
-	return cooldowns[hero_id][skill_id] <= 0
+	return hero.is_skill_atb_ready(skill_id)
 
 
 func get_remaining_cooldown(hero_id: String, skill_id: String) -> float:
-	## 남은 쿨타임 반환
-	if not cooldowns.has(hero_id):
+	## 남은 충전 시간 (초)
+	if PartyManager == null:
 		return 0.0
-	if not cooldowns[hero_id].has(skill_id):
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+	if hero == null:
 		return 0.0
-	return maxf(0.0, cooldowns[hero_id][skill_id])
+	var cost: float = hero.get_skill_atb_cost(skill_id)
+	var current: float = float(hero.skill_atb_timers.get(skill_id, 0.0))
+	return maxf(0.0, cost - current)
 
 
 func get_cooldown_percent(hero_id: String, skill_id: String) -> float:
-	## 쿨타임 진행률 (0.0 = 준비완료, 1.0 = 막 시작)
-	var remaining := get_remaining_cooldown(hero_id, skill_id)
-	if remaining <= 0:
+	## 스킬 ATB 진행률 반전 (0.0 = 준비완료, 1.0 = 시작)
+	if PartyManager == null:
 		return 0.0
-	var total: float = _get_base_cooldown(skill_id)
-	var dex: int = 0
-	if PartyManager and PartyManager.has_method("get_hero_by_id"):
-		var hero: Hero = PartyManager.get_hero_by_id(hero_id)
-		if hero:
-			dex = hero.get_dex()
-	total = maxf(0.5, total - float(dex) * 0.05)
-	if total <= 0:
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+	if hero == null:
 		return 0.0
-	return remaining / total
-
-
-func _get_base_cooldown(skill_id: String) -> float:
-	# 룰북: 힐 기본 쿨다운 4.0초
-	if skill_id == "heal":
-		return 4.0
-	return DataManager.get_skill_cooldown(skill_id)
+	return 1.0 - hero.get_skill_atb_percent(skill_id)
 
 
 func reset_all_cooldowns() -> void:
 	## 모든 쿨타임 초기화
-	cooldowns.clear()
+	if PartyManager == null:
+		return
+	for hero in PartyManager.get_party():
+		if hero != null:
+			hero.reset_all_skill_atb()
 
 
 func reset_hero_cooldowns(hero_id: String) -> void:
 	## 특정 영웅의 쿨타임 초기화
-	if cooldowns.has(hero_id):
-		cooldowns.erase(hero_id)
+	if PartyManager == null:
+		return
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id)
+	if hero != null:
+		hero.reset_all_skill_atb()

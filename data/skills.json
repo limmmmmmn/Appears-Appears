@@ -5,8 +5,7 @@
     "description": "정확히 조준하여 쏜다",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 5.0,
-    "mp_cost": 6,
+    "atb_cost": 5.0,
     "damage_base": 8,
     "damage_scaling": {
       "stat": "str",
@@ -26,8 +25,7 @@
     "description": "다음 마법 스킬의 데미지가 2배가 된다.",
     "type": "buff",
     "target": "self",
-    "cooldown": 10.0,
-    "mp_cost": 6,
+    "atb_cost": 12.0,
     "effects": [
       {
         "type": "magic_amp",
@@ -43,8 +41,7 @@
     "description": "급소를 노린다. 크리티컬 확률 증가",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 4.0,
-    "mp_cost": 5,
+    "atb_cost": 4.0,
     "damage_base": 3,
     "damage_scaling": {
       "stat": "str",
@@ -64,7 +61,7 @@
     "description": "기본적인 물리 공격",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 2.0,
+    "atb_cost": 0,
     "damage_base": 0,
     "damage_scaling": {
       "stat": "str",
@@ -79,8 +76,7 @@
     "description": "적에게 돌진하여 데미지를 입히고 ATB를 초기화한다.",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 8.0,
-    "mp_cost": 6,
+    "atb_cost": 9.0,
     "damage_base": 5,
     "damage_scaling": {
       "stat": "str",
@@ -99,8 +95,7 @@
     "description": "전투창 내 모든 적에게 화염 피해",
     "type": "magic",
     "target": "all_enemies",
-    "cooldown": 8.0,
-    "mp_cost": 12,
+    "atb_cost": 8.0,
     "damage_base": 12,
     "damage_scaling": {
       "stat": "int",
@@ -115,8 +110,7 @@
     "description": "아군 전체의 HP를 소량 회복한다.",
     "type": "heal",
     "target": "all_allies",
-    "cooldown": 13.0,
-    "mp_cost": 14,
+    "atb_cost": 14.0,
     "base_damage": 5,
     "scaling": 0.4,
     "effects": [],
@@ -128,8 +122,7 @@
     "description": "아군 한 명의 HP를 회복한다 (필드에서도 사용 가능)",
     "type": "heal",
     "target": "single_ally",
-    "cooldown": 5.0,
-    "mp_cost": 8,
+    "atb_cost": 5.0,
     "effects": [],
     "default_on": true,
     "base_damage": 8,
@@ -142,8 +135,7 @@
     "description": "자기 자신의 HP를 소량 회복한다.",
     "type": "heal",
     "target": "self",
-    "cooldown": 6.0,
-    "mp_cost": 5,
+    "atb_cost": 8.0,
     "base_damage": 8,
     "scaling": 0.5,
     "effects": [],
@@ -155,8 +147,7 @@
     "description": "단일 적에게 높은 마법 데미지를 주고 ATB를 4초간 50% 느리게 한다.",
     "type": "magic",
     "target": "single_enemy",
-    "cooldown": 8.0,
-    "mp_cost": 10,
+    "atb_cost": 7.0,
     "damage_base": 20,
     "damage_scaling": {
       "stat": "int",
@@ -177,8 +168,7 @@
     "description": "자신의 DEF를 10초간 50% 증가시키고 적의 공격을 3회 끌어당긴다.",
     "type": "buff",
     "target": "self",
-    "cooldown": 14.0,
-    "mp_cost": 8,
+    "atb_cost": 16.0,
     "effects": [
       {
         "type": "def_up",
@@ -198,8 +188,7 @@
     "description": "3회 연속으로 화살을 발사한다. 각 타격 배율이 낮다.",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 7.0,
-    "mp_cost": 7,
+    "atb_cost": 7.0,
     "damage_base": 0,
     "damage_scaling": {
       "stat": "str",
@@ -219,8 +208,7 @@
     "description": "데미지를 주고 5초간 독을 부여한다.",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 8.0,
-    "mp_cost": 6,
+    "atb_cost": 9.0,
     "damage_base": 3,
     "damage_scaling": {
       "stat": "str",
@@ -241,8 +229,7 @@
     "description": "공격력의 1.7배 데미지 (크리티컬 적용)",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 5.0,
-    "mp_cost": 4,
+    "atb_cost": 5.0,
     "damage_base": 0,
     "damage_scaling": {
       "stat": "str",
@@ -257,8 +244,7 @@
     "description": "쓰러진 아군 1명을 HP 30%로 부활시킨다.",
     "type": "resurrect",
     "target": "single_ally",
-    "cooldown": 25.0,
-    "mp_cost": 18,
+    "atb_cost": 25.0,
     "effects": [
       {
         "type": "revive",
@@ -273,8 +259,7 @@
     "description": "공격력 절반 데미지 + 다음 2회 공격을 대신 받음",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 8.0,
-    "mp_cost": 6,
+    "atb_cost": 7.0,
     "damage_base": 0,
     "damage_scaling": {
       "stat": "str",
@@ -294,8 +279,7 @@
     "description": "아군 전체의 회피율을 8초간 25% 증가시킨다.",
     "type": "buff",
     "target": "all_allies",
-    "cooldown": 14.0,
-    "mp_cost": 8,
+    "atb_cost": 15.0,
     "effects": [
       {
         "type": "eva_up",
@@ -311,8 +295,7 @@
     "description": "급소를 노려 일반 적은 15% 확률로 즉사, 보스에게는 큰 데미지를 준다.",
     "type": "physical",
     "target": "single_enemy",
-    "cooldown": 10.0,
-    "mp_cost": 10,
+    "atb_cost": 11.0,
     "damage_base": 0,
     "damage_scaling": {
       "stat": "str",
@@ -332,8 +315,7 @@
     "description": "아군 전체의 ATK를 8초간 30% 증가시킨다.",
     "type": "buff",
     "target": "all_allies",
-    "cooldown": 12.0,
-    "mp_cost": 8,
+    "atb_cost": 14.0,
     "effects": [
       {
         "type": "atk_up",

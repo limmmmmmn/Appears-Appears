@@ -20,10 +20,18 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int, mp_orbs: int)
+signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int)
+signal loot_gauge_changed(current: int, maximum: int)
+signal loot_gauge_filled
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
+
+# === 루트 게이지 시스템 (점수 기반, formulas.json 참조) ===
+var _lg_formula: Dictionary = {}  # 캐시 (formulas.json → loot_gauge)
+var loot_gauge_current: int = 0
+var loot_gauge_max: int = 500
+var loot_gauge_level: int = 0              # 몇 번 채웠는지
 
 # === 누적 보상 시스템 ===
 var accumulated_exp: int = 0
@@ -56,10 +64,23 @@ var battle_container: CanvasLayer = null
 
 
 func _ready() -> void:
+	_load_loot_gauge_formula()
 	if PartyManager != null and PartyManager.has_signal("party_changed"):
 		if not PartyManager.party_changed.is_connected(_on_party_changed):
 			PartyManager.party_changed.connect(_on_party_changed)
 	_refresh_party_snapshot_ids()
+
+
+func _load_loot_gauge_formula() -> void:
+	if DataManager != null:
+		_lg_formula = DataManager.get_formula("loot_gauge") as Dictionary
+	if _lg_formula.is_empty():
+		_lg_formula = {
+			"base_max": 500, "growth_per_level": 150,
+			"score_per_kill": 60, "score_per_exp": 0.8,
+			"elite_bonus": 120, "boss_bonus": 300, "min_score": 30,
+		}
+	loot_gauge_max = int(_lg_formula.get("base_max", 500))
 
 
 func push_hud_notice(message: String, duration: float = 2.0, color: Color = Color.WHITE) -> void:
@@ -370,11 +391,14 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 
 	end_battle(battle_id, victory)
 
-	# HP 오브/골드/아이템/EXP는 전투창 위치 기준으로 필드 드롭
-	if victory and (window_enemy_kills > 0 or window_gold > 0 or not window_items.is_empty() or window_exp > 0):
+	# 아이템은 즉시 인벤토리 지급 (필드 드롭 X)
+	if victory and not window_items.is_empty():
+		_grant_items_directly(window_items)
+
+	# HP 오브/골드/EXP는 전투창 위치 기준으로 필드 드롭 (아이템 제외, MP 삭제)
+	if victory and (window_enemy_kills > 0 or window_gold > 0 or window_exp > 0):
 		var hp_orbs: int = _calc_hp_orbs_from_kills(window_enemy_kills)
-		var mp_orbs: int = _calc_mp_orbs_from_kills(window_enemy_kills)
-		field_drops_requested.emit(hp_orbs, window_gold, window_items, battle_pos, window_screen_rect, window_exp, mp_orbs)
+		field_drops_requested.emit(hp_orbs, window_gold, [], battle_pos, window_screen_rect, window_exp)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -383,11 +407,40 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	elif victory and was_elite:
 		elite_victory.emit(battle_id)
 
+	# 루트 게이지 증가 (승리 시, 점수 기반 — formulas.json)
+	if victory:
+		var score_per_kill: int = int(_lg_formula.get("score_per_kill", 60))
+		var score_per_exp: float = float(_lg_formula.get("score_per_exp", 0.8))
+		var elite_bonus: int = int(_lg_formula.get("elite_bonus", 120))
+		var boss_bonus: int = int(_lg_formula.get("boss_bonus", 300))
+		var min_score: int = int(_lg_formula.get("min_score", 30))
+		var loot_score: int = window_enemy_kills * score_per_kill
+		loot_score += int(float(window_exp) * score_per_exp)
+		if was_elite:
+			loot_score += elite_bonus
+		if was_boss:
+			loot_score += boss_bonus
+		loot_score = maxi(loot_score, min_score)
+		add_loot_gauge(loot_score)
+
 	if victory and SaveManager:
 		SaveManager.auto_save("전투 승리")
 
 	if not victory and PartyManager.is_party_wiped():
 		GameManager.trigger_game_over()
+
+
+func _grant_items_directly(items: Array) -> void:
+	## 전투 드롭 아이템을 필드에 떨어뜨리지 않고 즉시 인벤토리에 지급
+	if InventoryManager == null:
+		return
+	for item_any in items:
+		var item_id: String = str(item_any)
+		if item_id.is_empty():
+			continue
+		var equipped: bool = InventoryManager.try_auto_equip(item_id)
+		if not equipped:
+			InventoryManager.add_item(item_id)
 
 
 func _on_battle_log(message: String, color: Color) -> void:
@@ -492,9 +545,13 @@ func claim_accumulated_rewards() -> void:
 	for item in accumulated_items:
 		items_arr.append(item.id)
 
-	if accumulated_gold > 0 or not items_arr.is_empty() or accumulated_exp > 0:
+	# 아이템은 즉시 인벤토리 지급 (필드 드롭 X)
+	if not items_arr.is_empty():
+		_grant_items_directly(items_arr)
+
+	if accumulated_gold > 0 or accumulated_exp > 0:
 		var hp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
-		field_drops_requested.emit(hp_orbs, accumulated_gold, items_arr, last_battle_pos, last_window_rect, accumulated_exp, 0)
+		field_drops_requested.emit(hp_orbs, accumulated_gold, [], last_battle_pos, last_window_rect, accumulated_exp)
 
 	# 초기화
 	reset_accumulated_rewards()
@@ -512,13 +569,6 @@ func _calc_hp_orbs_from_kills(kill_count: int) -> int:
 	return kill_count * int(rf.get("hp_orbs_per_kill", 1))
 
 
-func _calc_mp_orbs_from_kills(kill_count: int) -> int:
-	if kill_count <= 0:
-		return 0
-	var rf: Dictionary = DataManager.get_formula("rewards") as Dictionary
-	var divisor: int = int(rf.get("mp_orbs_kill_divisor", 3))
-	return int(floor(float(kill_count) / float(maxi(1, divisor))))
-
 func reset_accumulated_rewards() -> void:
 	## 보상 초기화
 	accumulated_exp = 0
@@ -533,6 +583,35 @@ func get_accumulated_rewards() -> Dictionary:
 		"gold": accumulated_gold,
 		"items": accumulated_items,
 	}
+#endregion
+
+
+#region 루트 게이지
+func add_loot_gauge(amount: int = 1) -> void:
+	## 루트 게이지 증가 (전투창 종료 시 호출)
+	loot_gauge_current += amount
+	loot_gauge_changed.emit(mini(loot_gauge_current, loot_gauge_max), loot_gauge_max)
+	if loot_gauge_current >= loot_gauge_max:
+		loot_gauge_filled.emit()
+
+
+func consume_loot_gauge() -> void:
+	## 아이템 선택 완료 후 게이지 리셋 + 최대치 증가 (초과분 이월)
+	var base_max: int = int(_lg_formula.get("base_max", 500))
+	var growth: int = int(_lg_formula.get("growth_per_level", 150))
+	var overflow: int = maxi(0, loot_gauge_current - loot_gauge_max)
+	loot_gauge_level += 1
+	loot_gauge_current = overflow
+	loot_gauge_max = base_max + loot_gauge_level * growth
+	loot_gauge_changed.emit(loot_gauge_current, loot_gauge_max)
+
+
+func reset_loot_gauge() -> void:
+	## 게이지 완전 초기화 (새 런 시작 등)
+	loot_gauge_current = 0
+	loot_gauge_max = int(_lg_formula.get("base_max", 500))
+	loot_gauge_level = 0
+	loot_gauge_changed.emit(loot_gauge_current, loot_gauge_max)
 #endregion
 
 

@@ -233,7 +233,8 @@ func get_skill(skill_id: String) -> Dictionary:
 	return skills.get(skill_id, {})
 
 func get_skill_cooldown(skill_id: String) -> float:
-	return float(get_skill(skill_id).get("cooldown", 2.0))
+	## 레거시 호환 — atb_cost 반환
+	return float(get_skill(skill_id).get("atb_cost", 2.0))
 
 func get_class_skills(class_id: String) -> Array:
 	## 클래스의 스킬 목록 반환

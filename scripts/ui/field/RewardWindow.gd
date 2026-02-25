@@ -58,35 +58,23 @@ var item_ids: Array[String] = []
 var selected_item_id: String = ""
 var selected_hero_id: String = ""
 var card_buttons: Array[Button] = []
-var _forced_pause_applied: bool = false
-var _prev_tree_paused: bool = false
-var _prev_battle_paused: bool = false
-var _is_shell_hovered: bool = false
-var _pause_anim_t: float = 0.0
-var _card_drag_tracking: bool = false
-var _card_drag_started: bool = false
-var _card_drag_start_pos: Vector2 = Vector2.ZERO
-const CARD_DRAG_THRESHOLD: float = 6.0
+var _overlay_bg: ColorRect = null
+var _paused_by_reward: bool = false
 
 
 func _ready() -> void:
 	super._ready()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_to_group("reward_windows")
-	set_process(true)
+	set_process(false)
 	title_text = "보상윈도우"
 	set_title(title_text)
 	set_window_size(PANEL_SIZE)
-	random_spawn = true
-	draggable = true
+	random_spawn = false
+	draggable = false
 	pause_policy = PausePolicy.NONE
 	if close_button:
 		close_button.visible = false
-	if shell_panel:
-		if not shell_panel.mouse_entered.is_connected(_on_shell_mouse_entered):
-			shell_panel.mouse_entered.connect(_on_shell_mouse_entered)
-		if not shell_panel.mouse_exited.is_connected(_on_shell_mouse_exited):
-			shell_panel.mouse_exited.connect(_on_shell_mouse_exited)
 	if not shell_closed.is_connected(_on_shell_closed):
 		shell_closed.connect(_on_shell_closed)
 	_build_ui()
@@ -106,35 +94,38 @@ func show_loot_selection(items: Array[String]) -> void:
 	hero_pick_panel.visible = false
 	subtitle_label.text = "원하는 아이템 카드를 선택하세요."
 	_build_item_cards()
-	_apply_reward_auto_pause(false)
+	_ensure_overlay_bg()
+	_pause_game()
 	open_shell()
+	# 상단 중앙 배치 (화면 가로 중앙, 세로 상단 쪽)
+	call_deferred("_position_top_center")
 
 
-func _process(delta: float) -> void:
-	var paused_now: bool = false
-	if get_tree():
-		paused_now = get_tree().paused
-	if shell_panel and is_instance_valid(shell_panel):
-		_is_shell_hovered = shell_panel.get_global_rect().has_point(get_viewport().get_mouse_position())
-	if paused_now:
-		var dim := 1.0 if _is_shell_hovered else 0.62
-		modulate = Color(dim, dim, dim, 1.0)
-	else:
-		modulate = Color.WHITE
+func _ensure_overlay_bg() -> void:
+	## 전체화면 반투명 어둠 배경 생성
+	if _overlay_bg != null and is_instance_valid(_overlay_bg):
+		_overlay_bg.visible = true
+		return
+	_overlay_bg = ColorRect.new()
+	_overlay_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay_bg.color = Color(0.0, 0.02, 0.08, 0.72)
+	_overlay_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	# shell_panel 앞에, 카드 뒤에 삽입
+	add_child(_overlay_bg)
+	if shell_panel:
+		move_child(_overlay_bg, shell_panel.get_index())
 
-	_pause_anim_t += delta
-	for i in range(card_buttons.size()):
-		var btn: Button = card_buttons[i]
-		if btn == null or not is_instance_valid(btn):
-			continue
-		if paused_now:
-			var pulse: float = 1.0 + 0.02 * sin(_pause_anim_t * 4.0 + float(i) * 0.7)
-			btn.scale = Vector2.ONE * pulse
-			var glow: float = 0.9 + 0.1 * (0.5 + 0.5 * sin(_pause_anim_t * 3.4 + float(i) * 1.1))
-			btn.modulate = Color(glow, glow, glow, 1.0)
-		else:
-			btn.scale = Vector2.ONE
-			btn.modulate = Color.WHITE
+
+func _position_top_center() -> void:
+	## 화면 가로 중앙, 세로 상단에 배치
+	if shell_panel == null:
+		return
+	var vp_size := get_viewport().get_visible_rect().size
+	var panel_size := shell_panel.size if shell_panel.size.x > 0 else window_size
+	shell_panel.global_position = Vector2(
+		(vp_size.x - panel_size.x) * 0.5,
+		40.0  # TopBar(~26) + 약간의 여백
+	)
 
 
 func _build_ui() -> void:
@@ -232,7 +223,6 @@ func _build_item_cards() -> void:
 		card_btn.focus_mode = Control.FOCUS_NONE
 		card_btn.clip_contents = false
 		card_btn.pressed.connect(_on_item_card_pressed.bind(i))
-		card_btn.gui_input.connect(_on_item_card_gui_input.bind(card_btn))
 		_apply_card_style(card_btn, i == 0 and i < item_ids.size(), i)
 		cards_row.add_child(card_btn)
 		card_buttons.append(card_btn)
@@ -242,38 +232,6 @@ func _build_item_cards() -> void:
 		else:
 			_populate_empty_card(card_btn)
 		_make_children_click_through(card_btn)
-
-
-func _on_item_card_gui_input(event: InputEvent, card_btn: Button) -> void:
-	if card_btn == null or not is_instance_valid(card_btn):
-		return
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.button_index == MOUSE_BUTTON_LEFT:
-			if mb.pressed:
-				_card_drag_tracking = true
-				_card_drag_started = false
-				_card_drag_start_pos = mb.global_position
-				begin_shell_drag(mb.global_position)
-				_is_shell_hovered = true
-			else:
-				if _card_drag_started:
-					end_shell_drag()
-					_card_drag_tracking = false
-					_card_drag_started = false
-					card_btn.accept_event()
-				else:
-					end_shell_drag()
-					_card_drag_tracking = false
-					_card_drag_started = false
-	elif event is InputEventMouseMotion and _card_drag_tracking:
-		var mm := event as InputEventMouseMotion
-		if not _card_drag_started and mm.global_position.distance_to(_card_drag_start_pos) >= CARD_DRAG_THRESHOLD:
-			_card_drag_started = true
-		if _card_drag_started:
-			drag_shell_to(mm.global_position)
-			_is_shell_hovered = true
-			card_btn.accept_event()
 
 
 func _populate_empty_card(card_btn: Button) -> void:
@@ -522,37 +480,43 @@ func _on_hero_pick_pressed(hero_id: String) -> void:
 func _finalize_selection() -> void:
 	if selected_item_id.is_empty():
 		return
-	_apply_reward_auto_pause(false)
+	_unpause_game()
 	item_selected.emit(selected_item_id)
 	close_shell("reward_selected")
 
 
 func _on_shell_closed(_reason: String) -> void:
-	_apply_reward_auto_pause(false)
-
-
-func _on_shell_mouse_entered() -> void:
-	_is_shell_hovered = true
-
-
-func _on_shell_mouse_exited() -> void:
-	_is_shell_hovered = false
-
-
-func _apply_reward_auto_pause(enable: bool) -> void:
-	# 보상윈도우는 더 이상 자동으로 게임을 멈추지 않는다.
-	# 일시정지는 스페이스/전역 정지 토글에서만 제어한다.
-	_forced_pause_applied = false
+	_unpause_game()
+	if _overlay_bg and is_instance_valid(_overlay_bg):
+		_overlay_bg.visible = false
 
 
 func _exit_tree() -> void:
-	_apply_reward_auto_pause(false)
+	_unpause_game()
+	if _overlay_bg and is_instance_valid(_overlay_bg):
+		_overlay_bg.queue_free()
+		_overlay_bg = null
 
 
-func release_pause_lock() -> void:
-	## 외부(전투창 클릭 재개)에서 호출: 창은 유지하고 전역 pause 강제만 해제
-	if _forced_pause_applied:
-		_forced_pause_applied = false
+func _pause_game() -> void:
+	var tree := get_tree()
+	if tree and not tree.paused:
+		tree.paused = true
+		_paused_by_reward = true
+	# 전투창도 멈춤 (PROCESS_MODE_ALWAYS라 tree.paused만으론 안 멈춤)
+	if BattleManager and not BattleManager.is_battle_paused:
+		BattleManager.set_battle_paused(true)
+
+
+func _unpause_game() -> void:
+	if _paused_by_reward:
+		_paused_by_reward = false
+		# 전투창 재개
+		if BattleManager and BattleManager.is_battle_paused:
+			BattleManager.set_battle_paused(false)
+		var tree := get_tree()
+		if tree:
+			tree.paused = false
 
 
 func _apply_card_style(card_btn: Button, selected: bool, index: int) -> void:

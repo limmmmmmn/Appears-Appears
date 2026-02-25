@@ -25,36 +25,27 @@ var selection_enabled: bool = true
 const POTION_SLOTS: int = 10           ## 포션 칸 수 (가로)
 const ORBS_PER_SLOT: int = 3           ## 칸 1개 = 오브 3개로 충전
 const MAX_HP_ORBS: int = 30            ## HP 오브 최대 (10칸 × 3)
-const MAX_MP_ORBS: int = 30            ## MP 오브 최대 (10칸 × 3)
 const HP_PER_POTION: int = 30          ## 포션 1개 회복량
-const MP_PER_POTION: int = 30          ## 포션 1개 회복량
 
 # 레이아웃
 const POTION_SLOT_W: float = 11.0      ## 포션 칸 가로 크기
 const POTION_SLOT_H: float = 11.0      ## 포션 칸 세로 크기
 const POTION_SLOT_GAP: float = 1.0     ## 칸 사이 간격
 const POTION_GRID_PAD: float = 4.0     ## 그리드 내부 패딩
-const POTION_ROW_GAP: float = 3.0      ## HP줄과 MP줄 사이 간격
+const POTION_ROW_GAP: float = 3.0      ## (레거시 — 사용 안 함)
 const POTION_GRID_TOP_GAP: float = 6.0 ## 카드 아래 ~ 포션그리드 사이 간격
 
 # 포션 색상
 const HP_FILL_COLOR := Color(0.85, 0.15, 0.15, 1.0)    ## HP 포션 내용물
 const HP_BG_COLOR   := Color(0.2, 0.08, 0.08, 0.5)      ## HP 빈 칸 배경
-const MP_FILL_COLOR := Color(0.2, 0.35, 0.92, 1.0)      ## MP 포션 내용물
-const MP_BG_COLOR   := Color(0.06, 0.08, 0.2, 0.5)      ## MP 빈 칸 배경
-
 # 오브 보유량 (오브 단위, 칸이 아님)
 var hp_orb_count: int = 3    ## 현재 HP 오브 (초기 3개 = 포션 1칸 가득)
-var mp_orb_count: int = 3    ## 현재 MP 오브 (초기 3개 = 포션 1칸 가득)
 
 # 포션 그리드 UI 노드
 var _potion_grid_panel: Control = null
 var _hp_slot_bgs: Array[ColorRect] = []    ## 칸 배경 (빈 칸)
 var _hp_slot_fills: Array[ColorRect] = []  ## 칸 내용물 (아래서 위로 채워짐)
-var _mp_slot_bgs: Array[ColorRect] = []
-var _mp_slot_fills: Array[ColorRect] = []
 var _hp_count_label: Label = null
-var _mp_count_label: Label = null
 
 
 func _ready() -> void:
@@ -123,8 +114,7 @@ func _rebuild_cards() -> void:
 		card.field_heal_requested.connect(_on_field_heal_requested)
 		card.card_selected.connect(_on_card_selected)
 		card.card_hovered.connect(_on_card_hovered)
-		card.hp_potion_requested.connect(_on_hp_potion_requested)
-		card.mp_potion_requested.connect(_on_mp_potion_requested)
+		card.face_chip_clicked.connect(_on_face_chip_clicked)
 		add_child(card)
 		cards.append(card)
 	_relayout_cards()
@@ -185,8 +175,7 @@ func init_party(heroes: Array) -> void:
 		card.field_heal_requested.connect(_on_field_heal_requested)
 		card.card_selected.connect(_on_card_selected)
 		card.card_hovered.connect(_on_card_hovered)
-		card.hp_potion_requested.connect(_on_hp_potion_requested)
-		card.mp_potion_requested.connect(_on_mp_potion_requested)
+		card.face_chip_clicked.connect(_on_face_chip_clicked)
 		add_child(card)
 		cards.append(card)
 		card.update_from_hero(heroes[i])
@@ -366,10 +355,8 @@ func _find_available_healer() -> Hero:
 			continue
 		if hero.class_id != "cleric":
 			continue
-		# MP 확인
-		var skill_data_check: Dictionary = DataManager.get_skill("heal")
-		var mp_cost: int = int(skill_data_check.get("mp_cost", 0))
-		if mp_cost > 0 and hero.current_mp < mp_cost:
+		# 힐 스킬 ATB 확인
+		if not hero.is_skill_atb_ready("heal"):
 			continue
 		return hero
 	return null
@@ -385,10 +372,8 @@ func _execute_field_heal(healer: Hero, target: Hero) -> void:
 
 	var actual_heal := target.heal(heal_amount)
 
-	# MP 소모
-	var mp_cost: int = int(skill_data.get("mp_cost", 0))
-	if mp_cost > 0:
-		healer.use_mp(mp_cost)
+	# 힐 스킬 ATB 리셋
+	healer.reset_skill_atb("heal")
 
 	if SoundManager:
 		SoundManager.play_heal()
@@ -408,7 +393,7 @@ func _execute_field_heal(healer: Hero, target: Hero) -> void:
 # =====================================================================
 
 func _get_potion_grid_height() -> float:
-	return POTION_GRID_PAD * 2.0 + POTION_SLOT_H * 2.0 + POTION_ROW_GAP + 10.0
+	return POTION_GRID_PAD * 2.0 + POTION_SLOT_H + 10.0
 
 
 func _create_potion_grid() -> void:
@@ -437,34 +422,12 @@ func _create_potion_grid() -> void:
 		_potion_grid_panel.add_child(fill)
 		_hp_slot_fills.append(fill)
 
-	# MP 포션 10칸
-	_mp_slot_bgs.clear()
-	_mp_slot_fills.clear()
-	for i in range(POTION_SLOTS):
-		var bg := ColorRect.new()
-		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		bg.color = MP_BG_COLOR
-		_potion_grid_panel.add_child(bg)
-		_mp_slot_bgs.append(bg)
-		var fill := ColorRect.new()
-		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		fill.color = MP_FILL_COLOR
-		fill.clip_contents = true
-		_potion_grid_panel.add_child(fill)
-		_mp_slot_fills.append(fill)
-
-	# HP/MP 라벨
+	# HP 라벨
 	_hp_count_label = Label.new()
 	_hp_count_label.add_theme_font_size_override("font_size", 7)
 	_hp_count_label.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4, 0.9))
 	_hp_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_potion_grid_panel.add_child(_hp_count_label)
-
-	_mp_count_label = Label.new()
-	_mp_count_label.add_theme_font_size_override("font_size", 7)
-	_mp_count_label.add_theme_color_override("font_color", Color(0.4, 0.5, 0.9, 0.9))
-	_mp_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_potion_grid_panel.add_child(_mp_count_label)
 
 	_layout_potion_grid()
 	_refresh_orb_visuals()
@@ -484,7 +447,6 @@ func _layout_potion_grid() -> void:
 	var total_w: float = POTION_SLOT_W * float(POTION_SLOTS) + POTION_SLOT_GAP * float(POTION_SLOTS - 1)
 	var start_x: float = floorf((grid_w - total_w) * 0.5)
 	var hp_row_y: float = POTION_GRID_PAD
-	var mp_row_y: float = hp_row_y + POTION_SLOT_H + POTION_ROW_GAP
 
 	for i in range(POTION_SLOTS):
 		var x: float = start_x + float(i) * (POTION_SLOT_W + POTION_SLOT_GAP)
@@ -495,21 +457,11 @@ func _layout_potion_grid() -> void:
 		if i < _hp_slot_fills.size():
 			_hp_slot_fills[i].position = Vector2(x, hp_row_y)
 			# fill 높이는 _refresh에서 설정
-		# MP
-		if i < _mp_slot_bgs.size():
-			_mp_slot_bgs[i].position = Vector2(x, mp_row_y)
-			_mp_slot_bgs[i].size = Vector2(POTION_SLOT_W, POTION_SLOT_H)
-		if i < _mp_slot_fills.size():
-			_mp_slot_fills[i].position = Vector2(x, mp_row_y)
 
-	var label_y: float = mp_row_y + POTION_SLOT_H + 1.0
+	var label_y: float = hp_row_y + POTION_SLOT_H + 1.0
 	if _hp_count_label:
 		_hp_count_label.position = Vector2(start_x, label_y)
-		_hp_count_label.size = Vector2(total_w * 0.5, 10)
-	if _mp_count_label:
-		_mp_count_label.position = Vector2(start_x + total_w * 0.5, label_y)
-		_mp_count_label.size = Vector2(total_w * 0.5, 10)
-		_mp_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_hp_count_label.size = Vector2(total_w, 10)
 
 	_refresh_orb_visuals()
 
@@ -518,14 +470,10 @@ func _refresh_orb_visuals() -> void:
 	## 각 포션 칸의 fill 높이를 오브 보유량에 따라 갱신
 	## 칸 i의 오브 = slot_orbs (0~3), fill ratio = slot_orbs / 3
 	_refresh_row(hp_orb_count, _hp_slot_bgs, _hp_slot_fills, HP_FILL_COLOR, HP_BG_COLOR)
-	_refresh_row(mp_orb_count, _mp_slot_bgs, _mp_slot_fills, MP_FILL_COLOR, MP_BG_COLOR)
 
 	var hp_full_potions: int = hp_orb_count / ORBS_PER_SLOT
-	var mp_full_potions: int = mp_orb_count / ORBS_PER_SLOT
 	if _hp_count_label:
 		_hp_count_label.text = "HP ×%d" % hp_full_potions
-	if _mp_count_label:
-		_mp_count_label.text = "MP ×%d" % mp_full_potions
 
 
 func _refresh_row(orb_total: int, bgs: Array[ColorRect], fills: Array[ColorRect], fill_color: Color, bg_color: Color) -> void:
@@ -554,30 +502,17 @@ func _refresh_row(orb_total: int, bgs: Array[ColorRect], fills: Array[ColorRect]
 
 
 func _update_potion_button_states() -> void:
-	## 매 프레임: 포션 사용 가능 여부에 따라 버튼 활성/비활성
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	for i in range(cards.size()):
-		if i >= party.size():
-			continue
-		var hero: Hero = party[i]
-		if hero == null:
-			cards[i].set_potion_enabled(false, false)
-			continue
-
-		# HP 포션: 가득 찬 칸 1개 이상, HP가 만땅이 아니고, 살아있어야
-		var hp_ok: bool = hp_orb_count >= ORBS_PER_SLOT and not hero.is_dead and hero.current_hp < hero.get_max_hp()
-		# MP 포션: 가득 찬 칸 1개 이상, MP가 만땅이 아니고, 살아있어야
-		var max_mp: int = 0
-		if hero.has_method("get_max_mp"):
-			max_mp = hero.get_max_mp()
-		elif "max_mp" in hero:
-			max_mp = int(hero.get("max_mp"))
-		var mp_ok: bool = mp_orb_count >= ORBS_PER_SLOT and not hero.is_dead and max_mp > 0 and hero.current_mp < max_mp
-		cards[i].set_potion_enabled(hp_ok, mp_ok)
+	## 포션 버튼 제거됨 — 페이스칩 클릭으로 대체
+	pass
 #endregion
 
 
 #region 포션 사용 로직
+func _on_face_chip_clicked(hero_index: int) -> void:
+	## 페이스칩 클릭 → HP 포션 사용
+	_on_hp_potion_requested(hero_index)
+
+
 func _on_hp_potion_requested(hero_index: int) -> void:
 	## HP 포션 사용 (가득 찬 칸 1개 소모 → HP 30 회복)
 	if hp_orb_count < ORBS_PER_SLOT:
@@ -611,41 +546,9 @@ func _on_hp_potion_requested(hero_index: int) -> void:
 	_flash_potion_slot(true, consumed_slot)
 
 
-func _on_mp_potion_requested(hero_index: int) -> void:
-	## MP 포션 사용 (가득 찬 칸 1개 소모 → MP 30 회복)
-	if mp_orb_count < ORBS_PER_SLOT:
-		return
-	var party: Array = PartyManager.get_party() if PartyManager else []
-	if hero_index < 0 or hero_index >= party.size():
-		return
-	var hero: Hero = party[hero_index]
-	if hero == null or hero.is_dead:
-		return
-	var max_mp: int = 0
-	if hero.has_method("get_max_mp"):
-		max_mp = hero.get_max_mp()
-	elif "max_mp" in hero:
-		max_mp = int(hero.get("max_mp"))
-	if max_mp <= 0 or hero.current_mp >= max_mp:
-		return
-
-	# 왼쪽부터 소모: 첫 번째 꽉 찬 칸 찾기
-	var consumed_slot: int = _find_first_full_slot(mp_orb_count)
-	var actual: int = hero.restore_mp(MP_PER_POTION)
-	_consume_slot_orbs(false, consumed_slot)
-	_refresh_orb_visuals()
-	update_display()
-
-	if SoundManager and SoundManager.has_method("play_heal"):
-		SoundManager.play_heal()
-
-	if BattleManager and actual > 0:
-		BattleManager.battle_log_received.emit(
-			"%s: MP 포션 사용! MP +%d" % [hero.hero_name, actual],
-			Color(0.6, 0.7, 1.0)
-		)
-
-	_flash_potion_slot(false, consumed_slot)
+func _on_mp_potion_requested(_hero_index: int) -> void:
+	## MP 시스템 삭제됨 — 아무 동작 없음
+	pass
 
 
 func _find_first_full_slot(orb_count: int) -> int:
@@ -661,14 +564,12 @@ func _consume_slot_orbs(is_hp: bool, slot_index: int) -> void:
 	## 지정된 칸의 오브(ORBS_PER_SLOT)를 제거
 	if is_hp:
 		hp_orb_count = maxi(0, hp_orb_count - ORBS_PER_SLOT)
-	else:
-		mp_orb_count = maxi(0, mp_orb_count - ORBS_PER_SLOT)
 
 
 func _flash_potion_slot(is_hp: bool, slot_index: int = 0) -> void:
 	## 포션 사용 시 소진된 칸 반짝 연출
-	var bgs: Array[ColorRect] = _hp_slot_bgs if is_hp else _mp_slot_bgs
-	var bg_color: Color = HP_BG_COLOR if is_hp else MP_BG_COLOR
+	var bgs: Array[ColorRect] = _hp_slot_bgs
+	var bg_color: Color = HP_BG_COLOR
 	var flash_color := Color(1.0, 0.85, 0.5, 1.0)
 	if slot_index >= 0 and slot_index < bgs.size():
 		var target_bg: ColorRect = bgs[slot_index]
@@ -683,15 +584,6 @@ func add_hp_orbs(amount: int) -> void:
 	_refresh_orb_visuals()
 
 
-func add_mp_orbs(amount: int) -> void:
-	mp_orb_count = mini(mp_orb_count + amount, MAX_MP_ORBS)
-	_refresh_orb_visuals()
-
-
 func get_hp_orb_count() -> int:
 	return hp_orb_count
-
-
-func get_mp_orb_count() -> int:
-	return mp_orb_count
 #endregion

@@ -45,6 +45,9 @@ func start_new_game() -> void:
 	PartyManager.inventory.clear()
 	InventoryManager.clear()
 
+	if BattleManager:
+		BattleManager.reset_loot_gauge()
+
 	FieldManager.generate_runtime_acts()
 	change_state(GameState.NODE_SELECT)
 	_emit_progress_changed()

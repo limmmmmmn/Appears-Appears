@@ -63,6 +63,16 @@ var is_pause_menu_active: bool = false
 # 장비 화면
 var equipment_screen: EquipmentScreen = null
 
+# 루트 게이지 (숫자 카운터 방식)
+var loot_gauge_container: HBoxContainer = null
+var loot_gauge_score_label: Label = null
+var loot_gauge_slash_label: Label = null
+var loot_gauge_max_label: Label = null
+var _loot_gauge_display_value: float = 0.0    # 보간 표시용 (float)
+var _loot_gauge_countup_tween: Tween = null
+var _loot_gauge_color_tween: Tween = null
+var _loot_gauge_punch_tween: Tween = null
+
 # 중앙 하단 알림 박스
 var notice_panel: PanelContainer = null
 var notice_label: Label = null
@@ -159,6 +169,7 @@ func _ready() -> void:
 	# ESC로 일시정지 메뉴를 열고 닫기 위해 ALWAYS 설정
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_init_topbar()
+	_init_loot_gauge_bar()
 	_init_party_cards()
 	_init_pause_menu()
 	_init_equipment_screen()
@@ -211,6 +222,351 @@ func _init_topbar() -> void:
 		hover.bg_color = Color(0.18, 0.18, 0.22, 0.95)
 		speed_button.add_theme_stylebox_override("hover", hover)
 
+
+
+func _init_loot_gauge_bar() -> void:
+	## TopBar 우측(골드 라벨 왼쪽)에 전리품 점수 숫자 표시
+	# TopBar > HBox 안에 GoldLabel 앞에 삽입
+	var hbox := get_node_or_null("Control/TopBar/HBox")
+	if not hbox:
+		return
+
+	# 초기 표시값 동기화
+	_loot_gauge_display_value = float(BattleManager.loot_gauge_current) if BattleManager else 0.0
+
+	# 컨테이너: [아이콘] [현재값] [/] [목표값]
+	loot_gauge_container = HBoxContainer.new()
+	loot_gauge_container.name = "LootGaugeContainer"
+	loot_gauge_container.add_theme_constant_override("separation", 2)
+	loot_gauge_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# 보물 아이콘
+	var icon_label := Label.new()
+	icon_label.text = "🎁"
+	icon_label.add_theme_font_size_override("font_size", 10)
+	icon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loot_gauge_container.add_child(icon_label)
+
+	# 현재 점수
+	loot_gauge_score_label = Label.new()
+	loot_gauge_score_label.name = "ScoreLabel"
+	loot_gauge_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	loot_gauge_score_label.add_theme_font_size_override("font_size", 11)
+	loot_gauge_score_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
+	loot_gauge_score_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loot_gauge_score_label.custom_minimum_size = Vector2(36, 0)
+	loot_gauge_container.add_child(loot_gauge_score_label)
+
+	# 슬래시
+	loot_gauge_slash_label = Label.new()
+	loot_gauge_slash_label.text = "/"
+	loot_gauge_slash_label.add_theme_font_size_override("font_size", 10)
+	loot_gauge_slash_label.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6))
+	loot_gauge_slash_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loot_gauge_container.add_child(loot_gauge_slash_label)
+
+	# 목표 점수
+	loot_gauge_max_label = Label.new()
+	loot_gauge_max_label.name = "MaxLabel"
+	loot_gauge_max_label.add_theme_font_size_override("font_size", 10)
+	loot_gauge_max_label.add_theme_color_override("font_color", Color(0.55, 0.55, 0.6))
+	loot_gauge_max_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	loot_gauge_container.add_child(loot_gauge_max_label)
+
+	# GoldLabel 앞에 삽입
+	var gold_idx: int = gold_label.get_index() if gold_label else -1
+	if gold_idx >= 0:
+		hbox.add_child(loot_gauge_container)
+		hbox.move_child(loot_gauge_container, gold_idx)
+	else:
+		hbox.add_child(loot_gauge_container)
+
+	_update_loot_gauge_display_immediate()
+
+
+func _format_score(value: int) -> String:
+	## 숫자에 천 단위 콤마 표시: 1247 → "1,247"
+	var s: String = str(absi(value))
+	var result: String = ""
+	var len: int = s.length()
+	for i in range(len):
+		if i > 0 and (len - i) % 3 == 0:
+			result += ","
+		result += s[i]
+	if value < 0:
+		return "-" + result
+	return result
+
+
+func _update_loot_gauge_display_immediate() -> void:
+	## 즉시 표시 업데이트 (카운트업 없이)
+	if BattleManager == null:
+		return
+	_loot_gauge_display_value = float(BattleManager.loot_gauge_current)
+	if loot_gauge_score_label:
+		loot_gauge_score_label.text = _format_score(int(_loot_gauge_display_value))
+	if loot_gauge_max_label:
+		loot_gauge_max_label.text = _format_score(BattleManager.loot_gauge_max)
+
+
+func _on_loot_gauge_changed(_current: int, _maximum: int) -> void:
+	if loot_gauge_score_label == null:
+		return
+	# 목표값은 즉시 갱신
+	if loot_gauge_max_label:
+		loot_gauge_max_label.text = _format_score(_maximum)
+
+	var target_value: float = float(_current)
+	var start_value: float = _loot_gauge_display_value
+
+	# 리셋(consume 후)이면 즉시 반영
+	if target_value < start_value:
+		_kill_loot_gauge_tweens()
+		_loot_gauge_display_value = target_value
+		loot_gauge_score_label.text = _format_score(int(target_value))
+		loot_gauge_score_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
+		loot_gauge_score_label.scale = Vector2.ONE
+		loot_gauge_score_label.pivot_offset = Vector2.ZERO
+		return
+
+	# 같으면 무시
+	if int(start_value) == _current:
+		return
+
+	# ── 카운트업 애니메이션 ──
+	_kill_loot_gauge_tweens()
+
+	# 속도: 차이에 따라 0.5~0.8초
+	var diff: float = target_value - start_value
+	var duration: float = clampf(0.5 + diff * 0.001, 0.5, 0.8)
+
+	# 1) 색상: 금색으로 빛남
+	_loot_gauge_color_tween = create_tween()
+	_loot_gauge_color_tween.tween_property(
+		loot_gauge_score_label, "theme_override_colors/font_color",
+		Color(1.0, 0.88, 0.25), 0.08
+	)
+
+	# 2) 숫자 카운트업 (Tween으로 _loot_gauge_display_value 보간)
+	_loot_gauge_countup_tween = create_tween()
+	_loot_gauge_countup_tween.tween_method(
+		_on_loot_gauge_countup_tick, start_value, target_value, duration
+	).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_loot_gauge_countup_tween.tween_callback(_on_loot_gauge_countup_finished.bind(_current >= _maximum))
+
+
+func _on_loot_gauge_countup_tick(value: float) -> void:
+	## 매 프레임 보간값 → 정수로 표시
+	_loot_gauge_display_value = value
+	if loot_gauge_score_label and is_instance_valid(loot_gauge_score_label):
+		loot_gauge_score_label.text = _format_score(int(value))
+
+
+func _on_loot_gauge_countup_finished(reached_max: bool) -> void:
+	## 카운트업 완료 → 색상 복귀 + 펀치 효과
+	if loot_gauge_score_label == null or not is_instance_valid(loot_gauge_score_label):
+		return
+
+	# 색상 복귀
+	if _loot_gauge_color_tween and _loot_gauge_color_tween.is_valid():
+		_loot_gauge_color_tween.kill()
+	_loot_gauge_color_tween = create_tween()
+	_loot_gauge_color_tween.tween_property(
+		loot_gauge_score_label, "theme_override_colors/font_color",
+		Color(0.95, 0.95, 1.0), 0.2
+	)
+
+	# 펀치 효과 (살짝 커졌다 원래로)
+	var label_size: Vector2 = loot_gauge_score_label.size
+	loot_gauge_score_label.pivot_offset = label_size / 2.0
+	if _loot_gauge_punch_tween and _loot_gauge_punch_tween.is_valid():
+		_loot_gauge_punch_tween.kill()
+	_loot_gauge_punch_tween = create_tween()
+	_loot_gauge_punch_tween.tween_property(
+		loot_gauge_score_label, "scale", Vector2(1.25, 1.25), 0.07
+	).set_ease(Tween.EASE_OUT)
+	_loot_gauge_punch_tween.tween_property(
+		loot_gauge_score_label, "scale", Vector2.ONE, 0.15
+	).set_ease(Tween.EASE_IN_OUT)
+
+	# 목표 도달 시 → 보상 발동
+	if reached_max:
+		_loot_gauge_punch_tween.tween_callback(_show_loot_gauge_reward).set_delay(0.1)
+
+
+func _on_loot_gauge_filled() -> void:
+	## loot_gauge_filled 시그널 수신 — 카운트업 중이 아니면 즉시 발동
+	# 카운트업 tween이 진행 중이면 tween 완료 콜백에서 처리됨
+	if _loot_gauge_countup_tween and _loot_gauge_countup_tween.is_valid():
+		return
+	# 카운트업 없이 즉시 도달한 경우 (예: 한번에 초과)
+	_show_loot_gauge_reward()
+
+
+func _kill_loot_gauge_tweens() -> void:
+	if _loot_gauge_countup_tween and _loot_gauge_countup_tween.is_valid():
+		_loot_gauge_countup_tween.kill()
+	if _loot_gauge_color_tween and _loot_gauge_color_tween.is_valid():
+		_loot_gauge_color_tween.kill()
+	if _loot_gauge_punch_tween and _loot_gauge_punch_tween.is_valid():
+		_loot_gauge_punch_tween.kill()
+
+
+func _show_loot_gauge_reward() -> void:
+	## 루트 게이지 보상: 3지선다 아이템 선택 창
+	if not BattleManager or not DataManager:
+		return
+
+	# 아이템 후보 3개 생성
+	var choices: Array[String] = _generate_loot_gauge_item_choices(3)
+	if choices.is_empty():
+		# 후보가 없으면 게이지만 소비
+		BattleManager.consume_loot_gauge()
+		return
+
+	# RewardWindow 생성
+	var reward_scene: PackedScene = load("res://scenes/ui/RewardWindow.tscn")
+	if reward_scene == null:
+		BattleManager.consume_loot_gauge()
+		return
+
+	var reward_window: RewardWindow = reward_scene.instantiate() as RewardWindow
+	if reward_window == null:
+		BattleManager.consume_loot_gauge()
+		return
+
+	# 전투 컨테이너에 추가 (없으면 루트에 추가)
+	var container: Node = null
+	if BattleManager.battle_container and is_instance_valid(BattleManager.battle_container):
+		container = BattleManager.battle_container
+	else:
+		container = get_tree().root
+	container.add_child(reward_window)
+
+	reward_window.set_title("Loot")
+	reward_window.item_selected.connect(_on_loot_gauge_item_selected.bind(reward_window))
+	reward_window.show_loot_selection(choices)
+
+
+func _on_loot_gauge_item_selected(item_id: String, reward_window: RewardWindow) -> void:
+	## 루트 게이지 보상 아이템 선택 완료
+	if not item_id.is_empty() and InventoryManager:
+		var target_hero_id: String = ""
+		if reward_window and is_instance_valid(reward_window):
+			target_hero_id = reward_window.get_selected_hero_id()
+
+		var added: bool = InventoryManager.add_item(item_id, 1)
+		if added:
+			var data: Dictionary = DataManager.get_equipment(item_id)
+			var item_name: String = str(data.get("name", item_id))
+			var equipped: bool = false
+
+			if not target_hero_id.is_empty() and PartyManager:
+				var hero: Hero = PartyManager.get_hero_by_id(target_hero_id)
+				if hero:
+					equipped = InventoryManager.equip_item(hero, item_id, "")
+
+			if not equipped:
+				equipped = InventoryManager.try_auto_equip(item_id)
+
+			if equipped:
+				_show_notice("루트 보상: %s 장착!" % item_name, 1.8, Color(0.82, 1.0, 0.86))
+			else:
+				_show_notice("루트 보상: %s 획득" % item_name, 1.8, STYLE.text_gold)
+
+	# 게이지 소비 (리셋 + 최대치 증가)
+	if BattleManager:
+		BattleManager.consume_loot_gauge()
+
+	# 창 정리
+	if reward_window and is_instance_valid(reward_window):
+		reward_window.queue_free()
+
+
+func _generate_loot_gauge_item_choices(count: int) -> Array[String]:
+	## 루트 게이지 보상 아이템 후보 생성
+	var result: Array[String] = []
+	if DataManager == null:
+		return result
+
+	var all_rarities: Array[String] = ["common", "uncommon", "magic", "rare", "epic", "legendary"]
+
+	# formulas.json → loot_gauge 에서 레어리티 가중치 로드
+	var lg_formula: Dictionary = {}
+	if DataManager.has_method("get_formula"):
+		lg_formula = DataManager.get_formula("loot_gauge") as Dictionary
+	var fw: Dictionary = lg_formula.get("rarity_weights", {}) as Dictionary
+	var rarity_weights: Dictionary = {
+		"common": float(fw.get("common", 40.0)),
+		"uncommon": float(fw.get("uncommon", 30.0)),
+		"magic": float(fw.get("magic", 18.0)),
+		"rare": float(fw.get("rare", 9.0)),
+		"epic": float(fw.get("epic", 2.5)),
+		"legendary": float(fw.get("legendary", 0.5)),
+	}
+	# 레벨이 오를수록 좋은 아이템 확률 증가 (formulas.json → level_scaling)
+	var ls: Dictionary = lg_formula.get("level_scaling", {}) as Dictionary
+	var gauge_level: int = BattleManager.loot_gauge_level if BattleManager else 0
+	var min_level: int = int(ls.get("min_level", 2))
+	if gauge_level >= min_level:
+		var common_decay: float = float(ls.get("common_decay", 4.0))
+		var common_floor: float = float(ls.get("common_floor", 10.0))
+		rarity_weights["common"] = maxf(common_floor, rarity_weights["common"] - gauge_level * common_decay)
+		rarity_weights["magic"] += gauge_level * float(ls.get("magic_growth", 1.5))
+		rarity_weights["rare"] += gauge_level * float(ls.get("rare_growth", 1.0))
+		rarity_weights["epic"] += gauge_level * float(ls.get("epic_growth", 0.5))
+		rarity_weights["legendary"] += gauge_level * float(ls.get("legendary_growth", 0.15))
+
+	# 후보 장비를 레어리티별로 분류
+	var by_rarity: Dictionary = {}
+	for rarity in all_rarities:
+		var ids: Array[String] = DataManager.get_equipment_by_rarity(rarity)
+		if not ids.is_empty():
+			by_rarity[rarity] = ids
+
+	# 가중치 합산
+	var total_weight: float = 0.0
+	for r in rarity_weights:
+		if by_rarity.has(r):
+			total_weight += float(rarity_weights[r])
+
+	if total_weight <= 0.0:
+		var fallback: Array[String] = DataManager.get_equipment_by_rarities(all_rarities)
+		fallback.shuffle()
+		for i in range(mini(count, fallback.size())):
+			result.append(fallback[i])
+		return result
+
+	# count개 선택
+	for _i in range(count):
+		var roll: float = randf() * total_weight
+		var accumulated: float = 0.0
+		var picked_rarity: String = "common"
+		for r in all_rarities:
+			if not by_rarity.has(r):
+				continue
+			accumulated += float(rarity_weights.get(r, 0.0))
+			if roll <= accumulated:
+				picked_rarity = r
+				break
+
+		var pool: Array = by_rarity.get(picked_rarity, []) as Array
+		if pool.is_empty():
+			for r in by_rarity:
+				if not (by_rarity[r] as Array).is_empty():
+					pool = by_rarity[r]
+					break
+		if pool.is_empty():
+			continue
+		var picked_id: String = str(pool[randi() % pool.size()])
+		if result.has(picked_id) and pool.size() > 1:
+			for _retry in range(5):
+				picked_id = str(pool[randi() % pool.size()])
+				if not result.has(picked_id):
+					break
+		result.append(picked_id)
+
+	return result
 
 
 func _init_party_cards() -> void:
@@ -934,6 +1290,12 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("battle_pause_changed"):
 			if not BattleManager.battle_pause_changed.is_connected(_on_battle_pause_changed):
 				BattleManager.battle_pause_changed.connect(_on_battle_pause_changed)
+		if BattleManager.has_signal("loot_gauge_changed"):
+			if not BattleManager.loot_gauge_changed.is_connected(_on_loot_gauge_changed):
+				BattleManager.loot_gauge_changed.connect(_on_loot_gauge_changed)
+		if BattleManager.has_signal("loot_gauge_filled"):
+			if not BattleManager.loot_gauge_filled.is_connected(_on_loot_gauge_filled):
+				BattleManager.loot_gauge_filled.connect(_on_loot_gauge_filled)
 
 	if InventoryManager:
 		if InventoryManager.has_signal("item_equipped"):
