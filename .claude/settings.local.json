@@ -11,7 +11,8 @@
       "Bash(cmd.exe /c \"npm install -g xlsx\")",
       "Bash(cmd.exe /c \"cd /d D:\\\\HyperQuset && npm install xlsx 2>&1 && node -e \"\"const XLSX=require\\(''xlsx''\\); const wb=XLSX.readFile\\(''C:\\\\Users\\\\ultla\\\\OneDrive\\\\Desktop\\\\act1_balance.xlsx''\\); wb.SheetNames.forEach\\(name=>{console.log\\(''=== Sheet: ''+name+'' ===''\\); const ws=wb.Sheets[name]; console.log\\(XLSX.utils.sheet_to_csv\\(ws\\)\\); console.log\\(\\);}\\);\"\"\")",
       "Bash(npm install:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep:*)"
     ]
   }
 }

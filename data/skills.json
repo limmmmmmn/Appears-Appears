@@ -5,11 +5,11 @@
     "description": "정확히 조준하여 쏜다",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 5.0,
-    "damage_base": 8,
+    "cooldown": 3.0,
+    "damage_base": 10,
     "damage_scaling": {
       "stat": "str",
-      "multiplier": 1.3
+      "multiplier": 1.4
     },
     "effects": [
       {
@@ -25,7 +25,7 @@
     "description": "다음 마법 스킬의 데미지가 2배가 된다.",
     "type": "buff",
     "target": "self",
-    "atb_cost": 12.0,
+    "cooldown": 7.0,
     "effects": [
       {
         "type": "magic_amp",
@@ -41,11 +41,11 @@
     "description": "급소를 노린다. 크리티컬 확률 증가",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 4.0,
-    "damage_base": 3,
+    "cooldown": 2.5,
+    "damage_base": 5,
     "damage_scaling": {
       "stat": "str",
-      "multiplier": 1.2
+      "multiplier": 1.3
     },
     "effects": [
       {
@@ -61,7 +61,7 @@
     "description": "기본적인 물리 공격",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 0,
+    "cooldown": 0,
     "damage_base": 0,
     "damage_scaling": {
       "stat": "str",
@@ -76,11 +76,11 @@
     "description": "적에게 돌진하여 데미지를 입히고 ATB를 초기화한다.",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 9.0,
-    "damage_base": 5,
+    "cooldown": 5.0,
+    "damage_base": 8,
     "damage_scaling": {
       "stat": "str",
-      "multiplier": 1.5
+      "multiplier": 1.6
     },
     "effects": [
       {
@@ -95,11 +95,11 @@
     "description": "전투창 내 모든 적에게 화염 피해",
     "type": "magic",
     "target": "all_enemies",
-    "atb_cost": 8.0,
-    "damage_base": 12,
+    "cooldown": 5.0,
+    "damage_base": 15,
     "damage_scaling": {
       "stat": "int",
-      "multiplier": 0.9
+      "multiplier": 1.0
     },
     "effects": [],
     "default_on": true
@@ -110,9 +110,9 @@
     "description": "아군 전체의 HP를 소량 회복한다.",
     "type": "heal",
     "target": "all_allies",
-    "atb_cost": 14.0,
-    "base_damage": 5,
-    "scaling": 0.4,
+    "cooldown": 8.0,
+    "base_damage": 8,
+    "scaling": 0.5,
     "effects": [],
     "default_on": true
   },
@@ -122,11 +122,11 @@
     "description": "아군 한 명의 HP를 회복한다 (필드에서도 사용 가능)",
     "type": "heal",
     "target": "single_ally",
-    "atb_cost": 5.0,
+    "cooldown": 3.0,
     "effects": [],
     "default_on": true,
-    "base_damage": 8,
-    "scaling": 0.6,
+    "base_damage": 12,
+    "scaling": 0.7,
     "usable_on_field": true
   },
   "healing_light": {
@@ -135,9 +135,9 @@
     "description": "자기 자신의 HP를 소량 회복한다.",
     "type": "heal",
     "target": "self",
-    "atb_cost": 8.0,
-    "base_damage": 8,
-    "scaling": 0.5,
+    "cooldown": 5.0,
+    "base_damage": 12,
+    "scaling": 0.6,
     "effects": [],
     "default_on": true
   },
@@ -147,11 +147,11 @@
     "description": "단일 적에게 높은 마법 데미지를 주고 ATB를 4초간 50% 느리게 한다.",
     "type": "magic",
     "target": "single_enemy",
-    "atb_cost": 7.0,
-    "damage_base": 20,
+    "cooldown": 4.0,
+    "damage_base": 25,
     "damage_scaling": {
       "stat": "int",
-      "multiplier": 1.3
+      "multiplier": 1.4
     },
     "effects": [
       {
@@ -168,7 +168,7 @@
     "description": "자신의 DEF를 10초간 50% 증가시키고 적의 공격을 3회 끌어당긴다.",
     "type": "buff",
     "target": "self",
-    "atb_cost": 16.0,
+    "cooldown": 10.0,
     "effects": [
       {
         "type": "def_up",
@@ -188,11 +188,11 @@
     "description": "3회 연속으로 화살을 발사한다. 각 타격 배율이 낮다.",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 7.0,
-    "damage_base": 0,
+    "cooldown": 4.0,
+    "damage_base": 2,
     "damage_scaling": {
       "stat": "str",
-      "multiplier": 0.5
+      "multiplier": 0.6
     },
     "effects": [
       {
@@ -208,16 +208,16 @@
     "description": "데미지를 주고 5초간 독을 부여한다.",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 9.0,
-    "damage_base": 3,
+    "cooldown": 5.0,
+    "damage_base": 5,
     "damage_scaling": {
       "stat": "str",
-      "multiplier": 1.0
+      "multiplier": 1.1
     },
     "effects": [
       {
         "type": "dot",
-        "dps": 5,
+        "dps": 7,
         "duration": 5.0
       }
     ],
@@ -226,14 +226,14 @@
   "power_strike": {
     "id": "power_strike",
     "name": "강타",
-    "description": "공격력의 1.7배 데미지 (크리티컬 적용)",
+    "description": "공격력의 1.8배 데미지 (크리티컬 적용)",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 5.0,
-    "damage_base": 0,
+    "cooldown": 3.0,
+    "damage_base": 3,
     "damage_scaling": {
       "stat": "str",
-      "multiplier": 1.7
+      "multiplier": 1.8
     },
     "effects": [],
     "default_on": true
@@ -241,14 +241,14 @@
   "resurrect": {
     "id": "resurrect",
     "name": "부활",
-    "description": "쓰러진 아군 1명을 HP 30%로 부활시킨다.",
+    "description": "쓰러진 아군 1명을 HP 40%로 부활시킨다.",
     "type": "resurrect",
     "target": "single_ally",
-    "atb_cost": 25.0,
+    "cooldown": 15.0,
     "effects": [
       {
         "type": "revive",
-        "hp_percent": 0.3
+        "hp_percent": 0.4
       }
     ],
     "default_on": true
@@ -259,11 +259,11 @@
     "description": "공격력 절반 데미지 + 다음 2회 공격을 대신 받음",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 7.0,
-    "damage_base": 0,
+    "cooldown": 4.0,
+    "damage_base": 3,
     "damage_scaling": {
       "stat": "str",
-      "multiplier": 0.5
+      "multiplier": 0.6
     },
     "effects": [
       {
@@ -279,7 +279,7 @@
     "description": "아군 전체의 회피율을 8초간 25% 증가시킨다.",
     "type": "buff",
     "target": "all_allies",
-    "atb_cost": 15.0,
+    "cooldown": 9.0,
     "effects": [
       {
         "type": "eva_up",
@@ -295,8 +295,8 @@
     "description": "급소를 노려 일반 적은 15% 확률로 즉사, 보스에게는 큰 데미지를 준다.",
     "type": "physical",
     "target": "single_enemy",
-    "atb_cost": 11.0,
-    "damage_base": 0,
+    "cooldown": 7.0,
+    "damage_base": 3,
     "damage_scaling": {
       "stat": "str",
       "multiplier": 2.5
@@ -315,7 +315,7 @@
     "description": "아군 전체의 ATK를 8초간 30% 증가시킨다.",
     "type": "buff",
     "target": "all_allies",
-    "atb_cost": 14.0,
+    "cooldown": 8.0,
     "effects": [
       {
         "type": "atk_up",

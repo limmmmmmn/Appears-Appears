@@ -58,6 +58,8 @@ var local_reward_level: int = 0
 var reward_hearts: int = 0
 var reward_chests: Array[String] = []
 var reward_preview_items: Array[String] = []
+var trinket_loot_mult: float = 1.0
+var _activated_trinket_ids: Dictionary = {}
 
 
 # === 활성 특성 ===
@@ -487,6 +489,7 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 		_spawn_single_enemy(enemy_id, make_elite, false)
 
 	_refresh_enemy_layout()
+	_check_trinket_loot_activation()
 
 	if is_elite_battle:
 		_apply_elite_style()
@@ -565,6 +568,7 @@ func add_field_enemies(enemy_ids: Array, is_elite: bool = false) -> int:
 		_wave_clear_processed = false
 		_refresh_enemy_layout()
 		_update_buttons_for_enemies()
+		_check_trinket_loot_activation()
 	return added
 
 
@@ -891,8 +895,6 @@ func _on_local_grudge_kill() -> void:
 		local_grudge_level += 1
 		leveled = true
 		_play_grudge_levelup_effect()
-		var msg := "⚠ 원념 레벨 %d! 적이 더 맹렬히 공격합니다." % local_grudge_level
-		_send_log(msg, Color(1.0, 0.42, 0.42, 1.0))
 		_sync_reward_level_with_grudge()
 
 	if leveled:
@@ -1050,8 +1052,6 @@ func _append_if_not_empty(arr: Array[String], value: String) -> void:
 
 
 func _play_reward_levelup_effect(level: int) -> void:
-	var msg := "⭐ 보상레벨 %d 상승!" % level
-	_show_msg_box(msg, Color(1.0, 0.92, 0.48, 1.0), 0.7)
 	if info_bar and is_instance_valid(info_bar):
 		var tw := create_tween()
 		tw.tween_property(info_bar, "modulate", Color(1.2, 1.2, 0.9, 1.0), 0.1)
@@ -1488,7 +1488,7 @@ func _execute_hero_action(hero: Hero) -> void:
 		else:
 			return
 	elif skill_id != "basic_attack":
-		if not hero.is_skill_atb_ready(skill_id):
+		if not hero.is_skill_off_cooldown(skill_id):
 			skill_id = "basic_attack"
 			skill_data = DataManager.get_skill("basic_attack")
 			is_queued = false
@@ -1497,11 +1497,10 @@ func _execute_hero_action(hero: Hero) -> void:
 			skill_data = DataManager.get_skill("basic_attack")
 			is_queued = false
 
-	# 행동 타이머 리셋 (기본공격 ATB + 스킬 ATB)
-	if skill_id == "basic_attack":
-		hero.reset_action_timer()
-	else:
-		hero.reset_skill_atb(skill_id)
+	# 행동 타이머 리셋 (모든 행동에서 action_timer 리셋)
+	hero.reset_action_timer()
+	if skill_id != "basic_attack":
+		hero.start_skill_cooldown(skill_id)
 
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
@@ -1583,43 +1582,82 @@ func _select_hero_skill(hero: Hero) -> String:
 
 
 func _pick_auto_skill(hero: Hero) -> String:
-	## 작전 우선순위에 따라 스킬 ATB가 충전된 스킬 자동 선택
-	var priority_list: Array = hero.get_skill_priority_list()
-	for sid in priority_list:
-		var skill_id: String = str(sid)
-		if not hero.unlocked_skills.has(skill_id):
-			continue
-		if not hero.is_skill_enabled(skill_id):
-			continue
-		if not hero.is_skill_atb_ready(skill_id):
-			continue
-		var skill_data: Dictionary = DataManager.get_skill(skill_id)
-		if skill_data.is_empty():
-			continue
-		if _should_skip_skill_due_to_active_buff(hero, skill_data):
-			continue
-		# 부활 스킬: 죽은 아군이 없으면 스킵
-		if skill_data.get("type", "") == "resurrect":
-			var has_dead: bool = false
-			if PartyManager != null:
-				for h in PartyManager.get_party():
-					if h is Hero and h.is_dead:
-						has_dead = true
-						break
-			if not has_dead:
+	## 우선순위 기반 자동 스킬 선택:
+	## 1. 부활 — 죽은 아군 + 쿨다운 완료
+	## 2. 힐 — HP ≤50% 아군 + 쿨다운 완료
+	## 3. 버프 — 현재 미적용 + 쿨다운 완료
+	## 4. 공격 스킬 — 쿨다운 완료 중 cooldown 값 큰 것 우선
+	## 5. 빈 문자열 (basic_attack 폴백은 호출부에서)
+
+	# --- 1. 부활 ---
+	var has_dead: bool = false
+	if PartyManager != null:
+		for h in PartyManager.get_party():
+			if h is Hero and h.is_dead:
+				has_dead = true
+				break
+	if has_dead:
+		for sid in hero.unlocked_skills:
+			if sid == "basic_attack" or not hero.is_skill_enabled(sid):
 				continue
-		# 힐 스킬: 모든 아군 HP가 80% 이상이면 스킵
-		if skill_data.get("type", "") == "heal":
-			var needs_heal: bool = false
-			for h in _get_alive_heroes_in_battle():
-				if h.get_hp_percent() < 0.8:
-					needs_heal = true
-					break
-			if skill_data.get("target", "") == "self":
-				needs_heal = hero.get_hp_percent() < 0.8
-			if not needs_heal:
+			var sd: Dictionary = DataManager.get_skill(sid)
+			if sd.get("type", "") == "resurrect" and hero.is_skill_off_cooldown(sid):
+				return sid
+
+	# --- 2. 힐 (임계치: 50%) ---
+	var needs_heal: bool = false
+	var self_needs_heal: bool = hero.get_hp_percent() < 0.5
+	for h in _get_alive_heroes_in_battle():
+		if h.get_hp_percent() < 0.5:
+			needs_heal = true
+			break
+	if needs_heal or self_needs_heal:
+		for sid in hero.unlocked_skills:
+			if sid == "basic_attack" or not hero.is_skill_enabled(sid):
 				continue
-		return skill_id
+			var sd: Dictionary = DataManager.get_skill(sid)
+			if sd.get("type", "") != "heal":
+				continue
+			if not hero.is_skill_off_cooldown(sid):
+				continue
+			if sd.get("target", "") == "self":
+				if self_needs_heal:
+					return sid
+			else:
+				if needs_heal:
+					return sid
+
+	# --- 3. 버프 (중복 안 걸림 + 쿨다운 완료) ---
+	for sid in hero.unlocked_skills:
+		if sid == "basic_attack" or not hero.is_skill_enabled(sid):
+			continue
+		var sd: Dictionary = DataManager.get_skill(sid)
+		if sd.get("type", "") != "buff":
+			continue
+		if not hero.is_skill_off_cooldown(sid):
+			continue
+		if _should_skip_skill_due_to_active_buff(hero, sd):
+			continue
+		return sid
+
+	# --- 4. 공격 스킬 (쿨다운 완료, cooldown 값 큰 것 우선) ---
+	var attack_candidates: Array = []
+	for sid in hero.unlocked_skills:
+		if sid == "basic_attack" or not hero.is_skill_enabled(sid):
+			continue
+		var sd: Dictionary = DataManager.get_skill(sid)
+		var stype: String = sd.get("type", "")
+		if stype != "physical" and stype != "magic":
+			continue
+		if not hero.is_skill_off_cooldown(sid):
+			continue
+		attack_candidates.append({"id": sid, "cd": float(sd.get("cooldown", 0.0))})
+
+	if not attack_candidates.is_empty():
+		attack_candidates.sort_custom(func(a, b): return a["cd"] > b["cd"])
+		return attack_candidates[0]["id"]
+
+	# --- 5. 기본공격 폴백 ---
 	return ""
 
 
@@ -1641,7 +1679,7 @@ func execute_skill(hero_id: String, skill_id: String, enemy_target: BattleEnemy 
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	if skill_data.is_empty():
 		return
-	if not hero.is_skill_atb_ready(skill_id):
+	if not hero.is_skill_off_cooldown(skill_id):
 		return
 	if _should_skip_skill_due_to_active_buff(hero, skill_data):
 		return
@@ -1833,6 +1871,8 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 		skill_data = DataManager.get_skill("basic_attack")
 
 	hero.reset_action_timer()
+	if skill_id != "basic_attack":
+		hero.start_skill_cooldown(skill_id)
 
 	var target_type: String = skill_data.get("target", "single_enemy")
 
@@ -1844,8 +1884,6 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 			_execute_aoe_attack(hero, skill_id, skill_data)
 		_:  # single_enemy
 			_execute_single_attack(hero, skill_id, skill_data)
-
-	# 스킬 쿨타임 시작
 
 
 func _get_wounded_heroes() -> Array:
@@ -3337,6 +3375,52 @@ func _play_victory_text_then_close() -> void:
 	var tw := create_tween()
 	tw.tween_interval(1.2)
 	tw.tween_callback(_finalize_victory_close)
+
+
+func _check_trinket_loot_activation() -> void:
+	## 현재 살아있는 적 수 기준으로 트링켓 루트 배율 체크 (트링켓당 1회만)
+	if GameManager == null or DataManager == null:
+		return
+	var alive: int = get_enemy_count()
+	for tid in GameManager.obtained_trinkets:
+		if _activated_trinket_ids.has(tid):
+			continue
+		var data: Dictionary = DataManager.get_trinket(tid)
+		var min_enemies: int = int(data.get("loot_mult_min_enemies", 0))
+		if min_enemies <= 0 or alive < min_enemies:
+			continue
+		var mv: float = float(data.get("loot_mult_value", 1.0))
+		if mv <= 1.0:
+			continue
+		_activated_trinket_ids[tid] = true
+		trinket_loot_mult *= mv
+		_show_loot_mult_popup(mv)
+		if BattleManager and BattleManager.has_signal("trinket_loot_activated"):
+			BattleManager.trinket_loot_activated.emit(tid, mv, battle_id)
+
+
+func _show_loot_mult_popup(mult: float) -> void:
+	## 우측 상단에 "x2" 텍스트를 팍! 하고 표시
+	var lbl := Label.new()
+	lbl.text = "x%d" % int(mult)
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.2))
+	lbl.add_theme_color_override("font_outline_color", Color(0.1, 0.05, 0.0))
+	lbl.add_theme_constant_override("outline_size", 3)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl.position = Vector2(size.x - 52, 4)
+	lbl.size = Vector2(48, 28)
+	lbl.z_index = 200
+	add_child(lbl)
+
+	# 팍! 스케일 팝 연출
+	lbl.pivot_offset = lbl.size * 0.5
+	lbl.scale = Vector2(2.2, 2.2)
+	lbl.modulate.a = 0.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate:a", 1.0, 0.1)
 
 
 func _play_close_effect() -> void:

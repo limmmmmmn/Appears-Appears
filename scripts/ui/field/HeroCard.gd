@@ -390,8 +390,8 @@ func update_skill_atb_bars(hero: Hero) -> void:
 		var fill: ColorRect = bar_data["fill"]
 		var lbl: Label = bar_data["label"]
 
-		var percent: float = hero.get_skill_atb_percent(skill_id)
-		var is_ready: bool = hero.is_skill_atb_ready(skill_id)
+		var percent: float = hero.get_skill_cooldown_percent(skill_id)
+		var is_ready: bool = hero.is_skill_off_cooldown(skill_id)
 
 		fill.size.x = float(SKILL_BAR_W) * percent
 		if is_basic:

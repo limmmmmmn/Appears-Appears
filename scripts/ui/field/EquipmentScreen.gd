@@ -892,8 +892,8 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		name_row.add_child(badge)
 
-	# ATB 코스트
-	var atb_cost: float = float(skill_data.get("atb_cost", 0.0))
+	# 쿨다운
+	var cooldown: float = float(skill_data.get("cooldown", 0.0))
 
 	# 설명 행
 	var desc_parts: Array = []
@@ -905,9 +905,9 @@ func _create_skill_card(hero: Hero, skill_id: String) -> PanelContainer:
 		"all_allies": desc_parts.append("아군전체")
 		"self": desc_parts.append("자신")
 
-	# ATB 소모량
-	if atb_cost > 0:
-		desc_parts.append("ATB %.1fs" % atb_cost)
+	# 쿨다운
+	if cooldown > 0:
+		desc_parts.append("CD %.1fs" % cooldown)
 
 	# 데미지 배율
 	var scaling: Dictionary = skill_data.get("damage_scaling", {})
@@ -1006,7 +1006,7 @@ func _create_tactics_row(hero: Hero, skill_id: String, index: int, total: int) -
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
 	var skill_name: String = skill_data.get("name", skill_id)
 	var is_enabled: bool = hero.is_skill_enabled(skill_id)
-	var atb_cost: float = float(skill_data.get("atb_cost", 0.0))
+	var cooldown: float = float(skill_data.get("cooldown", 0.0))
 
 	var panel := PanelContainer.new()
 	var bg_color := Color(0.1, 0.1, 0.14, 0.9) if is_enabled else Color(0.06, 0.06, 0.09, 0.6)
@@ -1053,10 +1053,10 @@ func _create_tactics_row(hero: Hero, skill_id: String, index: int, total: int) -
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.add_child(name_lbl)
 
-	# ATB 비용 행
+	# 쿨다운 표시
 	var sub_parts: Array = []
-	if atb_cost > 0.0:
-		sub_parts.append("ATB %.1fs" % atb_cost)
+	if cooldown > 0.0:
+		sub_parts.append("CD %.1fs" % cooldown)
 
 	var sub_lbl := Label.new()
 	sub_lbl.text = " | ".join(sub_parts)

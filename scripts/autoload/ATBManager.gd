@@ -21,7 +21,7 @@ func _process(delta: float) -> void:
 
 
 func _update_hero_timers(delta: float) -> void:
-	## 살아있는 영웅의 기본공격 ATB + 스킬별 ATB 충전
+	## 살아있는 영웅의 행동 타이머 충전 + 스킬 쿨다운 틱
 	if not PartyManager:
 		return
 	var has_active_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
@@ -29,29 +29,16 @@ func _update_hero_timers(delta: float) -> void:
 		var base_delay: float = maxf(0.001, hero.get_action_delay())
 		if has_active_battle:
 			var battle_delta: float = delta * BATTLE_ATB_FILL_RATE
-			# 기본공격 ATB
+			# 행동 타이머 충전 (전투 속도 적용)
 			if not hero.is_action_ready():
 				hero.action_timer = minf(hero.action_timer + battle_delta, base_delay)
-			# 스킬별 ATB 충전
-			for skill_id in hero.skill_atb_timers.keys():
-				var cost: float = hero.get_skill_atb_cost(skill_id)
-				if cost <= 0.0:
-					continue
-				var current: float = float(hero.skill_atb_timers[skill_id])
-				if current < cost:
-					hero.skill_atb_timers[skill_id] = minf(current + battle_delta, cost)
 		else:
-			# 필드에서도 스킬 ATB 충전 (전투 밖에서도 쌓임)
+			# 필드: 행동 타이머 순환
 			hero.action_timer += delta
 			if hero.action_timer >= base_delay:
 				hero.action_timer = fmod(hero.action_timer, base_delay)
-			for skill_id in hero.skill_atb_timers.keys():
-				var cost: float = hero.get_skill_atb_cost(skill_id)
-				if cost <= 0.0:
-					continue
-				var current: float = float(hero.skill_atb_timers[skill_id])
-				if current < cost:
-					hero.skill_atb_timers[skill_id] = minf(current + delta, cost)
+		# 스킬 쿨다운은 항상 실시간 속도로 감소 (전투/필드 동일)
+		hero.tick_cooldowns(delta)
 
 
 func reset() -> void:

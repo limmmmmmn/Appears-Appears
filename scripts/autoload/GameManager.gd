@@ -49,6 +49,7 @@ func start_new_game() -> void:
 		BattleManager.reset_loot_gauge()
 
 	FieldManager.generate_runtime_acts()
+	choose_starting_trinket("skull")
 	change_state(GameState.NODE_SELECT)
 	_emit_progress_changed()
 	gold_changed.emit(gold)
@@ -217,6 +218,16 @@ func get_trinket_max_enemies_per_window_bonus() -> int:
 		var data: Dictionary = DataManager.get_trinket(tid)
 		bonus += int(data.get("max_enemies_per_window_bonus", 0))
 	return maxi(0, bonus)
+
+
+func get_trinket_loot_multiplier(kill_count: int) -> float:
+	var mult: float = 1.0
+	for tid in obtained_trinkets:
+		var data: Dictionary = DataManager.get_trinket(tid)
+		var min_enemies: int = int(data.get("loot_mult_min_enemies", 0))
+		if min_enemies > 0 and kill_count >= min_enemies:
+			mult *= float(data.get("loot_mult_value", 1.0))
+	return mult
 
 
 func trigger_game_over() -> void:

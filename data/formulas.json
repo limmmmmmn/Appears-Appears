@@ -1,19 +1,19 @@
 {
 	"damage": {
-		"physical": { "atk_mult": 0.5, "def_mult": 0.25, "min": 1 },
-		"magic": { "matk_mult": 0.5, "mdef_mult": 0.25, "min": 1 },
-		"critical": { "atk_mult": 0.5, "ignore_defense": true, "min": 1 },
+		"physical": { "atk_mult": 0.6, "def_mult": 0.2, "min": 1 },
+		"magic": { "matk_mult": 0.6, "mdef_mult": 0.2, "min": 1 },
+		"critical": { "atk_mult": 0.6, "ignore_defense": true, "min": 1 },
 		"skill_level_bonus_per_level": 0.1
 	},
 	"stats": {
 		"mdef": { "stat": "wis", "multiplier": 0.5 },
-		"crit_chance": { "stat": "luk", "multiplier": 0.5, "min": 0.0, "max": 95.0 },
-		"evasion": { "stat": "luk", "multiplier": 0.1, "min": 0.0, "max": 60.0, "buffed_max": 80.0 },
-		"hit_rate": { "base": 90.0, "min": 40.0, "max": 100.0 }
+		"crit_chance": { "stat": "luk", "multiplier": 0.6, "min": 0.0, "max": 95.0 },
+		"evasion": { "stat": "luk", "multiplier": 0.12, "min": 0.0, "max": 60.0, "buffed_max": 80.0 },
+		"hit_rate": { "base": 92.0, "min": 40.0, "max": 100.0 }
 	},
 	"atb": {
-		"battle_fill_rate": 0.85,
-		"enemy_action": { "base_delay": 2.0, "dex_reduction": 0.05, "min_delay": 0.5, "boss_fixed_delay": 2.5 }
+		"battle_fill_rate": 1.0,
+		"enemy_action": { "base_delay": 2.5, "dex_reduction": 0.05, "min_delay": 0.8, "boss_fixed_delay": 3.0 }
 	},
 	"loot": {
 		"drop_rate_multiplier": 3.0,
@@ -24,17 +24,17 @@
 		"rare_equip_chance": 0.3
 	},
 	"elite": {
-		"hp_multiplier": 2.0,
-		"atk_multiplier": 1.5,
-		"def_multiplier": 1.5,
+		"hp_multiplier": 1.8,
+		"atk_multiplier": 1.3,
+		"def_multiplier": 1.3,
 		"reward_multiplier": 3.0,
 		"min_gold": 20
 	},
 	"battle": {
-		"base_escape_rate": 40.0,
+		"base_escape_rate": 50.0,
 		"grudge_kills_per_level": 5,
-		"action_process_delay": 0.3,
-		"victory_post_kill_delay": 0.18
+		"action_process_delay": 0.25,
+		"victory_post_kill_delay": 0.15
 	},
 	"exp": {
 		"base_exp": 100,
@@ -42,9 +42,9 @@
 		"bench_exp_ratio": 0.5
 	},
 	"spawning": {
-		"field_enemy_count_multiplier": 1.35,
-		"default_elite_chance": 0.15,
-		"proactive_spawn_interval": 0.45
+		"field_enemy_count_multiplier": 1.2,
+		"default_elite_chance": 0.12,
+		"proactive_spawn_interval": 0.5
 	},
 	"rewards": {
 		"exp_orb_per": 10,
@@ -52,7 +52,7 @@
 		"exp_orb_max": 5,
 		"gold_chunk_per": 12,
 		"gold_chunk_max": 8,
-		"hp_orbs_per_kill": 1
+		"hp_orbs_per_kill": 2
 	},
 	"loot_gauge": {
 		"base_max": 500,

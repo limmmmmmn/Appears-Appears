@@ -1,23 +1,15 @@
 extends Area2D
 class_name FieldDrop
 ## 필드 드롭 오브젝트: 전투 종료 후 필드에 떨어지는 보상
-## 플레이어가 위를 지나가면 수집
+## LOOT_ORB: 초록 오브 — 바닥에 닿자마자 흡수 → 루트 점수 증가
+## ITEM / BATTLE_CHEST: 기존 아이템/보물상자 유지
 
-enum DropType { GOLD, ITEM, HP_ORB, BATTLE_CHEST, EXP_ORB }
+enum DropType { LOOT_ORB, ITEM, BATTLE_CHEST }
 
-const DROP_ICONS := {
-	DropType.GOLD: "🪙",
-	DropType.ITEM: "📦",
-	DropType.HP_ORB: "💗",
-	DropType.BATTLE_CHEST: "🎁",
-	DropType.EXP_ORB: "✦",
-}
 const DROP_COLORS := {
-	DropType.GOLD: Color(1.0, 0.9, 0.3),
+	DropType.LOOT_ORB: Color(0.3, 0.9, 0.4),
 	DropType.ITEM: Color(0.9, 0.6, 1.0),
-	DropType.HP_ORB: Color(1.0, 0.4, 0.6),
 	DropType.BATTLE_CHEST: Color(0.95, 0.8, 0.32),
-	DropType.EXP_ORB: Color(0.45, 0.78, 1.0),
 }
 
 const ITEM_TYPE_ICONS: Dictionary = {
@@ -38,7 +30,6 @@ const RARITY_COLORS: Dictionary = {
 
 const OBJECT_SIZE := 16
 const PICKUP_RADIUS := 8.0
-const HP_PER_ORB := 10
 const ORB_DROP_HEIGHT_MIN: float = 20.0
 const ORB_DROP_HEIGHT_MAX: float = 42.0
 const ORB_DROP_TIME: float = 0.24
@@ -47,17 +38,14 @@ const ORB_LAND_BOUNCE_TIME: float = 0.09
 const ORB_HOMING_MAX_SPEED: float = 360.0
 const ORB_HOMING_ACCEL: float = 980.0
 const ORB_HOMING_COLLECT_DISTANCE: float = 10.0
-const ORB_MAGNET_TRIGGER_DISTANCE: float = 78.0
-const GOLD_MAGNET_TRIGGER_DISTANCE: float = 74.0
 const ORB_HOMING_MIN_SCALE: float = 0.36
 
-var drop_type: DropType = DropType.GOLD
+var drop_type: DropType = DropType.LOOT_ORB
+var loot_score: int = 0
 var gold_amount: int = 0
-var exp_amount: int = 0
 var item_id: String = ""
 var item_type: String = ""
 var item_rarity: String = ""
-var heal_amount: int = HP_PER_ORB
 var spawn_delay: float = 0.0
 var chest_gold_amount: int = 0
 var chest_hp_orbs: int = 0
@@ -101,28 +89,11 @@ func _ready() -> void:
 	add_child(_icon_sprite)
 
 	body_entered.connect(_on_body_entered)
-
-	if drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.ITEM or drop_type == DropType.BATTLE_CHEST or drop_type == DropType.EXP_ORB:
-		call_deferred("_start_hp_orb_sequence")
-	else:
-		# 즉시 활성화 (기존 동작 유지)
-		monitoring = true
-		_start_float_anim()
-		for body in get_overlapping_bodies():
-			_on_body_entered(body)
+	call_deferred("_start_drop_sequence")
 
 
-func _physics_process(delta: float) -> void:
-	if _collected:
-		return
-	if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB) and not _is_homing:
-		var magnet_target: Node2D = _resolve_homing_target()
-		if magnet_target != null and is_instance_valid(magnet_target):
-			var trigger_dist: float = global_position.distance_to(magnet_target.global_position)
-			var trigger_radius: float = ORB_MAGNET_TRIGGER_DISTANCE if drop_type == DropType.HP_ORB else GOLD_MAGNET_TRIGGER_DISTANCE
-			if trigger_dist <= trigger_radius:
-				_begin_homing_to_party()
-	if not _is_homing:
+func _physics_process(_delta: float) -> void:
+	if _collected or not _is_homing:
 		return
 	var target_pos: Vector2 = _get_homing_target_position()
 	var to_target: Vector2 = target_pos - global_position
@@ -136,11 +107,11 @@ func _physics_process(delta: float) -> void:
 	var shrink_t: float = clampf(homing_t, 0.0, 1.0)
 	var scale_factor: float = lerpf(1.0, ORB_HOMING_MIN_SCALE, shrink_t)
 	scale = _homing_start_scale * scale_factor
-	_homing_speed = minf(ORB_HOMING_MAX_SPEED, _homing_speed + ORB_HOMING_ACCEL * delta)
-	global_position += to_target.normalized() * _homing_speed * delta
+	_homing_speed = minf(ORB_HOMING_MAX_SPEED, _homing_speed + ORB_HOMING_ACCEL * _delta)
+	global_position += to_target.normalized() * _homing_speed * _delta
 
 
-func _start_hp_orb_sequence() -> void:
+func _start_drop_sequence() -> void:
 	if not is_inside_tree() or _collected:
 		return
 	var landing_pos: Vector2 = global_position
@@ -189,10 +160,14 @@ func _start_hp_orb_sequence() -> void:
 	if not is_inside_tree() or _collected:
 		return
 
+	# === LOOT_ORB: 바닥에 닿으면 플레이어 쪽으로 호밍 시작 (뱀서 스타일) ===
+	if drop_type == DropType.LOOT_ORB:
+		_begin_homing_to_party()
+		return
+
+	# 아이템/보물상자는 기존 방식 (플레이어가 걸어서 줍기)
 	monitoring = true
 	_setup_drop_emoji()
-	if drop_type != DropType.ITEM and drop_type != DropType.BATTLE_CHEST:
-		_start_float_anim()
 	if drop_type == DropType.BATTLE_CHEST:
 		_spawn_chest_land_effect()
 	for body in get_overlapping_bodies():
@@ -298,9 +273,7 @@ func _resolve_drop_emoji() -> String:
 	if drop_type == DropType.ITEM:
 		if not item_type.is_empty() and ITEM_TYPE_ICONS.has(item_type):
 			return str(ITEM_TYPE_ICONS[item_type])
-		return str(DROP_ICONS[DropType.ITEM])
-	if DROP_ICONS.has(drop_type):
-		return str(DROP_ICONS[drop_type])
+		return "📦"
 	return "•"
 
 
@@ -308,9 +281,6 @@ func _on_body_entered(body: Node2D) -> void:
 	if _collected:
 		return
 	if body.is_in_group("party_leader") or body.is_in_group("party"):
-		if (drop_type == DropType.HP_ORB or drop_type == DropType.GOLD or drop_type == DropType.EXP_ORB) and not _is_homing:
-			_begin_homing_to_party()
-			return
 		if drop_type == DropType.BATTLE_CHEST:
 			_open_battle_chest()
 			return
@@ -325,25 +295,31 @@ func collect() -> void:
 		_float_tween.kill()
 
 	match drop_type:
-		DropType.GOLD:
-			_collect_gold()
+		DropType.LOOT_ORB:
+			_collect_loot_orb()
 		DropType.ITEM:
 			_collect_item()
-		DropType.HP_ORB:
-			_collect_hp()
-		DropType.EXP_ORB:
-			_collect_exp()
 
 	_play_collect_anim()
 
 
-func _collect_gold() -> void:
-	if GameManager:
+func _collect_loot_orb() -> void:
+	## 루트 오브 흡수 → 골드 획득 + 루트 게이지 점수 증가
+	_collected = true
+	if gold_amount > 0 and GameManager:
 		GameManager.add_gold(gold_amount)
+	if loot_score > 0 and BattleManager:
+		BattleManager.add_loot_gauge(loot_score)
 	if BattleManager:
-		BattleManager.battle_log_received.emit(
-			"💰 Gold +%d" % gold_amount, Color(1.0, 0.9, 0.3)
-		)
+		var parts: Array[String] = []
+		if loot_score > 0:
+			parts.append("✦ Loot +%d" % loot_score)
+		if gold_amount > 0:
+			parts.append("💰 +%d G" % gold_amount)
+		if not parts.is_empty():
+			BattleManager.battle_log_received.emit(
+				" ".join(parts), Color(0.3, 0.9, 0.4)
+			)
 
 
 func _collect_item() -> void:
@@ -355,42 +331,7 @@ func _collect_item() -> void:
 			InventoryManager.add_item(item_id)
 
 
-func _collect_hp() -> void:
-	## HP 오브 수집 — 포션 인벤토리 충전 (필드에서 줍기)
-	var panel = _resolve_party_panel()
-	if panel != null:
-		panel.add_hp_orbs(1)
-
-
-func _resolve_party_panel():
-	var field_node = get_tree().current_scene
-	if field_node == null:
-		return null
-	if field_node.has_method("get_hud"):
-		var field_hud = field_node.get_hud()
-		if field_hud != null:
-			if field_hud.has_method("get_party_panel"):
-				return field_hud.get_party_panel()
-			if "party_panel" in field_hud:
-				return field_hud.party_panel
-	return null
-
-func _collect_exp() -> void:
-	## EXP 오브 수집 — 연출용 (EXP는 전투 승리 시 이미 지급됨)
-	if exp_amount > 0:
-		_spawn_exp_popups()
-		if BattleManager:
-			BattleManager.battle_log_received.emit(
-				"✦ EXP +%d" % exp_amount, Color(0.45, 0.78, 1.0)
-			)
-
-
-func _spawn_exp_popups() -> void:
-	return
-
-
 func _open_battle_chest() -> void:
-	# 목록 표시 후 보상 지급
 	_collect_battle_chest()
 	_play_collect_anim()
 
@@ -408,73 +349,17 @@ func _collect_battle_chest() -> void:
 		GameManager.add_gold(chest_gold_amount)
 
 	var granted_items: Array[String] = []
-	for item_id in chest_item_ids:
-		if item_id.is_empty():
+	for cid in chest_item_ids:
+		if cid.is_empty():
 			continue
-		granted_items.append(item_id)
+		granted_items.append(cid)
 		if InventoryManager:
-			var equipped: bool = InventoryManager.try_auto_equip(item_id)
+			var equipped: bool = InventoryManager.try_auto_equip(cid)
 			if not equipped:
-				InventoryManager.add_item(item_id)
+				InventoryManager.add_item(cid)
 
-	if chest_hp_orbs > 0:
-		# 포션 오브 충전 (직접 회복 안 함)
-		var panel = _resolve_party_panel()
-		if panel != null:
-			panel.add_hp_orbs(chest_hp_orbs)
+	_show_battle_chest_loot_list(granted_items, chest_gold_amount)
 
-	_show_battle_chest_loot_list(granted_items, chest_gold_amount, chest_hp_orbs)
-
-
-func _spawn_heal_popups(actual_by_hero_id: Dictionary) -> void:
-	if actual_by_hero_id.is_empty():
-		return
-	var field_members: Array = get_tree().get_nodes_in_group("party")
-	for member in field_members:
-		if not is_instance_valid(member) or not member is Node2D:
-			continue
-		var member_2d: Node2D = member as Node2D
-		var member_hero_id: String = str(member.get("hero_id"))
-		if member_hero_id.is_empty():
-			continue
-		var actual: int = int(actual_by_hero_id.get(member_hero_id, 0))
-		if actual <= 0:
-			continue
-		_spawn_popup_for_member(member_2d, "+%d" % actual, Color(0.3, 1.0, 0.3))
-
-
-func _spawn_restore_popups(text: String, color: Color) -> void:
-	var field_members: Array = get_tree().get_nodes_in_group("party")
-
-	for member in field_members:
-		if not is_instance_valid(member) or not member is Node2D:
-			continue
-		var member_2d: Node2D = member as Node2D
-		_spawn_popup_for_member(member_2d, text, color)
-
-
-func _spawn_popup_for_member(member_2d: Node2D, text: String, color: Color) -> void:
-	if member_2d == null or not is_instance_valid(member_2d):
-		return
-	var popup := Label.new()
-	popup.text = text
-	popup.add_theme_font_size_override("font_size", 10)
-	popup.add_theme_color_override("font_color", color)
-	popup.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	popup.add_theme_constant_override("outline_size", 3)
-	popup.z_index = 100
-	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	popup.position = member_2d.global_position + Vector2(-10, -20)
-	get_tree().current_scene.add_child(popup)
-
-	var start_y: float = popup.position.y
-	var tween := popup.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(popup, "position:y", start_y - 20.0, 0.6) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	tween.tween_property(popup, "modulate:a", 0.0, 0.6) \
-		.set_ease(Tween.EASE_IN).set_delay(0.3)
-	tween.chain().tween_callback(popup.queue_free)
 
 func _play_collect_anim() -> void:
 	var tween := create_tween()
@@ -491,11 +376,11 @@ func _build_drop_texture() -> Texture2D:
 	if drop_type == DropType.ITEM and not item_rarity.is_empty():
 		color = RARITY_COLORS.get(item_rarity, color)
 	if drop_type == DropType.ITEM:
-		# 아이템은 원형 본체 대신, 이모지 + 하단 타원 배경으로 표현
 		return _make_rect_texture(OBJECT_SIZE, OBJECT_SIZE, Color(0, 0, 0, 0))
 	if drop_type == DropType.BATTLE_CHEST:
 		return _make_chest_texture()
 
+	# LOOT_ORB: 원형 초록 오브
 	var img := Image.create(OBJECT_SIZE, OBJECT_SIZE, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 
@@ -503,28 +388,11 @@ func _build_drop_texture() -> Texture2D:
 		for x in range(OBJECT_SIZE):
 			var px: int = x - OBJECT_SIZE / 2
 			var py: int = y - OBJECT_SIZE / 2
-			var inside: bool = false
-			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB:
-					inside = float(px * px + py * py) <= 36.0
-				_:
-					inside = x >= 4 and x <= 11 and y >= 4 and y <= 11
-
+			var inside: bool = float(px * px + py * py) <= 36.0
 			if not inside:
 				continue
-
-			var edge: bool = false
-			match drop_type:
-				DropType.GOLD, DropType.HP_ORB, DropType.ITEM, DropType.EXP_ORB:
-					edge = float(px * px + py * py) >= 28.0
-				_:
-					edge = false
-			if drop_type == DropType.ITEM:
-				var item_fill: Color = color.darkened(0.45)
-				var item_edge: Color = color
-				img.set_pixel(x, y, item_edge if edge else item_fill)
-			else:
-				img.set_pixel(x, y, color.darkened(0.25) if edge else color)
+			var edge: bool = float(px * px + py * py) >= 28.0
+			img.set_pixel(x, y, color.darkened(0.25) if edge else color)
 
 	return ImageTexture.create_from_image(img)
 
@@ -544,15 +412,15 @@ func _make_ellipse_texture(w: int, h: int, fill: Color, border: Color) -> Textur
 	var cy: float = (float(height) - 1.0) * 0.5
 	var rx: float = maxf(1.0, float(width) * 0.5 - 1.0)
 	var ry: float = maxf(1.0, float(height) * 0.5 - 1.0)
-	for y in range(height):
-		for x in range(width):
-			var nx: float = (float(x) - cx) / rx
-			var ny: float = (float(y) - cy) / ry
+	for yp in range(height):
+		for xp in range(width):
+			var nx: float = (float(xp) - cx) / rx
+			var ny: float = (float(yp) - cy) / ry
 			var d: float = nx * nx + ny * ny
 			if d > 1.0:
 				continue
 			var is_edge: bool = d >= 0.78
-			img.set_pixel(x, y, border if is_edge else fill)
+			img.set_pixel(xp, yp, border if is_edge else fill)
 	return ImageTexture.create_from_image(img)
 
 
@@ -589,23 +457,21 @@ func _spawn_chest_land_effect() -> void:
 	tw.chain().tween_callback(pulse.queue_free)
 
 
-func _show_battle_chest_loot_list(items: Array[String], gold: int, hp_orbs: int) -> void:
+func _show_battle_chest_loot_list(items: Array[String], gold: int) -> void:
 	var lines: Array[String] = []
 	if gold > 0:
 		lines.append("💰 골드 +%d" % gold)
-	if hp_orbs > 0:
-		lines.append("💗 HP 오브 x%d" % hp_orbs)
-	for item_id in items:
-		var name: String = item_id
+	for cid in items:
+		var cname: String = cid
 		if DataManager != null:
-			var equip_data: Dictionary = DataManager.get_equipment(item_id)
+			var equip_data: Dictionary = DataManager.get_equipment(cid)
 			if not equip_data.is_empty():
-				name = str(equip_data.get("name", item_id))
+				cname = str(equip_data.get("name", cid))
 			else:
-				var item_data: Dictionary = DataManager.get_item(item_id)
+				var item_data: Dictionary = DataManager.get_item(cid)
 				if not item_data.is_empty():
-					name = str(item_data.get("name", item_id))
-		lines.append("• %s" % name)
+					cname = str(item_data.get("name", cid))
+		lines.append("• %s" % cname)
 	if lines.is_empty():
 		lines.append("획득한 보상이 없습니다.")
 

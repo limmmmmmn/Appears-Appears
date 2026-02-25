@@ -49,5 +49,24 @@
     "field_enemy_count_multiplier": 1.22,
     "battle_enemy_bonus": 1,
     "max_enemies_per_window_bonus": 1
+  },
+  "skull": {
+    "id": "skull",
+    "name": "스컬",
+    "emoji": "💀",
+    "description": "전투창에 적이 3마리 이상이면\n루트 오브 보상량이 2배가 된다.",
+    "sources": [
+      "boss",
+      "shop",
+      "event"
+    ],
+    "reward_gold_multiplier": 1.0,
+    "reward_exp_multiplier": 1.0,
+    "enemy_stat_multiplier": 1.0,
+    "field_enemy_count_multiplier": 1.0,
+    "battle_enemy_bonus": 0,
+    "max_enemies_per_window_bonus": 0,
+    "loot_mult_min_enemies": 3,
+    "loot_mult_value": 2.0
   }
 }

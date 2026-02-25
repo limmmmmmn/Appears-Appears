@@ -355,8 +355,8 @@ func _find_available_healer() -> Hero:
 			continue
 		if hero.class_id != "cleric":
 			continue
-		# 힐 스킬 ATB 확인
-		if not hero.is_skill_atb_ready("heal"):
+		# 힐 스킬 쿨다운 확인
+		if not hero.is_skill_off_cooldown("heal"):
 			continue
 		return hero
 	return null
@@ -372,8 +372,8 @@ func _execute_field_heal(healer: Hero, target: Hero) -> void:
 
 	var actual_heal := target.heal(heal_amount)
 
-	# 힐 스킬 ATB 리셋
-	healer.reset_skill_atb("heal")
+	# 힐 스킬 쿨다운 시작
+	healer.start_skill_cooldown("heal")
 
 	if SoundManager:
 		SoundManager.play_heal()

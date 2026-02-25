@@ -469,11 +469,6 @@ func _on_loot_gauge_item_selected(item_id: String, reward_window: RewardWindow) 
 			if not equipped:
 				equipped = InventoryManager.try_auto_equip(item_id)
 
-			if equipped:
-				_show_notice("루트 보상: %s 장착!" % item_name, 1.8, Color(0.82, 1.0, 0.86))
-			else:
-				_show_notice("루트 보상: %s 획득" % item_name, 1.8, STYLE.text_gold)
-
 	# 게이지 소비 (리셋 + 최대치 증가)
 	if BattleManager:
 		BattleManager.consume_loot_gauge()
@@ -1296,6 +1291,9 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("loot_gauge_filled"):
 			if not BattleManager.loot_gauge_filled.is_connected(_on_loot_gauge_filled):
 				BattleManager.loot_gauge_filled.connect(_on_loot_gauge_filled)
+		if BattleManager.has_signal("trinket_loot_activated"):
+			if not BattleManager.trinket_loot_activated.is_connected(_on_trinket_loot_activated):
+				BattleManager.trinket_loot_activated.connect(_on_trinket_loot_activated)
 
 	if InventoryManager:
 		if InventoryManager.has_signal("item_equipped"):
@@ -1419,10 +1417,6 @@ func _remove_hover_indicator() -> void:
 
 
 func _on_item_equipped(hero_name: String, item_id: String, _slot: String, replaced_id: String) -> void:
-	var item_data: Dictionary = DataManager.get_equipment(item_id)
-	var item_name: String = str(item_data.get("name", item_id))
-	var delta_text: String = _build_equip_stat_delta_text(item_id, replaced_id)
-	_show_notice("%s 장착: %s\n%s" % [hero_name, item_name, delta_text], 2.2, Color(0.8, 1.0, 0.6))
 	_enqueue_equip_notice_event(hero_name, item_id, _slot)
 
 
@@ -1489,7 +1483,28 @@ func _refresh_trinket_badges() -> void:
 			continue
 		if badge.has_method("configure"):
 			badge.call("configure", data)
+		badge.set_meta("trinket_id", trinket_id)
 		trinket_container.add_child(badge)
+
+
+func _on_trinket_loot_activated(trinket_id: String, _mult: float, _bid: int) -> void:
+	if trinket_container == null:
+		return
+	for child in trinket_container.get_children():
+		if not is_instance_valid(child):
+			continue
+		if child.get_meta("trinket_id", "") != trinket_id:
+			continue
+		# 달그락 흔들림 연출
+		var orig_pos: Vector2 = child.position
+		child.pivot_offset = child.size * 0.5
+		var tw := create_tween()
+		tw.tween_property(child, "position:x", orig_pos.x - 3, 0.04)
+		tw.tween_property(child, "position:x", orig_pos.x + 3, 0.04)
+		tw.tween_property(child, "position:x", orig_pos.x - 2, 0.04)
+		tw.tween_property(child, "position:x", orig_pos.x + 2, 0.03)
+		tw.tween_property(child, "position:x", orig_pos.x, 0.03)
+		break
 
 
 func _refresh_selected_hero_panels() -> void:

@@ -68,8 +68,8 @@ var skill_levels: Dictionary = {}   # { skill_id: int } — 기본 1, 중복 선
 var current_hp: int = 0
 var is_dead: bool = false
 
-# 스킬별 독립 ATB 타이머: { skill_id: float }
-var skill_atb_timers: Dictionary = {}
+# 스킬 쿨다운 타이머: { skill_id: 남은_쿨다운(초) } — 0이면 사용 가능
+var skill_cooldowns: Dictionary = {}
 
 # 도발 상태 (기사 방패 강타)
 var taunt_count: int = 0
@@ -165,7 +165,7 @@ func _initialize(hero_id: String) -> void:
 
 	current_hp = get_max_hp()
 	_init_skill_toggles()
-	_init_skill_atb_timers()
+	_init_skill_cooldowns()
 
 
 func _build_growth_table(class_data: Dictionary) -> Dictionary:
@@ -519,7 +519,7 @@ func set_progress(saved_level: int, saved_exp: int, saved_level_stats: Dictionar
 		unlocked_skills.append("basic_attack")
 
 	_init_skill_toggles()
-	_init_skill_atb_timers()
+	_init_skill_cooldowns()
 
 	if level >= MAX_LEVEL:
 		current_exp = 0
@@ -560,7 +560,7 @@ func revive(hp_percent: float = 0.3) -> void:
 		return
 	is_dead = false
 	current_hp = int(get_max_hp() * hp_percent)
-	reset_all_skill_atb()
+	reset_all_skill_cooldowns()
 
 
 # === 행동 타이머 (스킬별 독립 ATB) ===
@@ -586,60 +586,67 @@ func _get_class_action_speed() -> float:
 	return float(class_data.get("action_speed", 2.0))
 
 
-# === 스킬별 ATB ===
-func _init_skill_atb_timers() -> void:
-	## 해금된 스킬마다 타이머 초기화
-	skill_atb_timers.clear()
+# === 스킬 쿨다운 시스템 ===
+func _init_skill_cooldowns() -> void:
+	## 해금된 스킬마다 쿨다운 0 초기화 (사용 가능 상태)
+	skill_cooldowns.clear()
 	for skill_id in unlocked_skills:
 		if skill_id == "basic_attack":
 			continue
-		skill_atb_timers[skill_id] = 0.0
+		skill_cooldowns[skill_id] = 0.0
 
 
-func get_skill_atb_cost(skill_id: String) -> float:
-	## skills.json의 atb_cost 반환 (기본공격=0)
+func get_skill_cooldown_value(skill_id: String) -> float:
+	## skills.json의 cooldown 값 반환 (기본공격=0)
 	if skill_id == "basic_attack":
 		return 0.0
 	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	return float(skill_data.get("atb_cost", 0.0))
+	return float(skill_data.get("cooldown", 0.0))
 
 
-func is_skill_atb_ready(skill_id: String) -> bool:
-	## 스킬 ATB가 atb_cost 이상 차 있는지
+func is_skill_off_cooldown(skill_id: String) -> bool:
+	## 스킬 쿨다운이 끝났는지 (사용 가능 여부)
 	if skill_id == "basic_attack":
-		return is_action_ready()
-	var cost: float = get_skill_atb_cost(skill_id)
-	if cost <= 0.0:
 		return true
-	var current: float = float(skill_atb_timers.get(skill_id, 0.0))
-	return current >= cost
+	var remaining: float = float(skill_cooldowns.get(skill_id, 0.0))
+	return remaining <= 0.0
 
 
-func reset_skill_atb(skill_id: String) -> void:
-	## 스킬 사용 후 해당 스킬 ATB를 0으로 리셋
-	if skill_id != "basic_attack":
-		skill_atb_timers[skill_id] = 0.0
+func start_skill_cooldown(skill_id: String) -> void:
+	## 스킬 사용 후 쿨다운 시작
+	if skill_id == "basic_attack":
+		return
+	skill_cooldowns[skill_id] = get_skill_cooldown_value(skill_id)
 
 
-func reset_all_skill_atb() -> void:
-	## 모든 스킬 ATB 리셋 (부활 등)
-	for skill_id in skill_atb_timers.keys():
-		skill_atb_timers[skill_id] = 0.0
+func reset_all_skill_cooldowns() -> void:
+	## 모든 스킬 쿨다운 리셋 (부활 등 — 전부 사용 가능)
+	for skill_id in skill_cooldowns.keys():
+		skill_cooldowns[skill_id] = 0.0
 	action_timer = 0.0
 
 
-func get_skill_atb_percent(skill_id: String) -> float:
-	## UI 표시용: 스킬 ATB 진행률 (0.0~1.0)
+func get_skill_cooldown_percent(skill_id: String) -> float:
+	## UI 표시용: 0.0 = 쿨다운 막 시작, 1.0 = 준비 완료
 	if skill_id == "basic_attack":
 		var delay: float = get_action_delay()
 		if delay <= 0.0:
 			return 1.0
 		return clampf(action_timer / delay, 0.0, 1.0)
-	var cost: float = get_skill_atb_cost(skill_id)
-	if cost <= 0.0:
+	var total: float = get_skill_cooldown_value(skill_id)
+	if total <= 0.0:
 		return 1.0
-	var current: float = float(skill_atb_timers.get(skill_id, 0.0))
-	return clampf(current / cost, 0.0, 1.0)
+	var remaining: float = float(skill_cooldowns.get(skill_id, 0.0))
+	if remaining <= 0.0:
+		return 1.0
+	return clampf(1.0 - (remaining / total), 0.0, 1.0)
+
+
+func tick_cooldowns(delta: float) -> void:
+	## 매 프레임 호출: 모든 스킬 쿨다운 감소
+	for skill_id in skill_cooldowns.keys():
+		if skill_cooldowns[skill_id] > 0.0:
+			skill_cooldowns[skill_id] = maxf(0.0, skill_cooldowns[skill_id] - delta)
 
 
 func apply_seed_bonus(stat: String, value: int) -> void:
@@ -830,7 +837,7 @@ func level_up_skill(skill_id: String) -> int:
 
 
 func get_usable_skills() -> Array:
-	## 토글 ON + 스킬 ATB 충전 완료된 스킬 목록 반환 (기본 공격 제외)
+	## 토글 ON + 쿨다운 완료된 스킬 목록 반환 (기본 공격 제외)
 	var result: Array = []
 	var skills: Array = get_available_skills()
 	for skill_id in skills:
@@ -838,17 +845,17 @@ func get_usable_skills() -> Array:
 			continue
 		if not is_skill_enabled(skill_id):
 			continue
-		if not is_skill_atb_ready(skill_id):
+		if not is_skill_off_cooldown(skill_id):
 			continue
 		result.append(skill_id)
 	return result
 
 
 func can_use_skill(skill_id: String) -> bool:
-	## 해당 스킬을 사용할 수 있는지 확인 (기본공격=ATB, 스킬=스킬ATB)
+	## 해당 스킬을 사용할 수 있는지 확인 (기본공격=항상, 스킬=쿨다운)
 	if skill_id == "basic_attack":
-		return is_action_ready()
-	return is_skill_atb_ready(skill_id)
+		return true
+	return is_skill_off_cooldown(skill_id)
 #endregion
 
 

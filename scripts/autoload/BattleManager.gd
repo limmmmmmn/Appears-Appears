@@ -20,9 +20,10 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(hp_orbs: int, gold_amount: int, item_ids: Array, world_pos: Vector2, window_rect: Rect2, exp_amount: int)
+signal field_drops_requested(loot_score: int, gold_amount: int, kill_count: int, world_pos: Vector2, window_rect: Rect2)
 signal loot_gauge_changed(current: int, maximum: int)
 signal loot_gauge_filled
+signal trinket_loot_activated(trinket_id: String, mult_value: float, battle_id: int)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
@@ -372,6 +373,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	var window_enemy_kills: int = 0
 	var battle_pos: Vector2 = Vector2.ZERO
 	var window_screen_rect: Rect2 = Rect2()
+	var window_loot_mult: float = 1.0
 
 	if active_battles.has(battle_id):
 		var bd: Dictionary = active_battles[battle_id]
@@ -388,17 +390,13 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 				window_enemy_kills = int(window.get_total_enemy_count())
 				window_screen_rect = Rect2(window.position, window.size)
 				last_window_rect = window_screen_rect
+				window_loot_mult = window.trinket_loot_mult
 
 	end_battle(battle_id, victory)
 
 	# 아이템은 즉시 인벤토리 지급 (필드 드롭 X)
 	if victory and not window_items.is_empty():
 		_grant_items_directly(window_items)
-
-	# HP 오브/골드/EXP는 전투창 위치 기준으로 필드 드롭 (아이템 제외, MP 삭제)
-	if victory and (window_enemy_kills > 0 or window_gold > 0 or window_exp > 0):
-		var hp_orbs: int = _calc_hp_orbs_from_kills(window_enemy_kills)
-		field_drops_requested.emit(hp_orbs, window_gold, [], battle_pos, window_screen_rect, window_exp)
 
 	if was_boss:
 		boss_battle_ended.emit(battle_id)
@@ -407,7 +405,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	elif victory and was_elite:
 		elite_victory.emit(battle_id)
 
-	# 루트 게이지 증가 (승리 시, 점수 기반 — formulas.json)
+	# 루트 점수 계산 → 초록 루트 오브 N개 드롭 (오브 흡수 시 골드 + 루트 게이지 동시 증가)
 	if victory:
 		var score_per_kill: int = int(_lg_formula.get("score_per_kill", 60))
 		var score_per_exp: float = float(_lg_formula.get("score_per_exp", 0.8))
@@ -421,7 +419,10 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 		if was_boss:
 			loot_score += boss_bonus
 		loot_score = maxi(loot_score, min_score)
-		add_loot_gauge(loot_score)
+		if window_loot_mult > 1.0:
+			loot_score = int(float(loot_score) * window_loot_mult)
+			window_gold = int(float(window_gold) * window_loot_mult)
+		field_drops_requested.emit(loot_score, window_gold, maxi(1, window_enemy_kills), battle_pos, window_screen_rect)
 
 	if victory and SaveManager:
 		SaveManager.auto_save("전투 승리")
@@ -549,24 +550,15 @@ func claim_accumulated_rewards() -> void:
 	if not items_arr.is_empty():
 		_grant_items_directly(items_arr)
 
+	# 루트 오브 드롭 (골드 + 루트점수 동시)
 	if accumulated_gold > 0 or accumulated_exp > 0:
-		var hp_orbs: int = _calc_orb_count(accumulated_gold, items_arr.size())
-		field_drops_requested.emit(hp_orbs, accumulated_gold, [], last_battle_pos, last_window_rect, accumulated_exp)
+		var loot_score: int = maxi(30, int(accumulated_gold * 0.5) + int(float(accumulated_exp) * 0.8))
+		field_drops_requested.emit(loot_score, accumulated_gold, 1, last_battle_pos, last_window_rect)
 
 	# 초기화
 	reset_accumulated_rewards()
 
 
-func _calc_orb_count(gold: int, item_count: int) -> int:
-	var score: float = gold * 0.03 + item_count * 1.0
-	return clampi(int(floor(score)), 0, 3)
-
-
-func _calc_hp_orbs_from_kills(kill_count: int) -> int:
-	if kill_count <= 0:
-		return 0
-	var rf: Dictionary = DataManager.get_formula("rewards") as Dictionary
-	return kill_count * int(rf.get("hp_orbs_per_kill", 1))
 
 
 func reset_accumulated_rewards() -> void:
