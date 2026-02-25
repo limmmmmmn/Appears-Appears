@@ -10,6 +10,7 @@ var items: Dictionary = {}
 var traits: Dictionary = {}
 var dialogues: Dictionary = {}
 var trinkets: Dictionary = {}
+var formulas: Dictionary = {}
 
 const CLASS_JSON_PATH := "res://data/classes.json"
 const HERO_JSON_PATH := "res://data/heroes.json"
@@ -20,6 +21,7 @@ const ITEM_JSON_PATH := "res://data/items.json"
 const TRAIT_JSON_PATH := "res://data/traits.json"
 const DIALOGUE_JSON_DIR_PATH := "res://data/dialogues"
 const TRINKET_JSON_PATH := "res://data/trinkets.json"
+const FORMULAS_JSON_PATH := "res://data/formulas.json"
 
 
 func _ready() -> void:
@@ -36,7 +38,7 @@ func _load_all_data() -> void:
 	traits = _load_trait_data()
 	dialogues = _load_dialogue_data()
 	trinkets = _load_trinket_data()
-	
+	formulas = _load_formulas_data()
 
 
 func _load_enemy_data() -> Dictionary:
@@ -93,6 +95,21 @@ func _load_trinket_data() -> Dictionary:
 	if loaded.is_empty():
 		push_error("[DataManager] Trinket data is empty: " + TRINKET_JSON_PATH)
 	return loaded
+
+
+func _load_formulas_data() -> Dictionary:
+	var loaded: Dictionary = _load_json_dictionary(FORMULAS_JSON_PATH)
+	if loaded.is_empty():
+		push_error("[DataManager] Formulas data is empty: " + FORMULAS_JSON_PATH)
+	return loaded
+
+
+func get_formula(category: String, key: String = "") -> Variant:
+	## formulas.json에서 카테고리(+ 선택적 키)로 값을 가져온다
+	var cat: Dictionary = formulas.get(category, {}) as Dictionary
+	if key.is_empty():
+		return cat
+	return cat.get(key, {})
 
 
 func _load_dialogue_data() -> Dictionary:

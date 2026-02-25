@@ -69,6 +69,12 @@ signal enemy_respawned(enemy: Node2D)
 
 func _ready() -> void:
 	_apply_config_overrides()
+	# formulas.json에서 스폰 상수 로드
+	var sf: Dictionary = DataManager.get_formula("spawning") as Dictionary
+	if not sf.is_empty():
+		FIELD_ENEMY_COUNT_MULTIPLIER = float(sf.get("field_enemy_count_multiplier", FIELD_ENEMY_COUNT_MULTIPLIER))
+		ELITE_SPAWN_CHANCE = float(sf.get("default_elite_chance", ELITE_SPAWN_CHANCE))
+		PROACTIVE_SPAWN_INTERVAL = float(sf.get("proactive_spawn_interval", PROACTIVE_SPAWN_INTERVAL))
 
 
 func setup(p_field: Node2D, p_tilemap: TileMapLayer) -> void:

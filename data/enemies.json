@@ -4,10 +4,10 @@
     "name": "박쥐",
     "type": "normal",
     "stats": {
-      "atk": 11,
-      "def": 2,
-      "dex": 12,
-      "hp": 16
+      "atk": 16,
+      "def": 3,
+      "dex": 14,
+      "hp": 22
     },
     "rewards": {
       "exp": 16,
@@ -83,11 +83,11 @@
     "name": "슬라임 킹",
     "type": "boss",
     "stats": {
-      "atk": 20,
-      "def": 10,
-      "dex": 12,
-      "hp": 280,
-      "int": 6
+      "atk": 38,
+      "def": 14,
+      "dex": 14,
+      "hp": 500,
+      "int": 10
     },
     "rewards": {
       "exp": 220,
@@ -163,11 +163,11 @@
     "name": "다크 소서러",
     "type": "normal",
     "stats": {
-      "atk": 26,
-      "def": 6,
-      "dex": 10,
-      "hp": 35,
-      "int": 18
+      "atk": 32,
+      "def": 7,
+      "dex": 11,
+      "hp": 42,
+      "int": 20
     },
     "rewards": {
       "exp": 22,
@@ -246,10 +246,10 @@
     "name": "골렘",
     "type": "normal",
     "stats": {
-      "atk": 24,
-      "def": 20,
-      "dex": 4,
-      "hp": 65
+      "atk": 30,
+      "def": 22,
+      "dex": 5,
+      "hp": 80
     },
     "rewards": {
       "exp": 20,
@@ -327,10 +327,10 @@
     "name": "슬라임",
     "type": "normal",
     "stats": {
-      "atk": 9,
-      "def": 3,
-      "dex": 8,
-      "hp": 20
+      "atk": 14,
+      "def": 4,
+      "dex": 10,
+      "hp": 28
     },
     "rewards": {
       "exp": 14,

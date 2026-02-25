@@ -506,17 +506,18 @@ func _calc_orb_count(gold: int, item_count: int) -> int:
 
 
 func _calc_hp_orbs_from_kills(kill_count: int) -> int:
-	## 적 하나당 HP 오브 1개
 	if kill_count <= 0:
 		return 0
-	return kill_count
+	var rf: Dictionary = DataManager.get_formula("rewards") as Dictionary
+	return kill_count * int(rf.get("hp_orbs_per_kill", 1))
 
 
 func _calc_mp_orbs_from_kills(kill_count: int) -> int:
-	## MP 오브는 더 적게 — 적 3마리당 1개
 	if kill_count <= 0:
 		return 0
-	return int(floor(float(kill_count) / 3.0))
+	var rf: Dictionary = DataManager.get_formula("rewards") as Dictionary
+	var divisor: int = int(rf.get("mp_orbs_kill_divisor", 3))
+	return int(floor(float(kill_count) / float(maxi(1, divisor))))
 
 func reset_accumulated_rewards() -> void:
 	## 보상 초기화

@@ -1490,28 +1490,23 @@ func _show_boss_trinket_choice() -> void:
 	boss_trinket_choice_layer.add_child(center)
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(840.0, 360.0)
+	panel.custom_minimum_size = Vector2(660.0, 300.0)
 	panel.add_theme_stylebox_override("panel", _make_boss_trinket_panel_style())
 	center.add_child(panel)
 
 	var root := VBoxContainer.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.offset_left = 24.0
-	root.offset_top = 20.0
-	root.offset_right = -24.0
-	root.offset_bottom = -20.0
-	root.add_theme_constant_override("separation", 14)
+	root.add_theme_constant_override("separation", 10)
 	panel.add_child(root)
 
 	var title := Label.new()
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_font_size_override("font_size", 22)
 	title.text = "보스 보상: 트링켓 선택"
 	root.add_child(title)
 
 	var subtitle := Label.new()
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 15)
+	subtitle.add_theme_font_size_override("font_size", 13)
 	subtitle.modulate = Color(0.9, 0.94, 1.0, 0.95)
 	subtitle.text = "세 가지 중 하나를 선택하세요."
 	root.add_child(subtitle)
@@ -1519,7 +1514,7 @@ func _show_boss_trinket_choice() -> void:
 	var cards := HBoxContainer.new()
 	cards.alignment = BoxContainer.ALIGNMENT_CENTER
 	cards.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	cards.add_theme_constant_override("separation", 14)
+	cards.add_theme_constant_override("separation", 12)
 	root.add_child(cards)
 
 	for trinket_id in choices:
@@ -1529,42 +1524,38 @@ func _show_boss_trinket_choice() -> void:
 
 func _build_boss_trinket_choice_card(trinket_id: String, data: Dictionary) -> PanelContainer:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(238.0, 240.0)
+	card.custom_minimum_size = Vector2(190.0, 0.0)
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.add_theme_stylebox_override("panel", _make_boss_trinket_card_style())
 
 	var vbox := VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 12.0
-	vbox.offset_top = 12.0
-	vbox.offset_right = -12.0
-	vbox.offset_bottom = -12.0
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 6)
 	card.add_child(vbox)
 
 	var emoji_label := Label.new()
 	emoji_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	emoji_label.add_theme_font_size_override("font_size", 42)
+	emoji_label.add_theme_font_size_override("font_size", 32)
 	emoji_label.text = str(data.get("emoji", "🧿"))
 	vbox.add_child(emoji_label)
 
 	var name_label := Label.new()
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 17)
+	name_label.add_theme_font_size_override("font_size", 15)
 	name_label.text = str(data.get("name", trinket_id))
 	vbox.add_child(name_label)
 
 	var desc_label := Label.new()
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	desc_label.add_theme_font_size_override("font_size", 13)
+	desc_label.add_theme_font_size_override("font_size", 12)
 	desc_label.modulate = Color(0.9, 0.93, 0.98, 0.95)
 	desc_label.text = str(data.get("description", ""))
 	vbox.add_child(desc_label)
 
 	var pick_btn := Button.new()
 	pick_btn.text = "획득"
-	pick_btn.custom_minimum_size = Vector2(0.0, 36.0)
-	pick_btn.add_theme_font_size_override("font_size", 15)
+	pick_btn.custom_minimum_size = Vector2(0.0, 30.0)
+	pick_btn.add_theme_font_size_override("font_size", 13)
 	pick_btn.pressed.connect(_on_boss_trinket_choice_pressed.bind(trinket_id))
 	vbox.add_child(pick_btn)
 	return card
@@ -1611,6 +1602,10 @@ func _make_boss_trinket_panel_style() -> StyleBoxFlat:
 	style.corner_radius_top_right = 12
 	style.corner_radius_bottom_left = 12
 	style.corner_radius_bottom_right = 12
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 16
+	style.content_margin_bottom = 16
 	return style
 
 
@@ -1626,6 +1621,10 @@ func _make_boss_trinket_card_style() -> StyleBoxFlat:
 	style.corner_radius_top_right = 10
 	style.corner_radius_bottom_left = 10
 	style.corner_radius_bottom_right = 10
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
 	return style
 
 

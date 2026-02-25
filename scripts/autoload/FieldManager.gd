@@ -35,7 +35,7 @@ const DEFAULT_TERRAIN_ENEMIES: Dictionary = {
 	"stone": {"slime": 55, "bat": 45},
 }
 const DEFAULT_ELITE_POOL: Array[String] = ["orc_warrior"]
-const DEFAULT_ELITE_CHANCE: float = 0.2
+var DEFAULT_ELITE_CHANCE: float = 0.2  # formulas.json에서 오버라이드 가능
 const DEFAULT_BOSS_ID: String = "boss_goblin_king"
 
 var tile_types: Dictionary = DEFAULT_TILE_TYPES.duplicate(true)
@@ -57,6 +57,10 @@ var current_area_data: Dictionary = {}
 func _ready() -> void:
 	tile_types = DEFAULT_TILE_TYPES.duplicate(true)
 	battle_config = DEFAULT_BATTLE_CONFIG.duplicate(true)
+	# formulas.json에서 엘리트 기본 확률 로드
+	var sf: Dictionary = DataManager.get_formula("spawning") as Dictionary
+	if not sf.is_empty():
+		DEFAULT_ELITE_CHANCE = float(sf.get("default_elite_chance", DEFAULT_ELITE_CHANCE))
 	if auto_generate_runtime_acts:
 		ensure_runtime_acts(runtime_act_seed)
 	_ensure_current_area_selected()

@@ -82,27 +82,7 @@ var waiting_reward_claim: bool = false
 var _action_process_timer: float = 0.0
 const ACTION_TIMEOUT: float = 8.0  # 행동 처리 최대 시간 (초)
 
-# === 초당 마나 자연 회복 ===
-var _mp_regen_timer: float = 0.0
 
-# === 턴제 전투 시스템 ===
-const USE_TURN_BASED: bool = true
-const TURN_POST_DELAY: float = 0.30  # 결과 타이핑 완료 후 다음 턴까지 대기 (한 박자 쉼)
-const BEAT_BEFORE_ATTACK: float = 0.28  # 선언 타이핑 후 → 타격 전 긴장감 비트
-const BEAT_ANIM_WAIT: float = 0.32  # 타격 애니메이션(슬래시) 재생 대기
-const BEAT_AFTER_HIT: float = 0.22  # 피격 이펙트 후 → 결과 타이핑 전 여운 비트
-var _turn_queue: Array = []  # 이번 라운드 행동 순서 (Hero | BattleEnemy)
-var _turn_index: int = 0  # 현재 턴 인덱스
-var _turn_delay_timer: float = 0.0  # 턴 사이 대기 타이머
-# phase: 0=다음유닛, 1=선언타이핑, 2=선언후비트, 3=애니메이션대기, 4=피격+결과, 5=결과타이핑, 6=완료대기
-var _turn_phase: int = 0
-var _turn_current_unit = null  # 현재 행동 중인 유닛
-var _turn_action_line: String = ""  # 행동 선언 텍스트
-var _turn_result_lines: Array[String] = []  # 결과 텍스트들
-var _turn_pending_attack: Callable = Callable()  # 지연 실행할 공격 콜백
-var _turn_collecting_results: bool = false  # true일 때 show_battle_text가 결과를 수집
-var _turn_stage_hits: bool = false  # true일 때 피격이펙트+데미지숫자를 지연 큐에 저장
-var _turn_staged_hits: Array = []  # [{target, damage, is_crit, is_enemy_target}] 지연 큐
 
 
 # === 레벨업 스킬 선택 ===
@@ -112,14 +92,13 @@ var _skill_select_queue: Array = []  # Array of { hero_id, hero_name }
 var _skill_select_popup: SkillSelectPopup = null
 var _skill_select_in_victory: bool = false  # 승리 흐름에서 팝업 처리 중인지
 
-# === 도주 설정 ===
-const BASE_ESCAPE_RATE: float = 40.0
-const GRUDGE_KILLS_PER_LEVEL: int = 5
+# === 도주 설정 (formulas.json에서 로드) ===
+var BASE_ESCAPE_RATE: float = 40.0
+var GRUDGE_KILLS_PER_LEVEL: int = 5
 const BATTLE_ENEMY_SCENE = preload("res://scenes/battle/BattleEnemy.tscn")
 const BATTLE_WINDOW_UNIT_TOKEN_SCENE = preload("res://scenes/battle/BattleWindowUnitToken.tscn")
 const TOOLTIP_SCENE = preload("res://scenes/ui/Tooltip.tscn")
 const BASE_ENEMIES_PER_WINDOW: int = 3
-const BATTLE_ATB_FILL_RATE: float = 0.85
 const ENEMY_ROW_GAP: int = 5
 const SHOW_HERO_FACE_CHIPS: bool = false
 
@@ -219,6 +198,11 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS  # 게임 일시정지 중에도 입력 받기
 	add_to_group("battle_windows")
 
+	# formulas.json에서 전투 상수 로드
+	var battle_f: Dictionary = DataManager.get_formula("battle") as Dictionary
+	BASE_ESCAPE_RATE = float(battle_f.get("base_escape_rate", 40.0))
+	GRUDGE_KILLS_PER_LEVEL = int(battle_f.get("grudge_kills_per_level", 5))
+
 	# 마우스 GUI 입력 연결
 	gui_input.connect(_on_gui_input)
 
@@ -265,17 +249,6 @@ func _process(delta: float) -> void:
 		return
 
 	if pending_victory:
-		# 턴제 모드: 진행 중인 연출이 모두 끝날 때까지 승리 처리 보류
-		if USE_TURN_BASED:
-			_update_typewriter(delta)
-			# 남은 단계별 연출 진행 (피격 이펙트 → 결과 타이핑)
-			if not _turn_staged_hits.is_empty():
-				_play_staged_hits()
-				if _turn_result_lines.size() > 0:
-					_start_result_typewriter()
-				return
-			if not _tw_done:
-				return
 		var now_ms: int = Time.get_ticks_msec()
 		var min_visible_ms: int = int(MIN_BATTLE_VISIBLE_TIME * 1000.0)
 		var can_finish: bool = (now_ms - battle_started_ms) >= min_visible_ms and now_ms >= pending_victory_ready_ms
@@ -288,54 +261,31 @@ func _process(delta: float) -> void:
 	_update_background_effect(delta)
 	_update_run_button_position()
 
-	if USE_TURN_BASED:
-		# === 턴제 모드 ===
-		# 타이핑 연출 업데이트
-		_update_typewriter(delta)
+	# === ATB 모드 ===
+	# 적 행동 타이머 충전 (ATBManager 중앙 관리)
+	ATBManager.update_enemy_timers(enemies, delta, is_battle_paused)
 
-		# 마나 회복 + 버프 틱 (턴마다가 아니라 시간 기반 유지)
-		_mp_regen_timer += delta
-		if _mp_regen_timer >= 1.0:
-			_mp_regen_timer -= 1.0
-			for hero in _get_alive_heroes_in_battle():
-				hero.restore_mp(1)
-		for hero in _get_alive_heroes_in_battle():
-			hero.tick_buffs(delta)
-		# 적 디버프 틱
-		for enemy in enemies:
-			if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
-				enemy.tick_debuffs(delta)
-				if not enemy.is_alive():
-					_on_enemy_defeated(enemy)
+	# 버프/디버프 틱
+	for hero in _get_alive_heroes_in_battle():
+		hero.tick_buffs(delta)
+	for enemy in enemies:
+		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
+			enemy.tick_debuffs(delta)
+			if not enemy.is_alive():
+				_on_enemy_defeated(enemy)
 
-		if not is_battle_paused:
-			_process_turn_based(delta)
-	else:
-		# === ATB 모드 (기존) ===
-		# 적 행동 타이머 충전 (영웅은 ATBManager에서 중앙 관리)
-		_update_enemy_timers(delta)
-
-		# 초당 마나 +1 자연 회복 + 영웅 버프 틱
-		_mp_regen_timer += delta
-		if _mp_regen_timer >= 1.0:
-			_mp_regen_timer -= 1.0
-			for hero in _get_alive_heroes_in_battle():
-				hero.restore_mp(1)
-		for hero in _get_alive_heroes_in_battle():
-			hero.tick_buffs(delta)
-
-		# 행동 타임아웃 안전장치
-		if is_processing_action:
-			_action_process_timer += delta
-			if _action_process_timer > ACTION_TIMEOUT:
-				push_warning("[BattleWindow] 행동 처리 타임아웃 (%.1fs) - 강제 해제" % ACTION_TIMEOUT)
-				is_processing_action = false
-				_action_process_timer = 0.0
-
-		# 행동 준비된 유닛 즉시 행동 (정지 상태면 스킵)
-		if not is_processing_action and not is_battle_paused:
+	# 행동 타임아웃 안전장치
+	if is_processing_action:
+		_action_process_timer += delta
+		if _action_process_timer > ACTION_TIMEOUT:
+			push_warning("[BattleWindow] 행동 처리 타임아웃 (%.1fs) - 강제 해제" % ACTION_TIMEOUT)
+			is_processing_action = false
 			_action_process_timer = 0.0
-			_process_ready_unit()
+
+	# 행동 준비된 유닛 즉시 행동 (정지 상태면 스킵)
+	if not is_processing_action and not is_battle_paused:
+		_action_process_timer = 0.0
+		_process_ready_unit()
 
 
 func _setup_pause_controls() -> void:
@@ -763,16 +713,6 @@ func _start_battle() -> void:
 	set_process(true)
 	_reset_enemy_timers()
 
-	# 턴제 모드 초기화
-	if USE_TURN_BASED:
-		ATBManager.turn_based_active = true
-		_turn_queue.clear()
-		_turn_index = 0
-		_turn_phase = 0
-		_turn_delay_timer = 0.0
-		_turn_collecting_results = false
-		_turn_stage_hits = false
-		_turn_staged_hits.clear()
 #endregion
 
 
@@ -1413,20 +1353,6 @@ func _reset_enemy_timers() -> void:
 			enemy.reset_action_timer()
 
 
-func _update_enemy_timers(delta: float) -> void:
-	## 적 행동 타이머를 액션 딜레이 기준으로 채움
-	if is_battle_paused:
-		return
-	for enemy in enemies:
-		if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
-			continue
-		# 디버프 틱 (도트, ATB 슬로우)
-		enemy.tick_debuffs(delta)
-		if not enemy.is_alive():
-			_on_enemy_defeated(enemy)
-			continue
-		if not enemy.is_action_ready():
-			enemy.action_timer = minf(enemy.action_timer + delta * BATTLE_ATB_FILL_RATE, enemy.get_action_delay())
 #endregion
 
 
@@ -1476,376 +1402,8 @@ func _process_ready_unit() -> void:
 #endregion
 
 
-#region 턴제 전투 시스템
-func _build_turn_queue() -> void:
-	## 라운드 시작: 아군 + 적 전원을 속도(DEX) 내림차순으로 정렬
-	_turn_queue.clear()
-	_turn_index = 0
-
-	# 아군 수집
-	for hero in _get_alive_heroes_in_battle():
-		if hero != null and not hero.is_dead:
-			_turn_queue.append(hero)
-
-	# 적 수집
-	for enemy in enemies:
-		if enemy != null and is_instance_valid(enemy) and enemy.is_alive():
-			_turn_queue.append(enemy)
-
-	# DEX 내림차순 정렬 (빠른 유닛 먼저 행동)
-	_turn_queue.sort_custom(func(a, b):
-		var dex_a: int = a.get_dex() if a.has_method("get_dex") else 0
-		var dex_b: int = b.get_dex() if b.has_method("get_dex") else 0
-		return dex_a > dex_b
-	)
 
 
-func _play_staged_hits() -> void:
-	## 지연 큐에 저장된 피격 이펙트 + 데미지 숫자를 한꺼번에 재생
-	var total_enemy_damage: int = 0  # 적이 아군에게 준 총 데미지 (흔들림 계산용)
-	for hit in _turn_staged_hits:
-		var is_crit: bool = hit.get("is_crit", false)
-		var dmg: int = int(hit.get("damage", 0))
-		if hit.get("is_enemy_target", true):
-			# 아군이 적을 때림: 반짝 + 데미지 숫자 (전투창 흔들림 없음)
-			var target = hit.get("target")
-			if target != null and is_instance_valid(target):
-				target.play_hit_effect(is_crit)
-				target.show_damage_number(dmg, is_crit)
-		else:
-			# 적이 아군을 때림: 페이스칩 피격 + 전투창 흔들림
-			var hero_id: String = str(hit.get("hero_id", ""))
-			if not hero_id.is_empty():
-				_show_hero_face_chip(hero_id, true, dmg, is_crit, 1.25)
-			total_enemy_damage += dmg
-	# 적에게 맞았을 때만 전투창 흔들림 (데미지에 비례)
-	if total_enemy_damage > 0:
-		play_enemy_hit_shake(total_enemy_damage)
-	_turn_staged_hits.clear()
-
-
-func _process_turn_based(delta: float) -> void:
-	## 턴제 메인 루프 (단계별 연출)
-	## phase 0: 다음 유닛 선택
-	## phase 1: 선언 타이핑 ("롤랜드의 공격!")
-	## phase 2: 비트 → 타격 애니메이션 실행 (슬래시/파티클, 데미지 계산)
-	## phase 3: 타격 애니메이션 대기
-	## phase 4: 피격 이펙트 (반짝반짝) + 비트
-	## phase 5: 결과 타이핑 ("슬라임에게 35의 데미지!")
-	## phase 6: 빠르게 다음 턴
-	if current_state != BattleState.RUNNING:
-		return
-
-	# --- phase 6: 완료 → 빠르게 다음 턴 ---
-	if _turn_phase == 6:
-		_turn_delay_timer -= delta
-		if _turn_delay_timer > 0.0:
-			return
-		_turn_phase = 0
-
-	# --- phase 5: 결과 타이핑 대기 ---
-	if _turn_phase == 5:
-		# 비트 타이머가 남아있으면 대기 (피격 후 잠깐 쉼)
-		if _turn_delay_timer > 0.0:
-			_turn_delay_timer -= delta
-			if _turn_delay_timer > 0.0:
-				return
-			# 비트 완료 → 결과 타이핑 시작
-			if _turn_result_lines.size() > 0:
-				_start_result_typewriter()
-			else:
-				_tw_done = true
-		if not is_typewriter_done():
-			return
-		# 타이핑 완료 → 전투 종료 체크 후 빠르게 넘김
-		_check_battle_end()
-		is_processing_action = false
-		if is_inside_tree():
-			ATBManager.action_executed.emit()
-		_turn_phase = 6
-		_turn_delay_timer = TURN_POST_DELAY
-		return
-
-	# --- phase 4: 피격 이펙트 재생 ---
-	if _turn_phase == 4:
-		_turn_delay_timer -= delta
-		if _turn_delay_timer > 0.0:
-			return
-		# 피격 이펙트 재생 (반짝반짝 + 데미지 숫자)
-		_play_staged_hits()
-		# 결과 타이핑 단계로 (비트 후 시작)
-		_turn_phase = 5
-		_turn_delay_timer = BEAT_AFTER_HIT
-		return
-
-	# --- phase 3: 타격 애니메이션 대기 ---
-	if _turn_phase == 3:
-		_turn_delay_timer -= delta
-		if _turn_delay_timer > 0.0:
-			return
-		# 애니메이션 끝남 → 피격 이펙트 단계로
-		_turn_phase = 4
-		_turn_delay_timer = 0.0  # 즉시 피격 재생
-		return
-
-	# --- phase 2: 선언 후 비트 → 공격 실행 ---
-	if _turn_phase == 2:
-		_turn_delay_timer -= delta
-		if _turn_delay_timer > 0.0:
-			return
-		# 비트 완료 → 공격 실행 (슬래시/파티클 + 데미지 계산, 피격이펙트는 지연)
-		is_processing_action = true
-		if _turn_pending_attack.is_valid():
-			_turn_pending_attack.call()
-		_turn_pending_attack = Callable()
-		# 타격 애니메이션 대기
-		_turn_phase = 3
-		_turn_delay_timer = BEAT_ANIM_WAIT
-		return
-
-	# --- phase 1: 선언 타이핑 대기 ---
-	if _turn_phase == 1:
-		if not is_typewriter_done():
-			return
-		# 선언 타이핑 완료 → 비트 후 공격
-		_turn_phase = 2
-		_turn_delay_timer = BEAT_BEFORE_ATTACK
-		return
-
-	# --- phase 0: 다음 유닛 선택 ---
-	# 큐가 비었거나 인덱스 초과 → 새 라운드
-	if _turn_queue.is_empty() or _turn_index >= _turn_queue.size():
-		_build_turn_queue()
-		if _turn_queue.is_empty():
-			return
-
-	# 유닛 가져오기
-	var unit = _turn_queue[_turn_index]
-	_turn_index += 1
-
-	# 해제된 인스턴스 스킵
-	if unit == null or not is_instance_valid(unit):
-		return
-
-	# 죽은 유닛 스킵
-	if unit is Hero:
-		if unit.is_dead:
-			return
-	elif unit is BattleEnemy:
-		if not unit.is_alive():
-			return
-
-	# 행동 준비: 선언 줄 + 공격 콜백 설정
-	_turn_current_unit = unit
-	_turn_action_line = ""
-	_turn_result_lines.clear()
-	_turn_pending_attack = Callable()
-	_turn_staged_hits.clear()
-
-	if unit is Hero:
-		_prepare_hero_turn(unit)
-	elif unit is BattleEnemy:
-		_prepare_enemy_turn(unit)
-
-	# 선언 줄 타이핑 시작
-	if not _turn_action_line.is_empty():
-		start_typewriter([_turn_action_line])
-		_turn_phase = 1
-	else:
-		# 선언 없으면 바로 비트 → 공격
-		_turn_phase = 2
-		_turn_delay_timer = BEAT_BEFORE_ATTACK
-
-
-func _start_result_typewriter() -> void:
-	## 선언 줄 이후에 결과 줄들을 이어서 타이핑
-	if battle_log_label == null:
-		_turn_phase = 5
-		return
-	# 이미 표시된 선언 줄 위에 결과 줄들을 이어서 타이핑
-	var all_lines: Array = []
-	all_lines.append(_turn_action_line)
-	all_lines.append_array(_turn_result_lines)
-	# 선언 줄은 이미 표시 완료 → 결과만 타이핑
-	_tw_lines.clear()
-	for l in all_lines:
-		_tw_lines.append(str(l))
-	_tw_current_line = 1  # 0번(선언)은 이미 완료
-	_tw_char_index = 0
-	_tw_timer = 0.0
-	_tw_done = false
-	_tw_displayed.clear()
-	_tw_displayed.append(_turn_action_line)  # 선언 줄은 이미 완료된 것으로
-	_tw_callback = Callable()
-	_tw_callback_after_line = -1
-	_tw_callback_fired = false
-	_tw_pause_timer = 0.0
-	_turn_phase = 5
-
-
-func _prepare_hero_turn(hero: Hero) -> void:
-	## 턴제: 영웅 행동 선언 줄 설정 + 공격 콜백 준비
-	if hero == null or hero.is_dead:
-		return
-
-	# 스킬 결정 (선언 줄용)
-	var skill_id: String = ""
-	if not hero.queued_skill.is_empty():
-		skill_id = hero.queued_skill
-	else:
-		var auto_skill: String = _pick_auto_skill(hero)
-		if not auto_skill.is_empty():
-			skill_id = auto_skill
-		else:
-			skill_id = "basic_attack"
-
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-	if skill_data.is_empty() or skill_id == "basic_attack":
-		_turn_action_line = hero.hero_name + "의 공격!"
-	else:
-		var mp_cost: int = int(skill_data.get("mp_cost", 0))
-		if (mp_cost > 0 and hero.current_mp < mp_cost) or _should_skip_skill_due_to_active_buff(hero, skill_data):
-			_turn_action_line = hero.hero_name + "의 공격!"
-		else:
-			var sn: String = skill_data.get("name", "스킬")
-			var skill_type: String = skill_data.get("type", "physical")
-			if skill_type in ["buff", "heal", "resurrect"]:
-				_turn_action_line = hero.hero_name + "은(는) " + sn + "을(를) 사용!"
-			else:
-				_turn_action_line = hero.hero_name + "은(는) " + sn + "을(를) 사용!"
-
-	# 공격 콜백: 실제 실행은 선언 타이핑 완료 후
-	_turn_pending_attack = func():
-		_turn_collecting_results = true
-		_turn_stage_hits = true
-		_turn_staged_hits.clear()
-		_execute_hero_action_turn(hero)
-		_turn_stage_hits = false
-		_turn_collecting_results = false
-
-
-func _prepare_enemy_turn(enemy: BattleEnemy) -> void:
-	## 턴제: 적 행동 선언 줄 설정 + 공격 콜백 준비
-	if enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
-		return
-
-	_turn_action_line = enemy.enemy_name + "의 공격!"
-
-	_turn_pending_attack = func():
-		_turn_collecting_results = true
-		_turn_stage_hits = true
-		_turn_staged_hits.clear()
-		_execute_enemy_action(enemy)
-		_turn_stage_hits = false
-		_turn_collecting_results = false
-
-
-func _execute_hero_action_turn(hero: Hero) -> void:
-	## 턴제용 영웅 행동: ATB 체크 없이 바로 실행
-	if hero == null or hero.is_dead:
-		return
-
-	# 스킬 선택: 예약 스킬 우선, 없으면 자동 선택
-	var skill_id: String = ""
-	if not hero.queued_skill.is_empty():
-		skill_id = hero.queued_skill
-	else:
-		var auto_skill: String = _pick_auto_skill(hero)
-		if not auto_skill.is_empty():
-			skill_id = auto_skill
-		else:
-			skill_id = "basic_attack"
-
-	# 예약 스킬 타겟 정보 저장 후 클리어
-	var queued_enemy: Object = hero.queued_skill_enemy
-	var queued_ally_id: String = hero.queued_skill_ally_id
-	var is_queued: bool = not hero.queued_skill.is_empty()
-	hero.queued_skill = ""
-	hero.queued_skill_enemy = null
-	hero.queued_skill_ally_id = ""
-
-	var skill_data: Dictionary = DataManager.get_skill(skill_id)
-
-	if skill_data.is_empty():
-		skill_id = "basic_attack"
-		skill_data = DataManager.get_skill("basic_attack")
-	elif skill_id != "basic_attack":
-		var required_mp: int = int(skill_data.get("mp_cost", 0))
-		if required_mp > 0 and hero.current_mp < required_mp:
-			skill_id = "basic_attack"
-			skill_data = DataManager.get_skill("basic_attack")
-			is_queued = false
-		elif _should_skip_skill_due_to_active_buff(hero, skill_data):
-			skill_id = "basic_attack"
-			skill_data = DataManager.get_skill("basic_attack")
-			is_queued = false
-
-	# 히어로 카드 공격 애니메이션
-	BattleManager.hero_attacked.emit(hero.id)
-
-	# 예약 스킬이면 저장된 타겟으로 실행
-	if is_queued and skill_id != "basic_attack":
-		var skill_type: String = skill_data.get("type", "physical")
-		var target_type: String = skill_data.get("target", "single_enemy")
-		if skill_type == "buff" or skill_type == "resurrect":
-			_execute_special_skill(hero, skill_id, skill_data)
-		elif queued_enemy != null and is_instance_valid(queued_enemy):
-			var enemy_target: BattleEnemy = queued_enemy as BattleEnemy
-			if skill_type == "heal":
-				_execute_heal_on_enemy(hero, skill_id, skill_data, enemy_target)
-			else:
-				_execute_single_attack(hero, skill_id, skill_data, enemy_target)
-				_apply_post_attack_effects(hero, skill_id, skill_data, enemy_target)
-		elif not queued_ally_id.is_empty():
-			var ally: Hero = _find_hero_by_id(queued_ally_id)
-			if skill_type == "heal":
-				_execute_ally_skill(hero, skill_id, skill_data, "single_ally", ally)
-			elif skill_type == "resurrect":
-				_execute_special_skill(hero, skill_id, skill_data)
-			else:
-				_execute_attack_on_ally(hero, skill_id, skill_data, ally)
-		else:
-			match target_type:
-				"self":
-					_execute_special_skill(hero, skill_id, skill_data)
-				"single_ally", "all_allies":
-					if skill_type == "heal":
-						_execute_ally_skill(hero, skill_id, skill_data, target_type)
-					else:
-						_execute_special_skill(hero, skill_id, skill_data)
-				"all_enemies":
-					_execute_aoe_attack(hero, skill_id, skill_data)
-				_:
-					_execute_single_attack(hero, skill_id, skill_data)
-					_apply_post_attack_effects(hero, skill_id, skill_data)
-		# MP 소모
-		var mp_cost: int = int(skill_data.get("mp_cost", 0))
-		if mp_cost > 0:
-			hero.use_mp(mp_cost)
-	else:
-		# 기본공격 또는 자동 스킬
-		if skill_id != "basic_attack":
-			var mp_cost: int = int(skill_data.get("mp_cost", 0))
-			if mp_cost > 0:
-				hero.use_mp(mp_cost)
-		var target_type: String = skill_data.get("target", "single_enemy")
-		var skill_type: String = skill_data.get("type", "physical")
-		if skill_type == "buff" or skill_type == "resurrect":
-			_execute_special_skill(hero, skill_id, skill_data)
-		elif skill_type == "heal":
-			_execute_ally_skill(hero, skill_id, skill_data, target_type)
-		else:
-			match target_type:
-				"single_ally", "all_allies":
-					_execute_ally_skill(hero, skill_id, skill_data, target_type)
-				"all_enemies":
-					_execute_aoe_attack(hero, skill_id, skill_data)
-				_:
-					_execute_single_attack(hero, skill_id, skill_data)
-		# 기본 공격 시 마나 +2 회복
-		if skill_id == "basic_attack":
-			hero.restore_mp(2)
-#endregion
 
 
 func _get_alive_heroes_in_battle(_require_face_chip: bool = true) -> Array:
@@ -1996,8 +1554,6 @@ func _execute_hero_action(hero: Hero) -> void:
 				_execute_aoe_attack(hero, skill_id, skill_data)
 			_:
 				_execute_single_attack(hero, skill_id, skill_data)
-		# 기본 공격 시 마나 +2 회복
-		hero.restore_mp(2)
 
 
 func _execute_enemy_action(enemy: BattleEnemy) -> void:
@@ -2244,11 +1800,12 @@ func _estimate_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Diction
 			var effective_atk: float = float(hero.get_atk()) * skill_mult + float(skill_flat)
 			damage = _calc_physical_damage(effective_atk, target.get_p_def())
 
-	# 스킬 레벨 보너스 (레벨당 +10%, 기본공격 제외)
+	# 스킬 레벨 보너스
 	if resolved_skill_id != "basic_attack" and resolved_skill_id != "":
 		var skill_lv: int = hero.get_skill_level(resolved_skill_id)
 		if skill_lv > 1:
-			damage = int(float(damage) * (1.0 + 0.1 * float(skill_lv - 1)))
+			var lv_bonus: float = float(DataManager.get_formula("damage").get("skill_level_bonus_per_level", 0.1))
+			damage = int(float(damage) * (1.0 + lv_bonus * float(skill_lv - 1)))
 
 	return maxi(1, damage)
 
@@ -2474,15 +2031,8 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 
 		total_damage += damage
 		target.take_damage(damage)
-		if _turn_stage_hits:
-			# 턴제: 피격 이펙트/데미지숫자를 지연 큐에 저장
-			_turn_staged_hits.append({
-				"target": target, "damage": damage, "is_crit": is_crit,
-				"is_enemy_target": true, "any_crit": any_crit
-			})
-		else:
-			target.play_hit_effect(is_crit)
-			target.show_damage_number(damage, is_crit)
+		target.play_hit_effect(is_crit)
+		target.show_damage_number(damage, is_crit)
 
 	_show_hero_face_chip(hero.id, false, 0, any_crit, 1.15)
 
@@ -2499,8 +2049,8 @@ func _execute_single_attack(hero: Hero, skill_id: String, skill_data: Dictionary
 		log_lines.append(target.enemy_name + "을(를) 쓰러뜨렸다!")
 	show_battle_text(log_lines)
 
-	# 크리티컬 시 진동 효과 (스테이징 시 지연)
-	if any_crit and not _turn_stage_hits:
+	# 크리티컬 시 진동 효과
+	if any_crit:
 		play_critical_shake()
 
 	# 도발 효과 적용 (방패 강타 등)
@@ -2556,14 +2106,8 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 
 		aoe_total_damage += damage
 		target.take_damage(damage)
-		if _turn_stage_hits:
-			_turn_staged_hits.append({
-				"target": target, "damage": damage, "is_crit": is_crit,
-				"is_enemy_target": true, "any_crit": is_crit
-			})
-		else:
-			target.play_hit_effect(is_crit)
-			target.show_damage_number(damage, is_crit)
+		target.play_hit_effect(is_crit)
+		target.show_damage_number(damage, is_crit)
 
 		if not target.is_alive():
 			aoe_defeated.append(target.enemy_name)
@@ -2576,8 +2120,8 @@ func _execute_aoe_attack(hero: Hero, skill_id: String, skill_data: Dictionary) -
 		log_lines.append(defeated_name + "을(를) 쓰러뜨렸다!")
 	show_battle_text(log_lines)
 
-	# 크리티컬이 하나라도 있으면 진동 (스테이징 시 지연)
-	if any_crit and not _turn_stage_hits:
+	# 크리티컬이 하나라도 있으면 진동
+	if any_crit:
 		play_critical_shake()
 	_show_hero_face_chip(hero.id, false, 0, any_crit, 1.2)
 
@@ -2719,12 +2263,13 @@ func _calc_skill_damage(hero: Hero, target: BattleEnemy, skill_data: Dictionary,
 		damage = _calc_physical_damage(effective_atk, target.get_p_def())
 		crit_attack_base = effective_atk
 
-	# 스킬 레벨 보너스 (레벨당 +10%, 기본공격 제외)
+	# 스킬 레벨 보너스 (레벨당 보너스, 기본공격 제외)
 	if resolved_skill_id != "basic_attack" and resolved_skill_id != "":
 		var skill_lv: int = hero.get_skill_level(resolved_skill_id)
 		if skill_lv > 1:
-			damage = int(float(damage) * (1.0 + 0.1 * float(skill_lv - 1)))
-			crit_attack_base *= (1.0 + 0.1 * float(skill_lv - 1))
+			var lv_bonus: float = float(DataManager.get_formula("damage").get("skill_level_bonus_per_level", 0.1))
+			damage = int(float(damage) * (1.0 + lv_bonus * float(skill_lv - 1)))
+			crit_attack_base *= (1.0 + lv_bonus * float(skill_lv - 1))
 
 	if is_crit:
 		damage = _calc_critical_damage_from_attack(crit_attack_base)
@@ -2739,12 +2284,13 @@ func _calc_heal_amount(hero: Hero, skill_data: Dictionary, skill_id: String = ""
 	var int_stat: int = hero.get_base_stat("wis")
 	var base_heal: float = heal_base + float(int_stat) * multiplier
 
-	# 스킬 레벨 보너스 (레벨당 +10%)
+	# 스킬 레벨 보너스
 	var resolved_id: String = skill_id if not skill_id.is_empty() else str(skill_data.get("id", ""))
 	if resolved_id != "" and resolved_id != "basic_attack":
 		var skill_lv: int = hero.get_skill_level(resolved_id)
 		if skill_lv > 1:
-			base_heal *= (1.0 + 0.1 * float(skill_lv - 1))
+			var lv_bonus: float = float(DataManager.get_formula("damage").get("skill_level_bonus_per_level", 0.1))
+			base_heal *= (1.0 + lv_bonus * float(skill_lv - 1))
 
 	return _round_half_up(base_heal)
 
@@ -2838,18 +2384,9 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	# 도발 상태였으면 카운트 소모
 	var was_taunting := target.consume_taunt()
 
-	if _turn_stage_hits:
-		# 턴제: 데미지 적용은 하되 시각 피드백은 지연
-		PartyManager.on_hero_damaged(target, damage)
-		BattleManager.hero_damaged.emit(target.id)
-		_turn_staged_hits.append({
-			"target": target, "damage": damage, "is_crit": is_crit,
-			"is_enemy_target": false, "hero_id": target.id
-		})
-	else:
-		PartyManager.on_hero_damaged(target, damage)
-		_show_hero_face_chip(target.id, true, damage, is_crit, 1.25)
-		BattleManager.hero_damaged.emit(target.id)
+	PartyManager.on_hero_damaged(target, damage)
+	_show_hero_face_chip(target.id, true, damage, is_crit, 1.25)
+	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
 
 	# 고전 RPG 스타일 로그
@@ -2876,16 +2413,24 @@ func _calc_enemy_damage(enemy: BattleEnemy, target: Hero, is_crit: bool) -> int:
 
 
 func _calc_physical_damage(atk: float, def_val: float) -> int:
-	return maxi(1, _round_half_up(atk / 2.0 - def_val / 4.0))
+	var f: Dictionary = DataManager.get_formula("damage", "physical")
+	var atk_m: float = float(f.get("atk_mult", 0.5))
+	var def_m: float = float(f.get("def_mult", 0.25))
+	return maxi(int(f.get("min", 1)), _round_half_up(atk * atk_m - def_val * def_m))
 
 
 func _calc_magic_damage(matk: float, mdef: float) -> int:
-	return maxi(1, _round_half_up(matk / 2.0 - mdef / 4.0))
+	var f: Dictionary = DataManager.get_formula("damage", "magic")
+	var matk_m: float = float(f.get("matk_mult", 0.5))
+	var mdef_m: float = float(f.get("mdef_mult", 0.25))
+	return maxi(int(f.get("min", 1)), _round_half_up(matk * matk_m - mdef * mdef_m))
 
 
 func _calc_critical_damage_from_attack(attack_value: float) -> int:
-	## 크리티컬: 방어 무시, ATK/2 그대로
-	return maxi(1, _round_half_up(attack_value / 2.0))
+	## 크리티컬: 방어 무시
+	var f: Dictionary = DataManager.get_formula("damage", "critical")
+	var atk_m: float = float(f.get("atk_mult", 0.5))
+	return maxi(int(f.get("min", 1)), _round_half_up(attack_value * atk_m))
 
 
 func _round_half_up(value: float) -> int:
@@ -4249,14 +3794,7 @@ func is_typewriter_done() -> bool:
 
 
 func show_battle_text(lines: Array) -> void:
-	## 턴제 결과 수집 중이면 결과에 추가 (선언 줄 제외, 결과만)
-	if _turn_collecting_results:
-		# 첫 줄(선언)은 이미 _turn_action_line에 있으므로 결과만 수집
-		for i in lines.size():
-			if i > 0:  # 첫 줄(선언) 스킵
-				_turn_result_lines.append(str(lines[i]))
-		return
-	## 즉시 표시 (타이핑 없이) — ATB 모드 호환용
+	## 즉시 표시 (타이핑 없이)
 	if battle_log_label == null:
 		battle_log_label = get_node_or_null("MainVBox/BattleLogPanel/BattleLogLabel")
 	if battle_log_label == null:

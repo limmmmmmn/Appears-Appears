@@ -11,9 +11,10 @@ var enemy_id: String = ""
 var enemy_name: String = ""
 var enemy_type: String = "normal"  # normal, elite, boss
 
-const DROP_RATE_MULTIPLIER: float = 3.0
-const BONUS_EQUIP_DROP_BASE: float = 0.35
-const ELITE_BONUS_DROP_CHANCE: float = 0.9
+# 드롭률 (formulas.json에서 로드)
+var DROP_RATE_MULTIPLIER: float = 3.0
+var BONUS_EQUIP_DROP_BASE: float = 0.35
+var ELITE_BONUS_DROP_CHANCE: float = 0.9
 
 # 고유 식별자 (전투창 간 구분용)
 static var _uid_counter: int = 0
@@ -82,13 +83,14 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	base_luk = int(stats.get("luk", 2))
 	damage_type = str(data.get("damage_type", "physical"))
 
-	# 엘리트 버전이면 스탯 강화!
+	# 엘리트 버전이면 스탯 강화! (formulas.json)
 	if is_elite_version:
+		var ef: Dictionary = DataManager.get_formula("elite") as Dictionary
 		enemy_name = "⭐ " + enemy_name
 		enemy_type = "elite"
-		max_hp = int(max_hp * 2.0)  # HP 2배
-		base_str = int(base_str * 1.5)  # 공격력 1.5배
-		base_def = int(base_def * 1.5)  # 방어력 1.5배
+		max_hp = int(max_hp * float(ef.get("hp_multiplier", 2.0)))
+		base_str = int(base_str * float(ef.get("atk_multiplier", 1.5)))
+		base_def = int(base_def * float(ef.get("def_multiplier", 1.5)))
 
 	# 트링켓 난이도 배율 적용 (적 스탯 강화)
 	if GameManager != null and GameManager.has_method("get_trinket_enemy_stat_multiplier"):
@@ -105,14 +107,15 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	current_hp = max_hp
 	action_timer = 0.0
 	
-	# 보상 (엘리트는 3배 + 최소 보장)
+	# 보상 (엘리트는 배수 + 최소 보장, formulas.json)
 	var rewards: Dictionary = data.get("rewards", {})
-	var reward_mult: float = 3.0 if is_elite_version else 1.0
+	var ef2: Dictionary = DataManager.get_formula("elite") as Dictionary
+	var reward_mult: float = float(ef2.get("reward_multiplier", 3.0)) if is_elite_version else 1.0
 	exp_reward = int(int(rewards.get("exp", 0)) * reward_mult)
 	gold_min = int(int(rewards.get("gold_min", 1)) * reward_mult)
 	gold_max = int(int(rewards.get("gold_max", 5)) * reward_mult)
 	if is_elite_version:
-		gold_min = maxi(gold_min, 20)  # 엘리트 최소 골드 보장
+		gold_min = maxi(gold_min, int(ef2.get("min_gold", 20)))
 	
 	# 드랍 테이블
 	drop_table = data.get("drop_table", [])
@@ -185,7 +188,8 @@ func get_p_def() -> int:
 	return base_def
 
 func get_m_def() -> int:
-	return int(round(float(base_int) * 0.5))
+	var f: Dictionary = DataManager.get_formula("stats", "mdef")
+	return int(round(float(base_int) * float(f.get("multiplier", 0.5))))
 
 func get_dex() -> int:
 	return base_dex
@@ -197,10 +201,12 @@ func get_luk() -> int:
 	return base_luk
 
 func get_eva() -> float:
-	return base_dex * 0.3 + base_luk * 0.1
+	var ef: Dictionary = DataManager.get_formula("stats", "evasion")
+	return base_dex * 0.3 + base_luk * float(ef.get("multiplier", 0.1))
 
 func get_crit() -> float:
-	return clampf(base_luk * 0.5, 0.0, 95.0)
+	var f: Dictionary = DataManager.get_formula("stats", "crit_chance")
+	return clampf(base_luk * float(f.get("multiplier", 0.5)), float(f.get("min", 0.0)), float(f.get("max", 95.0)))
 #endregion
 
 
@@ -244,12 +250,12 @@ func reset_action_timer() -> void:
 
 
 func get_action_delay() -> float:
-	# 보스는 고정 2.5초, 일반/엘리트는 DEX 기반
+	var f: Dictionary = DataManager.get_formula("atb", "enemy_action")
 	var base_delay: float
 	if enemy_type == "boss":
-		base_delay = 2.5
+		base_delay = float(f.get("boss_fixed_delay", 2.5))
 	else:
-		base_delay = maxf(0.5, 2.0 - get_dex() * 0.05)
+		base_delay = maxf(float(f.get("min_delay", 0.5)), float(f.get("base_delay", 2.0)) - get_dex() * float(f.get("dex_reduction", 0.05)))
 	# ATB 슬로우 디버프 적용
 	if _atb_slow_remaining > 0.0:
 		base_delay *= (1.0 + _atb_slow_value)
@@ -304,17 +310,23 @@ func get_exp_reward() -> int:
 
 
 func roll_drops() -> Array:
-	## 드랍 판정 - LUK 보정 적용
+	## 드랍 판정 - LUK 보정 적용 (formulas.json)
+	var loot_f: Dictionary = DataManager.get_formula("loot") as Dictionary
+	DROP_RATE_MULTIPLIER = float(loot_f.get("drop_rate_multiplier", 3.0))
+	BONUS_EQUIP_DROP_BASE = float(loot_f.get("bonus_equip_drop_base", 0.35))
+	ELITE_BONUS_DROP_CHANCE = float(loot_f.get("elite_bonus_drop_chance", 0.9))
+	var max_chance: float = float(loot_f.get("max_drop_chance", 0.95))
 	var drops: Array = []
 	var party_luk: int = PartyManager.get_party_average_luk()
-	var luk_multiplier: float = 1.0 + (party_luk / 100.0)
+	var luk_divisor: float = float(loot_f.get("luk_bonus_divisor", 100.0))
+	var luk_multiplier: float = 1.0 + (party_luk / luk_divisor)
 	
 	# 1. 기존 드랍 테이블 판정
 	for drop in drop_table:
 		var drop_dict: Dictionary = drop as Dictionary
 		var item_id: String = str(drop_dict.get("item_id", ""))
 		var base_chance: float = float(drop_dict.get("chance", 0.0))
-		var final_chance: float = clampf(base_chance * luk_multiplier * DROP_RATE_MULTIPLIER, 0.0, 0.95)
+		var final_chance: float = clampf(base_chance * luk_multiplier * DROP_RATE_MULTIPLIER, 0.0, max_chance)
 		
 		if randf() < final_chance:
 			# 트링켓은 일반 드랍에서 제외 (보스/상점/이벤트 획득 전용)
@@ -326,7 +338,7 @@ func roll_drops() -> Array:
 	
 	# 2. 일반몹 추가 장비 드랍 (common 등급만)
 	if enemy_type == "normal" and not is_elite_version:
-		var equip_drop_chance: float = clampf(BONUS_EQUIP_DROP_BASE * luk_multiplier, 0.0, 0.95)
+		var equip_drop_chance: float = clampf(BONUS_EQUIP_DROP_BASE * luk_multiplier, 0.0, max_chance)
 		if randf() < equip_drop_chance:
 			var common_equip: String = _roll_random_common_equipment()
 			if not common_equip.is_empty():
@@ -358,7 +370,8 @@ func _roll_random_elite_equipment() -> String:
 		"sword_rare", "dagger_rare", "staff_rare", "bow_rare",
 		"shield_rare", "plate_helmet", "plate_armor",
 	]
-	if randf() < 0.3 and not rare_pool.is_empty():
+	var loot_f: Dictionary = DataManager.get_formula("loot") as Dictionary
+	if randf() < float(loot_f.get("rare_equip_chance", 0.3)) and not rare_pool.is_empty():
 		return rare_pool[randi() % rare_pool.size()]
 	if elite_equipment.is_empty():
 		return ""

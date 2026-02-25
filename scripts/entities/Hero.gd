@@ -7,11 +7,12 @@ var hero_name: String = ""
 var class_id: String = ""
 var hero_class_name: String = ""  # class_name은 Godot 예약어
 
-# 레벨/경험치
+# 레벨/경험치 (formulas.json에서 로드)
 const MAX_LEVEL: int = 50
-const BASE_EXP: int = 100
-const EXP_EXPONENT: float = 1.5
-const BENCH_EXP_RATIO: float = 0.5
+static var BASE_EXP: int = 100
+static var EXP_EXPONENT: float = 1.5
+static var BENCH_EXP_RATIO: float = 0.5
+static var _formulas_loaded: bool = false
 
 # 성장/전투 상수
 const SEED_CAP: int = 99
@@ -104,12 +105,23 @@ static func create_from_id(hero_id: String) -> Hero:
 	return hero
 
 
+static func _load_formulas_once() -> void:
+	if _formulas_loaded:
+		return
+	_formulas_loaded = true
+	var exp_f: Dictionary = DataManager.get_formula("exp") as Dictionary
+	BASE_EXP = int(exp_f.get("base_exp", 100))
+	EXP_EXPONENT = float(exp_f.get("exp_exponent", 1.5))
+	BENCH_EXP_RATIO = float(exp_f.get("bench_exp_ratio", 0.5))
+
+
 static func get_required_exp_for_level(level_value: int) -> int:
 	## 현재 레벨 -> 다음 레벨에 필요한 EXP
 	return int(round(BASE_EXP * pow(float(maxi(1, level_value)), EXP_EXPONENT)))
 
 
 func _initialize(hero_id: String) -> void:
+	_load_formulas_once()
 	var hero_data: Dictionary = DataManager.get_hero(hero_id)
 	if hero_data.is_empty():
 		return
@@ -281,8 +293,9 @@ func get_max_hp() -> int:
 
 
 func get_max_mp() -> int:
-	## MP = WIS * 3 + 장비 mp 보정
-	return get_base_stat("wis") * 3 + _get_equipment_stat("mp")
+	var f: Dictionary = DataManager.get_formula("stats", "mp")
+	var mult: int = int(f.get("multiplier", 3))
+	return get_base_stat("wis") * mult + _get_equipment_stat("mp")
 
 
 func get_str() -> int:
@@ -328,10 +341,11 @@ func get_p_def() -> int:
 
 
 func get_m_def() -> int:
-	# MDEF = base_mdef(0) + INT*0.5 + equipment_mdef
+	var f: Dictionary = DataManager.get_formula("stats", "mdef")
+	var mult: float = float(f.get("multiplier", 0.5))
 	var int_stat: int = get_base_stat("wis")
 	var equip_mdef: int = _get_equipment_stat("mdef") + _get_equipment_stat("m_def")
-	return int(round(float(int_stat) * 0.5)) + equip_mdef
+	return int(round(float(int_stat) * mult)) + equip_mdef
 
 
 func get_magic_attack() -> int:
@@ -350,19 +364,22 @@ func get_spd() -> int:
 
 
 func get_crit() -> float:
-	# crit_chance = LUK * 0.5 + equipment_crit_chance
+	var f: Dictionary = DataManager.get_formula("stats", "crit_chance")
+	var mult: float = float(f.get("multiplier", 0.5))
 	var equip_crit: float = float(_get_equipment_stat("crit")) + float(_get_equipment_stat("crit_chance"))
-	return clampf(get_base_stat("luk") * 0.5 + equip_crit, 0.0, 95.0)
+	return clampf(get_base_stat("luk") * mult + equip_crit, float(f.get("min", 0.0)), float(f.get("max", 95.0)))
 
 
 func get_hit_rate() -> float:
-	# 명중은 무기/장비 성능 기반
-	return clampf(90.0 + _get_equipment_stat("hit") + _get_equipment_stat("acc"), 40.0, 100.0)
+	var f: Dictionary = DataManager.get_formula("stats", "hit_rate")
+	var base: float = float(f.get("base", 90.0))
+	return clampf(base + _get_equipment_stat("hit") + _get_equipment_stat("acc"), float(f.get("min", 40.0)), float(f.get("max", 100.0)))
 
 
 func get_eva() -> float:
-	# 회피는 장비 + 운 보정
-	return clampf(_get_equipment_stat("eva") + get_base_stat("luk") * 0.1, 0.0, 60.0)
+	var f: Dictionary = DataManager.get_formula("stats", "evasion")
+	var mult: float = float(f.get("multiplier", 0.1))
+	return clampf(_get_equipment_stat("eva") + get_base_stat("luk") * mult, float(f.get("min", 0.0)), float(f.get("max", 60.0)))
 
 
 func _get_equipment_stat(stat: String) -> int:
@@ -566,15 +583,18 @@ func reset_skill_action_timer() -> void:
 
 
 func get_action_delay() -> float:
-	# 클래스 기본 action_speed + DEX 보정, 최소 0.5
+	var f: Dictionary = DataManager.get_formula("atb", "hero_action")
 	var base_speed: float = _get_class_action_speed()
-	return maxf(0.5, base_speed - get_dex() * 0.02)
+	var dex_red: float = float(f.get("dex_reduction", 0.02))
+	return maxf(float(f.get("min_delay", 0.5)), base_speed - get_dex() * dex_red)
 
 
 func get_skill_action_delay() -> float:
-	# 스킬 ATB는 기본공격보다 느리게 충전
+	var f: Dictionary = DataManager.get_formula("atb", "hero_skill")
 	var base_speed: float = _get_class_action_speed()
-	return maxf(1.0, base_speed * 1.6 - get_dex() * 0.015)
+	var spd_mult: float = float(f.get("speed_multiplier", 1.6))
+	var dex_red: float = float(f.get("dex_reduction", 0.015))
+	return maxf(float(f.get("min_delay", 1.0)), base_speed * spd_mult - get_dex() * dex_red)
 
 
 func _get_class_action_speed() -> float:
@@ -682,7 +702,8 @@ func get_buffed_eva() -> float:
 	var base: float = get_eva()
 	if has_buff("eva_up"):
 		base += get_buff_value("eva_up")
-	return clampf(base, 0.0, 80.0)
+	var f: Dictionary = DataManager.get_formula("stats", "evasion")
+	return clampf(base, 0.0, float(f.get("buffed_max", 80.0)))
 #endregion
 
 

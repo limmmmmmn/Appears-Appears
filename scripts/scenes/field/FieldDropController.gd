@@ -129,15 +129,19 @@ func _resolve_scatter_rect(window_rect: Rect2, world_pos: Vector2, party_leader:
 func _calc_exp_orb_count(total_exp: int) -> int:
 	if total_exp <= 0:
 		return 0
-	# EXP 10당 1개, 최소 1 최대 5
-	return clampi(int(ceil(float(total_exp) / 10.0)), 1, 5)
+	var rf: Dictionary = DataManager.get_formula("rewards") as Dictionary
+	var per: int = int(rf.get("exp_orb_per", 10))
+	return clampi(int(ceil(float(total_exp) / float(maxi(1, per)))), int(rf.get("exp_orb_min", 1)), int(rf.get("exp_orb_max", 5)))
 
 
 func _split_gold_into_drop_chunks(total_gold: int) -> Array[int]:
 	var chunks: Array[int] = []
 	if total_gold <= 0:
 		return chunks
-	var max_chunks: int = clampi(int(ceil(float(total_gold) / 12.0)), 1, 8)
+	var rf: Dictionary = DataManager.get_formula("rewards") as Dictionary
+	var chunk_per: int = int(rf.get("gold_chunk_per", 12))
+	var chunk_max: int = int(rf.get("gold_chunk_max", 8))
+	var max_chunks: int = clampi(int(ceil(float(total_gold) / float(maxi(1, chunk_per)))), 1, chunk_max)
 	var remaining: int = total_gold
 	for i in range(max_chunks):
 		var remain_slots: int = max_chunks - i

@@ -1,0 +1,61 @@
+{
+	"damage": {
+		"physical": { "atk_mult": 0.5, "def_mult": 0.25, "min": 1 },
+		"magic": { "matk_mult": 0.5, "mdef_mult": 0.25, "min": 1 },
+		"critical": { "atk_mult": 0.5, "ignore_defense": true, "min": 1 },
+		"skill_level_bonus_per_level": 0.1
+	},
+	"stats": {
+		"mp": { "stat": "wis", "multiplier": 3 },
+		"mdef": { "stat": "wis", "multiplier": 0.5 },
+		"crit_chance": { "stat": "luk", "multiplier": 0.5, "min": 0.0, "max": 95.0 },
+		"evasion": { "stat": "luk", "multiplier": 0.1, "min": 0.0, "max": 60.0, "buffed_max": 80.0 },
+		"hit_rate": { "base": 90.0, "min": 40.0, "max": 100.0 }
+	},
+	"atb": {
+		"battle_fill_rate": 0.85,
+		"hero_action": { "dex_reduction": 0.02, "min_delay": 0.5 },
+		"hero_skill": { "speed_multiplier": 1.6, "dex_reduction": 0.015, "min_delay": 1.0 },
+		"enemy_action": { "base_delay": 2.0, "dex_reduction": 0.05, "min_delay": 0.5, "boss_fixed_delay": 2.5 }
+	},
+	"loot": {
+		"drop_rate_multiplier": 3.0,
+		"luk_bonus_divisor": 100.0,
+		"max_drop_chance": 0.95,
+		"bonus_equip_drop_base": 0.35,
+		"elite_bonus_drop_chance": 0.9,
+		"rare_equip_chance": 0.3
+	},
+	"elite": {
+		"hp_multiplier": 2.0,
+		"atk_multiplier": 1.5,
+		"def_multiplier": 1.5,
+		"reward_multiplier": 3.0,
+		"min_gold": 20
+	},
+	"battle": {
+		"base_escape_rate": 40.0,
+		"grudge_kills_per_level": 5,
+		"action_process_delay": 0.3,
+		"victory_post_kill_delay": 0.18
+	},
+	"exp": {
+		"base_exp": 100,
+		"exp_exponent": 1.5,
+		"bench_exp_ratio": 0.5
+	},
+	"spawning": {
+		"field_enemy_count_multiplier": 1.35,
+		"default_elite_chance": 0.15,
+		"proactive_spawn_interval": 0.45
+	},
+	"rewards": {
+		"exp_orb_per": 10,
+		"exp_orb_min": 1,
+		"exp_orb_max": 5,
+		"gold_chunk_per": 12,
+		"gold_chunk_max": 8,
+		"hp_orbs_per_kill": 1,
+		"mp_orbs_kill_divisor": 3
+	}
+}
