@@ -674,6 +674,32 @@ func get_enemy_count() -> int:
 
 func get_total_enemy_count() -> int:
 	return enemies.size()
+
+
+func apply_damage_to_all_enemies(damage: int) -> void:
+	## 합체공격: 모든 적에게 고정 데미지
+	for enemy in enemies:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if not enemy.is_alive():
+			continue
+		enemy.take_damage(damage)
+		enemy.play_hit_effect(false)
+		enemy.show_damage_number(damage, false)
+		if not enemy.is_alive():
+			_on_enemy_defeated(enemy)
+	_check_all_enemies_dead()
+
+
+func apply_blind_to_all_enemies(duration: float) -> void:
+	## 합체공격: 모든 적에게 명중률 감소
+	for enemy in enemies:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if not enemy.is_alive():
+			continue
+		if enemy.has_method("apply_debuff"):
+			enemy.apply_debuff("blind", duration, -30.0)
 #endregion
 
 
@@ -1502,6 +1528,12 @@ func _execute_hero_action(hero: Hero) -> void:
 	if skill_id != "basic_attack":
 		hero.start_skill_cooldown(skill_id)
 
+	# 합체 게이지 충전
+	if skill_id == "basic_attack":
+		BattleManager.on_hero_basic_attack()
+	else:
+		BattleManager.on_hero_skill_used()
+
 	# 히어로 카드 공격 애니메이션
 	BattleManager.hero_attacked.emit(hero.id)
 
@@ -1873,6 +1905,12 @@ func _hero_attack(hero: Hero, skill_id: String = "basic_attack") -> void:
 	hero.reset_action_timer()
 	if skill_id != "basic_attack":
 		hero.start_skill_cooldown(skill_id)
+
+	# 합체 게이지 충전
+	if skill_id == "basic_attack":
+		BattleManager.on_hero_basic_attack()
+	else:
+		BattleManager.on_hero_skill_used()
 
 	var target_type: String = skill_data.get("target", "single_enemy")
 
@@ -2404,6 +2442,15 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 
 	var action_line: String = enemy.enemy_name + "의 공격!"
 
+	# 블라인드 디버프 시 미스 확률 증가
+	var blind_miss: bool = false
+	if enemy.has_method("is_blinded") and enemy.is_blinded():
+		var blind_penalty: float = absf(enemy.get_blind_penalty())
+		blind_miss = randf() * 100 < blind_penalty
+	if blind_miss:
+		show_battle_text([action_line, "공격이 빗나갔다!"])
+		return
+
 	var is_evaded := randf() * 100 < target.get_buffed_eva()
 	if is_evaded:
 		show_battle_text([action_line, target.hero_name + "은(는) 공격을 피했다!"])
@@ -2416,6 +2463,9 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 	var was_taunting := target.consume_taunt()
 
 	PartyManager.on_hero_damaged(target, damage)
+	BattleManager.on_hero_hit()
+	if target.is_dead:
+		BattleManager.on_hero_died()
 	_show_hero_face_chip(target.id, true, damage, is_crit, 1.25)
 	BattleManager.hero_damaged.emit(target.id)
 	call_deferred("_emit_party_updated")
@@ -2942,6 +2992,7 @@ func _build_encounter_message() -> String:
 func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 	if GameManager:
 		GameManager.add_kill_count(1)
+	BattleManager.on_enemy_killed()
 	_on_local_grudge_kill()
 
 	# 보상 계산 (특성 적용)

@@ -47,6 +47,22 @@ var _hp_slot_bgs: Array[ColorRect] = []    ## 칸 배경 (빈 칸)
 var _hp_slot_fills: Array[ColorRect] = []  ## 칸 내용물 (아래서 위로 채워짐)
 var _hp_count_label: Label = null
 
+# === 합체 게이지 UI ===
+const UNITE_GAUGE_TOP_GAP: float = 4.0
+const UNITE_GAUGE_BAR_H: float = 8.0
+const UNITE_GAUGE_BTN_H: float = 18.0
+const UNITE_GAUGE_BG_COLOR := Color(0.1, 0.1, 0.15, 0.8)
+const UNITE_GAUGE_FILL_COLOR := Color(0.9, 0.7, 0.2, 0.9)
+const UNITE_GAUGE_FULL_COLOR := Color(1.0, 0.85, 0.3, 1.0)
+const UNITE_BTN_DISABLED_COLOR := Color(0.3, 0.3, 0.35, 0.7)
+const UNITE_BTN_ENABLED_COLOR := Color(0.12, 0.1, 0.06, 0.95)
+const UNITE_BTN_BORDER_COLOR := Color(1.0, 0.85, 0.3, 0.9)
+var _unite_panel: Control = null
+var _unite_gauge_bg: ColorRect = null
+var _unite_gauge_fill: ColorRect = null
+var _unite_button: Button = null
+var _unite_glow_tween: Tween = null
+
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
@@ -63,12 +79,14 @@ func _process(_delta: float) -> void:
 func _initial_setup() -> void:
 	update_display()
 	_create_potion_grid()
+	_create_unite_gauge()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		_relayout_cards()
 		_layout_potion_grid()
+		_layout_unite_gauge()
 
 
 #region 시그널
@@ -87,6 +105,9 @@ func _connect_signals() -> void:
 		if BattleManager.has_signal("hero_damaged"):
 			if not BattleManager.hero_damaged.is_connected(_on_hero_damaged):
 				BattleManager.hero_damaged.connect(_on_hero_damaged)
+		if BattleManager.has_signal("unite_gauge_changed"):
+			if not BattleManager.unite_gauge_changed.is_connected(_on_unite_gauge_changed):
+				BattleManager.unite_gauge_changed.connect(_on_unite_gauge_changed)
 #endregion
 
 
@@ -97,9 +118,9 @@ func _on_party_changed() -> void:
 #region 카드 관리
 func _rebuild_cards() -> void:
 	cards.clear()
-	# 포션 그리드는 보존
+	# 포션 그리드 & 합체 게이지 보존
 	for child in get_children():
-		if child == _potion_grid_panel:
+		if child == _potion_grid_panel or child == _unite_panel:
 			continue
 		remove_child(child)
 		child.queue_free()
@@ -122,14 +143,15 @@ func _rebuild_cards() -> void:
 
 
 func _relayout_cards() -> void:
-	## 카드를 세로 중앙 정렬 — @export 값 기반 (포션 그리드 공간 고려)
+	## 카드를 세로 중앙 정렬 — @export 값 기반 (포션 그리드 + 합체 게이지 공간 고려)
 	if cards.is_empty():
 		return
 	var card_count: int = cards.size()
 	var card_w: float = float(panel_width)
 	var card_h: float = float(card_height)
 	var potion_h: float = _get_potion_grid_height()
-	var total_h: float = card_h * float(card_count) + float(card_gap) * float(maxi(0, card_count - 1)) + POTION_GRID_TOP_GAP + potion_h
+	var unite_h: float = _get_unite_gauge_height()
+	var total_h: float = card_h * float(card_count) + float(card_gap) * float(maxi(0, card_count - 1)) + POTION_GRID_TOP_GAP + potion_h + unite_h
 	var panel_h: float = size.y
 	if panel_h <= 0:
 		var vp := get_viewport_rect().size
@@ -141,6 +163,7 @@ func _relayout_cards() -> void:
 		card.position = Vector2(0, y)
 		card.size = Vector2(card_w, card_h)
 	_layout_potion_grid()
+	_layout_unite_gauge()
 
 
 func update_display() -> void:
@@ -162,7 +185,7 @@ func update_display() -> void:
 func init_party(heroes: Array) -> void:
 	cards.clear()
 	for child in get_children():
-		if child == _potion_grid_panel:
+		if child == _potion_grid_panel or child == _unite_panel:
 			continue
 		remove_child(child)
 		child.queue_free()
@@ -586,4 +609,167 @@ func add_hp_orbs(amount: int) -> void:
 
 func get_hp_orb_count() -> int:
 	return hp_orb_count
+#endregion
+
+
+# =====================================================================
+#region 합체 게이지 UI
+# =====================================================================
+
+func _get_unite_gauge_height() -> float:
+	return UNITE_GAUGE_TOP_GAP + UNITE_GAUGE_BAR_H + 2.0 + UNITE_GAUGE_BTN_H
+
+
+func _create_unite_gauge() -> void:
+	if _unite_panel != null:
+		return
+
+	_unite_panel = Control.new()
+	_unite_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_unite_panel)
+
+	# 게이지 바 배경
+	_unite_gauge_bg = ColorRect.new()
+	_unite_gauge_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_unite_gauge_bg.color = UNITE_GAUGE_BG_COLOR
+	_unite_panel.add_child(_unite_gauge_bg)
+
+	# 게이지 바 채움
+	_unite_gauge_fill = ColorRect.new()
+	_unite_gauge_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_unite_gauge_fill.color = UNITE_GAUGE_FILL_COLOR
+	_unite_panel.add_child(_unite_gauge_fill)
+
+	# 합체공격 버튼
+	_unite_button = Button.new()
+	_unite_button.text = "합체공격: ???"
+	_unite_button.add_theme_font_size_override("font_size", 8)
+	_unite_button.disabled = true
+	_unite_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	_unite_button.pressed.connect(_on_unite_button_pressed)
+	_unite_panel.add_child(_unite_button)
+
+	_layout_unite_gauge()
+	_refresh_unite_display()
+
+
+func _layout_unite_gauge() -> void:
+	if _unite_panel == null or _potion_grid_panel == null:
+		return
+
+	var panel_y: float = _potion_grid_panel.position.y + _potion_grid_panel.size.y + UNITE_GAUGE_TOP_GAP
+	var w: float = float(panel_width) - 8.0
+	var x_offset: float = 4.0
+	_unite_panel.position = Vector2(0, panel_y)
+	_unite_panel.size = Vector2(float(panel_width), _get_unite_gauge_height())
+
+	if _unite_gauge_bg:
+		_unite_gauge_bg.position = Vector2(x_offset, 0)
+		_unite_gauge_bg.size = Vector2(w, UNITE_GAUGE_BAR_H)
+
+	if _unite_gauge_fill:
+		_unite_gauge_fill.position = Vector2(x_offset, 0)
+		var ratio: float = BattleManager.get_unite_gauge_percent() if BattleManager else 0.0
+		_unite_gauge_fill.size = Vector2(w * ratio, UNITE_GAUGE_BAR_H)
+
+	if _unite_button:
+		_unite_button.position = Vector2(x_offset, UNITE_GAUGE_BAR_H + 2.0)
+		_unite_button.size = Vector2(w, UNITE_GAUGE_BTN_H)
+
+	_apply_unite_button_style()
+
+
+func _on_unite_gauge_changed(current: float, maximum: float) -> void:
+	if _unite_gauge_fill == null or _unite_gauge_bg == null:
+		return
+	var ratio: float = current / maximum if maximum > 0.0 else 0.0
+	var w: float = _unite_gauge_bg.size.x
+	_unite_gauge_fill.size.x = w * ratio
+
+	var is_full: bool = current >= maximum
+	if is_full:
+		_unite_gauge_fill.color = UNITE_GAUGE_FULL_COLOR
+		_start_gauge_glow()
+	else:
+		_unite_gauge_fill.color = UNITE_GAUGE_FILL_COLOR
+		_stop_gauge_glow()
+
+	_refresh_unite_display()
+
+
+func _refresh_unite_display() -> void:
+	if _unite_button == null:
+		return
+
+	# 파티원 4명 미만이면 합체공격 비활성
+	var party_ready: bool = PartyManager.party.size() >= PartyManager.MAX_PARTY_SIZE if PartyManager else false
+	if not party_ready:
+		_unite_button.disabled = true
+		_unite_button.text = "—"
+		_apply_unite_button_style()
+		return
+
+	var is_full: bool = BattleManager.is_unite_gauge_full() if BattleManager else false
+	var has_battle: bool = BattleManager.get_active_battle_count() > 0 if BattleManager else false
+	_unite_button.disabled = not (is_full and has_battle)
+
+	var unite_data: Dictionary = PartyManager.get_current_unite_attack_data() if PartyManager else {}
+	var unite_id: String = str(unite_data.get("id", ""))
+	var unite_name: String = str(unite_data.get("name", "총공격"))
+
+	# 히든 태그로만 발동하는 합체공격은 발견 전까지 "???"
+	if not unite_id.is_empty() and unite_id != "default_unite":
+		if PartyManager.is_unite_uses_hidden_tag(unite_id) and not PartyManager.discovered_unite_attacks.has(unite_id):
+			unite_name = "???"
+
+	_unite_button.text = unite_name
+	_apply_unite_button_style()
+
+
+func _apply_unite_button_style() -> void:
+	if _unite_button == null:
+		return
+	var style := StyleBoxFlat.new()
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+
+	if _unite_button.disabled:
+		style.bg_color = UNITE_BTN_DISABLED_COLOR
+		style.border_color = Color(0.4, 0.4, 0.45, 0.5)
+		_unite_button.add_theme_color_override("font_color", Color(0.5, 0.5, 0.55))
+		_unite_button.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.55))
+	else:
+		style.bg_color = UNITE_BTN_ENABLED_COLOR
+		style.border_color = UNITE_BTN_BORDER_COLOR
+		_unite_button.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+
+	_unite_button.add_theme_stylebox_override("normal", style)
+	_unite_button.add_theme_stylebox_override("disabled", style)
+	_unite_button.add_theme_stylebox_override("hover", style)
+	_unite_button.add_theme_stylebox_override("pressed", style)
+
+
+func _start_gauge_glow() -> void:
+	if _unite_glow_tween != null and _unite_glow_tween.is_valid():
+		return
+	_unite_glow_tween = create_tween().set_loops()
+	_unite_glow_tween.tween_property(_unite_gauge_fill, "color", Color(1.0, 0.95, 0.5, 1.0), 0.4)
+	_unite_glow_tween.tween_property(_unite_gauge_fill, "color", UNITE_GAUGE_FULL_COLOR, 0.4)
+
+
+func _stop_gauge_glow() -> void:
+	if _unite_glow_tween != null and _unite_glow_tween.is_valid():
+		_unite_glow_tween.kill()
+	_unite_glow_tween = null
+
+
+func _on_unite_button_pressed() -> void:
+	if BattleManager and BattleManager.is_unite_gauge_full():
+		BattleManager.execute_unite_attack()
 #endregion

@@ -91,7 +91,9 @@ func _serialize_game_state() -> Dictionary:
 		"obtained_legendaries": GameManager.obtained_legendaries.duplicate(),
 		"obtained_trinkets": GameManager.get_obtained_trinkets(),
 		"starting_trinket_id": GameManager.starting_trinket_id,
-		"current_state": GameManager.current_state
+		"current_state": GameManager.current_state,
+		"discovered_synergies": PartyManager.discovered_synergies.duplicate(),
+		"discovered_unite_attacks": PartyManager.discovered_unite_attacks.duplicate()
 	}
 
 
@@ -201,6 +203,16 @@ func _deserialize_game_state(data: Dictionary) -> void:
 	# current_state 복원 (enum은 int로 저장됨)
 	var saved_state: int = int(data.get("current_state", GameManager.GameState.FIELD))
 	GameManager.current_state = saved_state as GameManager.GameState
+
+	# 발견된 시너지/합체공격 복원
+	var saved_synergies: Dictionary = data.get("discovered_synergies", {})
+	PartyManager.discovered_synergies.clear()
+	for key in saved_synergies.keys():
+		PartyManager.discovered_synergies[str(key)] = true
+	var saved_unites: Dictionary = data.get("discovered_unite_attacks", {})
+	PartyManager.discovered_unite_attacks.clear()
+	for key in saved_unites.keys():
+		PartyManager.discovered_unite_attacks[str(key)] = true
 	
 	GameManager.gold_changed.emit(GameManager.gold)
 	GameManager.trinkets_changed.emit(GameManager.get_obtained_trinkets())

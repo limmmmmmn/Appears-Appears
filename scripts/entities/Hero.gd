@@ -88,6 +88,7 @@ var skill_toggles: Dictionary = {}
 var skill_priority: Array = []
 
 var tags: Array = []
+var hidden_tags: Array = []
 var portrait: String = ""
 var field_sprite: String = ""
 
@@ -135,7 +136,8 @@ func _initialize(hero_id: String) -> void:
 
 	var class_data: Dictionary = DataManager.get_class_data(class_id)
 	hero_class_name = class_data.get("name", "Unknown")
-	tags = class_data.get("tags", []) + hero_data.get("tags", [])
+	tags = hero_data.get("tags", [])
+	hidden_tags = hero_data.get("hidden_tags", [])
 
 	var base_stats: Dictionary = DataManager.get_class_base_stats(class_id)
 	base_hp = int(base_stats.get("hp", 30))
@@ -283,6 +285,26 @@ func _normalize_stat_key(stat: String) -> String:
 			return stat
 
 
+#region 태그
+func get_all_tags() -> Array:
+	## tags + hidden_tags + 클래스의 tags를 합친 전체 태그 목록
+	var result: Array = tags.duplicate()
+	for t in hidden_tags:
+		if not result.has(t):
+			result.append(t)
+	var class_data: Dictionary = DataManager.get_class_data(class_id)
+	var class_tags: Array = class_data.get("tags", [])
+	for t in class_tags:
+		if not result.has(t):
+			result.append(t)
+	return result
+
+
+func has_tag(tag: String) -> bool:
+	return tag in get_all_tags()
+#endregion
+
+
 #region 스탯 계산
 func get_base_stat(stat: String) -> int:
 	var key: String = _normalize_stat_key(stat)
@@ -291,8 +313,48 @@ func get_base_stat(stat: String) -> int:
 	return int(level_stats.get(key, 0)) + int(seed_bonus.get(key, 0))
 
 
+func _get_synergy_mult(stat_key: String) -> float:
+	## 시너지 배율 합산 (all_stats_mult, hp_mult, atk_mult, def_mult 등)
+	var mult: float = 0.0
+	if PartyManager == null:
+		return mult
+	var effects: Array = PartyManager.get_synergy_effects()
+	for effect in effects:
+		var etype: String = str(effect.get("type", ""))
+		var value: float = float(effect.get("value", 0.0))
+		if etype == "all_stats_mult":
+			mult += value
+		elif etype == "hp_mult" and stat_key == "hp":
+			mult += value
+		elif etype == "atk_mult" and stat_key == "atk":
+			mult += value
+		elif etype == "def_mult" and stat_key == "def":
+			mult += value
+	return mult
+
+
+func _get_synergy_add(stat_key: String) -> float:
+	## 시너지 고정 수치 합산 (eva_add, crit_add 등)
+	var add: float = 0.0
+	if PartyManager == null:
+		return add
+	var effects: Array = PartyManager.get_synergy_effects()
+	for effect in effects:
+		var etype: String = str(effect.get("type", ""))
+		var value: float = float(effect.get("value", 0.0))
+		if etype == "eva_add" and stat_key == "eva":
+			add += value
+		elif etype == "crit_add" and stat_key == "crit":
+			add += value
+	return add
+
+
 func get_max_hp() -> int:
-	return get_base_stat("hp") + _get_equipment_stat("hp")
+	var base: int = get_base_stat("hp") + _get_equipment_stat("hp")
+	var synergy_mult: float = _get_synergy_mult("hp")
+	if synergy_mult > 0.0:
+		return int(float(base) * (1.0 + synergy_mult))
+	return base
 
 
 func get_max_mp() -> int:
@@ -301,7 +363,11 @@ func get_max_mp() -> int:
 
 
 func get_str() -> int:
-	return get_base_stat("str")
+	var base: int = get_base_stat("str")
+	var synergy_mult: float = _get_synergy_mult("str")
+	if synergy_mult > 0.0:
+		return int(float(base) * (1.0 + synergy_mult))
+	return base
 
 
 func get_def() -> int:
@@ -314,15 +380,27 @@ func get_int() -> int:
 
 
 func get_dex() -> int:
-	return get_base_stat("agi")
+	var base: int = get_base_stat("agi")
+	var synergy_mult: float = _get_synergy_mult("agi")
+	if synergy_mult > 0.0:
+		return int(float(base) * (1.0 + synergy_mult))
+	return base
 
 
 func get_luk() -> int:
-	return get_base_stat("luk")
+	var base: int = get_base_stat("luk")
+	var synergy_mult: float = _get_synergy_mult("luk")
+	if synergy_mult > 0.0:
+		return int(float(base) * (1.0 + synergy_mult))
+	return base
 
 
 func get_attack() -> int:
-	return get_base_stat("str") + _get_equipment_stat("atk")
+	var base: int = get_base_stat("str") + _get_equipment_stat("atk")
+	var synergy_mult: float = _get_synergy_mult("atk")
+	if synergy_mult > 0.0:
+		return int(float(base) * (1.0 + synergy_mult))
+	return base
 
 
 func get_atk() -> int:
@@ -335,7 +413,11 @@ func get_defense() -> int:
 	var growth_def: int = int(growth.get("def", 0))
 	var level_bonus: int = growth_def * maxi(0, level - 1)
 	var seed_bonus_def: int = int(seed_bonus.get("def", 0))
-	return base_def + level_bonus + seed_bonus_def + _get_equipment_stat("def")
+	var base: int = base_def + level_bonus + seed_bonus_def + _get_equipment_stat("def")
+	var synergy_mult: float = _get_synergy_mult("def")
+	if synergy_mult > 0.0:
+		return int(float(base) * (1.0 + synergy_mult))
+	return base
 
 
 func get_p_def() -> int:
@@ -352,7 +434,11 @@ func get_m_def() -> int:
 
 func get_magic_attack() -> int:
 	# INT 기반 + 장비 마법공격 보정(matk/matk_bonus/mag/int)
-	return get_base_stat("wis") + _get_equipment_stat("matk") + _get_equipment_stat("matk_bonus") + _get_equipment_stat("mag") + _get_equipment_stat("int")
+	var base: int = get_base_stat("wis") + _get_equipment_stat("matk") + _get_equipment_stat("matk_bonus") + _get_equipment_stat("mag") + _get_equipment_stat("int")
+	var synergy_mult: float = _get_synergy_mult("wis")
+	if synergy_mult > 0.0:
+		return int(float(base) * (1.0 + synergy_mult))
+	return base
 
 
 func get_atb_speed() -> float:
@@ -369,7 +455,8 @@ func get_crit() -> float:
 	var f: Dictionary = DataManager.get_formula("stats", "crit_chance")
 	var mult: float = float(f.get("multiplier", 0.5))
 	var equip_crit: float = float(_get_equipment_stat("crit")) + float(_get_equipment_stat("crit_chance"))
-	return clampf(get_base_stat("luk") * mult + equip_crit, float(f.get("min", 0.0)), float(f.get("max", 95.0)))
+	var synergy_crit: float = _get_synergy_add("crit")
+	return clampf(get_base_stat("luk") * mult + equip_crit + synergy_crit, float(f.get("min", 0.0)), float(f.get("max", 95.0)))
 
 
 func get_hit_rate() -> float:
@@ -381,7 +468,8 @@ func get_hit_rate() -> float:
 func get_eva() -> float:
 	var f: Dictionary = DataManager.get_formula("stats", "evasion")
 	var mult: float = float(f.get("multiplier", 0.1))
-	return clampf(_get_equipment_stat("eva") + get_base_stat("luk") * mult, float(f.get("min", 0.0)), float(f.get("max", 60.0)))
+	var synergy_eva: float = _get_synergy_add("eva")
+	return clampf(_get_equipment_stat("eva") + get_base_stat("luk") * mult + synergy_eva, float(f.get("min", 0.0)), float(f.get("max", 60.0)))
 
 
 func _get_equipment_stat(stat: String) -> int:
@@ -574,8 +662,24 @@ func reset_action_timer() -> void:
 
 
 func get_action_delay() -> float:
-	## 기본공격 ATB 딜레이 = action_speed (classes.json)
-	return _get_class_action_speed()
+	## 기본공격 ATB 딜레이 = action_speed (classes.json) + 시너지 asp_mult 반영
+	var base: float = _get_class_action_speed()
+	var asp_mult: float = _get_synergy_asp_mult()
+	if asp_mult != 0.0:
+		base = base * (1.0 + asp_mult)
+	return maxf(0.3, base)  # 최소 0.3초
+
+
+func _get_synergy_asp_mult() -> float:
+	## 시너지 행동속도 배율 합산
+	if PartyManager == null:
+		return 0.0
+	var effects: Array = PartyManager.get_synergy_effects()
+	var total: float = 0.0
+	for effect in effects:
+		if str(effect.get("type", "")) == "asp_mult":
+			total += float(effect.get("value", 0.0))
+	return total
 
 
 func _get_class_action_speed() -> float:

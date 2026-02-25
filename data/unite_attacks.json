@@ -1,0 +1,72 @@
+{
+  "tuna_attack": {
+    "id": "tuna_attack",
+    "name": "참치 어택",
+    "description": "거대 참치가 모든 전투창의 적을 덮친다!",
+    "condition": {
+      "type": "tag_count",
+      "tag": "fisher",
+      "min_count": 3
+    },
+    "priority": 10,
+    "effects": [
+      {"type": "all_window_damage", "scaling_stat": "str", "multiplier": 3.5}
+    ]
+  },
+  "heroes_charge": {
+    "id": "heroes_charge",
+    "name": "영웅의 진격",
+    "description": "클래식 파티의 총공격 + 전체 회복",
+    "condition": {
+      "type": "class_all",
+      "required_classes": ["warrior", "thief", "mage", "cleric"]
+    },
+    "priority": 8,
+    "effects": [
+      {"type": "all_window_damage", "scaling_stat": "str", "multiplier": 2.5},
+      {"type": "heal_all_percent", "value": 0.3}
+    ]
+  },
+  "bald_flash": {
+    "id": "bald_flash",
+    "name": "빛반사 어택",
+    "description": "눈부신 대머리의 빛이 적을 불태운다!",
+    "condition": {
+      "type": "tag_count",
+      "tag": "bald",
+      "min_count": 3
+    },
+    "priority": 10,
+    "effects": [
+      {"type": "all_window_damage", "scaling_stat": "int", "multiplier": 4.0},
+      {"type": "blind_all", "duration": 3.0}
+    ]
+  },
+  "thief_raid": {
+    "id": "thief_raid",
+    "name": "도적단 습격",
+    "description": "도적들의 기습! 추가 전리품 점수 획득",
+    "condition": {
+      "type": "tag_count",
+      "tag": "speed",
+      "min_count": 3
+    },
+    "priority": 7,
+    "effects": [
+      {"type": "all_window_damage", "scaling_stat": "dex", "multiplier": 2.0},
+      {"type": "loot_score_bonus", "value": 200}
+    ]
+  },
+  "default_unite": {
+    "id": "default_unite",
+    "name": "총공격",
+    "description": "파티원 전원이 힘을 합쳐 공격한다",
+    "condition": {
+      "type": "default"
+    },
+    "priority": 0,
+    "effects": [
+      {"type": "all_window_damage", "scaling_stat": "str", "multiplier": 2.0}
+    ]
+  }
+}

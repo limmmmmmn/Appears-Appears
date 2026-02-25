@@ -1,0 +1,66 @@
+{
+  "classic_party": {
+    "id": "classic_party",
+    "name": "클래식 파티",
+    "description": "전원 스탯 +10%",
+    "condition": {
+      "type": "class_all",
+      "required_classes": ["warrior", "thief", "mage", "cleric"]
+    },
+    "effects": [
+      {"type": "all_stats_mult", "value": 0.1}
+    ]
+  },
+  "beast_pack": {
+    "id": "beast_pack",
+    "name": "수인 무리",
+    "description": "전원 행동속도 20% 빨라짐",
+    "condition": {
+      "type": "tag_count",
+      "tag": "beast",
+      "min_count": 3
+    },
+    "effects": [
+      {"type": "asp_mult", "value": -0.2}
+    ]
+  },
+  "elf_wind": {
+    "id": "elf_wind",
+    "name": "엘프의 바람",
+    "description": "전원 회피 +15%",
+    "condition": {
+      "type": "tag_count",
+      "tag": "elf",
+      "min_count": 2
+    },
+    "effects": [
+      {"type": "eva_add", "value": 15.0}
+    ]
+  },
+  "heavy_front": {
+    "id": "heavy_front",
+    "name": "중장갑 전선",
+    "description": "전원 DEF +20%",
+    "condition": {
+      "type": "tag_count",
+      "tag": "heavy",
+      "min_count": 2
+    },
+    "effects": [
+      {"type": "def_mult", "value": 0.2}
+    ]
+  },
+  "bald_brotherhood": {
+    "id": "bald_brotherhood",
+    "name": "대머리 형제단",
+    "description": "전원 크리티컬 확률 +25%",
+    "condition": {
+      "type": "tag_count",
+      "tag": "bald",
+      "min_count": 3
+    },
+    "effects": [
+      {"type": "crit_add", "value": 25.0}
+    ]
+  }
+}

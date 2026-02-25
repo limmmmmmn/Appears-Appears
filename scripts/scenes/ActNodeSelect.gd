@@ -68,6 +68,10 @@ var party_tokens: Array[Control] = []
 var is_transition_running: bool = false
 var is_editor_preview: bool = false
 
+# 시너지/합체공격 표시
+var synergy_label: Label = null
+var unite_label: Label = null
+
 
 func _ready() -> void:
 	is_editor_preview = Engine.is_editor_hint()
@@ -141,6 +145,9 @@ func _setup_static_ui() -> void:
 	hint_label.text = "이전 노드로는 돌아갈 수 없습니다."
 
 	party_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# 시너지/합체공격 정보 표시
+	_build_composition_info()
 
 
 func _rebuild_node_flow() -> void:
@@ -469,6 +476,72 @@ func _make_style(bg: Color, border: Color, radius: int, width: int) -> StyleBoxF
 	style.corner_radius_bottom_left = radius
 	style.corner_radius_bottom_right = radius
 	return style
+
+
+func _build_composition_info() -> void:
+	## 시너지/합체공격 표시 영역 생성
+	if is_editor_preview:
+		return
+	if PartyManager == null:
+		return
+
+	PartyManager.refresh_synergies_and_unite()
+
+	# 시너지 라벨
+	synergy_label = Label.new()
+	synergy_label.add_theme_font_size_override("font_size", 11)
+	synergy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	synergy_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root_vbox.add_child(synergy_label)
+
+	# 합체공격 라벨
+	unite_label = Label.new()
+	unite_label.add_theme_font_size_override("font_size", 12)
+	unite_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root_vbox.add_child(unite_label)
+
+	_refresh_composition_info()
+
+
+func _refresh_composition_info() -> void:
+	if synergy_label == null or unite_label == null:
+		return
+	if PartyManager == null:
+		return
+
+	# 시너지 텍스트
+	var synergy_lines: Array[String] = []
+	for synergy_id in PartyManager.active_synergies:
+		var data: Dictionary = DataManager.get_synergy(synergy_id)
+		var name: String = str(data.get("name", ""))
+		var desc: String = str(data.get("description", ""))
+		# 히든 태그로만 발동하면 발견 전까지 "???" 표시
+		if PartyManager.is_synergy_uses_hidden_tag(synergy_id) and not PartyManager.discovered_synergies.has(synergy_id):
+			synergy_lines.append("??? — ???")
+		else:
+			synergy_lines.append("%s — %s" % [name, desc])
+
+	if synergy_lines.is_empty():
+		synergy_label.text = ""
+		synergy_label.visible = false
+	else:
+		synergy_label.text = "[ 시너지 ] " + " / ".join(synergy_lines)
+		synergy_label.modulate = Color(0.5, 1.0, 0.5, 0.95)
+		synergy_label.visible = true
+
+	# 합체공격 텍스트
+	var unite_data: Dictionary = PartyManager.get_current_unite_attack_data()
+	var unite_id: String = str(unite_data.get("id", "default_unite"))
+	var unite_name: String = str(unite_data.get("name", "총공격"))
+
+	if unite_id != "default_unite" and PartyManager.is_unite_uses_hidden_tag(unite_id) and not PartyManager.discovered_unite_attacks.has(unite_id):
+		unite_name = "???"
+
+	unite_label.text = "합체공격: %s" % unite_name
+	if unite_id == "default_unite":
+		unite_label.modulate = Color(0.7, 0.7, 0.75, 0.9)
+	else:
+		unite_label.modulate = Color(1.0, 0.85, 0.3, 0.95)
 
 
 func _build_editor_preview_areas() -> void:

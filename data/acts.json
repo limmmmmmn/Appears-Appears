@@ -1,501 +1,501 @@
 {
   "act_1": {
-    "act_id": "act_1",
-    "act_name": "Act 1",
-    "act_order": 1,
-    "min_regular_areas": 5,
-    "max_regular_areas": 5,
-    "guaranteed_town_count": 0,
-    "guaranteed_event_count": 0,
-    "guaranteed_dungeon_count": 0,
-    "field_weight": 0.9,
-    "dungeon_weight": 0.0,
-    "event_weight": 0.0,
-    "town_weight": 0.1,
-    "default_elite_chance": 0.05,
-    "skip_link_chance": 0.0,
-    "side_branch_chance": 0.0,
-    "start_area_pool": [
-      {
-        "id": "field1_1",
-        "name": "Field1_1",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "enemy_count": {
-          "max": 8,
-          "min": 6
-        },
-        "enemy_pool": {
-          "default": {
-            "bat": 35,
-            "golem": 10,
-            "slime": 55
-          }
-        },
-        "elite_chance": 0.05,
-        "field_boss_id": "boss_slime"
-      }
-    ],
-    "field_pool": [
-      {
-        "id": "field1_2",
-        "name": "Field1_2",
-        "scene": "res://scenes/field/Field1_2.tscn",
-        "enemy_count": {
-          "max": 9,
-          "min": 6
-        },
-        "enemy_pool": {
-          "default": {
-            "bat": 35,
-            "dark_sorcerer": 10,
-            "golem": 20,
-            "slime": 35
-          }
-        },
-        "elite_chance": 0.08,
-        "field_boss_id": "boss_slime"
-      },
-      {
-        "id": "field1_3",
-        "name": "Field1_3",
-        "scene": "res://scenes/field/Field1_3.tscn",
-        "weight": 0.8,
-        "enemy_count": {
-          "max": 10,
-          "min": 7
-        },
-        "enemy_pool": {
-          "default": {
-            "bat": 30,
-            "dark_sorcerer": 25,
-            "golem": 25,
-            "slime": 20
-          }
-        },
-        "elite_chance": 0.12,
-        "field_boss_id": "boss_slime"
-      }
-    ],
-    "dungeon_pool": [],
-    "event_pool": [],
-    "town_pool": [
-      {
-        "id": "act1_town_1",
-        "name": "Town1_1",
-        "scene": "res://scenes/town/Town.tscn",
-        "weight": 1.0
-      },
-      {
-        "id": "act1_town_2",
-        "name": "Town1_2",
-        "scene": "res://scenes/town/Town.tscn",
-        "weight": 1.0
-      }
-    ],
-    "fixed_area_sequence": [
-      "field",
-      "town",
-      "field",
-      "town",
+	"act_id": "act_1",
+	"act_name": "Act 1",
+	"act_order": 1,
+	"min_regular_areas": 5,
+	"max_regular_areas": 5,
+	"guaranteed_town_count": 0,
+	"guaranteed_event_count": 0,
+	"guaranteed_dungeon_count": 0,
+	"field_weight": 0.9,
+	"dungeon_weight": 0.0,
+	"event_weight": 0.0,
+	"town_weight": 0.1,
+	"default_elite_chance": 0.05,
+	"skip_link_chance": 0.0,
+	"side_branch_chance": 0.0,
+	"start_area_pool": [
+	  {
+		"id": "field1_1",
+		"name": "Field1_1",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"enemy_count": {
+		  "max": 8,
+		  "min": 6
+		},
+		"enemy_pool": {
+		  "default": {
+			"bat": 35,
+			"golem": 10,
+			"slime": 55
+		  }
+		},
+		"elite_chance": 0.05,
+		"field_boss_id": "boss_slime"
+	  }
+	],
+	"field_pool": [
+	  {
+		"id": "field1_2",
+		"name": "Field1_2",
+		"scene": "res://scenes/field/Field1_2.tscn",
+		"enemy_count": {
+		  "max": 9,
+		  "min": 6
+		},
+		"enemy_pool": {
+		  "default": {
+			"bat": 35,
+			"dark_sorcerer": 10,
+			"golem": 20,
+			"slime": 35
+		  }
+		},
+		"elite_chance": 0.08,
+		"field_boss_id": "boss_slime"
+	  },
+	  {
+		"id": "field1_3",
+		"name": "Field1_3",
+		"scene": "res://scenes/field/Field1_3.tscn",
+		"weight": 0.8,
+		"enemy_count": {
+		  "max": 10,
+		  "min": 7
+		},
+		"enemy_pool": {
+		  "default": {
+			"bat": 30,
+			"dark_sorcerer": 25,
+			"golem": 25,
+			"slime": 20
+		  }
+		},
+		"elite_chance": 0.12,
+		"field_boss_id": "boss_slime"
+	  }
+	],
+	"dungeon_pool": [],
+	"event_pool": [],
+	"town_pool": [
+	  {
+		"id": "act1_town_1",
+		"name": "Town1_1",
+		"scene": "res://scenes/town/Town.tscn",
+		"weight": 1.0
+	  },
+	  {
+		"id": "act1_town_2",
+		"name": "Town1_2",
+		"scene": "res://scenes/town/Town.tscn",
+		"weight": 1.0
+	  }
+	],
+	"fixed_area_sequence": [
+	  "field",
+	  "town",
+	  "field",
+	  "town",
       "field"
-    ],
-    "fixed_area_path": [
-      {
-        "id": "field1_1",
-        "name": "Field1_1",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "enemy_count": {
-          "max": 8,
-          "min": 6
-        },
-        "enemy_pool": {
-          "default": {
-            "bat": 35,
-            "golem": 10,
-            "slime": 55
-          }
-        },
-        "elite_chance": 0.05,
-        "field_boss_id": "boss_slime"
-      },
-      {
-        "id": "act1_town_1",
-        "name": "Town1_1",
-        "scene": "res://scenes/town/Town.tscn",
-        "weight": 1.0
-      },
-      {
-        "id": "field1_2",
-        "name": "Field1_2",
-        "scene": "res://scenes/field/Field1_2.tscn",
-        "enemy_count": {
-          "max": 9,
-          "min": 6
-        },
-        "enemy_pool": {
-          "default": {
-            "bat": 35,
-            "dark_sorcerer": 10,
-            "golem": 20,
-            "slime": 35
-          }
-        },
-        "elite_chance": 0.08,
-        "field_boss_id": "boss_slime"
-      },
-      {
-        "id": "act1_town_2",
-        "name": "Town1_2",
-        "scene": "res://scenes/town/Town.tscn",
-        "weight": 1.0
-      },
-      {
-        "id": "field1_3",
-        "name": "Field1_3",
-        "scene": "res://scenes/field/Field1_3.tscn",
-        "weight": 0.8,
-        "enemy_count": {
-          "max": 10,
-          "min": 7
-        },
-        "enemy_pool": {
-          "default": {
-            "bat": 30,
-            "dark_sorcerer": 25,
-            "golem": 25,
-            "slime": 20
-          }
-        },
-        "elite_chance": 0.12,
-        "field_boss_id": "boss_slime"
-      }
-    ]
+	],
+	"fixed_area_path": [
+	  {
+		"id": "field1_1",
+		"name": "Field1_1",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"enemy_count": {
+		  "max": 8,
+		  "min": 6
+		},
+		"enemy_pool": {
+		  "default": {
+			"bat": 35,
+			"golem": 10,
+			"slime": 55
+		  }
+		},
+		"elite_chance": 0.05,
+		"field_boss_id": "boss_slime"
+	  },
+	  {
+		"id": "act1_town_1",
+		"name": "Town1_1",
+		"scene": "res://scenes/town/Town.tscn",
+		"weight": 1.0
+	  },
+	  {
+		"id": "field1_2",
+		"name": "Field1_2",
+		"scene": "res://scenes/field/Field1_2.tscn",
+		"enemy_count": {
+		  "max": 9,
+		  "min": 6
+		},
+		"enemy_pool": {
+		  "default": {
+			"bat": 35,
+			"dark_sorcerer": 10,
+			"golem": 20,
+			"slime": 35
+		  }
+		},
+		"elite_chance": 0.08,
+		"field_boss_id": "boss_slime"
+	  },
+	  {
+		"id": "act1_town_2",
+		"name": "Town1_2",
+		"scene": "res://scenes/town/Town.tscn",
+		"weight": 1.0
+	  },
+	  {
+		"id": "field1_3",
+		"name": "Field1_3",
+		"scene": "res://scenes/field/Field1_3.tscn",
+		"weight": 0.8,
+		"enemy_count": {
+		  "max": 10,
+		  "min": 7
+		},
+		"enemy_pool": {
+		  "default": {
+			"bat": 30,
+			"dark_sorcerer": 25,
+			"golem": 25,
+			"slime": 20
+		  }
+		},
+		"elite_chance": 0.12,
+		"field_boss_id": "boss_slime"
+	  }
+	]
   },
   "act_2": {
-    "act_id": "act_2",
-    "act_name": "Act 2",
-    "act_order": 2,
-    "min_regular_areas": 6,
-    "max_regular_areas": 8,
-    "guaranteed_town_count": 1,
-    "guaranteed_event_count": 1,
-    "guaranteed_dungeon_count": 2,
-    "field_weight": 0.45,
-    "dungeon_weight": 0.32,
-    "event_weight": 0.13,
-    "town_weight": 0.1,
-    "skip_link_chance": 0.3,
-    "side_branch_chance": 0.12,
-    "start_area_pool": [
-      {
-        "id": "field2_1",
-        "name": "Field2_1",
-        "scene": "res://scenes/field/Field2_1.tscn",
-        "weight": 1.0,
-        "enemy_count": {
-          "max": 6,
-          "min": 5
-        },
-        "enemy_pool": {
-          "default": {
-            "dark_sorcerer": 40,
-            "golem": 30,
-            "orc_warrior": 30
-          }
-        },
-        "elite_chance": 0.08,
-        "elite_pool": [
+	"act_id": "act_2",
+	"act_name": "Act 2",
+	"act_order": 2,
+	"min_regular_areas": 6,
+	"max_regular_areas": 8,
+	"guaranteed_town_count": 1,
+	"guaranteed_event_count": 1,
+	"guaranteed_dungeon_count": 2,
+	"field_weight": 0.45,
+	"dungeon_weight": 0.32,
+	"event_weight": 0.13,
+	"town_weight": 0.1,
+	"skip_link_chance": 0.3,
+	"side_branch_chance": 0.12,
+	"start_area_pool": [
+	  {
+		"id": "field2_1",
+		"name": "Field2_1",
+		"scene": "res://scenes/field/Field2_1.tscn",
+		"weight": 1.0,
+		"enemy_count": {
+		  "max": 6,
+		  "min": 5
+		},
+		"enemy_pool": {
+		  "default": {
+			"dark_sorcerer": 40,
+			"golem": 30,
+			"orc_warrior": 30
+		  }
+		},
+		"elite_chance": 0.08,
+		"elite_pool": [
           "orc_warrior"
-        ],
-        "field_boss_id": "boss_goblin_king"
-      }
-    ],
-    "field_pool": [
-      {
-        "id": "field2_2",
-        "name": "Field2_2",
-        "scene": "res://scenes/field/Field2_2.tscn",
-        "weight": 1.0,
-        "enemy_count": {
-          "max": 6,
-          "min": 5
-        },
-        "enemy_pool": {
-          "default": {
-            "dark_sorcerer": 30,
-            "dragon": 45,
-            "orc_warrior": 25
-          }
-        },
-        "elite_chance": 0.1,
-        "elite_pool": [
-          "orc_warrior",
+		],
+		"field_boss_id": "boss_goblin_king"
+	  }
+	],
+	"field_pool": [
+	  {
+		"id": "field2_2",
+		"name": "Field2_2",
+		"scene": "res://scenes/field/Field2_2.tscn",
+		"weight": 1.0,
+		"enemy_count": {
+		  "max": 6,
+		  "min": 5
+		},
+		"enemy_pool": {
+		  "default": {
+			"dark_sorcerer": 30,
+			"dragon": 45,
+			"orc_warrior": 25
+		  }
+		},
+		"elite_chance": 0.1,
+		"elite_pool": [
+		  "orc_warrior",
           "dark_mage"
-        ],
-        "field_boss_id": "boss_goblin_king"
-      },
-      {
-        "id": "field2_3",
-        "name": "Field2_3",
-        "scene": "res://scenes/field/Field2_3.tscn",
-        "weight": 0.9,
-        "enemy_count": {
-          "max": 7,
-          "min": 5
-        },
-        "enemy_pool": {
-          "default": {
-            "dark_mage": 35,
-            "dragon": 40,
-            "orc_warrior": 25
-          }
-        },
-        "elite_chance": 0.12,
-        "elite_pool": [
-          "orc_warrior",
+		],
+		"field_boss_id": "boss_goblin_king"
+	  },
+	  {
+		"id": "field2_3",
+		"name": "Field2_3",
+		"scene": "res://scenes/field/Field2_3.tscn",
+		"weight": 0.9,
+		"enemy_count": {
+		  "max": 7,
+		  "min": 5
+		},
+		"enemy_pool": {
+		  "default": {
+			"dark_mage": 35,
+			"dragon": 40,
+			"orc_warrior": 25
+		  }
+		},
+		"elite_chance": 0.12,
+		"elite_pool": [
+		  "orc_warrior",
           "dark_mage"
-        ],
-        "field_boss_id": "boss_goblin_king"
-      }
-    ],
-    "dungeon_pool": [
-      {
-        "id": "a2_dungeon_a",
-        "name": "Act2 Catacomb",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 1.0
-      },
-      {
-        "id": "a2_dungeon_b",
-        "name": "Act2 Mine",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 0.8
-      }
-    ],
-    "event_pool": [
-      {
-        "id": "a2_event_a",
-        "name": "Act2 Event",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 1.0
-      }
-    ],
-    "town_pool": [
-      {
-        "id": "a2_town_a",
-        "name": "Act2 Town",
-        "scene": "res://scenes/town/Town.tscn",
-        "weight": 1.0
-      }
-    ]
+		],
+		"field_boss_id": "boss_goblin_king"
+	  }
+	],
+	"dungeon_pool": [
+	  {
+		"id": "a2_dungeon_a",
+		"name": "Act2 Catacomb",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 1.0
+	  },
+	  {
+		"id": "a2_dungeon_b",
+		"name": "Act2 Mine",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 0.8
+	  }
+	],
+	"event_pool": [
+	  {
+		"id": "a2_event_a",
+		"name": "Act2 Event",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 1.0
+	  }
+	],
+	"town_pool": [
+	  {
+		"id": "a2_town_a",
+		"name": "Act2 Town",
+		"scene": "res://scenes/town/Town.tscn",
+		"weight": 1.0
+	  }
+	]
   },
   "act_3": {
-    "act_id": "act_3",
-    "act_name": "Act 3",
-    "act_order": 3,
-    "min_regular_areas": 6,
-    "max_regular_areas": 9,
-    "guaranteed_town_count": 1,
-    "guaranteed_event_count": 1,
-    "guaranteed_dungeon_count": 2,
-    "field_weight": 0.4,
-    "dungeon_weight": 0.36,
-    "event_weight": 0.14,
-    "town_weight": 0.1,
-    "skip_link_chance": 0.33,
-    "side_branch_chance": 0.15,
-    "start_area_pool": [
-      {
-        "id": "field3_1",
-        "name": "Field3_1",
-        "scene": "res://scenes/field/Field3_1.tscn",
-        "weight": 1.0,
-        "enemy_count": {
-          "max": 7,
-          "min": 6
-        },
-        "enemy_pool": {
-          "default": {
-            "dark_mage": 45,
-            "dragon": 25,
-            "orc_warrior": 30
-          }
-        },
-        "elite_chance": 0.16,
-        "elite_pool": [
-          "orc_warrior",
+	"act_id": "act_3",
+	"act_name": "Act 3",
+	"act_order": 3,
+	"min_regular_areas": 6,
+	"max_regular_areas": 9,
+	"guaranteed_town_count": 1,
+	"guaranteed_event_count": 1,
+	"guaranteed_dungeon_count": 2,
+	"field_weight": 0.4,
+	"dungeon_weight": 0.36,
+	"event_weight": 0.14,
+	"town_weight": 0.1,
+	"skip_link_chance": 0.33,
+	"side_branch_chance": 0.15,
+	"start_area_pool": [
+	  {
+		"id": "field3_1",
+		"name": "Field3_1",
+		"scene": "res://scenes/field/Field3_1.tscn",
+		"weight": 1.0,
+		"enemy_count": {
+		  "max": 7,
+		  "min": 6
+		},
+		"enemy_pool": {
+		  "default": {
+			"dark_mage": 45,
+			"dragon": 25,
+			"orc_warrior": 30
+		  }
+		},
+		"elite_chance": 0.16,
+		"elite_pool": [
+		  "orc_warrior",
           "dark_mage"
-        ],
-        "field_boss_id": "boss_goblin_king"
-      }
-    ],
-    "field_pool": [
-      {
-        "id": "field3_2",
-        "name": "Field3_2",
-        "scene": "res://scenes/field/Field3_2.tscn",
-        "weight": 1.0,
-        "enemy_count": {
-          "max": 8,
-          "min": 6
-        },
-        "enemy_pool": {
-          "default": {
-            "dark_mage": 35,
-            "dragon": 40,
-            "orc_warrior": 25
-          }
-        },
-        "elite_chance": 0.18,
-        "elite_pool": [
-          "orc_warrior",
+		],
+		"field_boss_id": "boss_goblin_king"
+	  }
+	],
+	"field_pool": [
+	  {
+		"id": "field3_2",
+		"name": "Field3_2",
+		"scene": "res://scenes/field/Field3_2.tscn",
+		"weight": 1.0,
+		"enemy_count": {
+		  "max": 8,
+		  "min": 6
+		},
+		"enemy_pool": {
+		  "default": {
+			"dark_mage": 35,
+			"dragon": 40,
+			"orc_warrior": 25
+		  }
+		},
+		"elite_chance": 0.18,
+		"elite_pool": [
+		  "orc_warrior",
           "dark_mage"
-        ],
-        "field_boss_id": "boss_goblin_king"
-      },
-      {
-        "id": "field3_3",
-        "name": "Field3_3",
-        "scene": "res://scenes/field/Field3_3.tscn",
-        "weight": 0.9,
-        "enemy_count": {
-          "max": 9,
-          "min": 7
-        },
-        "enemy_pool": {
-          "default": {
-            "dark_mage": 50,
-            "dragon": 20,
-            "orc_warrior": 30
-          }
-        },
-        "elite_chance": 0.22,
-        "elite_pool": [
-          "orc_warrior",
+		],
+		"field_boss_id": "boss_goblin_king"
+	  },
+	  {
+		"id": "field3_3",
+		"name": "Field3_3",
+		"scene": "res://scenes/field/Field3_3.tscn",
+		"weight": 0.9,
+		"enemy_count": {
+		  "max": 9,
+		  "min": 7
+		},
+		"enemy_pool": {
+		  "default": {
+			"dark_mage": 50,
+			"dragon": 20,
+			"orc_warrior": 30
+		  }
+		},
+		"elite_chance": 0.22,
+		"elite_pool": [
+		  "orc_warrior",
           "dark_mage"
-        ],
-        "field_boss_id": "boss_goblin_king"
-      }
-    ],
-    "dungeon_pool": [
-      {
-        "id": "a3_dungeon_a",
-        "name": "Act3 Fortress",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 1.0
-      },
-      {
-        "id": "a3_dungeon_b",
-        "name": "Act3 Labyrinth",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 0.9
-      }
-    ],
-    "event_pool": [
-      {
-        "id": "a3_event_a",
-        "name": "Act3 Event",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 1.0
-      }
-    ],
-    "town_pool": [
-      {
-        "id": "a3_town_a",
-        "name": "Act3 Camp",
-        "scene": "res://scenes/town/Town.tscn",
-        "weight": 1.0
-      }
-    ]
+		],
+		"field_boss_id": "boss_goblin_king"
+	  }
+	],
+	"dungeon_pool": [
+	  {
+		"id": "a3_dungeon_a",
+		"name": "Act3 Fortress",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 1.0
+	  },
+	  {
+		"id": "a3_dungeon_b",
+		"name": "Act3 Labyrinth",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 0.9
+	  }
+	],
+	"event_pool": [
+	  {
+		"id": "a3_event_a",
+		"name": "Act3 Event",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 1.0
+	  }
+	],
+	"town_pool": [
+	  {
+		"id": "a3_town_a",
+		"name": "Act3 Camp",
+		"scene": "res://scenes/town/Town.tscn",
+		"weight": 1.0
+	  }
+	]
   },
   "act_4": {
-    "act_id": "act_4",
-    "act_name": "Act 4",
-    "act_order": 4,
-    "min_regular_areas": 7,
-    "max_regular_areas": 10,
-    "guaranteed_town_count": 1,
-    "guaranteed_event_count": 1,
-    "guaranteed_dungeon_count": 3,
-    "field_weight": 0.34,
-    "dungeon_weight": 0.42,
-    "event_weight": 0.14,
-    "town_weight": 0.1,
-    "skip_link_chance": 0.36,
-    "side_branch_chance": 0.18,
-    "start_area_pool": [
-      {
-        "id": "field4_1",
-        "name": "Field4_1",
-        "scene": "res://scenes/field/Field4_1.tscn",
-        "weight": 1.0,
-        "enemy_count": {
-          "max": 7,
-          "min": 5
-        },
-        "enemy_pool": {
-          "default": {
-            "dark_mage": 52,
-            "orc_warrior": 48
-          }
-        },
-        "field_boss_id": "boss_goblin_king"
-      }
-    ],
-    "field_pool": [
-      {
-        "id": "field4_2",
-        "name": "Field4_2",
-        "scene": "res://scenes/field/Field4_2.tscn",
-        "weight": 1.0,
-        "enemy_count": {
-          "max": 7,
-          "min": 5
-        },
-        "enemy_pool": {
-          "default": {
-            "dragon": 54,
-            "orc_warrior": 46
-          }
-        },
-        "field_boss_id": "boss_goblin_king"
-      }
-    ],
-    "dungeon_pool": [
-      {
-        "id": "a4_dungeon_a",
-        "name": "Act4 Keep",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 1.0
-      },
-      {
-        "id": "a4_dungeon_b",
-        "name": "Act4 Depths",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 0.95
-      },
-      {
-        "id": "a4_dungeon_c",
-        "name": "Act4 Tower",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 0.9
-      }
-    ],
-    "event_pool": [
-      {
-        "id": "a4_event_a",
-        "name": "Act4 Event",
-        "scene": "res://scenes/field/Field1_1.tscn",
-        "weight": 1.0
-      }
-    ],
-    "town_pool": [
-      {
-        "id": "a4_town_a",
-        "name": "Act4 Last Town",
-        "scene": "res://scenes/town/Town.tscn",
-        "weight": 1.0
-      }
-    ]
+	"act_id": "act_4",
+	"act_name": "Act 4",
+	"act_order": 4,
+	"min_regular_areas": 7,
+	"max_regular_areas": 10,
+	"guaranteed_town_count": 1,
+	"guaranteed_event_count": 1,
+	"guaranteed_dungeon_count": 3,
+	"field_weight": 0.34,
+	"dungeon_weight": 0.42,
+	"event_weight": 0.14,
+	"town_weight": 0.1,
+	"skip_link_chance": 0.36,
+	"side_branch_chance": 0.18,
+	"start_area_pool": [
+	  {
+		"id": "field4_1",
+		"name": "Field4_1",
+		"scene": "res://scenes/field/Field4_1.tscn",
+		"weight": 1.0,
+		"enemy_count": {
+		  "max": 7,
+		  "min": 5
+		},
+		"enemy_pool": {
+		  "default": {
+			"dark_mage": 52,
+			"orc_warrior": 48
+		  }
+		},
+		"field_boss_id": "boss_goblin_king"
+	  }
+	],
+	"field_pool": [
+	  {
+		"id": "field4_2",
+		"name": "Field4_2",
+		"scene": "res://scenes/field/Field4_2.tscn",
+		"weight": 1.0,
+		"enemy_count": {
+		  "max": 7,
+		  "min": 5
+		},
+		"enemy_pool": {
+		  "default": {
+			"dragon": 54,
+			"orc_warrior": 46
+		  }
+		},
+		"field_boss_id": "boss_goblin_king"
+	  }
+	],
+	"dungeon_pool": [
+	  {
+		"id": "a4_dungeon_a",
+		"name": "Act4 Keep",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 1.0
+	  },
+	  {
+		"id": "a4_dungeon_b",
+		"name": "Act4 Depths",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 0.95
+	  },
+	  {
+		"id": "a4_dungeon_c",
+		"name": "Act4 Tower",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 0.9
+	  }
+	],
+	"event_pool": [
+	  {
+		"id": "a4_event_a",
+		"name": "Act4 Event",
+		"scene": "res://scenes/field/Field1_1.tscn",
+		"weight": 1.0
+	  }
+	],
+	"town_pool": [
+	  {
+		"id": "a4_town_a",
+		"name": "Act4 Last Town",
+		"scene": "res://scenes/town/Town.tscn",
+		"weight": 1.0
+	  }
+	]
   }
 }

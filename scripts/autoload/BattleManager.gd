@@ -24,6 +24,11 @@ signal field_drops_requested(loot_score: int, gold_amount: int, kill_count: int,
 signal loot_gauge_changed(current: int, maximum: int)
 signal loot_gauge_filled
 signal trinket_loot_activated(trinket_id: String, mult_value: float, battle_id: int)
+signal unite_gauge_changed(current: float, maximum: float)
+signal unite_gauge_full
+signal unite_attack_executed(unite_id: String)
+signal enemy_killed_in_battle  # 적 처치 시그널 (합체 게이지용)
+signal hero_died_in_battle     # 아군 사망 시그널 (합체 게이지용)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
@@ -60,6 +65,11 @@ const BOSS_WINDOW_SIZE := Vector2(420, 300)  # 보스전 전투창 (약 2배 크
 const CENTER_SAFE_SIZE: float = 100.0
 const WINDOW_MARGIN: float = 20.0  # 화면 가장자리 여유
 const BASE_ENEMIES_PER_WINDOW: int = 3
+
+# === 합체 게이지 ===
+const UNITE_GAUGE_MAX: float = 100.0
+var unite_gauge: float = 0.0
+var is_unite_executing: bool = false  # 합체공격 실행 중 플래그
 
 var battle_container: CanvasLayer = null
 
@@ -629,6 +639,7 @@ func clear_battle_container() -> void:
 	clear_all_hero_locks()
 	_refresh_party_snapshot_ids()
 	ATBManager.reset()
+	reset_unite_gauge()
 #endregion
 
 
@@ -833,4 +844,188 @@ func transfer_hero_to_battle(hero_id: String, to_battle_id: int) -> bool:
 
 func clear_all_hero_locks() -> void:
 	hero_battle_locks.clear()
+#endregion
+
+
+#region 합체 게이지
+func add_unite_gauge(amount: float) -> void:
+	## 합체 게이지 증가 (4인 파티일 때만 충전)
+	if is_unite_executing:
+		return
+	if PartyManager and PartyManager.party.size() < PartyManager.MAX_PARTY_SIZE:
+		return
+	var old := unite_gauge
+	unite_gauge = clampf(unite_gauge + amount, 0.0, UNITE_GAUGE_MAX)
+	if unite_gauge != old:
+		unite_gauge_changed.emit(unite_gauge, UNITE_GAUGE_MAX)
+	if unite_gauge >= UNITE_GAUGE_MAX and old < UNITE_GAUGE_MAX:
+		unite_gauge_full.emit()
+
+
+func reset_unite_gauge() -> void:
+	unite_gauge = 0.0
+	unite_gauge_changed.emit(unite_gauge, UNITE_GAUGE_MAX)
+
+
+func is_unite_gauge_full() -> bool:
+	return unite_gauge >= UNITE_GAUGE_MAX
+
+
+func get_unite_gauge_percent() -> float:
+	return unite_gauge / UNITE_GAUGE_MAX
+
+
+func on_hero_basic_attack() -> void:
+	## 아군 기본공격 시 게이지 +2
+	add_unite_gauge(2.0)
+
+
+func on_hero_skill_used() -> void:
+	## 아군 스킬 사용 시 게이지 +3
+	add_unite_gauge(3.0)
+
+
+func on_hero_hit() -> void:
+	## 아군 피격 시 게이지 +2
+	add_unite_gauge(2.0)
+
+
+func on_enemy_killed() -> void:
+	## 적 처치 시 게이지 +5
+	add_unite_gauge(5.0)
+	enemy_killed_in_battle.emit()
+
+
+func on_hero_died() -> void:
+	## 아군 사망 시 게이지 +15
+	add_unite_gauge(15.0)
+	hero_died_in_battle.emit()
+#endregion
+
+
+#region 합체공격 실행
+func execute_unite_attack() -> void:
+	## 합체공격 발동 시퀀스
+	if not is_unite_gauge_full():
+		return
+	if is_unite_executing:
+		return
+	if active_battles.is_empty():
+		return
+	if PartyManager and PartyManager.current_unite_attack.is_empty():
+		return
+
+	is_unite_executing = true
+	var unite_data: Dictionary = PartyManager.get_current_unite_attack_data()
+	var unite_id: String = str(unite_data.get("id", "default_unite"))
+	var unite_name: String = str(unite_data.get("name", "총공격"))
+
+	# 1. 모든 전투창 일시정지 (0.3초)
+	var was_paused := is_battle_paused
+	set_battle_paused(true)
+	await _wait_seconds(0.3)
+
+	# 2. 화면 중앙에 합체공격 이름 크게 표시 (0.7초)
+	push_hud_notice(unite_name, 0.7, Color(1.0, 0.85, 0.3))
+	await _wait_seconds(0.7)
+
+	# 3 & 4. 이펙트 적용
+	var effects: Array = unite_data.get("effects", [])
+	for effect in effects:
+		_apply_unite_effect(effect)
+
+	# 5. 게이지 0으로 리셋
+	reset_unite_gauge()
+
+	# 6. 전투 재개
+	if not was_paused:
+		set_battle_paused(false)
+	is_unite_executing = false
+	unite_attack_executed.emit(unite_id)
+
+
+func _apply_unite_effect(effect: Dictionary) -> void:
+	## 합체공격 이펙트 적용
+	var etype: String = str(effect.get("type", ""))
+	match etype:
+		"all_window_damage":
+			_apply_all_window_damage(effect)
+		"heal_all_percent":
+			_apply_heal_all_percent(effect)
+		"blind_all":
+			_apply_blind_all(effect)
+		"loot_score_bonus":
+			_apply_loot_score_bonus(effect)
+		"atk_buff_all":
+			_apply_atk_buff_all(effect)
+		"asp_buff_all":
+			_apply_asp_buff_all(effect)
+
+
+func _apply_all_window_damage(effect: Dictionary) -> void:
+	## 모든 열린 전투창의 모든 적에게 데미지
+	var scaling_stat: String = str(effect.get("scaling_stat", "str"))
+	var multiplier: float = float(effect.get("multiplier", 2.0))
+	var avg_stat: float = PartyManager.get_party_average_stat(scaling_stat)
+	var damage: int = maxi(1, int(avg_stat * multiplier))
+
+	for battle_id in active_battles:
+		var battle_data: Dictionary = active_battles[battle_id]
+		var window: BattleWindow = battle_data.get("window") as BattleWindow
+		if window == null or not is_instance_valid(window):
+			continue
+		if window.current_state != BattleWindow.BattleState.RUNNING:
+			continue
+		window.apply_damage_to_all_enemies(damage)
+
+
+func _apply_heal_all_percent(effect: Dictionary) -> void:
+	## 아군 전체 HP를 max HP의 value% 만큼 회복
+	var value: float = float(effect.get("value", 0.3))
+	for hero in PartyManager.get_alive_heroes():
+		var heal_amount: int = int(float(hero.get_max_hp()) * value)
+		hero.heal(heal_amount)
+	party_hp_changed.emit()
+
+
+func _apply_blind_all(effect: Dictionary) -> void:
+	## 모든 전투창의 모든 적에게 명중률 감소 (duration초)
+	var duration: float = float(effect.get("duration", 3.0))
+	for battle_id in active_battles:
+		var battle_data: Dictionary = active_battles[battle_id]
+		var window: BattleWindow = battle_data.get("window") as BattleWindow
+		if window == null or not is_instance_valid(window):
+			continue
+		if window.current_state != BattleWindow.BattleState.RUNNING:
+			continue
+		window.apply_blind_to_all_enemies(duration)
+
+
+func _apply_loot_score_bonus(effect: Dictionary) -> void:
+	## 전리품 점수 즉시 추가
+	var value: int = int(effect.get("value", 200))
+	add_loot_gauge(value)
+
+
+func _apply_atk_buff_all(effect: Dictionary) -> void:
+	## 아군 전체 ATK 버프
+	var duration: float = float(effect.get("duration", 10.0))
+	var value: float = float(effect.get("value", 0.3))
+	for hero in PartyManager.get_alive_heroes():
+		hero.apply_buff("atk_up", duration, value)
+
+
+func _apply_asp_buff_all(effect: Dictionary) -> void:
+	## 아군 전체 행동속도 버프
+	var duration: float = float(effect.get("duration", 10.0))
+	var value: float = float(effect.get("value", -0.2))
+	for hero in PartyManager.get_alive_heroes():
+		hero.apply_buff("asp_up", duration, value)
+
+
+func _wait_seconds(seconds: float) -> void:
+	## await용 타이머 헬퍼
+	var tree := get_tree()
+	if tree:
+		await tree.create_timer(seconds).timeout
 #endregion

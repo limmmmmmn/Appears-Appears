@@ -11,6 +11,8 @@ var traits: Dictionary = {}
 var dialogues: Dictionary = {}
 var trinkets: Dictionary = {}
 var formulas: Dictionary = {}
+var synergies: Dictionary = {}
+var unite_attacks: Dictionary = {}
 
 const CLASS_JSON_PATH := "res://data/classes.json"
 const HERO_JSON_PATH := "res://data/heroes.json"
@@ -22,6 +24,8 @@ const TRAIT_JSON_PATH := "res://data/traits.json"
 const DIALOGUE_JSON_DIR_PATH := "res://data/dialogues"
 const TRINKET_JSON_PATH := "res://data/trinkets.json"
 const FORMULAS_JSON_PATH := "res://data/formulas.json"
+const SYNERGY_JSON_PATH := "res://data/synergies.json"
+const UNITE_ATTACK_JSON_PATH := "res://data/unite_attacks.json"
 
 
 func _ready() -> void:
@@ -39,6 +43,8 @@ func _load_all_data() -> void:
 	dialogues = _load_dialogue_data()
 	trinkets = _load_trinket_data()
 	formulas = _load_formulas_data()
+	synergies = _load_synergy_data()
+	unite_attacks = _load_unite_attack_data()
 
 
 func _load_enemy_data() -> Dictionary:
@@ -101,6 +107,20 @@ func _load_formulas_data() -> Dictionary:
 	var loaded: Dictionary = _load_json_dictionary(FORMULAS_JSON_PATH)
 	if loaded.is_empty():
 		push_error("[DataManager] Formulas data is empty: " + FORMULAS_JSON_PATH)
+	return loaded
+
+
+func _load_synergy_data() -> Dictionary:
+	var loaded: Dictionary = _load_json_dictionary(SYNERGY_JSON_PATH)
+	if loaded.is_empty():
+		push_warning("[DataManager] Synergy data is empty: " + SYNERGY_JSON_PATH)
+	return loaded
+
+
+func _load_unite_attack_data() -> Dictionary:
+	var loaded: Dictionary = _load_json_dictionary(UNITE_ATTACK_JSON_PATH)
+	if loaded.is_empty():
+		push_warning("[DataManager] Unite attack data is empty: " + UNITE_ATTACK_JSON_PATH)
 	return loaded
 
 
@@ -363,3 +383,35 @@ func get_dialogue_lines(category: String, trigger: String, speaker_id: String = 
 		for v in global_lines_variant:
 			result.append(str(v))
 	return result
+
+
+# 시너지
+func get_synergy(synergy_id: String) -> Dictionary:
+	return synergies.get(synergy_id, {})
+
+
+func get_all_synergy_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for sid in synergies.keys():
+		ids.append(str(sid))
+	return ids
+
+
+func get_all_synergies() -> Dictionary:
+	return synergies
+
+
+# 합체공격
+func get_unite_attack(unite_id: String) -> Dictionary:
+	return unite_attacks.get(unite_id, {})
+
+
+func get_all_unite_attack_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for uid in unite_attacks.keys():
+		ids.append(str(uid))
+	return ids
+
+
+func get_all_unite_attacks() -> Dictionary:
+	return unite_attacks

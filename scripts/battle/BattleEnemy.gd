@@ -269,6 +269,8 @@ var _dot_dps: int = 0
 var _dot_tick_timer: float = 0.0
 var _atb_slow_remaining: float = 0.0
 var _atb_slow_value: float = 0.0  # 0.5 = ATB 50% 느려짐
+var _blind_remaining: float = 0.0
+var _blind_value: float = 0.0     # 명중률 감소량
 
 
 func apply_dot(dps: int, duration: float) -> void:
@@ -280,6 +282,28 @@ func apply_dot(dps: int, duration: float) -> void:
 func apply_atb_slow(value: float, duration: float) -> void:
 	_atb_slow_value = value
 	_atb_slow_remaining = duration
+
+
+func apply_debuff(debuff_type: String, duration: float, value: float = 0.0) -> void:
+	## 범용 디버프 적용
+	match debuff_type:
+		"blind":
+			_blind_remaining = duration
+			_blind_value = value
+		"slow":
+			apply_atb_slow(absf(value), duration)
+		"dot":
+			apply_dot(int(absf(value)), duration)
+
+
+func is_blinded() -> bool:
+	return _blind_remaining > 0.0
+
+
+func get_blind_penalty() -> float:
+	if _blind_remaining > 0.0:
+		return _blind_value
+	return 0.0
 
 
 func tick_debuffs(delta: float) -> void:
@@ -298,6 +322,11 @@ func tick_debuffs(delta: float) -> void:
 		_atb_slow_remaining -= delta
 		if _atb_slow_remaining <= 0.0:
 			_atb_slow_value = 0.0
+	# 블라인드 처리
+	if _blind_remaining > 0.0:
+		_blind_remaining -= delta
+		if _blind_remaining <= 0.0:
+			_blind_value = 0.0
 
 
 #region 보상
