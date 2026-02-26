@@ -432,6 +432,9 @@ func _connect_signals() -> void:
 			BattleManager.hero_attacked.connect(_on_battle_hero_attacked)
 		if not BattleManager.hero_damaged.is_connected(_on_battle_hero_damaged):
 			BattleManager.hero_damaged.connect(_on_battle_hero_damaged)
+		# 합체공격 시 필드 적 교전
+		if not BattleManager.unite_field_engage_requested.is_connected(_engage_visible_enemies_for_unite):
+			BattleManager.unite_field_engage_requested.connect(_engage_visible_enemies_for_unite)
 
 	if not town_entrance_entered.is_connected(_on_town_entrance_entered):
 		town_entrance_entered.connect(_on_town_entrance_entered)
@@ -1168,6 +1171,65 @@ func _on_field_enemy_contacted(field_enemy: FieldEnemy) -> void:
 	battle_triggered.emit(battle_enemies)
 
 
+func _engage_visible_enemies_for_unite() -> void:
+	## 합체공격 시 카메라에 보이는 필드 적과 전투창을 연다
+	if field_enemies.is_empty() or BattleManager == null:
+		return
+
+	var camera_rect: Rect2 = _get_camera_rect()
+	if camera_rect.size.x <= 0.0 or camera_rect.size.y <= 0.0:
+		return
+
+	# HUD에 가려진 적도 포함되도록 여유분 확장
+	camera_rect = camera_rect.grow(80.0)
+
+	# 보이는 적 수집 (보스, 이미 접촉, 디스폰 중 제외)
+	var visible: Array[FieldEnemy] = []
+	for enemy in field_enemies:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		if enemy.is_boss or enemy.is_contacted or enemy.is_despawning:
+			continue
+		if camera_rect.has_point(enemy.global_position):
+			visible.append(enemy)
+
+	if visible.is_empty():
+		return
+
+	# 보이는 적 전부 교전 (합체공격이므로 전투창 제한 무시)
+	for enemy in visible:
+		var enemy_id: String = enemy.enemy_id
+		var tile_type: String = enemy.tile_type
+		var was_elite: bool = enemy.is_elite
+		var collision_pos: Vector2 = enemy.global_position
+
+		var battle_enemies: Array = FieldManager.generate_battle_enemies(enemy_id, tile_type)
+
+		# HUD 로그
+		if hud:
+			var enemy_data: Dictionary = DataManager.get_enemy(enemy_id)
+			var enemy_name: String = str(enemy_data.get("name", enemy_id))
+			var msg: String
+			if was_elite:
+				msg = "⭐ 엘리트 %s이(가) 나타났다!" % enemy_name
+			else:
+				msg = "%s이(가) 나타났다!" % enemy_name
+			if battle_enemies.size() > 1:
+				msg += " (+%d마리 합류)" % (battle_enemies.size() - 1)
+			hud.add_battle_log(msg)
+
+		# 리스폰 큐에 추가
+		if spawner:
+			spawner.on_enemy_killed(tile_type, enemy.global_position)
+
+		# 필드에서 제거
+		field_enemies.erase(enemy)
+		enemy.freeze_and_despawn(0.25)
+
+		# 전투창 생성
+		BattleManager.add_enemy_to_battle(battle_enemies, self, was_elite, collision_pos)
+
+
 #=============================================================================
 # 보스 접촉 처리
 #=============================================================================
@@ -1402,7 +1464,7 @@ func _on_elite_victory(_battle_id: int) -> void:
 func _on_boss_victory(_battle_id: int) -> void:
 	if hud:
 		hud.add_system_log("🎉 보스를 처치했다!")
-		hud.add_system_log("트링켓 1개를 선택할 수 있다.")
+		hud.add_system_log("트링캣 1개를 선택할 수 있다.")
 
 	# 보스 처치 확정 시에만 필드 보스 제거
 	for i in range(field_enemies.size() - 1, -1, -1):
@@ -1429,7 +1491,7 @@ func _show_boss_trinket_choice() -> void:
 
 	if choices.is_empty():
 		if hud:
-			hud.add_system_log("선택 가능한 트링켓이 없다.")
+			hud.add_system_log("선택 가능한 트링캣이 없다.")
 			hud.add_system_log("출구로 향해 다음 스테이지로 진행하자!")
 		return
 
@@ -1463,7 +1525,7 @@ func _show_boss_trinket_choice() -> void:
 	var title := Label.new()
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 22)
-	title.text = "보스 보상: 트링켓 선택"
+	title.text = "보스 보상: 트링캣 선택"
 	root.add_child(title)
 
 	var subtitle := Label.new()
@@ -1533,10 +1595,10 @@ func _on_boss_trinket_choice_pressed(trinket_id: String) -> void:
 		var tname: String = str(tdata.get("name", trinket_id))
 		var temoji: String = str(tdata.get("emoji", "🧿"))
 		if hud:
-			hud.add_system_log("%s 트링켓 획득: %s" % [temoji, tname])
+			hud.add_system_log("%s 트링캣 획득: %s" % [temoji, tname])
 	else:
 		if hud:
-			hud.add_system_log("트링켓 획득에 실패했다.")
+			hud.add_system_log("트링캣 획득에 실패했다.")
 
 	_close_boss_trinket_choice()
 	if hud:
@@ -1859,11 +1921,11 @@ func get_hud():
 
 
 func _on_hero_recruited(hero_id: String) -> void:
-	## 영입된 영웅을 필드에 팔로워로 추가
+	## 영입된 용사을 필드에 팔로워로 추가
 	if not party_leader:
 		return
 	var party: Array = PartyManager.get_party()
-	# 새로 추가된 영웅 찾기 (마지막 멤버)
+	# 새로 추가된 용사 찾기 (마지막 멤버)
 	var hero_data: Hero = null
 	for h in party:
 		if h and h.id == hero_id:

@@ -103,7 +103,7 @@ func get_quantity(item_id: String) -> int:
 
 #region 장비 장착/해제
 func equip_item(hero: RefCounted, item_id: String, slot: String) -> bool:
-	## 장비 장착 (인벤에서 빼서 영웅에게)
+	## 장비 장착 (인벤에서 빼서 용사에게)
 	if not has_item(item_id):
 		push_warning("[InventoryManager] 인벤에 없음: " + item_id)
 		return false
@@ -146,7 +146,7 @@ func equip_item(hero: RefCounted, item_id: String, slot: String) -> bool:
 
 
 func unequip_item(hero: RefCounted, slot: String) -> bool:
-	## 장비 해제 (영웅에서 빼서 인벤으로)
+	## 장비 해제 (용사에서 빼서 인벤으로)
 	var equip_id: String = hero.equipment.get(slot, "")
 	if equip_id.is_empty():
 		return false

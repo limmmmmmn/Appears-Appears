@@ -1,6 +1,6 @@
 extends "res://scripts/ui/window/WindowShell.gd"
 class_name RewardWindow
-## 보물상자 3지선다 UI (가로 카드 + 장착 영웅 선택)
+## 보물상자 3지선다 UI (가로 카드 + 장착 용사 선택)
 
 signal item_selected(item_id: String)
 
@@ -197,7 +197,7 @@ func _build_ui() -> void:
 	hero_pick_panel.add_child(hero_vbox)
 
 	hero_pick_label = Label.new()
-	hero_pick_label.text = "장착할 영웅을 선택해주세요."
+	hero_pick_label.text = "장착할 파티원을 선택해주세요."
 	hero_pick_label.add_theme_font_size_override("font_size", 11)
 	hero_pick_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0, 1.0))
 	hero_pick_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -410,7 +410,7 @@ func _on_item_card_pressed(index: int) -> void:
 
 	selected_item_id = item_ids[index]
 	selected_hero_id = ""
-	subtitle_label.text = "아이템 선택 완료. 아래에서 장착할 영웅을 선택하세요."
+	subtitle_label.text = "아이템 선택 완료. 아래에서 장착할 파티원을 선택하세요."
 
 	for i in range(card_buttons.size()):
 		_apply_card_style(card_buttons[i], i == index, i)
@@ -429,7 +429,7 @@ func _show_hero_pick_for_item(item_id: String) -> void:
 	hero_pick_panel.visible = true
 
 	if equipable.is_empty():
-		hero_pick_label.text = "장착 가능한 영웅이 없어 인벤토리로 획득합니다."
+		hero_pick_label.text = "장착 가능한 파티원이 없어 인벤토리로 획득합니다."
 		var only_btn := Button.new()
 		only_btn.text = "인벤토리로 받기"
 		only_btn.custom_minimum_size = Vector2(140, 28)
@@ -439,7 +439,7 @@ func _show_hero_pick_for_item(item_id: String) -> void:
 		hero_pick_row.add_child(only_btn)
 		return
 
-	hero_pick_label.text = "장착할 영웅을 선택해주세요."
+	hero_pick_label.text = "장착할 파티원을 선택해주세요."
 	for hero in equipable:
 		var hero_btn := Button.new()
 		hero_btn.text = ""

@@ -594,7 +594,7 @@ func _make_mini_bar(current: int, max_val: int, color: Color, w: int, h: int) ->
 #endregion
 
 
-#region 영웅 프리뷰 + 스탯
+#region 용사 프리뷰 + 스탯
 func _refresh_hero_preview() -> void:
 	var hero := _get_hero()
 	if hero == null:

@@ -121,7 +121,7 @@ func _create_item_row(item: Dictionary) -> Button:
 	var tip: String = item_name + " [" + rarity + "]\n"
 	for stat_key in stats:
 		tip += "%s: %+d\n" % [stat_key.to_upper(), stats[stat_key]]
-	tip += "[클릭: 자동장착] [드래그: 영웅에게]"
+	tip += "[클릭: 자동장착] [드래그: 파티원에게]"
 	row.tooltip_text = tip
 
 	return row

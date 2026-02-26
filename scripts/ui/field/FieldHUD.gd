@@ -63,7 +63,7 @@ var is_pause_menu_active: bool = false
 # 장비 화면
 var equipment_screen: EquipmentScreen = null
 
-# 루트 게이지 (숫자 카운터 방식)
+# 전리품 게이지 (숫자 카운터 방식)
 var loot_gauge_container: HBoxContainer = null
 var loot_gauge_score_label: Label = null
 var loot_gauge_slash_label: Label = null
@@ -413,7 +413,7 @@ func _kill_loot_gauge_tweens() -> void:
 
 
 func _show_loot_gauge_reward() -> void:
-	## 루트 게이지 보상: 3지선다 아이템 선택 창
+	## 전리품 게이지 보상: 3지선다 아이템 선택 창
 	if not BattleManager or not DataManager:
 		return
 
@@ -449,7 +449,7 @@ func _show_loot_gauge_reward() -> void:
 
 
 func _on_loot_gauge_item_selected(item_id: String, reward_window: RewardWindow) -> void:
-	## 루트 게이지 보상 아이템 선택 완료
+	## 전리품 게이지 보상 아이템 선택 완료
 	if not item_id.is_empty() and InventoryManager:
 		var target_hero_id: String = ""
 		if reward_window and is_instance_valid(reward_window):
@@ -479,7 +479,7 @@ func _on_loot_gauge_item_selected(item_id: String, reward_window: RewardWindow) 
 
 
 func _generate_loot_gauge_item_choices(count: int) -> Array[String]:
-	## 루트 게이지 보상 아이템 후보 생성
+	## 전리품 게이지 보상 아이템 후보 생성
 	var result: Array[String] = []
 	if DataManager == null:
 		return result
@@ -717,7 +717,7 @@ func _on_level_up_pressed() -> void:
 
 
 func _show_next_skill_select() -> void:
-	## 큐에서 다음 영웅의 스킬 선택 팝업 표시
+	## 큐에서 다음 용사의 스킬 선택 팝업 표시
 	if _skill_select_queue.is_empty():
 		# 전투 정지 상태가 아니면 게임 재개
 		if not BattleManager or not BattleManager.is_battle_paused:
@@ -804,7 +804,7 @@ func _on_skill_selected_from_levelup(hero_id: String, skill_id: String) -> void:
 	if party_panel:
 		party_panel.update_display()
 
-	# 다음 영웅 처리
+	# 다음 용사 처리
 	_show_next_skill_select()
 
 
@@ -1383,7 +1383,7 @@ func _on_battle_pause_changed(paused: bool) -> void:
 var _hover_indicator: Node2D = null  # 필드 위 반투명 원형 인디케이터
 
 func _on_hero_card_hovered(hero_index: int, is_hovered: bool) -> void:
-	## 카드 호버 시 필드의 해당 영웅 발밑에 인디케이터 표시
+	## 카드 호버 시 필드의 해당 용사 발밑에 인디케이터 표시
 	if not is_hovered:
 		_remove_hover_indicator()
 		return
@@ -2239,7 +2239,7 @@ func clear_logs() -> void:
 
 #region 호버 인디케이터 서브클래스
 class _HoverCircle extends Node2D:
-	## 반투명 원형 인디케이터 (영웅 발밑)
+	## 반투명 원형 인디케이터 (용사 발밑)
 	var _alpha_tween: Tween
 	var _alpha: float = 0.0
 

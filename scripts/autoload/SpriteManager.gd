@@ -30,9 +30,9 @@ func _ready() -> void:
 	pass
 
 
-#region 영웅 스프라이트
+#region 용사 스프라이트
 func get_hero_field_sprite(hero_id: String) -> Texture2D:
-	## 영웅 필드 스프라이트 로드
+	## 용사 필드 스프라이트 로드
 	var cache_key: String = hero_id + "_field"
 	if _hero_sprites.has(cache_key):
 		return _hero_sprites[cache_key]
@@ -54,7 +54,7 @@ func get_hero_field_sprite(hero_id: String) -> Texture2D:
 
 
 func get_hero_face_sprite(hero_id: String) -> Texture2D:
-	## 영웅 페이스칩 스프라이트 로드
+	## 용사 페이스칩 스프라이트 로드
 	var cache_key: String = hero_id + "_face"
 	if _hero_sprites.has(cache_key):
 		return _hero_sprites[cache_key]
@@ -76,7 +76,7 @@ func get_hero_face_sprite(hero_id: String) -> Texture2D:
 
 
 func get_hero_sprite_frames(hero_id: String) -> SpriteFrames:
-	## 영웅 스프라이트시트에서 SpriteFrames 생성 (4방향 걷기 애니메이션)
+	## 용사 스프라이트시트에서 SpriteFrames 생성 (4방향 걷기 애니메이션)
 	## 스프라이트시트 구조: 48x96 (3열 x 4행, 각 프레임 16x24)
 	## Row 0: Down, Row 1: Left, Row 2: Right, Row 3: Up
 	

@@ -92,7 +92,7 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 		base_str = int(base_str * float(ef.get("atk_multiplier", 1.5)))
 		base_def = int(base_def * float(ef.get("def_multiplier", 1.5)))
 
-	# 트링켓 난이도 배율 적용 (적 스탯 강화)
+	# 트링캣 난이도 배율 적용 (적 스탯 강화)
 	if GameManager != null and GameManager.has_method("get_trinket_enemy_stat_multiplier"):
 		var trinket_mult: float = float(GameManager.call("get_trinket_enemy_stat_multiplier"))
 		max_hp = maxi(1, int(round(float(max_hp) * trinket_mult)))
@@ -358,7 +358,7 @@ func roll_drops() -> Array:
 		var final_chance: float = clampf(base_chance * luk_multiplier * DROP_RATE_MULTIPLIER, 0.0, max_chance)
 		
 		if randf() < final_chance:
-			# 트링켓은 일반 드랍에서 제외 (보스/상점/이벤트 획득 전용)
+			# 트링캣은 일반 드랍에서 제외 (보스/상점/이벤트 획득 전용)
 			if DataManager != null and DataManager.has_method("get_trinket"):
 				var trinket_data: Dictionary = DataManager.get_trinket(item_id)
 				if not trinket_data.is_empty():

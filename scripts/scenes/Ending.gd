@@ -112,7 +112,7 @@ func _build_ui() -> void:
 	# 파티 멤버
 	var party_label := Label.new()
 	var hero_names: Array = stats.get("hero_names", [])
-	party_label.text = "🗡️ 영웅들: %s" % ", ".join(hero_names)
+	party_label.text = "🗡️ 용사들: %s" % ", ".join(hero_names)
 	party_label.add_theme_color_override("font_color", Color.LIGHT_CYAN)
 	stats_vbox.add_child(party_label)
 	

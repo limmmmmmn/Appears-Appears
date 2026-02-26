@@ -1,5 +1,5 @@
 extends Control
-## 새 게임 시작 시 트링켓 1개 선택
+## 새 게임 시작 시 트링캣 1개 선택
 
 const ACT_NODE_SELECT_SCENE := "res://scenes/main/ActNodeSelect.tscn"
 
@@ -40,7 +40,7 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 30)
-	title.text = "시작 트링켓 선택"
+	title.text = "시작 트링캣 선택"
 	root.add_child(title)
 
 	var subtitle := Label.new()
@@ -68,7 +68,7 @@ func _build_ui() -> void:
 		var fallback := Label.new()
 		fallback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		fallback.add_theme_font_size_override("font_size", 15)
-		fallback.text = "트링켓 데이터가 없어 기본 진행으로 이동합니다."
+		fallback.text = "트링캣 데이터가 없어 기본 진행으로 이동합니다."
 		root.add_child(fallback)
 		call_deferred("_go_to_node_select")
 

@@ -171,7 +171,7 @@ static func get_slot_display_name(slot: String) -> String:
 	return SLOT_DISPLAY_NAMES.get(slot, slot)
 
 
-## 아이템 슬롯 → 영웅 장착 슬롯 결정
+## 아이템 슬롯 → 용사 장착 슬롯 결정
 static func _get_target_slot(hero: Hero, slot: String) -> String:
 	if slot in ["ring", "acc"]:
 		for s in ["ring1", "ring2"]:

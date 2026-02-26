@@ -58,7 +58,7 @@ func reset_all_cooldowns() -> void:
 
 
 func reset_hero_cooldowns(hero_id: String) -> void:
-	## 특정 영웅의 쿨타임 초기화
+	## 특정 용사의 쿨타임 초기화
 	if PartyManager == null:
 		return
 	var hero: Hero = PartyManager.get_hero_by_id(hero_id)

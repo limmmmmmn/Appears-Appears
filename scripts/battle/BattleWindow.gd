@@ -1020,39 +1020,39 @@ func _apply_reward_level_bundle(level: int) -> void:
 	var hearts: int = 0
 	match level:
 		1:
-			bonus_gold = 18
+			bonus_gold = 8
 			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("common"))
 		2:
-			bonus_gold = 30
+			bonus_gold = 14
 			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("common"))
-			if randf() < 0.5:
+			if randf() < 0.3:
 				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("common"))
-			if randf() < 0.6:
+			if randf() < 0.35:
 				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("uncommon"))
 			reward_chests.append("🪵")
 		3:
-			bonus_gold = 42
-			if randf() < 0.45:
+			bonus_gold = 20
+			if randf() < 0.25:
 				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
 			hearts = 1
 			reward_chests.append("🥈")
 		4:
-			bonus_gold = 58
-			if randf() < 0.75:
+			bonus_gold = 28
+			if randf() < 0.45:
 				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
 			hearts = 1
 			reward_chests.append("🥇")
 		5:
-			bonus_gold = 76
+			bonus_gold = 36
 			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
-			hearts = 2
+			hearts = 1
 			reward_chests.append("✨")
 		_:
-			bonus_gold = 76 + max(0, level - 5) * 12
+			bonus_gold = 36 + max(0, level - 5) * 6
 			_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("rare"))
-			if randf() < 0.35:
+			if randf() < 0.2:
 				_append_if_not_empty(item_ids, _roll_reward_item_by_rarity("uncommon"))
-			if randf() < 0.25:
+			if randf() < 0.15:
 				hearts = 1
 			reward_chests.append("✨")
 
@@ -1402,7 +1402,7 @@ func _process_ready_unit() -> void:
 	if current_state != BattleState.RUNNING:
 		return
 
-	# 영웅 체크
+	# 용사 체크
 	for hero in _get_alive_heroes_in_battle():
 		if hero != null and not hero.is_dead and hero.is_action_ready() and _has_ready_hero_action(hero):
 			is_processing_action = true
@@ -1488,7 +1488,7 @@ func on_enemy_defeated(enemy: BattleEnemy) -> void:
 
 
 func _execute_hero_action(hero: Hero) -> void:
-	## 영웅 즉시 행동 (동기, 대기 없음)
+	## 용사 즉시 행동 (동기, 대기 없음)
 	if hero == null or hero.is_dead:
 		return
 
@@ -1598,7 +1598,7 @@ func _execute_enemy_action(enemy: BattleEnemy) -> void:
 
 
 func _select_hero_skill(hero: Hero) -> String:
-	## 영웅의 스킬 선택 — 예약 스킬 우선, 없으면 쿨다운 끝난 스킬 자동 사용
+	## 용사의 스킬 선택 — 예약 스킬 우선, 없으면 쿨다운 끝난 스킬 자동 사용
 	if not hero.queued_skill.is_empty():
 		return hero.queued_skill
 	# 해금 스킬 중 사용 가능한 것 자동 선택 (basic_attack 제외)
@@ -2429,7 +2429,7 @@ func _enemy_attack(enemy: BattleEnemy) -> void:
 
 	_bring_to_front()
 
-	# 도발 상태인 영웅이 있으면 우선 타겟
+	# 도발 상태인 용사이 있으면 우선 타겟
 	var target: Hero = _find_taunt_target(alive_heroes)
 	if target == null:
 		target = _pick_enemy_target(alive_heroes, enemy)
@@ -2522,7 +2522,7 @@ func _round_half_up(value: float) -> int:
 
 
 func _find_taunt_target(alive_heroes: Array) -> Hero:
-	## 도발 상태인 영웅 찾기
+	## 도발 상태인 용사 찾기
 	for hero in alive_heroes:
 		if hero.has_taunt():
 			return hero
@@ -2530,7 +2530,7 @@ func _find_taunt_target(alive_heroes: Array) -> Hero:
 
 
 func _pick_enemy_target(alive_heroes: Array, enemy: BattleEnemy) -> Hero:
-	## 가중치 기반 타겟 선택 — 골고루 때리되, HP 낮은 영웅이 약간 더 맞음
+	## 가중치 기반 타겟 선택 — 골고루 때리되, HP 낮은 용사이 약간 더 맞음
 	## 보스: 완전 균등 랜덤
 	if alive_heroes.size() == 1:
 		return alive_heroes[0]
@@ -2540,7 +2540,7 @@ func _pick_enemy_target(alive_heroes: Array, enemy: BattleEnemy) -> Hero:
 
 	# 일반/엘리트: 가중치 랜덤
 	# 기본 가중치 1.0 + HP% 낮을수록 보너스 (최대 +0.5)
-	# → HP 100% 영웅 = 1.0, HP 0% 영웅 = 1.5
+	# → HP 100% 용사 = 1.0, HP 0% 용사 = 1.5
 	# 4명 파티 기준: 25% vs 37.5% 정도 차이 (완전 집중은 아님)
 	var weights: Array[float] = []
 	var total: float = 0.0
@@ -3006,8 +3006,13 @@ func _on_enemy_defeated(enemy: BattleEnemy) -> void:
 		if GameManager.has_method("get_trinket_reward_gold_multiplier"):
 			trinket_gold_mult = float(GameManager.call("get_trinket_reward_gold_multiplier"))
 
+	var base_gold_mult: float = 1.0
+	if DataManager != null:
+		base_gold_mult = float(DataManager.get_formula("loot_gauge", "gold_multiplier"))
+		if base_gold_mult <= 0.0:
+			base_gold_mult = 1.0
 	var exp_reward: int = int(enemy.get_exp_reward() * exp_trait_mult * trinket_exp_mult)
-	var gold_reward: int = int(enemy.get_gold_reward() * gold_trait_mult * trinket_gold_mult)
+	var gold_reward: int = int(enemy.get_gold_reward() * gold_trait_mult * trinket_gold_mult * base_gold_mult)
 	var items: Array = enemy.roll_drops()
 
 	total_exp += exp_reward
@@ -3271,30 +3276,33 @@ func _end_battle_victory() -> void:
 	_play_victory_text_then_close()
 
 
-func _check_skill_select_on_levelup(hero: Hero, old_level: int, result: Dictionary) -> void:
-	## 레벨업 결과에서 2레벨 도달 여부 확인 → 즉시 스킬 선택 팝업 표시
-	if old_level >= 2:
-		return
-	# 이미 큐에 있는 영웅은 스킵
-	for entry in _skill_select_queue:
-		if entry.get("hero_id", "") == hero.id:
-			return
+func _check_skill_select_on_levelup(hero: Hero, old_level: int, result: Dictionary, show_immediately: bool = true) -> void:
+	## 레벨업할 때마다 스킬 선택 큐에 추가 (show_immediately=true이면 즉시 팝업 표시)
 	var levels: Array = result.get("levels", [])
 	for lv_data in levels:
 		var lv: int = int(lv_data.get("level", 0))
-		if lv == 2:
+		if lv >= 2:
+			# 같은 용사가 이미 큐에 동일 레벨로 있으면 스킵
+			var already_queued: bool = false
+			for entry in _skill_select_queue:
+				if entry.get("hero_id", "") == hero.id and entry.get("level", 0) == lv:
+					already_queued = true
+					break
+			if already_queued:
+				continue
 			_skill_select_queue.append({
 				"hero_id": hero.id,
 				"hero_name": hero.hero_name,
+				"level": lv,
 			})
-			# 팝업이 열려있지 않으면 즉시 표시
-			if _skill_select_popup == null or not is_instance_valid(_skill_select_popup):
-				_show_next_skill_select()
-			break
+	# 즉시 표시 모드일 때만 팝업 열기 (전투 중 레벨업)
+	if show_immediately and not _skill_select_queue.is_empty():
+		if _skill_select_popup == null or not is_instance_valid(_skill_select_popup):
+			_show_next_skill_select()
 
 
 func _show_next_skill_select() -> void:
-	## 큐에서 다음 영웅의 스킬 선택 팝업 표시
+	## 큐에서 다음 용사의 스킬 선택 팝업 표시
 	if _skill_select_queue.is_empty():
 		if _skill_select_in_victory:
 			_skill_select_in_victory = false
@@ -3391,7 +3399,7 @@ func _on_skill_selected(hero_id: String, skill_id: String) -> void:
 	# 일시정지 해제
 	get_tree().paused = false
 
-	# 다음 영웅 처리 or 승리 연출
+	# 다음 용사 처리 or 승리 연출
 	_show_next_skill_select()
 
 
@@ -3429,7 +3437,7 @@ func _play_victory_text_then_close() -> void:
 
 
 func _check_trinket_loot_activation() -> void:
-	## 현재 살아있는 적 수 기준으로 트링켓 루트 배율 체크 (트링켓당 1회만)
+	## 현재 살아있는 적 수 기준으로 트링캣 전리품 배율 체크 (트링캣당 1회만)
 	if GameManager == null or DataManager == null:
 		return
 	var alive: int = get_enemy_count()
@@ -3572,7 +3580,7 @@ func _add_rewards(_exp: int, gold: int, items: Array) -> void:
 
 
 func _grant_exp_rewards() -> void:
-	## 파티원 EXP 지급 (복사 지급), 벤치 영웅은 50%
+	## 파티원 EXP 지급 (복사 지급), 벤치 용사은 50%
 	if total_exp <= 0:
 		return
 
@@ -3583,7 +3591,7 @@ func _grant_exp_rewards() -> void:
 		var old_level: int = hero.level
 		var result: Dictionary = hero.gain_exp(total_exp)
 		_show_rebel_up_popups(hero, result)
-		_check_skill_select_on_levelup(hero, old_level, result)
+		_check_skill_select_on_levelup(hero, old_level, result, false)
 
 	var bench: Array = PartyManager.get_bench_heroes() if PartyManager and PartyManager.has_method("get_bench_heroes") else []
 	var bench_exp: int = int(total_exp * Hero.BENCH_EXP_RATIO)
@@ -3596,7 +3604,7 @@ func _grant_exp_rewards() -> void:
 		var old_level: int = hero.level
 		var result: Dictionary = hero.gain_exp(bench_exp)
 		_show_rebel_up_popups(hero, result)
-		_check_skill_select_on_levelup(hero, old_level, result)
+		_check_skill_select_on_levelup(hero, old_level, result, false)
 
 
 func _show_rebel_up_popups(hero: Hero, gain_result: Dictionary) -> void:

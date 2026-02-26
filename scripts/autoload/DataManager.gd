@@ -228,7 +228,7 @@ func can_class_equip(class_id: String, equip_type: String) -> bool:
 	return check_type in can_equip
 
 
-# 영웅
+# 용사
 func get_hero(hero_id: String) -> Dictionary:
 	return heroes.get(hero_id, {})
 
@@ -320,12 +320,12 @@ func get_trait(trait_id: String) -> Dictionary:
 	return traits.get(trait_id, {})
 
 func get_hero_traits(hero_id: String) -> Array:
-	## 영웅의 특성 ID 목록 반환
+	## 용사의 특성 ID 목록 반환
 	var hero_data: Dictionary = get_hero(hero_id)
 	return hero_data.get("traits", [])
 
 
-# 트링켓
+# 트링캣
 func get_trinket(trinket_id: String) -> Dictionary:
 	return trinkets.get(trinket_id, {})
 

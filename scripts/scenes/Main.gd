@@ -80,16 +80,16 @@ func _clear_current_scene() -> void:
 
 
 func _add_random_companions(count: int) -> void:
-	## 랜덤 동료 추가 (롤랜드 및 이미 파티에 있는 영웅 제외)
+	## 랜덤 동료 추가 (롤랜드 및 이미 파티에 있는 용사 제외)
 	var all_heroes: Array = DataManager.get_all_hero_ids()
 	var available: Array[String] = []
 
-	# 이미 파티에 있는 영웅 ID 수집
+	# 이미 파티에 있는 용사 ID 수집
 	var party_ids: Array[String] = []
 	for hero in PartyManager.get_party():
 		party_ids.append(hero.id)
 
-	# 사용 가능한 영웅 필터링
+	# 사용 가능한 용사 필터링
 	for hero_id in all_heroes:
 		if hero_id not in party_ids:
 			available.append(hero_id)

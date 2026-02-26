@@ -1,7 +1,7 @@
 extends Area2D
 class_name FieldDrop
 ## 필드 드롭 오브젝트: 전투 종료 후 필드에 떨어지는 보상
-## LOOT_ORB: 초록 오브 — 바닥에 닿자마자 흡수 → 루트 점수 증가
+## LOOT_ORB: 초록 오브 — 바닥에 닿자마자 흡수 → 전리품 점수 증가
 ## ITEM / BATTLE_CHEST: 기존 아이템/보물상자 유지
 
 enum DropType { LOOT_ORB, ITEM, BATTLE_CHEST }
@@ -304,7 +304,7 @@ func collect() -> void:
 
 
 func _collect_loot_orb() -> void:
-	## 루트 오브 흡수 → 골드 획득 + 루트 게이지 점수 증가
+	## 전리품 조각 흡수 → 골드 획득 + 전리품 게이지 점수 증가
 	_collected = true
 	if gold_amount > 0 and GameManager:
 		GameManager.add_gold(gold_amount)

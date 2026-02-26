@@ -711,7 +711,7 @@
   },
   "helmet_rare": {
 	"id": "helmet_rare",
-	"name": "영웅의 투구",
+	"name": "용사의 투구",
 	"slot": "head",
 	"type": "helmet",
 	"rarity": "rare",

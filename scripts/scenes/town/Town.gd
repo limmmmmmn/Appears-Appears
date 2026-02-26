@@ -541,7 +541,7 @@ func _try_grant_town_trinket(index: int) -> void:
 	var tname: String = str(tdata.get("name", gained_trinket_id))
 	var temoji: String = str(tdata.get("emoji", "🧿"))
 	if detail_info != null:
-		detail_info.text = "%s [%s] 트링켓 획득: %s" % [temoji, source_name, tname]
+		detail_info.text = "%s [%s] 트링캣 획득: %s" % [temoji, source_name, tname]
 
 
 func _resolve_town_stage_context() -> void:

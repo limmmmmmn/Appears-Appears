@@ -55,29 +55,30 @@
 		"hp_orbs_per_kill": 2
 	},
 	"loot_gauge": {
-		"base_max": 500,
-		"growth_per_level": 150,
-		"score_per_kill": 60,
-		"score_per_exp": 0.8,
-		"elite_bonus": 120,
-		"boss_bonus": 300,
-		"min_score": 30,
+		"base_max": 800,
+		"growth_per_level": 250,
+		"score_per_kill": 35,
+		"score_per_exp": 0.4,
+		"elite_bonus": 60,
+		"boss_bonus": 150,
+		"min_score": 15,
+		"gold_multiplier": 0.5,
 		"rarity_weights": {
-			"common": 40.0,
-			"uncommon": 30.0,
-			"magic": 18.0,
-			"rare": 9.0,
-			"epic": 2.5,
-			"legendary": 0.5
+			"common": 55.0,
+			"uncommon": 28.0,
+			"magic": 11.0,
+			"rare": 4.5,
+			"epic": 1.2,
+			"legendary": 0.3
 		},
 		"level_scaling": {
-			"min_level": 2,
-			"common_decay": 4.0,
-			"common_floor": 10.0,
-			"magic_growth": 1.5,
-			"rare_growth": 1.0,
-			"epic_growth": 0.5,
-			"legendary_growth": 0.15
+			"min_level": 3,
+			"common_decay": 2.0,
+			"common_floor": 20.0,
+			"magic_growth": 0.8,
+			"rare_growth": 0.5,
+			"epic_growth": 0.25,
+			"legendary_growth": 0.08
 		}
 	}
 }

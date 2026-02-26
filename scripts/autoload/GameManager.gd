@@ -49,7 +49,6 @@ func start_new_game() -> void:
 		BattleManager.reset_loot_gauge()
 
 	FieldManager.generate_runtime_acts()
-	choose_starting_trinket("skull")
 	change_state(GameState.NODE_SELECT)
 	_emit_progress_changed()
 	gold_changed.emit(gold)
@@ -126,7 +125,7 @@ func obtain_trinket(trinket_id: String, source: String) -> bool:
 	obtained_trinkets.append(trinket_id)
 	trinkets_changed.emit(obtained_trinkets.duplicate())
 	if SaveManager != null:
-		SaveManager.auto_save("트링켓 획득")
+		SaveManager.auto_save("트링캣 획득")
 	return true
 
 

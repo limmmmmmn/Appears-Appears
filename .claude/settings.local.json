@@ -12,7 +12,14 @@
       "Bash(cmd.exe /c \"cd /d D:\\\\HyperQuset && npm install xlsx 2>&1 && node -e \"\"const XLSX=require\\(''xlsx''\\); const wb=XLSX.readFile\\(''C:\\\\Users\\\\ultla\\\\OneDrive\\\\Desktop\\\\act1_balance.xlsx''\\); wb.SheetNames.forEach\\(name=>{console.log\\(''=== Sheet: ''+name+'' ===''\\); const ws=wb.Sheets[name]; console.log\\(XLSX.utils.sheet_to_csv\\(ws\\)\\); console.log\\(\\);}\\);\"\"\")",
       "Bash(npm install:*)",
       "Bash(ls:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find /d/HyperQuset -name \"*.gd\" -type f -exec grep -l -i \"skill\" {} ;)",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:doc-08-a4-docstext.googleusercontent.com)",
+      "Bash(python -c \":*)",
+      "Bash(pip --version)",
+      "Bash(/c/Users/ultla/AppData/Local/Microsoft/WindowsApps/python.exe -c \":*)",
+      "Bash(find \"D:/HyperQuset/data/dialogues/\" -name \"*.json\" -exec grep -l \"루트\\\\|트링켓\\\\|영웅\\\\|합체 공격\" {} ;)"
     ]
   }
 }

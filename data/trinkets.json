@@ -54,7 +54,7 @@
 	"id": "skull",
 	"name": "스컬",
 	"emoji": "💀",
-	"description": "전투창에 적이 3마리 이상이면\n루트 오브 보상량이 2배가 된다.",
+	"description": "전투창에 적이 3마리 이상이면\n전리품 조각 보상량이 2배가 된다.",
 	"sources": [
 	  "boss",
 	  "shop",

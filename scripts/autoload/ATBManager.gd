@@ -1,6 +1,6 @@
 extends Node
-## ATBManager: 영웅 + 적 행동 타이머 중앙 관리 + 액션 시그널 허브
-## - 영웅의 기본공격 ATB + 스킬별 독립 ATB를 상시 충전
+## ATBManager: 용사 + 적 행동 타이머 중앙 관리 + 액션 시그널 허브
+## - 용사의 기본공격 ATB + 스킬별 독립 ATB를 상시 충전
 ## - 적의 행동 타이머도 BattleWindow로부터 위임받아 충전
 
 signal action_executed  # 액션 실행됨 (RightPartyPanel 업데이트용)
@@ -21,7 +21,7 @@ func _process(delta: float) -> void:
 
 
 func _update_hero_timers(delta: float) -> void:
-	## 살아있는 영웅의 행동 타이머 충전 + 스킬 쿨다운 틱
+	## 살아있는 용사의 행동 타이머 충전 + 스킬 쿨다운 틱
 	if not PartyManager:
 		return
 	var has_active_battle: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
@@ -42,7 +42,7 @@ func _update_hero_timers(delta: float) -> void:
 
 
 func reset() -> void:
-	## 전투 종료 시 영웅 타이머 초기화 (필드 순환 모드로 복귀)
+	## 전투 종료 시 용사 타이머 초기화 (필드 순환 모드로 복귀)
 	if PartyManager:
 		for hero in PartyManager.get_alive_heroes():
 			hero.action_timer = 0.0

@@ -1,6 +1,6 @@
 extends RefCounted
 class_name Hero
-## Hero: 영웅 인스턴스 데이터 관리
+## Hero: 용사 인스턴스 데이터 관리
 
 var id: String = ""
 var hero_name: String = ""
@@ -212,14 +212,7 @@ func _setup_skill_unlocks(class_data: Dictionary) -> void:
 	skill_unlock_levels.clear()
 	unlocked_skills.clear()
 
-	var class_skills: Array = DataManager.get_class_skills(class_id)
-
-	for skill_id in class_skills:
-		var sid: String = str(skill_id)
-		skill_unlock_levels[sid] = 1
-		if not unlocked_skills.has(sid):
-			unlocked_skills.append(sid)
-
+	# 레벨1에는 스킬 없음 — 레벨업 시 스킬 선택으로 습득
 	if not unlocked_skills.has("basic_attack"):
 		unlocked_skills.append("basic_attack")
 
@@ -976,7 +969,7 @@ func get_hp_percent() -> float:
 
 #region 특성
 func get_traits() -> Array:
-	## 영웅의 특성 데이터 목록 반환
+	## 용사의 특성 데이터 목록 반환
 	var result: Array = []
 	var trait_ids: Array = DataManager.get_hero_traits(id)
 	for trait_id in trait_ids:

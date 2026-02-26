@@ -43,7 +43,7 @@ func get_party() -> Array[Hero]:
 
 
 func get_bench_heroes() -> Array[Hero]:
-	## 비전투 대기 영웅 목록
+	## 비전투 대기 용사 목록
 	return reserve_party
 
 
@@ -61,7 +61,7 @@ func get_leader() -> Hero:
 
 
 func get_hero_by_id(hero_id: String) -> Hero:
-	## ID로 영웅 찾기
+	## ID로 용사 찾기
 	for hero in party:
 		if hero.id == hero_id:
 			return hero

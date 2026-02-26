@@ -17,8 +17,8 @@ func spawn_loot_orbs(
 	party_leader: Node2D,
 	world_effect_z: int
 ) -> void:
-	## 전투 승리 후 초록 루트 오브를 kill_count개 드롭
-	## 각 오브에 루트점수 + 골드를 균등 분배
+	## 전투 승리 후 초록 전리품 조각를 kill_count개 드롭
+	## 각 오브에 전리품 점수 + 골드를 균등 분배
 	if host == null or kill_count <= 0:
 		return
 	if total_loot_score <= 0 and total_gold <= 0:

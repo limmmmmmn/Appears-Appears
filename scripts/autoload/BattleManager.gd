@@ -18,7 +18,7 @@ signal boss_battle_started(battle_id: int)  # 보스전 시작 시그널 (관전
 signal boss_battle_ended(battle_id: int)  # 보스전 종료 시그널
 signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
-signal hero_damaged(hero_id: String)  # 영웅 피격 시그널
+signal hero_damaged(hero_id: String)  # 용사 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
 signal field_drops_requested(loot_score: int, gold_amount: int, kill_count: int, world_pos: Vector2, window_rect: Rect2)
 signal loot_gauge_changed(current: int, maximum: int)
@@ -27,13 +27,14 @@ signal trinket_loot_activated(trinket_id: String, mult_value: float, battle_id: 
 signal unite_gauge_changed(current: float, maximum: float)
 signal unite_gauge_full
 signal unite_attack_executed(unite_id: String)
+signal unite_field_engage_requested  # 합체공격 시 필드 적 교전 요청
 signal enemy_killed_in_battle  # 적 처치 시그널 (합체 게이지용)
 signal hero_died_in_battle     # 아군 사망 시그널 (합체 게이지용)
 
 # === 전투창 시스템 설정 ===
 const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
 
-# === 루트 게이지 시스템 (점수 기반, formulas.json 참조) ===
+# === 전리품 게이지 시스템 (점수 기반, formulas.json 참조) ===
 var _lg_formula: Dictionary = {}  # 캐시 (formulas.json → loot_gauge)
 var loot_gauge_current: int = 0
 var loot_gauge_max: int = 500
@@ -133,8 +134,8 @@ func add_enemy_to_battle(enemy_ids: Array, parent_node: Node = null, is_elite: b
 			if pending_enemy_ids.is_empty():
 				return appended_battle_id
 
-	# 추가 후 남은 적은 새 전투창으로
-	if get_active_battle_count() >= MAX_BATTLE_WINDOWS:
+	# 추가 후 남은 적은 새 전투창으로 (합체공격 중에는 제한 무시)
+	if not is_unite_executing and get_active_battle_count() >= MAX_BATTLE_WINDOWS:
 		return appended_battle_id
 
 	# 새 전투창 생성
@@ -415,7 +416,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	elif victory and was_elite:
 		elite_victory.emit(battle_id)
 
-	# 루트 점수 계산 → 초록 루트 오브 N개 드롭 (오브 흡수 시 골드 + 루트 게이지 동시 증가)
+	# 전리품 점수 계산 → 초록 전리품 조각 N개 드롭 (오브 흡수 시 골드 + 전리품 게이지 동시 증가)
 	if victory:
 		var score_per_kill: int = int(_lg_formula.get("score_per_kill", 60))
 		var score_per_exp: float = float(_lg_formula.get("score_per_exp", 0.8))
@@ -560,7 +561,7 @@ func claim_accumulated_rewards() -> void:
 	if not items_arr.is_empty():
 		_grant_items_directly(items_arr)
 
-	# 루트 오브 드롭 (골드 + 루트점수 동시)
+	# 전리품 조각 드롭 (골드 + 전리품 점수 동시)
 	if accumulated_gold > 0 or accumulated_exp > 0:
 		var loot_score: int = maxi(30, int(accumulated_gold * 0.5) + int(float(accumulated_exp) * 0.8))
 		field_drops_requested.emit(loot_score, accumulated_gold, 1, last_battle_pos, last_window_rect)
@@ -588,9 +589,9 @@ func get_accumulated_rewards() -> Dictionary:
 #endregion
 
 
-#region 루트 게이지
+#region 전리품 게이지
 func add_loot_gauge(amount: int = 1) -> void:
-	## 루트 게이지 증가 (전투창 종료 시 호출)
+	## 전리품 게이지 증가 (전투창 종료 시 호출)
 	loot_gauge_current += amount
 	loot_gauge_changed.emit(mini(loot_gauge_current, loot_gauge_max), loot_gauge_max)
 	if loot_gauge_current >= loot_gauge_max:
@@ -783,7 +784,7 @@ func clear_battle_group_hover() -> void:
 #endregion
 
 
-#region 영웅 전투창 소속
+#region 용사 전투창 소속
 func lock_hero_to_battle(hero_id: String, battle_id: int) -> bool:
 	if hero_id.is_empty() or battle_id < 0:
 		return false
@@ -910,12 +911,18 @@ func execute_unite_attack() -> void:
 		return
 	if is_unite_executing:
 		return
-	if active_battles.is_empty():
-		return
 	if PartyManager and PartyManager.current_unite_attack.is_empty():
 		return
 
 	is_unite_executing = true
+
+	# 카메라에 보이는 필드 적과 전투창 열기
+	unite_field_engage_requested.emit()
+
+	# 교전 후에도 전투창이 없으면 중단 (게이지 소모 안 함)
+	if active_battles.is_empty():
+		is_unite_executing = false
+		return
 	var unite_data: Dictionary = PartyManager.get_current_unite_attack_data()
 	var unite_id: String = str(unite_data.get("id", "default_unite"))
 	var unite_name: String = str(unite_data.get("name", "총공격"))

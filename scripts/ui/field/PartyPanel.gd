@@ -710,8 +710,7 @@ func _refresh_unite_display() -> void:
 		return
 
 	var is_full: bool = BattleManager.is_unite_gauge_full() if BattleManager else false
-	var has_battle: bool = BattleManager.get_active_battle_count() > 0 if BattleManager else false
-	_unite_button.disabled = not (is_full and has_battle)
+	_unite_button.disabled = not is_full
 
 	var unite_data: Dictionary = PartyManager.get_current_unite_attack_data() if PartyManager else {}
 	var unite_id: String = str(unite_data.get("id", ""))
