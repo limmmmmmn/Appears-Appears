@@ -16,12 +16,13 @@ var ELITE_SPAWN_CHANCE: float = 0.15
 var MAX_SPAWN_ATTEMPTS: int = 50
 
 # Respawn config
-var RESPAWN_DELAY_MIN: float = 1.0
-var RESPAWN_DELAY_MAX: float = 2.5
+var RESPAWN_DELAY_MIN: float = 3.0
+var RESPAWN_DELAY_MAX: float = 5.0
+var RESPAWN_COOLDOWN: float = 2.5       # 리스폰 1마리 후 다음 스폰까지 최소 대기
 var FIELD_ENEMY_Z: int = 48
 
 # Dynamic bonus spawn (grudge-driven)
-var PROACTIVE_SPAWN_INTERVAL: float = 0.45
+var PROACTIVE_SPAWN_INTERVAL: float = 2.5
 
 @export_group("Config")
 @export var config: EnemySpawnerConfig
@@ -57,10 +58,11 @@ var bounds_calculated: bool = false
 var target_enemy_count_cached: int = -1
 var dynamic_bonus_enemy_count: int = 0
 var proactive_spawn_cooldown: float = 0.0
+var respawn_cooldown: float = 0.0        # 리스폰 후 다음 스폰까지 쿨다운
 var cached_spawn_markers: Array[Marker2D] = []
 
 # Respawn queue
-# [{"tile_type": String, "delay_timer": float, "original_pos": Vector2}]
+# [{"tile_type": String, "delay_timer": float, "original_pos": Vector2, "pending": bool}]
 var respawn_queue: Array[Dictionary] = []
 
 signal enemy_spawned(enemy: Node2D)
@@ -185,6 +187,7 @@ func update_movement_spawn(field_enemies: Array) -> void:
 
 	var delta: float = field.get_process_delta_time() if field else 0.016
 	proactive_spawn_cooldown = maxf(0.0, proactive_spawn_cooldown - delta)
+	respawn_cooldown = maxf(0.0, respawn_cooldown - delta)
 
 	if target_enemy_count_cached <= 0:
 		target_enemy_count_cached = _roll_target_enemy_count()
@@ -196,14 +199,28 @@ func update_movement_spawn(field_enemies: Array) -> void:
 		if is_instance_valid(enemy):
 			existing_positions.append(enemy.global_position)
 
-	# respawn queue
+	# 전투 진행 여부 확인
+	var battles_active: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
+
+	# respawn queue — 쿨다운이 남아있으면 스폰하지 않음 (한 번에 1마리씩만)
+	var spawned_one: bool = false
 	var to_respawn: Array[int] = []
 	for i in range(respawn_queue.size()):
 		var entry: Dictionary = respawn_queue[i]
+
+		# pending 상태: 전투가 끝나야 딜레이 카운트다운 시작
+		if entry.get("pending", false):
+			if battles_active:
+				continue  # 전투 중이면 타이머 시작하지 않음
+			else:
+				entry["pending"] = false  # 전투 끝남 → 타이머 시작
+				respawn_queue[i] = entry
+				continue  # 이 프레임에는 건너뛰고 다음 프레임부터 카운트다운
+
 		entry["delay_timer"] = float(entry.get("delay_timer", 0.0)) - delta
 		respawn_queue[i] = entry
 
-		if float(entry.get("delay_timer", 0.0)) <= 0.0:
+		if not spawned_one and respawn_cooldown <= 0.0 and float(entry.get("delay_timer", 0.0)) <= 0.0:
 			if _get_non_boss_enemy_count(field_enemies) >= target_enemy_count:
 				continue
 
@@ -219,14 +236,16 @@ func update_movement_spawn(field_enemies: Array) -> void:
 				var tile_type: String = str(entry.get("tile_type", "grass"))
 				_spawn_enemy_at({"position": spawn_pos, "tile_type": tile_type}, field_enemies, false, true)
 				existing_positions.append(spawn_pos)
+				spawned_one = true
+				respawn_cooldown = RESPAWN_COOLDOWN  # 다음 스폰까지 대기
 
 	to_respawn.reverse()
 	for idx in to_respawn:
 		respawn_queue.remove_at(idx)
 
-	# proactive spawn to reach dynamic target
+	# proactive spawn to reach dynamic target (전투 중이거나 쿨다운 중이면 스킵)
 	var current_non_boss: int = _get_non_boss_enemy_count(field_enemies)
-	if current_non_boss < target_enemy_count and proactive_spawn_cooldown <= 0.0:
+	if not battles_active and not spawned_one and respawn_cooldown <= 0.0 and current_non_boss < target_enemy_count and proactive_spawn_cooldown <= 0.0:
 		existing_positions.clear()
 		for enemy in field_enemies:
 			if is_instance_valid(enemy):
@@ -242,16 +261,21 @@ func update_movement_spawn(field_enemies: Array) -> void:
 		)
 		if spawn_pos != Vector2.ZERO:
 			var tile_type: String = _get_tile_type_at(spawn_pos)
-			_spawn_enemy_at({"position": spawn_pos, "tile_type": tile_type}, field_enemies)
+			_spawn_enemy_at({"position": spawn_pos, "tile_type": tile_type}, field_enemies, false, true)
 			proactive_spawn_cooldown = PROACTIVE_SPAWN_INTERVAL
+			respawn_cooldown = RESPAWN_COOLDOWN
 
 
 func on_enemy_killed(tile_type: String, position: Vector2) -> void:
-	var delay: float = randf_range(RESPAWN_DELAY_MIN, RESPAWN_DELAY_MAX)
+	var base_delay: float = randf_range(RESPAWN_DELAY_MIN, RESPAWN_DELAY_MAX)
+
+	# pending: 전투가 진행 중이면 딜레이 카운트다운을 시작하지 않음
+	var is_battle_active: bool = BattleManager != null and BattleManager.get_active_battle_count() > 0
 	respawn_queue.append({
 		"tile_type": tile_type,
-		"delay_timer": delay,
+		"delay_timer": base_delay,
 		"original_pos": position,
+		"pending": is_battle_active,
 	})
 
 
@@ -499,7 +523,8 @@ func _spawn_enemy_at(tile_data: Dictionary, field_enemies: Array, force_elite: b
 	var tile_type: String = str(tile_data.get("tile_type", "grass"))
 	var enemy_id: String = FieldManager.select_field_enemy_for_tile(tile_type)
 	var is_elite: bool = force_elite
-	enemy.setup(enemy_id, tile_type, tile_data.get("position", Vector2.ZERO), is_elite)
+	# 리스폰 시 페이드인 효과 적용
+	enemy.setup(enemy_id, tile_type, tile_data.get("position", Vector2.ZERO), is_elite, is_respawn)
 	enemy.add_to_group("field_enemy")
 	field_enemies.append(enemy)
 

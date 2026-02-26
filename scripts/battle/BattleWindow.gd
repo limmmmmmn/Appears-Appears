@@ -482,7 +482,6 @@ func setup_new(p_battle_id: int, enemy_ids: Array, p_is_elite: bool = false, p_i
 		loot_multiplier = 2.0
 	else:
 		loot_multiplier = 1.0
-
 	for i in range(enemy_ids.size()):
 		var enemy_id: String = str(enemy_ids[i])
 		var make_elite: bool = (i == 0 and is_elite_battle)
@@ -3309,6 +3308,10 @@ func _show_next_skill_select() -> void:
 			_play_victory_text_then_close()
 		return
 
+	# 다른 전투창의 스킬 선택 팝업이 이미 열려있으면 대기 (뒤로 추가)
+	if _is_any_skill_select_open():
+		return
+
 	var entry: Dictionary = _skill_select_queue.pop_front()
 	var hero_id: String = entry.get("hero_id", "")
 	var hero_name: String = entry.get("hero_name", "")
@@ -3402,6 +3405,35 @@ func _on_skill_selected(hero_id: String, skill_id: String) -> void:
 	# 다음 용사 처리 or 승리 연출
 	_show_next_skill_select()
 
+	# 이 창의 큐가 비었으면, 대기 중인 다른 전투창의 스킬 선택 처리
+	if _skill_select_queue.is_empty():
+		call_deferred("_trigger_pending_skill_selects_in_other_windows")
+
+
+func _is_any_skill_select_open() -> bool:
+	## 현재 씬 트리에 SkillSelectLayer가 열려있는지 확인
+	var existing := get_tree().root.find_child("SkillSelectLayer", true, false)
+	return existing != null and is_instance_valid(existing)
+
+
+func _trigger_pending_skill_selects_in_other_windows() -> void:
+	## 다른 전투창 중 스킬 선택 큐가 남아있는 창을 찾아 처리 시작
+	if _is_any_skill_select_open():
+		return
+	if not BattleManager:
+		return
+	for battle_id_any in BattleManager.active_battles.keys():
+		var bd: Dictionary = BattleManager.active_battles[battle_id_any]
+		var window = bd.get("window")
+		if window == null or not is_instance_valid(window):
+			continue
+		if window == self:
+			continue
+		var other: BattleWindow = window as BattleWindow
+		if other != null and not other._skill_select_queue.is_empty():
+			other._show_next_skill_select()
+			return
+
 
 func _hide_party_chatter_layer(hide: bool) -> void:
 	var chatter_layer: CanvasLayer = get_tree().root.find_child("PartyChatterLayer", true, false) as CanvasLayer
@@ -3428,12 +3460,11 @@ func _finalize_victory_close() -> void:
 
 
 func _play_victory_text_then_close() -> void:
-	## 하단 로그 박스에 승리 메시지 표시 후 닫기
+	## 승리 텍스트 후 잔상 HP바가 사라질 때까지 대기 후 닫기
 	show_battle_text(["승리했다!"])
-
-	var tw := create_tween()
-	tw.tween_interval(1.2)
-	tw.tween_callback(_finalize_victory_close)
+	var tween := create_tween()
+	tween.tween_interval(0.8)  # 잔상 hold(0.3) + fade(0.5)
+	tween.tween_callback(_finalize_victory_close)
 
 
 func _check_trinket_loot_activation() -> void:

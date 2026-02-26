@@ -1899,10 +1899,10 @@ func _get_camera_rect() -> Rect2:
 #=============================================================================
 # 필드 드롭 시스템
 #=============================================================================
-func _on_field_drops_requested(loot_score: int, gold_amount: int, kill_count: int, world_pos: Vector2, window_rect: Rect2) -> void:
+func _on_field_drops_requested(loot_score: int, gold_amount: int, kill_count: int, world_pos: Vector2, window_rect: Rect2, wave_count: int = 1) -> void:
 	if drop_controller == null:
 		return
-	drop_controller.spawn_loot_orbs(loot_score, gold_amount, kill_count, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z)
+	drop_controller.spawn_loot_orbs(loot_score, gold_amount, kill_count, world_pos, window_rect, party_leader, FIELD_WORLD_EFFECT_Z, wave_count)
 
 
 #=============================================================================

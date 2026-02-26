@@ -1,7 +1,7 @@
 extends Node
 ## BattleManager: 전투창 시스템
 ## - 필드 조우 시 전투창 1개 생성 (1~3마리)
-## - 전투창 최대 MAX_BATTLE_WINDOWS 개
+## - 전투창 개수 제한 없음
 
 const BATTLE_WINDOW_SCENE = preload("res://scenes/battle/BattleWindow.tscn")
 const WINDOW_SHELL_SCRIPT = preload("res://scripts/ui/window/WindowShell.gd")
@@ -20,7 +20,7 @@ signal turn_changed(unit_name: String, is_hero: bool)  # 턴 변경 시그널
 signal hero_attacked(hero_id: String)
 signal hero_damaged(hero_id: String)  # 용사 피격 시그널
 signal accumulated_rewards_changed(gold: int, items: Array)
-signal field_drops_requested(loot_score: int, gold_amount: int, kill_count: int, world_pos: Vector2, window_rect: Rect2)
+signal field_drops_requested(loot_score: int, gold_amount: int, kill_count: int, world_pos: Vector2, window_rect: Rect2, wave_count: int)
 signal loot_gauge_changed(current: int, maximum: int)
 signal loot_gauge_filled
 signal trinket_loot_activated(trinket_id: String, mult_value: float, battle_id: int)
@@ -32,7 +32,6 @@ signal enemy_killed_in_battle  # 적 처치 시그널 (합체 게이지용)
 signal hero_died_in_battle     # 아군 사망 시그널 (합체 게이지용)
 
 # === 전투창 시스템 설정 ===
-const MAX_BATTLE_WINDOWS: int = 5      # 최대 전투창 개수
 
 # === 전리품 게이지 시스템 (점수 기반, formulas.json 참조) ===
 var _lg_formula: Dictionary = {}  # 캐시 (formulas.json → loot_gauge)
@@ -133,10 +132,6 @@ func add_enemy_to_battle(enemy_ids: Array, parent_node: Node = null, is_elite: b
 			is_elite = false
 			if pending_enemy_ids.is_empty():
 				return appended_battle_id
-
-	# 추가 후 남은 적은 새 전투창으로 (합체공격 중에는 제한 무시)
-	if not is_unite_executing and get_active_battle_count() >= MAX_BATTLE_WINDOWS:
-		return appended_battle_id
 
 	# 새 전투창 생성
 	var new_battle_id: int = _create_new_battle(pending_enemy_ids, parent_node, is_elite, false, collision_pos)
@@ -286,8 +281,8 @@ func _check_threshold(window_count: int) -> void:
 	elif window_count == 5:
 		threshold_reached.emit(5)
 		_on_threshold_5_effect()
-	elif window_count == MAX_BATTLE_WINDOWS:
-		threshold_reached.emit(MAX_BATTLE_WINDOWS)
+	elif window_count == 7:
+		threshold_reached.emit(7)
 		_on_threshold_max_effect()
 
 
@@ -385,6 +380,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 	var battle_pos: Vector2 = Vector2.ZERO
 	var window_screen_rect: Rect2 = Rect2()
 	var window_loot_mult: float = 1.0
+	var window_base_loot_mult: float = 1.0  # 배수 (엘리트x2, 보스x4, +특성)
 
 	if active_battles.has(battle_id):
 		var bd: Dictionary = active_battles[battle_id]
@@ -402,6 +398,7 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 				window_screen_rect = Rect2(window.position, window.size)
 				last_window_rect = window_screen_rect
 				window_loot_mult = window.trinket_loot_mult
+				window_base_loot_mult = window.loot_multiplier
 
 	end_battle(battle_id, victory)
 
@@ -430,10 +427,18 @@ func _on_battle_window_ended(battle_id: int, victory: bool) -> void:
 		if was_boss:
 			loot_score += boss_bonus
 		loot_score = maxi(loot_score, min_score)
-		if window_loot_mult > 1.0:
-			loot_score = int(float(loot_score) * window_loot_mult)
-			window_gold = int(float(window_gold) * window_loot_mult)
-		field_drops_requested.emit(loot_score, window_gold, maxi(1, window_enemy_kills), battle_pos, window_screen_rect)
+		# 총 배율 = 전투창 배수(엘리트/보스/특성) × 트링캣 배율
+		var total_mult: float = window_base_loot_mult * window_loot_mult
+		# 배수 적용: 루트피스 갯수를 배수만큼 늘리고, 총량도 배수만큼 증가 → 피스당 보상 동일 유지
+		# 웨이브 단위로 시간차 드롭 (1배=1웨이브, 2배=2웨이브, ...)
+		var orb_count: int = maxi(1, window_enemy_kills)
+		var wave_count: int = 1
+		if total_mult > 1.0:
+			wave_count = maxi(1, int(round(total_mult)))
+			orb_count = orb_count * wave_count
+			loot_score = int(float(loot_score) * total_mult)
+			window_gold = int(float(window_gold) * total_mult)
+		field_drops_requested.emit(loot_score, window_gold, orb_count, battle_pos, window_screen_rect, wave_count)
 
 	if victory and SaveManager:
 		SaveManager.auto_save("전투 승리")
@@ -564,7 +569,7 @@ func claim_accumulated_rewards() -> void:
 	# 전리품 조각 드롭 (골드 + 전리품 점수 동시)
 	if accumulated_gold > 0 or accumulated_exp > 0:
 		var loot_score: int = maxi(30, int(accumulated_gold * 0.5) + int(float(accumulated_exp) * 0.8))
-		field_drops_requested.emit(loot_score, accumulated_gold, 1, last_battle_pos, last_window_rect)
+		field_drops_requested.emit(loot_score, accumulated_gold, 1, last_battle_pos, last_window_rect, 1)
 
 	# 초기화
 	reset_accumulated_rewards()

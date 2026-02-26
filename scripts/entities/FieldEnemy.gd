@@ -28,6 +28,7 @@ var wander_target: Vector2 = Vector2.ZERO
 var wander_timer: float = 0.0
 var is_contacted: bool = false
 var is_despawning: bool = false  # 사라지는 중
+var _do_fade_in: bool = false     # 리스폰 시 페이드인 효과
 
 # 관전 모드
 var is_spectating: bool = false
@@ -95,6 +96,23 @@ func _setup_from_data() -> void:
 			# Label 대신 텍스처 사용
 			var alert_sprite: Sprite2D = alert_icon
 			alert_sprite.texture = alert_tex
+
+	# 리스폰 시 페이드인 효과
+	if _do_fade_in:
+		_do_fade_in = false
+		_play_fade_in()
+
+
+func _play_fade_in() -> void:
+	## 서서히 나타나는 등장 효과 (투명 → 불투명 + 살짝 위로 떠오르기)
+	modulate = Color(1, 1, 1, 0)
+	var start_y: float = global_position.y + 4.0
+	global_position.y = start_y
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(self, "global_position:y", start_y - 4.0, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
 func _physics_process(delta: float) -> void:
@@ -204,11 +222,13 @@ func _update_sprite_direction(x_direction: float) -> void:
 		sprite.flip_h = false
 
 
-func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2, p_is_elite: bool = false) -> void:
+func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2, p_is_elite: bool = false, p_fade_in: bool = false) -> void:
 	enemy_id = p_enemy_id
 	tile_type = p_tile_type
 	is_elite = p_is_elite
 	global_position = pos
+	if p_fade_in:
+		_do_fade_in = true
 	call_deferred("_setup_from_data")
 
 

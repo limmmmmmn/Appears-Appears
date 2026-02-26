@@ -44,7 +44,7 @@
 	"spawning": {
 		"field_enemy_count_multiplier": 1.2,
 		"default_elite_chance": 0.12,
-		"proactive_spawn_interval": 0.5
+		"proactive_spawn_interval": 2.5
 	},
 	"rewards": {
 		"exp_orb_per": 10,

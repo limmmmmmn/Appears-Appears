@@ -7,9 +7,9 @@ class_name PartyPanel
 const HeroCardScene := preload("res://scenes/ui/HeroCard.tscn")
 
 # 레이아웃 (인스펙터에서 조정 가능)
-@export var card_gap: int = 3        ## 카드 사이 간격
-@export var card_height: int = 60    ## 각 카드 높이
-@export var panel_width: int = 160   ## 패널 가로 폭
+@export var card_gap: int = 2        ## 카드 사이 간격
+@export var card_height: int = 44    ## 각 카드 높이 (페이스칩40 + 패딩4)
+@export var panel_width: int = 52    ## 패널 가로 폭
 
 signal equipment_dropped(hero_index: int, item_id: String)
 signal hero_selected(hero_index: int)
@@ -28,10 +28,10 @@ const MAX_HP_ORBS: int = 30            ## HP 오브 최대 (10칸 × 3)
 const HP_PER_POTION: int = 30          ## 포션 1개 회복량
 
 # 레이아웃
-const POTION_SLOT_W: float = 11.0      ## 포션 칸 가로 크기
-const POTION_SLOT_H: float = 11.0      ## 포션 칸 세로 크기
+const POTION_SLOT_W: float = 4.0       ## 포션 칸 가로 크기
+const POTION_SLOT_H: float = 8.0       ## 포션 칸 세로 크기
 const POTION_SLOT_GAP: float = 1.0     ## 칸 사이 간격
-const POTION_GRID_PAD: float = 4.0     ## 그리드 내부 패딩
+const POTION_GRID_PAD: float = 2.0     ## 그리드 내부 패딩
 const POTION_ROW_GAP: float = 3.0      ## (레거시 — 사용 안 함)
 const POTION_GRID_TOP_GAP: float = 6.0 ## 카드 아래 ~ 포션그리드 사이 간격
 
@@ -143,20 +143,13 @@ func _rebuild_cards() -> void:
 
 
 func _relayout_cards() -> void:
-	## 카드를 세로 중앙 정렬 — @export 값 기반 (포션 그리드 + 합체 게이지 공간 고려)
+	## 카드를 좌측 상단부터 세로 배치
 	if cards.is_empty():
 		return
 	var card_count: int = cards.size()
 	var card_w: float = float(panel_width)
 	var card_h: float = float(card_height)
-	var potion_h: float = _get_potion_grid_height()
-	var unite_h: float = _get_unite_gauge_height()
-	var total_h: float = card_h * float(card_count) + float(card_gap) * float(maxi(0, card_count - 1)) + POTION_GRID_TOP_GAP + potion_h + unite_h
-	var panel_h: float = size.y
-	if panel_h <= 0:
-		var vp := get_viewport_rect().size
-		panel_h = vp.y if vp.y > 0 else 540.0
-	var start_y: float = floorf((panel_h - total_h) * 0.5)
+	var start_y: float = 30.0  # TopBar 아래부터 시작
 	for i in range(card_count):
 		var card: HeroCard = cards[i]
 		var y: float = start_y + float(i) * (card_h + float(card_gap))
@@ -496,7 +489,7 @@ func _refresh_orb_visuals() -> void:
 
 	var hp_full_potions: int = hp_orb_count / ORBS_PER_SLOT
 	if _hp_count_label:
-		_hp_count_label.text = "HP ×%d" % hp_full_potions
+		_hp_count_label.text = "×%d" % hp_full_potions
 
 
 func _refresh_row(orb_total: int, bgs: Array[ColorRect], fills: Array[ColorRect], fill_color: Color, bg_color: Color) -> void:
@@ -642,8 +635,9 @@ func _create_unite_gauge() -> void:
 
 	# 합체공격 버튼
 	_unite_button = Button.new()
-	_unite_button.text = "합체공격: ???"
-	_unite_button.add_theme_font_size_override("font_size", 8)
+	_unite_button.text = "합체"
+	_unite_button.add_theme_font_size_override("font_size", 7)
+	_unite_button.clip_text = true
 	_unite_button.disabled = true
 	_unite_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	_unite_button.pressed.connect(_on_unite_button_pressed)

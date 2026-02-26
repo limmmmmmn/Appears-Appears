@@ -54,8 +54,27 @@ var _hover_tween: Tween = null
 var _hover_glow: Panel = null
 var _is_hovered: bool = false
 
+# HP바 (ColorRect 3층 구조: BG → Ghost → Fill)
+const HP_FILL_COLOR := Color(0.8, 0.2, 0.15, 0.9)  # 적 HP바 빨간색
+const HP_BG_COLOR := Color(0.0, 0.0, 0.0, 0.9)
+const HP_GHOST_COLOR := Color(1.0, 0.6, 0.1, 0.9)
+const HP_GHOST_HOLD: float = 0.3
+const HP_GHOST_FADE: float = 0.5
+var _hp_bar_bg: ColorRect = null
+var _hp_bar_fill: ColorRect = null
+var _hp_ghost_bar: ColorRect = null
+var _hp_ghost_tween: Tween = null
+var _hp_ghost_ratio: float = 1.0
+var _hp_prev_ratio: float = 1.0
+
 
 var is_elite_version: bool = false  # 엘리트 버전 여부
+
+
+func _ready() -> void:
+	# ProgressBar 숨기고 ColorRect 3층 HP바 생성
+	_build_hp_bars()
+
 
 func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	enemy_id = p_enemy_id
@@ -123,6 +142,7 @@ func setup(p_enemy_id: String, p_is_elite: bool = false) -> void:
 	# UI 업데이트
 	if name_label:
 		name_label.text = enemy_name
+	_build_hp_bars()
 	_update_hp_display()
 	
 	# 스프라이트 로드
@@ -236,9 +256,80 @@ func heal(amount: int) -> int:
 
 
 func _update_hp_display() -> void:
-	# HP바가 visible일 때만 업데이트
-	if hp_bar and hp_bar.visible:
-		hp_bar.value = (float(current_hp) / float(max_hp)) * 100.0
+	var ratio: float = clampf(float(current_hp) / float(max_hp), 0.0, 1.0) if max_hp > 0 else 1.0
+
+	# ColorRect fill 바 크기 갱신
+	if _hp_bar_fill and _hp_bar_bg:
+		_hp_bar_fill.size.x = _hp_bar_bg.size.x * ratio
+
+	# 잔상 HP바
+	if _hp_ghost_bar and _hp_bar_bg:
+		if ratio < _hp_prev_ratio:
+			# 피격: 잔상은 이전 비율에 머물다가 스르륵 줄어듦
+			_hp_ghost_ratio = _hp_prev_ratio
+			_hp_ghost_bar.size.x = _hp_bar_bg.size.x * _hp_ghost_ratio
+			_start_hp_ghost_tween(ratio)
+		elif ratio > _hp_prev_ratio:
+			# 회복: 잔상 즉시 실제 HP로 맞춤
+			_hp_ghost_ratio = ratio
+			_hp_ghost_bar.size.x = _hp_bar_bg.size.x * ratio
+			if _hp_ghost_tween and _hp_ghost_tween.is_valid():
+				_hp_ghost_tween.kill()
+	_hp_prev_ratio = ratio
+
+
+func _build_hp_bars() -> void:
+	## ProgressBar를 숨기고 ColorRect 3층 HP바 생성 (BG → Ghost → Fill)
+	if hp_bar == null or _hp_bar_bg != null:
+		return
+	# 기존 ProgressBar 위치/크기 기준
+	var bar_pos: Vector2 = hp_bar.position
+	var bar_size: Vector2 = hp_bar.size
+	hp_bar.visible = false  # ProgressBar 숨기기
+
+	var parent: Node = hp_bar.get_parent()
+	var idx: int = hp_bar.get_index()
+
+	# BG
+	_hp_bar_bg = ColorRect.new()
+	_hp_bar_bg.color = HP_BG_COLOR
+	_hp_bar_bg.position = bar_pos
+	_hp_bar_bg.size = bar_size
+	_hp_bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(_hp_bar_bg)
+	parent.move_child(_hp_bar_bg, idx + 1)
+
+	# Ghost (BG 위)
+	_hp_ghost_bar = ColorRect.new()
+	_hp_ghost_bar.color = HP_GHOST_COLOR
+	_hp_ghost_bar.position = bar_pos
+	_hp_ghost_bar.size = bar_size
+	_hp_ghost_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(_hp_ghost_bar)
+	parent.move_child(_hp_ghost_bar, _hp_bar_bg.get_index() + 1)
+
+	# Fill (맨 앞)
+	_hp_bar_fill = ColorRect.new()
+	_hp_bar_fill.color = HP_FILL_COLOR
+	_hp_bar_fill.position = bar_pos
+	_hp_bar_fill.size = bar_size
+	_hp_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(_hp_bar_fill)
+	parent.move_child(_hp_bar_fill, _hp_ghost_bar.get_index() + 1)
+
+
+func _start_hp_ghost_tween(target_ratio: float) -> void:
+	if _hp_ghost_tween and _hp_ghost_tween.is_valid():
+		_hp_ghost_tween.kill()
+	_hp_ghost_tween = create_tween()
+	_hp_ghost_tween.tween_interval(HP_GHOST_HOLD)
+	_hp_ghost_tween.tween_method(_update_hp_ghost, _hp_ghost_ratio, target_ratio, HP_GHOST_FADE).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
+func _update_hp_ghost(ratio: float) -> void:
+	_hp_ghost_ratio = ratio
+	if _hp_ghost_bar and _hp_bar_bg:
+		_hp_ghost_bar.size.x = _hp_bar_bg.size.x * ratio
 
 
 func is_action_ready() -> bool:

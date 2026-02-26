@@ -724,6 +724,11 @@ func _show_next_skill_select() -> void:
 			get_tree().paused = false
 		return
 
+	# 다른 곳에서 스킬 선택 팝업이 이미 열려있으면 대기
+	var existing_layer := get_tree().root.find_child("SkillSelectLayer", true, false)
+	if existing_layer != null and is_instance_valid(existing_layer):
+		return
+
 	var entry: Dictionary = _skill_select_queue.pop_front()
 	var hero_id: String = entry.get("hero_id", "")
 	var hero_name: String = entry.get("hero_name", "")
@@ -806,6 +811,28 @@ func _on_skill_selected_from_levelup(hero_id: String, skill_id: String) -> void:
 
 	# 다음 용사 처리
 	_show_next_skill_select()
+
+	# 이 큐가 비었으면, 대기 중인 전투창의 스킬 선택 처리
+	if _skill_select_queue.is_empty():
+		call_deferred("_trigger_pending_skill_selects_in_battle_windows")
+
+
+func _trigger_pending_skill_selects_in_battle_windows() -> void:
+	## 전투창 중 스킬 선택 큐가 남아있는 창을 찾아 처리
+	var existing_layer := get_tree().root.find_child("SkillSelectLayer", true, false)
+	if existing_layer != null and is_instance_valid(existing_layer):
+		return
+	if not BattleManager:
+		return
+	for battle_id_any in BattleManager.active_battles.keys():
+		var bd: Dictionary = BattleManager.active_battles[battle_id_any]
+		var window = bd.get("window")
+		if window == null or not is_instance_valid(window):
+			continue
+		var bw: BattleWindow = window as BattleWindow
+		if bw != null and not bw._skill_select_queue.is_empty():
+			bw._show_next_skill_select()
+			return
 
 
 func _init_equipment_screen() -> void:
