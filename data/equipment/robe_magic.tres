@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "robe_magic"
+name = "대마법사의 로브"
+slot = "body"
+type = "robe"
+rarity = "magic"
+two_handed = false
+stats = {
+  "def": 5,
+  "int": 12
+}
+gear_score = 30

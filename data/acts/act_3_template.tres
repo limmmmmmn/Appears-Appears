@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="ActTemplate" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ActTemplate.gd" id="1_act_template"]
+[ext_resource type="Resource" path="res://data/fields/field3_1.tres" id="2_a3_start"]
+[ext_resource type="Resource" path="res://data/fields/field3_2.tres" id="3_a3_field_a"]
+[ext_resource type="Resource" path="res://data/fields/field3_3.tres" id="4_a3_field_b"]
+
+[resource]
+script = ExtResource("1_act_template")
+act_id = "act_3"
+act_name = "Act 3"
+act_order = 3
+min_regular_areas = 6
+max_regular_areas = 9
+guaranteed_town_count = 1
+guaranteed_event_count = 1
+guaranteed_dungeon_count = 2
+field_weight = 0.4
+dungeon_weight = 0.36
+event_weight = 0.14
+town_weight = 0.1
+skip_link_chance = 0.33
+side_branch_chance = 0.15
+start_area_pool = [ExtResource("2_a3_start")]
+field_pool = [ExtResource("3_a3_field_a"), ExtResource("4_a3_field_b")]
+dungeon_pool = [{"id":"a3_dungeon_a","name":"Act3 Fortress","scene":"res://scenes/field/Field1_1.tscn","weight":1.0},{"id":"a3_dungeon_b","name":"Act3 Labyrinth","scene":"res://scenes/field/Field1_1.tscn","weight":0.9}]
+event_pool = [{"id":"a3_event_a","name":"Act3 Event","scene":"res://scenes/field/Field1_1.tscn","weight":1.0}]
+town_pool = [{"id":"a3_town_a","name":"Act3 Camp","scene":"res://scenes/town/Town.tscn","weight":1.0}]

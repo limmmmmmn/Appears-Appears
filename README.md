@@ -5,7 +5,7 @@
 ```
 hyperquest_full/
 ├── data/
-│   └── stages.json              # 스테이지/필드/적 풀 데이터
+│   └── acts/                    # 액트 템플릿(.tres)
 │
 ├── scripts/
 │   ├── autoload/
@@ -24,13 +24,13 @@ hyperquest_full/
 		├── PartyLeader.tscn
 		├── PartyFollower.tscn
 		├── FieldEnemy.tscn
-		└── Field_1_1.tscn       # 테스트 필드
+		└── Field1_1.tscn       # 테스트 필드
 ```
 
 ## ⚙️ 설치 방법
 
 ### 1. 파일 복사
-- `data/stages.json` → 기존 data 폴더에
+- `data/acts/*.tres` → 기존 data/acts 폴더에
 - `scripts/autoload/FieldManager.gd` → 기존 autoload 폴더에
 - `scripts/field/*` → 기존 scripts 폴더에 field 폴더 생성 후 복사
 - `scenes/field/*` → 기존 scenes 폴더에 field 폴더 생성 후 복사
@@ -56,16 +56,16 @@ FieldManager → res://scripts/autoload/FieldManager.gd
 
 ### Town에서 시작하는 경우
 1. Town 씬에 "출발" 버튼 추가
-2. 버튼 → `GameManager.go_to_field()` 호출
+2. 버튼 → `GameManager.go_to_area()` 호출
 
 ### Field 직접 테스트
-1. `Field_1_1.tscn`을 메인 씬으로 설정
+1. `Field1_1.tscn`을 메인 씬으로 설정
 2. 실행 전 FieldManager 초기화:
 ```gdscript
 # Main.gd 또는 테스트 스크립트에서
 func _ready():
-	FieldManager.set_current_stage("stage_1")
-	FieldManager.set_current_field("field_1_1")
+	FieldManager.set_current_act("act_1")
+	FieldManager.set_current_area(FieldManager.get_first_area_id("act_1"))
 ```
 
 ## 📋 핵심 로직
@@ -88,5 +88,5 @@ func _ready():
 
 1. [ ] 전투창(BattleWindow) 구현
 2. [ ] 전투 승리 → 필드 적 제거
-3. [ ] 출구 → Town/다음 스테이지 전환
+3. [ ] 출구 → Town/다음 액트 전환
 4. [ ] 스프라이트 에셋 추가

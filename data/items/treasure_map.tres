@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemTemplate.gd" id="1_item_template"]
+
+[resource]
+script = ExtResource("1_item_template")
+id = "treasure_map"
+name = "보물 지도"
+description = "어딘가에 숨겨진 보물의 위치가 표시되어 있다."
+type = "key_item"
+category = "note"
+consumable = false
+readable = true
+content = "[지도에 X 표시가 되어있다]\n'큰 나무 아래, 세 걸음 북쪽'"

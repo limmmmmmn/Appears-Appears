@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemTemplate.gd" id="1_item_template"]
+
+[resource]
+script = ExtResource("1_item_template")
+id = "boss_key_1"
+name = "보스방 열쇠"
+description = "스테이지 1 보스방의 문을 연다"
+type = "key_item"
+category = "dungeon_key"
+consumable = true
+target_id = "boss_door_1"
+stage = 1

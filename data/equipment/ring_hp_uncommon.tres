@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "ring_hp_uncommon"
+name = "활력의 반지"
+slot = "ring"
+type = "ring"
+rarity = "uncommon"
+two_handed = false
+stats = {
+  "hp": 35,
+  "def": 2
+}
+gear_score = 12

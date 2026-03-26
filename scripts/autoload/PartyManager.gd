@@ -8,6 +8,7 @@ signal party_wiped
 
 const MAX_PARTY_SIZE: int = 4
 var party: Array[Hero] = []
+var reserve_party: Array[Hero] = []
 var inventory: Dictionary = {}  # item_id -> 수량
 
 const EQUIP_SLOTS: Array[String] = ["main_hand", "off_hand", "head", "body", "acc1", "acc2"]
@@ -25,12 +26,18 @@ func add_hero_by_id(hero_id: String) -> bool:
 	if hero.id.is_empty():
 		return false
 	party.append(hero)
+	_reorder_party_alive_first()
 	party_changed.emit()
 	return true
 
 
 func get_party() -> Array[Hero]:
 	return party
+
+
+func get_bench_heroes() -> Array[Hero]:
+	## 비전투 대기 영웅 목록
+	return reserve_party
 
 
 func get_hero_at(index: int) -> Hero:
@@ -79,13 +86,13 @@ func is_party_wiped() -> bool:
 
 
 #region 파티 스탯
-func get_party_average_spd() -> float:
+func get_party_average_dex() -> float:
 	var alive := get_alive_heroes()
 	if alive.is_empty():
 		return 0.0
 	var total: float = 0.0
 	for hero in alive:
-		total += hero.get_spd()
+		total += hero.get_dex()
 	return total / alive.size()
 
 
@@ -104,18 +111,11 @@ func get_party_average_luk() -> float:
 func on_hero_damaged(hero: Hero, damage: int) -> void:
 	hero.take_damage(damage)
 	if hero.is_dead:
+		_reorder_party_alive_first()
 		hero_died.emit(hero)
+		party_changed.emit()
 		if is_party_wiped():
 			party_wiped.emit()
-
-
-func distribute_exp(total_exp: int) -> void:
-	var alive := get_alive_heroes()
-	if alive.is_empty():
-		return
-	var exp_each := total_exp / alive.size()
-	for hero in alive:
-		hero.add_exp(exp_each)
 
 
 func full_restore_party() -> void:
@@ -193,14 +193,25 @@ func auto_equip_to_party(equip_id: String) -> bool:
 	if equip_data.is_empty():
 		return false
 	
-	var slot: String = equip_data.get("slot", "")
-	if slot == "accessory":
+	var slot: String = Hero.normalize_equipment_slot(str(equip_data.get("slot", "")))
+	if slot == "acc":
 		for hero in party:
 			if hero.can_equip(equip_id):
-				if hero.equipment["acc1"].is_empty():
-					return equip_to_hero(hero, equip_id, "acc1")
-				elif hero.equipment["acc2"].is_empty():
-					return equip_to_hero(hero, equip_id, "acc2")
+				for s in ["acc1", "acc2"]:
+					if hero.equipment[s].is_empty():
+						return equip_to_hero(hero, equip_id, s)
+	elif slot == "main_hand":
+		for hero in party:
+			if not hero.can_equip(equip_id):
+				continue
+			if hero.equipment["main_hand"].is_empty():
+				if equip_data.get("two_handed", false):
+					if hero.equipment["off_hand"].is_empty():
+						return equip_to_hero(hero, equip_id, "main_hand")
+				else:
+					return equip_to_hero(hero, equip_id, "main_hand")
+			elif hero.can_dual_wield() and hero.equipment["off_hand"].is_empty() and not hero.is_off_hand_disabled():
+				return equip_to_hero(hero, equip_id, "off_hand")
 	else:
 		for hero in party:
 			if hero.can_equip(equip_id) and hero.equipment[slot].is_empty():
@@ -215,3 +226,20 @@ func auto_equip_to_party(equip_id: String) -> bool:
 
 func print_party_status() -> void:
 	pass
+
+
+func _reorder_party_alive_first() -> void:
+	if party.is_empty():
+		return
+	var alive: Array[Hero] = []
+	var dead: Array[Hero] = []
+	for h in party:
+		if h == null:
+			continue
+		if h.is_dead:
+			dead.append(h)
+		else:
+			alive.append(h)
+	party.clear()
+	party.append_array(alive)
+	party.append_array(dead)

@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://dj5rb6up368r4"]
+
+[ext_resource type="Script" uid="uid://cjwnjookhuu21" path="res://scripts/entities/RecruitNPC.gd" id="1_script"]
+
+[node name="RecruitNPC" type="Node2D" unique_id=593146081]
+script = ExtResource("1_script")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=259119344]

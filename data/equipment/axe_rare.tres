@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "axe_rare"
+name = "피의 도끼"
+slot = "main_hand"
+type = "axe"
+rarity = "rare"
+two_handed = false
+stats = {
+  "atk": 28,
+  "str": 8,
+  "hp": 20
+}
+special_effect = {
+  "type": "lifesteal",
+  "value": 0.1
+}
+gear_score = 48

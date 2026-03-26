@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "greatsword_uncommon"
+name = "참수검"
+slot = "main_hand"
+type = "sword"
+rarity = "uncommon"
+two_handed = true
+stats = {
+  "atk": 22,
+  "str": 2
+}
+gear_score = 26

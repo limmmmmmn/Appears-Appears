@@ -4,7 +4,7 @@ class_name FieldEnemy
 
 signal player_contacted(field_enemy: FieldEnemy)
 
-enum State { IDLE, WANDER, ALERT, CHASE }
+enum State { IDLE, WANDER, ALERT, CHASE, SPECTATE }
 
 @export var enemy_id: String = "slime"
 @export var tile_type: String = "grass"
@@ -14,7 +14,7 @@ enum State { IDLE, WANDER, ALERT, CHASE }
 @export_group("Movement")
 @export var wander_speed: float = 25.0
 @export var chase_speed: float = 50.0
-@export var detection_range: float = 60.0
+@export var detection_range: float = 70.0
 @export var lose_range: float = 120.0
 
 @export_group("Wander")
@@ -27,6 +27,13 @@ var target_player: Node2D = null
 var wander_target: Vector2 = Vector2.ZERO
 var wander_timer: float = 0.0
 var is_contacted: bool = false
+var is_despawning: bool = false  # 사라지는 중
+
+# 관전 모드
+var is_spectating: bool = false
+var spectate_target_pos: Vector2 = Vector2.ZERO
+var pre_spectate_state: State = State.IDLE
+var spectate_speed: float = 80.0
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var alert_icon: Sprite2D = $AlertIcon
@@ -36,6 +43,7 @@ var is_contacted: bool = false
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_setup_from_data()
 	_set_state(State.IDLE)
 	
@@ -54,10 +62,12 @@ func _setup_from_data() -> void:
 	if data.is_empty():
 		return
 	
-	# 스피드 기반 이동속도
-	var spd: int = int(data.get("base_stats", {}).get("spd", 5))
-	chase_speed = 35.0 + spd * 1.5
+	# DEX 기반 이동속도
+	var dex: int = int(data.get("stats", {}).get("dex", 5))
+	chase_speed = 28.0 + dex * 1.0
 	wander_speed = chase_speed * 0.4
+	# 요청사항: 감지 후 추격 속도도 평소(배회) 속도와 동일
+	chase_speed = wander_speed
 	
 	# SpriteManager에서 스프라이트 로드
 	if SpriteManager:
@@ -88,6 +98,11 @@ func _setup_from_data() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# 사라지는 중에는 이동 정지
+	if is_despawning:
+		velocity = Vector2.ZERO
+		return
+
 	match current_state:
 		State.IDLE:
 			_process_idle(delta)
@@ -97,6 +112,8 @@ func _physics_process(delta: float) -> void:
 			pass
 		State.CHASE:
 			_process_chase(delta)
+		State.SPECTATE:
+			_process_spectate(delta)
 
 
 func _process_idle(delta: float) -> void:
@@ -175,7 +192,7 @@ func _on_detection_body_exited(body: Node2D) -> void:
 func _on_contact_body_entered(body: Node2D) -> void:
 	if is_contacted:
 		return
-	if body.is_in_group("party_leader") or body.is_in_group("party"):
+	if body.is_in_group("party_leader"):
 		is_contacted = true
 		player_contacted.emit(self)
 
@@ -196,4 +213,134 @@ func setup(p_enemy_id: String, p_tile_type: String, pos: Vector2, p_is_elite: bo
 
 
 func despawn() -> void:
+	## 적 사라짐 (전투 진입)
+	is_despawning = true
+	velocity = Vector2.ZERO
 	queue_free()
+
+
+func brief_pause(duration: float = 0.3) -> void:
+	## 잠깐 멈칫하는 효과 (전투 시작 시)
+	var prev_state := current_state
+	velocity = Vector2.ZERO
+	current_state = State.IDLE
+
+	await get_tree().create_timer(duration).timeout
+
+	if is_instance_valid(self) and not is_despawning:
+		current_state = prev_state
+
+
+func freeze_and_despawn(duration: float = 0.5) -> void:
+	## 제자리에 멈추고 일정 시간 후 사라짐
+	is_despawning = true
+	velocity = Vector2.ZERO
+	current_state = State.IDLE
+
+	# 느낌표 아이콘 숨김
+	if alert_icon:
+		alert_icon.visible = false
+
+	# 흰색 반짝임 효과
+	if sprite:
+		_flash_white()
+
+	await get_tree().create_timer(duration).timeout
+
+	if is_instance_valid(self):
+		queue_free()
+
+
+func _flash_white() -> void:
+	## 흰색 반짝임 효과
+	if not sprite or not is_instance_valid(sprite):
+		return
+
+	var original_modulate := sprite.modulate
+	# 매우 밝은 색으로 설정 (modulate는 곱연산이라 1.0 이상 필요)
+	var flash_color := Color(8, 8, 8, 1)
+
+	var tween := create_tween()
+	# 즉시 밝게
+	tween.tween_property(sprite, "modulate", flash_color, 0.02)
+	# 밝은 상태 유지
+	tween.tween_interval(0.1)
+	# 원래 색으로 복귀
+	tween.tween_property(sprite, "modulate", original_modulate, 0.08)
+
+
+#region 관전 시스템
+func _process_spectate(_delta: float) -> void:
+	## 관전 위치로 이동
+	if not is_spectating:
+		return
+
+	var distance := global_position.distance_to(spectate_target_pos)
+	if distance < 5.0:
+		velocity = Vector2.ZERO
+		return
+
+	var direction := (spectate_target_pos - global_position).normalized()
+	velocity = direction * spectate_speed
+	move_and_slide()
+	_update_sprite_direction(direction.x)
+
+
+func start_spectating(camera_rect: Rect2) -> void:
+	## 보스전 관전 시작 - 카메라 가장자리로 이동
+	if is_boss:
+		return  # 보스는 관전하지 않음
+
+	is_spectating = true
+	pre_spectate_state = current_state
+
+	# 화면 가장자리 중 가장 가까운 곳으로 이동
+	spectate_target_pos = _find_spectate_position(camera_rect)
+	_set_state(State.SPECTATE)
+
+	# 느낌표 숨김
+	if alert_icon:
+		alert_icon.visible = false
+
+
+func stop_spectating() -> void:
+	## 관전 종료 - 원래 행동으로 복귀
+	if not is_spectating:
+		return
+
+	is_spectating = false
+	_set_state(State.IDLE)
+
+
+func _find_spectate_position(camera_rect: Rect2) -> Vector2:
+	## 카메라 가장자리 중 가장 가까운 위치 계산
+	var my_pos := global_position
+	var edge_margin: float = 20.0
+
+	# 4개 가장자리 중 가장 가까운 곳 계산
+	var left_edge := Vector2(camera_rect.position.x + edge_margin, my_pos.y)
+	var right_edge := Vector2(camera_rect.end.x - edge_margin, my_pos.y)
+	var top_edge := Vector2(my_pos.x, camera_rect.position.y + edge_margin)
+	var bottom_edge := Vector2(my_pos.x, camera_rect.end.y - edge_margin)
+
+	# Y 위치 제한 (화면 안에 있도록)
+	left_edge.y = clampf(left_edge.y, camera_rect.position.y + edge_margin, camera_rect.end.y - edge_margin)
+	right_edge.y = clampf(right_edge.y, camera_rect.position.y + edge_margin, camera_rect.end.y - edge_margin)
+	top_edge.x = clampf(top_edge.x, camera_rect.position.x + edge_margin, camera_rect.end.x - edge_margin)
+	bottom_edge.x = clampf(bottom_edge.x, camera_rect.position.x + edge_margin, camera_rect.end.x - edge_margin)
+
+	var edges: Array[Vector2] = [left_edge, right_edge, top_edge, bottom_edge]
+	var closest := edges[0]
+	var closest_dist := my_pos.distance_to(closest)
+
+	for edge in edges:
+		var dist := my_pos.distance_to(edge)
+		if dist < closest_dist:
+			closest = edge
+			closest_dist = dist
+
+	# 약간의 랜덤 오프셋 추가 (겹치지 않도록)
+	closest += Vector2(randf_range(-15, 15), randf_range(-15, 15))
+
+	return closest
+#endregion

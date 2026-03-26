@@ -14,8 +14,8 @@ const SAVE_COOLDOWN_TIME: float = 0.5  # 연속 저장 방지
 
 # 필드 위치 저장용
 var last_field_position: Vector2 = Vector2.ZERO
-var last_field_stage: String = ""
-var last_field_id: String = ""
+var last_field_act: String = ""
+var last_field_area: String = ""
 
 
 func _ready() -> void:
@@ -48,11 +48,11 @@ func auto_save(reason: String = "") -> void:
 	save_game()
 
 
-func save_field_position(pos: Vector2, stage_id: String, field_id: String) -> void:
+func save_field_position(pos: Vector2, act_id: String, area_id: String) -> void:
 	## 필드 위치 저장
 	last_field_position = pos
-	last_field_stage = stage_id
-	last_field_id = field_id
+	last_field_act = _normalize_stage_id_to_act_id(act_id)
+	last_field_area = area_id
 #endregion
 
 
@@ -64,8 +64,7 @@ func save_game() -> bool:
 		"game": _serialize_game_state(),
 		"party": _serialize_party(),
 		"inventory": _serialize_inventory(),
-		"field_position": _serialize_field_position(),
-		"town": _serialize_town_state()
+		"field_position": _serialize_field_position()
 	}
 	
 	var json_string: String = JSON.stringify(save_data, "\t")
@@ -85,10 +84,13 @@ func save_game() -> bool:
 
 func _serialize_game_state() -> Dictionary:
 	return {
-		"current_stage": GameManager.current_stage,
-		"current_field": GameManager.current_field,
+		"current_act_id": GameManager.current_act_id,
+		"current_area_id": GameManager.current_area_id,
+		"runtime_act_seed": FieldManager.runtime_act_seed,
 		"gold": GameManager.gold,
 		"obtained_legendaries": GameManager.obtained_legendaries.duplicate(),
+		"obtained_trinkets": GameManager.get_obtained_trinkets(),
+		"starting_trinket_id": GameManager.starting_trinket_id,
 		"current_state": GameManager.current_state
 	}
 
@@ -99,13 +101,14 @@ func _serialize_party() -> Array:
 		party_data.append({
 			"id": hero.id,
 			"level": hero.level,
-			"exp": hero.exp,
+			"current_exp": hero.current_exp,
+			"level_stats": hero.level_stats.duplicate(),
 			"current_hp": hero.current_hp,
-			"current_mp": hero.current_mp,
 			"is_dead": hero.is_dead,
 			"seed_bonus": hero.seed_bonus.duplicate(),
 			"equipment": hero.equipment.duplicate(),
-			"skill_toggles": hero.skill_toggles.duplicate()
+			"skill_toggles": hero.skill_toggles.duplicate(),
+			"unlocked_skills": hero.unlocked_skills.duplicate()
 		})
 	return party_data
 
@@ -118,18 +121,11 @@ func _serialize_field_position() -> Dictionary:
 	return {
 		"position_x": last_field_position.x,
 		"position_y": last_field_position.y,
-		"stage_id": last_field_stage,
-		"field_id": last_field_id
+		"act_id": last_field_act,
+		"area_id": last_field_area
 	}
 
 
-func _serialize_town_state() -> Dictionary:
-	## TownManager 상태 저장
-	return {
-		"tavern_heroes": TownManager.tavern_heroes.duplicate(),
-		"recruit_remaining": TownManager.recruit_remaining,
-		"explore_count": TownManager.explore_count
-	}
 #endregion
 
 
@@ -158,7 +154,6 @@ func load_game() -> bool:
 	_deserialize_party(save_data.get("party", []))
 	_deserialize_inventory(save_data.get("inventory", {}))
 	_deserialize_field_position(save_data.get("field_position", {}))
-	_deserialize_town_state(save_data.get("town", {}))
 	
 	load_completed.emit(true)
 	return true
@@ -167,16 +162,46 @@ func load_game() -> bool:
 func _deserialize_game_state(data: Dictionary) -> void:
 	if data.is_empty():
 		return
-	GameManager.current_stage = int(data.get("current_stage", 1))
-	GameManager.current_field = int(data.get("current_field", 1))
+	var saved_seed: int = int(data.get("runtime_act_seed", 0))
+	FieldManager.generate_runtime_acts(saved_seed)
+
+	var act_id: String = str(data.get("current_act_id", ""))
+	if act_id.is_empty():
+		var legacy_stage: int = int(data.get("current_stage", 1))
+		act_id = "act_%d" % maxi(1, legacy_stage)
+	if not FieldManager.set_current_act(act_id):
+		var acts: Array[Dictionary] = FieldManager.ensure_runtime_acts()
+		if not acts.is_empty():
+			act_id = str((acts[0] as Dictionary).get("id", "act_1"))
+			FieldManager.set_current_act(act_id)
+
+	var area_id: String = str(data.get("current_area_id", ""))
+	if area_id.is_empty():
+		# legacy 저장 데이터(current_field)는 런타임 area id로 직접 매핑 불가
+		area_id = FieldManager.get_first_area_id(act_id)
+	if not FieldManager.set_current_area(area_id):
+		area_id = FieldManager.get_first_area_id(act_id)
+		FieldManager.set_current_area(area_id)
+
+	GameManager.current_act_id = FieldManager.current_act_id
+	GameManager.current_area_id = FieldManager.current_area_id
 	GameManager.gold = int(data.get("gold", 0))
 	GameManager.obtained_legendaries = data.get("obtained_legendaries", [])
+	var saved_trinkets: Array = data.get("obtained_trinkets", [])
+	GameManager.obtained_trinkets.clear()
+	for tid_any in saved_trinkets:
+		var tid: String = str(tid_any)
+		if tid.is_empty():
+			continue
+		GameManager.obtained_trinkets.append(tid)
+	GameManager.starting_trinket_id = str(data.get("starting_trinket_id", ""))
 	
 	# current_state 복원 (enum은 int로 저장됨)
-	var saved_state: int = int(data.get("current_state", GameManager.GameState.TOWN))
+	var saved_state: int = int(data.get("current_state", GameManager.GameState.FIELD))
 	GameManager.current_state = saved_state as GameManager.GameState
 	
 	GameManager.gold_changed.emit(GameManager.gold)
+	GameManager.trinkets_changed.emit(GameManager.get_obtained_trinkets())
 
 
 func _deserialize_party(data: Array) -> void:
@@ -193,23 +218,39 @@ func _deserialize_party(data: Array) -> void:
 		if hero.id.is_empty():
 			continue
 		
-		hero.level = int(hero_data.get("level", 1))
-		hero.exp = int(hero_data.get("exp", 0))
 		hero.current_hp = int(hero_data.get("current_hp", hero.get_max_hp()))
-		hero.current_mp = int(hero_data.get("current_mp", hero.get_max_mp()))
 		hero.is_dead = bool(hero_data.get("is_dead", false))
-		
+
 		var saved_seed: Dictionary = hero_data.get("seed_bonus", {})
 		for stat in saved_seed:
-			hero.seed_bonus[stat] = int(saved_seed[stat])
-		
+			var stat_key: String = str(stat)
+			var normalized_stat: String = stat_key
+			if stat_key == "int":
+				normalized_stat = "wis"
+			elif stat_key == "dex":
+				normalized_stat = "agi"
+			elif stat_key == "def":
+				normalized_stat = "def"
+			if normalized_stat == "def":
+				continue
+			if hero.seed_bonus.has(normalized_stat):
+				hero.seed_bonus[normalized_stat] = mini(Hero.SEED_CAP, int(saved_seed[stat]))
+
+		var saved_level: int = int(hero_data.get("level", 1))
+		var saved_exp: int = int(hero_data.get("current_exp", 0))
+		var saved_level_stats: Dictionary = hero_data.get("level_stats", {})
+		var saved_unlocked_skills: Array = hero_data.get("unlocked_skills", [])
+		hero.set_progress(saved_level, saved_exp, saved_level_stats, saved_unlocked_skills)
+
 		var saved_equip: Dictionary = hero_data.get("equipment", {})
-		for slot in saved_equip:
-			hero.equipment[slot] = str(saved_equip[slot])
+		_apply_saved_equipment(hero, saved_equip)
 		
 		var saved_toggles: Dictionary = hero_data.get("skill_toggles", {})
 		for skill_id in saved_toggles:
 			hero.skill_toggles[skill_id] = bool(saved_toggles[skill_id])
+
+		# 세이브 데이터를 모두 적용한 뒤 체력 안전 보정
+		hero.current_hp = mini(hero.current_hp, hero.get_max_hp())
 		
 		PartyManager.party.append(hero)
 	
@@ -223,6 +264,34 @@ func _deserialize_inventory(data: Dictionary) -> void:
 	InventoryManager.inventory_changed.emit()
 
 
+func _apply_saved_equipment(hero: Hero, saved_equip: Dictionary) -> void:
+	for slot in hero.equipment.keys():
+		hero.equipment[slot] = ""
+	if saved_equip.is_empty():
+		return
+
+	var accessory_queue: Array[String] = []
+	for old_slot in ["acc1", "acc2", "ring1", "ring2", "necklace", "boots", "shoes", "gloves", "hands", "feet", "acc", "ring"]:
+		var id: String = str(saved_equip.get(old_slot, ""))
+		if not id.is_empty():
+			accessory_queue.append(id)
+
+	for old_slot in ["main_hand", "off_hand", "head", "body"]:
+		var id: String = str(saved_equip.get(old_slot, ""))
+		if id.is_empty():
+			continue
+		hero.equipment[old_slot] = id
+
+	var acc_idx: int = 0
+	for acc_slot in ["acc1", "acc2"]:
+		while acc_idx < accessory_queue.size():
+			var equip_id: String = accessory_queue[acc_idx]
+			acc_idx += 1
+			if not equip_id.is_empty():
+				hero.equipment[acc_slot] = equip_id
+				break
+
+
 func _deserialize_field_position(data: Dictionary) -> void:
 	if data.is_empty():
 		return
@@ -230,30 +299,14 @@ func _deserialize_field_position(data: Dictionary) -> void:
 		float(data.get("position_x", 0)),
 		float(data.get("position_y", 0))
 	)
-	last_field_stage = str(data.get("stage_id", ""))
-	last_field_id = str(data.get("field_id", ""))
+	last_field_act = str(data.get("act_id", ""))
+	last_field_area = str(data.get("area_id", ""))
+	if last_field_act.is_empty():
+		last_field_act = _normalize_stage_id_to_act_id(str(data.get("stage_id", "")))
+	if last_field_area.is_empty():
+		last_field_area = str(data.get("field_id", ""))
 
 
-func _deserialize_town_state(data: Dictionary) -> void:
-	## TownManager 상태 복원
-	if data.is_empty():
-		# 세이브 데이터에 town 정보가 없으면 새로 초기화
-		TownManager.init_new_game()
-		return
-	
-	# tavern_heroes 복원
-	TownManager.tavern_heroes.clear()
-	var saved_tavern: Array = data.get("tavern_heroes", [])
-	for hero_id in saved_tavern:
-		TownManager.tavern_heroes.append(str(hero_id))
-	
-	# recruit_remaining 복원
-	TownManager.recruit_remaining = int(data.get("recruit_remaining", 3))
-	
-	# explore_count 복원
-	TownManager.explore_count = int(data.get("explore_count", 0))
-	
-	TownManager.tavern_updated.emit()
 #endregion
 
 
@@ -289,8 +342,8 @@ func get_save_info() -> Dictionary:
 	
 	return {
 		"timestamp": save_data.get("timestamp", ""),
-		"stage": int(game_data.get("current_stage", 1)),
-		"field": int(game_data.get("current_field", 1)),
+		"act_id": str(game_data.get("current_act_id", "act_1")),
+		"area_id": str(game_data.get("current_area_id", "")),
 		"gold": int(game_data.get("gold", 0)),
 		"party_size": party_data.size()
 	}
@@ -302,8 +355,16 @@ func get_saved_field_position() -> Vector2:
 
 func get_saved_field_info() -> Dictionary:
 	return {
-		"stage_id": last_field_stage,
-		"field_id": last_field_id,
+		"act_id": last_field_act,
+		"area_id": last_field_area,
 		"position": last_field_position
 	}
+
+
+func _normalize_stage_id_to_act_id(raw_id: String) -> String:
+	if raw_id.is_empty():
+		return raw_id
+	if raw_id.begins_with("stage_"):
+		return "act_" + raw_id.trim_prefix("stage_")
+	return raw_id
 #endregion

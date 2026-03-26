@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "robe_epic"
+name = "별빛의 로브"
+slot = "body"
+type = "robe"
+rarity = "epic"
+two_handed = false
+stats = {
+  "def": 12,
+  "int": 28,
+  "hp": 35,
+  "luk": 5
+}
+special_effect = {
+  "type": "mana_regen",
+  "value": 0.15
+}
+gear_score = 78

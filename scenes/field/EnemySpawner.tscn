@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/EnemySpawner.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/spawners/default_enemy_spawner_config.tres" id="2_spawner_config"]
+
+[node name="EnemySpawner" type="Node"]
+script = ExtResource("1_script")
+config = ExtResource("2_spawner_config")

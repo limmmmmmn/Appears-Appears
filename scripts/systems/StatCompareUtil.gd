@@ -2,16 +2,18 @@ extends RefCounted
 class_name StatCompareUtil
 ## 스탯 비교 유틸리티: 장비 변경 시 스탯 변화 계산
 
-const STAT_KEYS := ["atk", "def", "p_def", "int", "spd", "luk", "hp", "mp", "str"]
+const STAT_KEYS := ["atk", "def", "p_def", "int", "dex", "luk", "hp", "str", "spd"]
 
 const SLOT_DISPLAY_NAMES := {
-	"main_hand": "주무기",
-	"off_hand": "보조",
-	"head": "머리",
-	"body": "몸통",
-	"accessory": "장신구",
-	"acc1": "장신구1",
-	"acc2": "장신구2"
+	"main_hand": "메인손",
+	"off_hand": "서브손",
+	"head": "투구",
+	"body": "갑옷",
+	"gloves": "장갑",
+	"boots": "신발",
+	"necklace": "목걸이",
+	"ring1": "반지1",
+	"ring2": "반지2"
 }
 
 
@@ -26,7 +28,7 @@ static func calculate_stat_changes(hero: Hero, new_item_id: String) -> Dictionar
 	
 	var new_stats: Dictionary = equip_data.get("stats", {})
 	var slot: String = equip_data.get("slot", "")
-	var target_slot := _get_target_slot(hero, slot)
+	var target_slot: String = _get_target_slot(hero, slot)
 	
 	# 현재 장착 장비 스탯
 	var current_equip_id: String = hero.equipment.get(target_slot, "")
@@ -59,13 +61,13 @@ static func calculate_stat_changes(hero: Hero, new_item_id: String) -> Dictionar
 		var new_val := cur - old_bonus + new_bonus
 		result["INT"] = {"current": cur, "new": new_val, "diff": new_val - cur}
 	
-	# SPD 계산
-	if new_stats.has("spd") or current_stats.has("spd"):
-		var cur := hero.get_spd()
-		var old_bonus: int = int(current_stats.get("spd", 0))
-		var new_bonus: int = int(new_stats.get("spd", 0))
+	# DEX 계산
+	if new_stats.has("dex") or current_stats.has("dex"):
+		var cur := hero.get_dex()
+		var old_bonus: int = int(current_stats.get("dex", 0))
+		var new_bonus: int = int(new_stats.get("dex", 0))
 		var new_val := cur - old_bonus + new_bonus
-		result["SPD"] = {"current": cur, "new": new_val, "diff": new_val - cur}
+		result["DEX"] = {"current": cur, "new": new_val, "diff": new_val - cur}
 	
 	# LUK 계산
 	if new_stats.has("luk") or current_stats.has("luk"):
@@ -82,15 +84,15 @@ static func calculate_stat_changes(hero: Hero, new_item_id: String) -> Dictionar
 		var new_bonus: int = int(new_stats.get("hp", 0))
 		var new_val := cur - old_bonus + new_bonus
 		result["HP"] = {"current": cur, "new": new_val, "diff": new_val - cur}
-	
-	# MP 계산
-	if new_stats.has("mp") or current_stats.has("mp"):
-		var cur := hero.get_max_mp()
-		var old_bonus: int = int(current_stats.get("mp", 0))
-		var new_bonus: int = int(new_stats.get("mp", 0))
+
+	# SPD 계산
+	if new_stats.has("spd") or current_stats.has("spd"):
+		var cur := hero.get_spd()
+		var old_bonus: int = int(current_stats.get("spd", 0))
+		var new_bonus: int = int(new_stats.get("spd", 0))
 		var new_val := cur - old_bonus + new_bonus
-		result["MP"] = {"current": cur, "new": new_val, "diff": new_val - cur}
-	
+		result["SPD"] = {"current": cur, "new": new_val, "diff": new_val - cur}
+
 	return result
 
 
@@ -150,17 +152,17 @@ static func format_equipment_stats(stats: Dictionary) -> String:
 		parts.append("DEF +%d" % val)
 	if stats.has("int"):
 		parts.append("INT +%d" % int(stats["int"]))
-	if stats.has("spd"):
-		parts.append("SPD +%d" % int(stats["spd"]))
+	if stats.has("dex"):
+		parts.append("DEX +%d" % int(stats["dex"]))
 	if stats.has("str"):
 		parts.append("STR +%d" % int(stats["str"]))
 	if stats.has("luk"):
 		parts.append("LUK +%d" % int(stats["luk"]))
 	if stats.has("hp"):
 		parts.append("HP +%d" % int(stats["hp"]))
-	if stats.has("mp"):
-		parts.append("MP +%d" % int(stats["mp"]))
-	
+	if stats.has("spd"):
+		parts.append("SPD +%d" % int(stats["spd"]))
+
 	return "  ".join(parts) if not parts.is_empty() else "(스탯 없음)"
 
 
@@ -169,22 +171,21 @@ static func get_slot_display_name(slot: String) -> String:
 	return SLOT_DISPLAY_NAMES.get(slot, slot)
 
 
-## 악세서리 슬롯 결정
+## 아이템 슬롯 → 영웅 장착 슬롯 결정
 static func _get_target_slot(hero: Hero, slot: String) -> String:
-	if slot == "accessory":
-		if hero.equipment.get("acc1", "").is_empty():
-			return "acc1"
-		return "acc1"  # 기본값
+	if slot in ["ring", "acc"]:
+		for s in ["ring1", "ring2"]:
+			if hero.equipment.get(s, "").is_empty():
+				return s
+		return "ring1"
 	return slot
 
 
 ## 장착할 최적 슬롯 결정
 static func determine_equip_slot(hero: Hero, item_slot: String) -> String:
-	if item_slot == "accessory":
-		if hero.equipment.get("acc1", "").is_empty():
-			return "acc1"
-		elif hero.equipment.get("acc2", "").is_empty():
-			return "acc2"
-		else:
-			return "acc1"
+	if item_slot in ["ring", "acc"]:
+		for s in ["ring1", "ring2"]:
+			if hero.equipment.get(s, "").is_empty():
+				return s
+		return "ring1"
 	return item_slot

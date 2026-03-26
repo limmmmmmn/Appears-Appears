@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="TrinketTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/TrinketTemplate.gd" id="1_trinket_template"]
+
+[resource]
+script = ExtResource("1_trinket_template")
+id = "lucky_charm"
+name = "행운의 부적"
+emoji = "🍀"
+description = "전리품의 흐름을 안정시키는 부적.\n골드/경험치 보상이 소폭 증가한다."
+sources = ["boss", "shop", "event"]
+reward_gold_multiplier = 1.35
+reward_exp_multiplier = 1.1
+enemy_stat_multiplier = 1.0
+field_enemy_count_multiplier = 1.0
+battle_enemy_bonus = 0
+max_enemies_per_window_bonus = 0

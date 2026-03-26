@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "boots_epic"
+name = "헤르메스의 날개"
+slot = "boots"
+type = "shoes"
+rarity = "epic"
+two_handed = false
+stats = {
+  "spd": 18,
+  "def": 8,
+  "luk": 8,
+  "hp": 20
+}
+special_effect = {
+  "type": "evasion",
+  "value": 0.15
+}
+gear_score = 58

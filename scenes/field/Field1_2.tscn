@@ -1,0 +1,104 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/scenes/Field.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/fields/field1_2.tres" id="2_field_template"]
+[ext_resource type="PackedScene" path="res://scenes/ui/FieldHUD.tscn" id="3_hud_scene"]
+[ext_resource type="PackedScene" path="res://scenes/field/EnemySpawner.tscn" id="4_enemy_spawner_scene"]
+
+[sub_resource type="RectangleShape2D" id="RectShape_top"]
+size = Vector2(544, 16)
+
+[sub_resource type="RectangleShape2D" id="RectShape_bottom"]
+size = Vector2(544, 16)
+
+[sub_resource type="RectangleShape2D" id="RectShape_left"]
+size = Vector2(16, 320)
+
+[sub_resource type="RectangleShape2D" id="RectShape_right"]
+size = Vector2(16, 320)
+
+[sub_resource type="RectangleShape2D" id="RectShape_exit"]
+size = Vector2(56, 96)
+
+[node name="Field1_2" type="Node2D"]
+script = ExtResource("1_script")
+spawn_point = NodePath("SpawnPoint")
+boss_spawn_point = NodePath("BossSpawnPoint")
+tilemap = NodePath("TileMapLayer")
+enemy_spawner_node = NodePath("EnemySpawner")
+field_template = ExtResource("2_field_template")
+enable_runtime_field_content = false
+play_area_size = Vector2(512, 288)
+
+[node name="Background" type="ColorRect" parent="."]
+offset_right = 512.0
+offset_bottom = 288.0
+color = Color(0.18, 0.24, 0.3, 1)
+
+[node name="TileMapLayerBg" type="TileMapLayer" parent="."]
+
+[node name="TileMapLayer" type="TileMapLayer" parent="."]
+
+[node name="SpawnPoint" type="Marker2D" parent="."]
+visible = false
+position = Vector2(44, 144)
+
+[node name="BossSpawnPoint" type="Marker2D" parent="."]
+visible = false
+position = Vector2(438, 142)
+
+[node name="EnemySpawnPoints" type="Node2D" parent="."]
+
+[node name="Point1" type="Marker2D" parent="EnemySpawnPoints"]
+position = Vector2(144, 88)
+
+[node name="Point2" type="Marker2D" parent="EnemySpawnPoints"]
+position = Vector2(256, 84)
+
+[node name="Point3" type="Marker2D" parent="EnemySpawnPoints"]
+position = Vector2(332, 196)
+
+[node name="Point4" type="Marker2D" parent="EnemySpawnPoints"]
+position = Vector2(436, 220)
+
+[node name="Bounds" type="Node2D" parent="."]
+
+[node name="TopWall" type="StaticBody2D" parent="Bounds"]
+position = Vector2(256, -8)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Bounds/TopWall"]
+shape = SubResource("RectShape_top")
+
+[node name="BottomWall" type="StaticBody2D" parent="Bounds"]
+position = Vector2(256, 296)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Bounds/BottomWall"]
+shape = SubResource("RectShape_bottom")
+
+[node name="LeftWall" type="StaticBody2D" parent="Bounds"]
+position = Vector2(-8, 144)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Bounds/LeftWall"]
+shape = SubResource("RectShape_left")
+
+[node name="RightWall" type="StaticBody2D" parent="Bounds"]
+position = Vector2(520, 144)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Bounds/RightWall"]
+shape = SubResource("RectShape_right")
+
+[node name="ExitArea" type="Area2D" parent="."]
+position = Vector2(476, 144)
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ExitArea"]
+shape = SubResource("RectShape_exit")
+
+[node name="TownGateMarker" type="Polygon2D" parent="."]
+position = Vector2(476, 144)
+color = Color(0.21, 0.62, 0.95, 0.5)
+polygon = PackedVector2Array(-28, -48, 28, -48, 28, 48, -28, 48)
+
+[node name="EnemySpawner" parent="." instance=ExtResource("4_enemy_spawner_scene")]
+
+[node name="HUD" parent="." instance=ExtResource("3_hud_scene")]

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "sword_magic"
+name = "마법검"
+slot = "main_hand"
+type = "sword"
+rarity = "magic"
+two_handed = false
+stats = {
+  "atk": 16,
+  "int": 3
+}
+gear_score = 22

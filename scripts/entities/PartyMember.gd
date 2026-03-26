@@ -4,6 +4,10 @@ class_name PartyMember
 ## JRPG 스네이크 무브먼트 - 리더가 지나간 길을 따라감
 
 @export var move_speed: float = 60.0
+@export_group("Chatter Bubble")
+@export var chatter_bubble_scene: PackedScene = preload("res://scenes/ui/SpeechBubble.tscn")
+@export var chatter_bubble_extra_lift: float = 24.0
+@export var chatter_bubble_offset: Vector2 = Vector2.ZERO
 
 var is_leader: bool = false
 var member_index: int = 0  # 0=리더, 1,2,3=팔로워
@@ -13,32 +17,47 @@ var hero_data: Dictionary = {}
 var facing_right: bool = false
 var current_direction: String = "down"
 
+# 보스전 모드 (이동 정지)
+var is_in_boss_battle: bool = false
+
+# 잠시 멈춤 (적 조우 시)
+var is_stunned: bool = false
+var stun_timer: float = 0.0
+
 # 스네이크 무브먼트용
 var path_history: Array[Vector2] = []  # 리더만 사용
 var leader_ref: PartyMember = null  # 팔로워만 사용
 const PATH_RECORD_DISTANCE: float = 4.0  # 몇 픽셀마다 기록할지
-const FOLLOW_DISTANCE: float = 18.0  # 팔로워 간 거리
+const FOLLOW_DISTANCE: float = 24.0  # 팔로워 간 거리
 
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var collision: CollisionShape2D = $CollisionShape2D
 @onready var hp_bar: ProgressBar = $StatusBars/HPBar
 
-var attack_icon: Label = null
-const ATTACK_ICONS: Dictionary = {
-	"warrior": "⚔️", "knight": "🗡️", "thief": "🔪",
-	"archer": "🏹", "mage": "✨", "cleric": "✝️"
-}
-
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_to_group("party")
-	_create_attack_icon()
-	
-	if BattleManager:
-		BattleManager.hero_attacked.connect(_on_hero_attacked)
 
 
 func _physics_process(delta: float) -> void:
+	_apply_dead_visual()
+
+	# 보스전 중에는 이동 정지
+	if is_in_boss_battle:
+		velocity = Vector2.ZERO
+		_play_idle_animation()
+		return
+
+	# 잠시 멈춤 처리 (적 조우 시)
+	if is_stunned:
+		stun_timer -= delta
+		if stun_timer <= 0:
+			is_stunned = false
+		velocity = Vector2.ZERO
+		_play_idle_animation()
+		return
+
 	if is_leader:
 		_process_leader(delta)
 	else:
@@ -51,21 +70,57 @@ func _physics_process(delta: float) -> void:
 # 리더 로직
 #=============================================================================
 func _process_leader(_delta: float) -> void:
-	var input_dir := Vector2(
-		Input.get_axis("ui_left", "ui_right"),
-		Input.get_axis("ui_up", "ui_down")
-	).normalized()
-	
+	# WASD + 방향키 입력 체크
+	var input_dir := Vector2.ZERO
+
+	# WASD 입력
+	if Input.is_key_pressed(KEY_A):
+		input_dir.x -= 1
+	if Input.is_key_pressed(KEY_D):
+		input_dir.x += 1
+	if Input.is_key_pressed(KEY_W):
+		input_dir.y -= 1
+	if Input.is_key_pressed(KEY_S):
+		input_dir.y += 1
+
+	# 방향키도 지원
+	input_dir.x += Input.get_axis("ui_left", "ui_right")
+	input_dir.y += Input.get_axis("ui_up", "ui_down")
+
+	input_dir = input_dir.normalized()
+
+	# 키보드 입력이 있으면 이동
 	if input_dir != Vector2.ZERO:
+		var prev_pos: Vector2 = global_position
 		velocity = input_dir * move_speed
 		_update_direction(input_dir)
 		_play_walk_animation()
-		
 		move_and_slide()
+		if not _is_position_walkable(global_position):
+			global_position = prev_pos
+			velocity = Vector2.ZERO
+			_play_idle_animation()
+			return
 		_record_path()
-	else:
+		return
+
+	# 입력 없음 - 대기
+	velocity = Vector2.ZERO
+	_play_idle_animation()
+
+
+func set_boss_battle_mode(enabled: bool) -> void:
+	## 보스전 모드 설정 (이동 정지/복귀)
+	is_in_boss_battle = enabled
+	if enabled:
 		velocity = Vector2.ZERO
-		_play_idle_animation()
+
+
+func brief_pause(duration: float = 0.15) -> void:
+	## 잠시 멈춤 (적 조우 시 호출)
+	is_stunned = true
+	stun_timer = duration
+	velocity = Vector2.ZERO
 
 
 func _record_path() -> void:
@@ -119,11 +174,15 @@ func _process_follower(_delta: float) -> void:
 	var target_pos: Vector2 = leader_ref.get_path_position(target_distance)
 	
 	# 현재 위치에서 목표까지 얼마나 이동해야 하는지
+	var prev_pos: Vector2 = global_position
 	var to_target: Vector2 = target_pos - global_position
 	var move_distance: float = to_target.length()
 	
 	# 목표 위치로 이동
 	global_position = target_pos
+	if not _is_position_walkable(global_position):
+		global_position = prev_pos
+		move_distance = 0.0
 	
 	# 움직였으면 걷기 애니메이션
 	if move_distance > 0.5:
@@ -131,6 +190,13 @@ func _process_follower(_delta: float) -> void:
 		_play_walk_animation()
 	else:
 		_play_idle_animation()
+
+
+func _is_position_walkable(world_pos: Vector2) -> bool:
+	var host := get_parent()
+	if host != null and host.has_method("is_world_position_walkable"):
+		return bool(host.call("is_world_position_walkable", world_pos))
+	return true
 
 
 #=============================================================================
@@ -170,46 +236,6 @@ func _play_idle_animation() -> void:
 		sprite.frame = 1
 
 
-func _create_attack_icon() -> void:
-	attack_icon = Label.new()
-	attack_icon.text = "⚔️"
-	attack_icon.add_theme_font_size_override("font_size", 16)
-	attack_icon.position = Vector2(-8, -32)
-	attack_icon.z_index = 20
-	attack_icon.visible = false
-	add_child(attack_icon)
-
-
-func _on_hero_attacked(attacked_hero_id: String) -> void:
-	if attacked_hero_id == hero_id:
-		_play_attack_effect()
-
-
-func _play_attack_effect() -> void:
-	if not attack_icon:
-		return
-	
-	var class_id: String = hero_data.get("class_id", "warrior")
-	attack_icon.text = ATTACK_ICONS.get(class_id, "⚔️")
-	
-	var start_x: float = -12.0 if not facing_right else 12.0
-	var end_x: float = 12.0 if not facing_right else -12.0
-	
-	attack_icon.position = Vector2(start_x, -28)
-	attack_icon.rotation_degrees = -45.0 if not facing_right else 45.0
-	attack_icon.visible = true
-	attack_icon.modulate = Color.WHITE
-	
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(attack_icon, "position:x", end_x, 0.15)
-	tween.tween_property(attack_icon, "position:y", -35, 0.07)
-	tween.tween_property(attack_icon, "rotation_degrees", 45.0 if not facing_right else -45.0, 0.15)
-	tween.chain().tween_property(attack_icon, "position:y", -28, 0.08)
-	tween.chain().tween_property(attack_icon, "modulate:a", 0.0, 0.1)
-	tween.chain().tween_callback(func(): attack_icon.visible = false)
-
-
 func _update_hp_bar() -> void:
 	if not hp_bar or hero_id.is_empty():
 		return
@@ -229,12 +255,69 @@ func _update_hp_bar() -> void:
 		hp_bar.add_theme_stylebox_override("fill", fill_style)
 
 
+func _apply_dead_visual() -> void:
+	if hero_id.is_empty():
+		return
+	var hero: Hero = PartyManager.get_hero_by_id(hero_id) if PartyManager else null
+	var is_dead_now: bool = hero != null and hero.is_dead
+
+	if animated_sprite and is_instance_valid(animated_sprite):
+		if is_dead_now:
+			animated_sprite.modulate = Color(0.45, 0.45, 0.45, 0.9)
+		else:
+			animated_sprite.modulate = Color(1, 1, 1, 1)
+
+	if hp_bar and is_instance_valid(hp_bar):
+		if is_dead_now:
+			hp_bar.modulate = Color(0.6, 0.6, 0.6, 0.85)
+		else:
+			hp_bar.modulate = Color(1, 1, 1, 1)
+
+
 func get_current_direction() -> String:
 	return current_direction
 
 
 func get_facing_right() -> bool:
 	return facing_right
+
+
+func get_chatter_bubble_extra_lift() -> float:
+	return chatter_bubble_extra_lift
+
+
+func get_chatter_bubble_offset() -> Vector2:
+	return chatter_bubble_offset
+
+
+func create_chatter_bubble(text: String, tint_color: Color) -> PanelContainer:
+	var scene: PackedScene = chatter_bubble_scene
+	if scene == null:
+		scene = load("res://scenes/ui/SpeechBubble.tscn")
+	if scene == null:
+		return null
+
+	var instance: Node = scene.instantiate()
+	var bubble: PanelContainer = instance as PanelContainer
+	if bubble == null:
+		if instance != null and is_instance_valid(instance):
+			instance.queue_free()
+		return null
+
+	var chatter_bubble: SpeechBubble = bubble as SpeechBubble
+	if chatter_bubble != null:
+		chatter_bubble.configure(text, tint_color)
+	elif bubble.has_method("configure"):
+		bubble.call("configure", text, tint_color)
+	else:
+		var label: Label = bubble.get_node_or_null("TextLabel") as Label
+		if label != null:
+			label.text = text
+			label.add_theme_font_size_override("font_size", 11)
+			label.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 1.0))
+			label.custom_minimum_size = Vector2(132.0, 0.0)
+
+	return bubble
 
 
 #=============================================================================
@@ -252,6 +335,8 @@ func setup_as_leader(hero: RefCounted, start_pos: Vector2) -> void:
 	var camera := get_node_or_null("Camera2D") as Camera2D
 	if camera:
 		camera.enabled = true
+		camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
+		camera.make_current()
 	
 	# 초기 경로 히스토리 (뒤쪽으로 줄 세우기)
 	for i in range(100):
@@ -265,9 +350,13 @@ func setup_as_follower(hero: RefCounted, leader: PartyMember, index: int) -> voi
 	member_index = index
 	leader_ref = leader
 	z_index = 100 - index
-	
+
 	add_to_group("party_follower")
-	
+
+	var camera := get_node_or_null("Camera2D") as Camera2D
+	if camera:
+		camera.enabled = false
+
 	# 초기 위치
 	global_position = leader.get_path_position(FOLLOW_DISTANCE * index)
 	

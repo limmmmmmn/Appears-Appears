@@ -10,12 +10,12 @@ var enemy_type: String = ""  # normal, elite, boss
 var max_hp: int = 0
 var atk_stat: int = 0
 var def_stat: int = 0
-var spd_stat: int = 0
+var dex_stat: int = 0
+var int_stat: int = 0
 
 var current_hp: int = 0
 var is_dead: bool = false
 
-var exp_reward: int = 0
 var gold_min: int = 0
 var gold_max: int = 0
 var drop_table: Array = []
@@ -50,17 +50,17 @@ func _initialize(enemy_id: String) -> void:
 	skills = data.get("skills", ["basic_attack"])
 	damage_type = data.get("damage_type", "physical")
 	
-	# 새 스탯 구조: stats.hp, stats.atk, stats.def, stats.spd
+	# 새 스탯 구조: stats.hp, stats.atk, stats.def, stats.dex, stats.int
 	var stats: Dictionary = data.get("stats", {})
 	max_hp = int(stats.get("hp", 10))
 	atk_stat = int(stats.get("atk", 5))
 	def_stat = int(stats.get("def", 5))
-	spd_stat = int(stats.get("spd", 5))
+	dex_stat = int(stats.get("dex", 5))
+	int_stat = int(stats.get("int", 1))
 	
 	current_hp = max_hp
 	
 	var rewards: Dictionary = data.get("rewards", {})
-	exp_reward = int(rewards.get("exp", 0))
 	gold_min = int(rewards.get("gold_min", 0))
 	gold_max = int(rewards.get("gold_max", 0))
 	drop_table = data.get("drop_table", [])
@@ -72,8 +72,11 @@ func get_atk() -> int:
 func get_def() -> int:
 	return def_stat
 
-func get_spd() -> int:
-	return spd_stat
+func get_dex() -> int:
+	return dex_stat
+
+func get_int() -> int:
+	return int_stat
 
 # 하위 호환용 (기존 코드에서 사용 중일 수 있음)
 func get_p_def() -> int:
@@ -83,7 +86,7 @@ func get_m_def() -> int:
 	return def_stat
 
 func get_eva() -> float:
-	return spd_stat * 0.5
+	return dex_stat * 0.5
 
 func get_crit() -> float:
 	return 5.0  # 적은 기본 5% 크리티컬

@@ -1,0 +1,145 @@
+[gd_scene format=3 uid="uid://bha04pcmxyf1h"]
+
+[ext_resource type="Script" uid="uid://bgp7mge35l47r" path="res://scripts/scenes/ActNodeSelect.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_vnu3c"]
+bg_color = Color(0.12, 0.15, 0.22, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.35, 0.46, 0.72, 0.95)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[node name="ActNodeSelect" type="Control" unique_id=1567398510]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="." unique_id=1002532469]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.06, 0.08, 0.12, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=1691798515]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="NodeMapPanel" type="PanelContainer" parent="CenterContainer" unique_id=1023263071]
+custom_minimum_size = Vector2(860, 360)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_vnu3c")
+
+[node name="RootVBox" type="VBoxContainer" parent="CenterContainer/NodeMapPanel" unique_id=2070030458]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/NodeMapPanel/RootVBox" unique_id=995340692]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = " 전체 노드"
+horizontal_alignment = 1
+
+[node name="SubtitleLabel" type="Label" parent="CenterContainer/NodeMapPanel/RootVBox" unique_id=1018433471]
+modulate = Color(0.85, 0.9, 1, 0.95)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "파티가 노드를 이동한 뒤 해당 구역으로 진입합니다."
+horizontal_alignment = 1
+
+[node name="NodeScroll" type="ScrollContainer" parent="CenterContainer/NodeMapPanel/RootVBox" unique_id=260585072]
+custom_minimum_size = Vector2(760, 190)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 3
+vertical_scroll_mode = 0
+
+[node name="NodeFlow" type="HBoxContainer" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll" unique_id=1827428331]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 8
+
+[node name="NodeButton1" type="Button" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=1194997743]
+custom_minimum_size = Vector2(132, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "1. 필드
+Field1_1"
+
+[node name="Arrow1" type="Label" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=1992057939]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "→"
+vertical_alignment = 1
+
+[node name="NodeButton2" type="Button" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=1630592754]
+custom_minimum_size = Vector2(132, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "2. 마을
+Town1_1"
+
+[node name="Arrow2" type="Label" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=2082765427]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "→"
+vertical_alignment = 1
+
+[node name="NodeButton3" type="Button" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=396467228]
+custom_minimum_size = Vector2(132, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "3. 필드
+Field1_2"
+
+[node name="Arrow3" type="Label" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=1529825318]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "→"
+vertical_alignment = 1
+
+[node name="NodeButton4" type="Button" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=824119689]
+custom_minimum_size = Vector2(132, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "4. 마을
+Town1_2"
+
+[node name="Arrow4" type="Label" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=136399474]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "→"
+vertical_alignment = 1
+
+[node name="NodeButton5" type="Button" parent="CenterContainer/NodeMapPanel/RootVBox/NodeScroll/NodeFlow" unique_id=735040682]
+custom_minimum_size = Vector2(132, 84)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "5. 필드
+Field1_3"
+
+[node name="HintLabel" type="Label" parent="CenterContainer/NodeMapPanel/RootVBox" unique_id=1507634502]
+modulate = Color(0.9, 0.95, 1, 0.95)
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "이전 노드로는 돌아갈 수 없습니다."
+horizontal_alignment = 1
+
+[node name="PartyOverlay" type="Control" parent="CenterContainer/NodeMapPanel" unique_id=1728520793]
+layout_mode = 2
+mouse_filter = 2

@@ -4,10 +4,10 @@
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5btk3"]
 bg_color = Color(0, 0, 0, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
 
 [sub_resource type="Shader" id="Shader_mother2"]
 code = "shader_type canvas_item;
@@ -20,7 +20,7 @@ uniform vec3 color2 : source_color = vec3(0.4, 0.2, 0.5);
 void fragment() {
     vec2 uv = UV;
     vec3 col = vec3(0.0);
-    
+
     if (effect_type == 0) {
         // 체크무늬 스크롤
         vec2 checker = floor((uv + vec2(time * 0.1, time * 0.05)) * 8.0);
@@ -73,102 +73,41 @@ void fragment() {
         plasma = plasma / 3.0 * 0.5 + 0.5;
         col = mix(color1, color2, plasma);
     }
-    
+
     COLOR = vec4(col, 1.0);
 }
 "
 
 [node name="BattleWindow" type="PanelContainer" unique_id=1167346498]
-custom_minimum_size = Vector2(280, 190)
+custom_minimum_size = Vector2(280, 210)
 offset_left = 3.0
 offset_top = 1.0
 offset_right = 283.0
-offset_bottom = 181.0
-mouse_filter = 1
+offset_bottom = 211.0
+mouse_filter = 0
 script = ExtResource("1_battle")
 
 [node name="MainVBox" type="VBoxContainer" parent="." unique_id=482878077]
 layout_mode = 2
 mouse_filter = 1
-theme_override_constants/separation = 4
-
-[node name="RewardsPanel" type="PanelContainer" parent="MainVBox"]
-layout_mode = 2
-mouse_filter = 1
-
-[node name="RewardsHBox" type="HBoxContainer" parent="MainVBox/RewardsPanel"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 12
-alignment = 1
-
-[node name="GoldContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="GoldIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/GoldContainer"]
-layout_mode = 2
-text = "💰"
-
-[node name="GoldLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/GoldContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "0"
-
-[node name="ExpContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="ExpIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/ExpContainer"]
-layout_mode = 2
-text = "⭐"
-
-[node name="ExpLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/ExpContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "0"
-
-[node name="LootContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="LootIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/LootContainer"]
-layout_mode = 2
-text = "🎁"
-
-[node name="LootLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/LootContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "x1"
-
-[node name="KillCountContainer" type="HBoxContainer" parent="MainVBox/RewardsPanel/RewardsHBox"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="KillCountIcon" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/KillCountContainer"]
-layout_mode = 2
-text = "💀"
-
-[node name="KillCountLabel" type="Label" parent="MainVBox/RewardsPanel/RewardsHBox/KillCountContainer"]
-unique_name_in_owner = true
-layout_mode = 2
-text = "0"
+theme_override_constants/separation = 0
 
 [node name="TopBar" type="HBoxContainer" parent="MainVBox" unique_id=1913141494]
-visible = false
 layout_mode = 2
-alignment = 2
+custom_minimum_size = Vector2(0, 22)
+theme_override_constants/separation = 6
 
 [node name="CloseButton" type="Button" parent="MainVBox/TopBar" unique_id=262349809]
 visible = false
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
-text = "×"
+text = "x"
 
 [node name="BattleArea" type="PanelContainer" parent="MainVBox" unique_id=897254730]
 layout_mode = 2
 mouse_filter = 1
 size_flags_vertical = 3
+size_flags_stretch_ratio = 7.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_5btk3")
 
 [node name="Background" type="ColorRect" parent="MainVBox/BattleArea"]
@@ -176,23 +115,35 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="EnemyContainer" type="HBoxContainer" parent="MainVBox/BattleArea" unique_id=197219225]
+[node name="EnemyContainer" type="VBoxContainer" parent="MainVBox/BattleArea" unique_id=197219225]
 layout_mode = 2
 mouse_filter = 2
+size_flags_horizontal = 4
 size_flags_vertical = 4
 theme_override_constants/separation = 5
 alignment = 1
 
-[node name="BottomBar" type="HBoxContainer" parent="MainVBox" unique_id=676078642]
+[node name="InfoBar" type="PanelContainer" parent="MainVBox"]
 layout_mode = 2
-mouse_filter = 1
-theme_override_constants/separation = 8
-alignment = 2
+custom_minimum_size = Vector2(0, 20)
 
-[node name="RunButton" type="Button" parent="MainVBox/BottomBar" unique_id=219318160]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(50, 26)
+[node name="InfoLabel" type="Label" parent="MainVBox/InfoBar"]
 layout_mode = 2
+text = "💰0  📦0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ButtonBar" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 30)
+alignment = 1
+theme_override_constants/separation = 14
+
+[node name="RunButton" type="Button" parent="MainVBox/ButtonBar" unique_id=219318160]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(104, 24)
+layout_mode = 2
+size_flags_horizontal = 4
 mouse_filter = 0
-tooltip_text = "즉시 도주 (보상 50%)"
+theme_override_font_sizes/font_size = 9
 text = "도주"

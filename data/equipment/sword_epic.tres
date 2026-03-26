@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EquipmentTemplate" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EquipmentTemplate.gd" id="1_equipment_template"]
+
+[resource]
+script = ExtResource("1_equipment_template")
+id = "sword_epic"
+name = "드래곤 슬레이어"
+slot = "main_hand"
+type = "sword"
+rarity = "epic"
+two_handed = false
+stats = {
+  "atk": 30,
+  "str": 8,
+  "hp": 30
+}
+gear_score = 55
