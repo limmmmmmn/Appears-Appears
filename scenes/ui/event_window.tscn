@@ -1,0 +1,36 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1hqevent00000000"]
+
+[ext_resource type="Script" path="res://scripts/ui/event_window.gd" id="1_event"]
+
+[node name="EventWindow" type="PanelContainer"]
+custom_minimum_size = Vector2(460, 240)
+offset_right = 460.0
+offset_bottom = 240.0
+script = ExtResource("1_event")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+text = "이벤트"
+theme_override_font_sizes/font_size = 26
+
+[node name="Description" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(420, 100)
+autowrap_mode = 2
+text = ""
+
+[node name="ButtonContainer" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 14

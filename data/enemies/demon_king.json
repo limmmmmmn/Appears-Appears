@@ -1,0 +1,18 @@
+{
+  "id": "demon_king",
+  "name": "마왕",
+  "hp": 400,
+  "mp": 80,
+  "str": 28,
+  "agi": 14,
+  "vit": 22,
+  "int": 20,
+  "luk": 12,
+  "sprite": "",
+  "reward_gold": 999,
+  "reward_exp": 500,
+  "description": "세계의 종말을 바라는 마의 왕. 가장 강대한 적.",
+  "min_count": 1,
+  "max_count": 1,
+  "spells": ["fire", "heal"]
+}

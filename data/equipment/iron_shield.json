@@ -1,0 +1,12 @@
+{
+  "id": "iron_shield",
+  "name": "철방패",
+  "description": "견고한 철판. 방어의 기본.",
+  "slot": "shield",
+  "str_bonus": 0,
+  "vit_bonus": 3,
+  "agi_bonus": -1,
+  "int_bonus": 0,
+  "buy_price": 120,
+  "sell_price": 60
+}

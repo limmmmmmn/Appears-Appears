@@ -1,0 +1,6 @@
+{
+  "id": "plains_enemies",
+  "enemies": ["slime", "goblin"],
+  "encounter_interval_min": 8.0,
+  "encounter_interval_max": 15.0
+}

@@ -1,0 +1,38 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1hqfork00000000"]
+
+[ext_resource type="Script" path="res://scripts/ui/fork_choice.gd" id="1_fork"]
+
+[node name="ForkChoice" type="PanelContainer"]
+custom_minimum_size = Vector2(480, 260)
+offset_right = 480.0
+offset_bottom = 260.0
+script = ExtResource("1_fork")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 18
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+text = "갈  림  길"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 28
+
+[node name="Description" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+text = "어디로 갈 것인가?"
+horizontal_alignment = 1
+
+[node name="HSep" type="HSeparator" parent="Margin/VBox"]
+layout_mode = 2
+
+[node name="ButtonContainer" type="VBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8

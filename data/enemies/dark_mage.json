@@ -1,0 +1,18 @@
+{
+  "id": "dark_mage",
+  "name": "암흑 마법사",
+  "hp": 48,
+  "mp": 20,
+  "str": 4,
+  "agi": 6,
+  "vit": 4,
+  "int": 14,
+  "luk": 5,
+  "sprite": "",
+  "reward_gold": 45,
+  "reward_exp": 30,
+  "description": "검은 로브를 걸친 마법사. 공포의 주문을 외운다.",
+  "min_count": 1,
+  "max_count": 1,
+  "spells": ["fire"]
+}

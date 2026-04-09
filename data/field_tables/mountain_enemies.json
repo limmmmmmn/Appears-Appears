@@ -1,0 +1,6 @@
+{
+  "id": "mountain_enemies",
+  "enemies": ["orc", "wolf", "dark_mage"],
+  "encounter_interval_min": 6.0,
+  "encounter_interval_max": 11.0
+}

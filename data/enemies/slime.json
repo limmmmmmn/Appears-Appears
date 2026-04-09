@@ -1,0 +1,18 @@
+{
+  "id": "slime",
+  "name": "슬라임",
+  "hp": 15,
+  "mp": 0,
+  "str": 3,
+  "agi": 2,
+  "vit": 1,
+  "int": 0,
+  "luk": 1,
+  "sprite": "",
+  "reward_gold": 8,
+  "reward_exp": 5,
+  "description": "가장 약한 몬스터. 말랑말랑하다.",
+  "min_count": 1,
+  "max_count": 3,
+  "spells": []
+}

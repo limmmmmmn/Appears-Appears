@@ -1,0 +1,66 @@
+{
+  "id": "journey_01",
+  "name": "첫 번째 여정",
+  "nodes": [
+    {
+      "type": "field",
+      "name": "왕성 근교",
+      "field_type": "plains",
+      "room_count": 8,
+      "enemy_table": "plains_enemies",
+      "event_table": "events_common"
+    },
+    {
+      "type": "town",
+      "name": "시작의 마을"
+    },
+    {
+      "type": "field",
+      "name": "초원",
+      "field_type": "plains",
+      "room_count": 10,
+      "enemy_table": "plains_enemies",
+      "event_table": "events_common",
+      "has_fork": true,
+      "fork_options": [
+        {"label": "곧장 마을로 (안전)", "route": "continue"},
+        {"label": "던전으로 (위험, 보상 큼)", "route": "dungeon", "extra_nodes": [
+          {"type": "field", "name": "지하 던전 1층", "field_type": "dungeon", "room_count": 8, "enemy_table": "dungeon_enemies", "event_table": "events_common"},
+          {"type": "field", "name": "지하 던전 2층", "field_type": "dungeon", "room_count": 8, "enemy_table": "dungeon_enemies", "event_table": "events_common"}
+        ]},
+        {"label": "수상한 오솔길 (이벤트)", "route": "event"}
+      ]
+    },
+    {
+      "type": "town",
+      "name": "숲속 마을"
+    },
+    {
+      "type": "field",
+      "name": "깊은 숲",
+      "field_type": "forest",
+      "room_count": 12,
+      "enemy_table": "forest_enemies",
+      "event_table": "events_common"
+    },
+    {
+      "type": "town",
+      "name": "산기슭 마을"
+    },
+    {
+      "type": "field",
+      "name": "험한 산길",
+      "field_type": "mountain",
+      "room_count": 14,
+      "enemy_table": "mountain_enemies",
+      "event_table": "events_common"
+    },
+    {
+      "type": "boss",
+      "name": "마왕성",
+      "field_type": "dungeon",
+      "room_count": 6,
+      "boss_id": "demon_king"
+    }
+  ]
+}

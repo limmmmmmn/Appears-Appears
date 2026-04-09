@@ -1,0 +1,12 @@
+{
+  "id": "long_sword",
+  "name": "롱소드",
+  "description": "표준적인 장검. 믿음직하다.",
+  "slot": "weapon",
+  "str_bonus": 10,
+  "vit_bonus": 0,
+  "agi_bonus": 0,
+  "int_bonus": 0,
+  "buy_price": 150,
+  "sell_price": 75
+}

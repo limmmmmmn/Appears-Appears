@@ -1,0 +1,18 @@
+{
+  "id": "orc",
+  "name": "오크",
+  "hp": 65,
+  "mp": 0,
+  "str": 13,
+  "agi": 5,
+  "vit": 9,
+  "int": 2,
+  "luk": 3,
+  "sprite": "",
+  "reward_gold": 40,
+  "reward_exp": 28,
+  "description": "산악지대의 전사. 도끼를 휘두른다.",
+  "min_count": 1,
+  "max_count": 2,
+  "spells": []
+}

@@ -1,0 +1,6 @@
+{
+  "id": "boss_enemies",
+  "enemies": ["dragon"],
+  "encounter_interval_min": 9999.0,
+  "encounter_interval_max": 9999.0
+}

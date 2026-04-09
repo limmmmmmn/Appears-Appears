@@ -1,0 +1,18 @@
+{
+  "id": "wolf",
+  "name": "늑대",
+  "hp": 35,
+  "mp": 0,
+  "str": 8,
+  "agi": 9,
+  "vit": 4,
+  "int": 2,
+  "luk": 4,
+  "sprite": "",
+  "reward_gold": 20,
+  "reward_exp": 14,
+  "description": "숲의 날쌘 사냥꾼.",
+  "min_count": 1,
+  "max_count": 3,
+  "spells": []
+}

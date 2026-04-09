@@ -1,0 +1,12 @@
+{
+  "id": "wooden_sword",
+  "name": "나무 검",
+  "description": "초보 모험가의 첫 검.",
+  "slot": "weapon",
+  "str_bonus": 3,
+  "vit_bonus": 0,
+  "agi_bonus": 0,
+  "int_bonus": 0,
+  "buy_price": 50,
+  "sell_price": 25
+}

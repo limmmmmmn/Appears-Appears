@@ -1,0 +1,13 @@
+{
+  "id": "events_common",
+  "event_interval_min": 18.0,
+  "event_interval_max": 32.0,
+  "events": [
+    {"type": "treasure", "gold": 30, "weight": 3},
+    {"type": "treasure", "gold": 50, "weight": 2},
+    {"type": "treasure", "gold": 100, "weight": 1},
+    {"type": "equipment", "pool": ["wooden_sword", "leather_armor", "long_sword", "iron_shield"], "weight": 2},
+    {"type": "story", "title": "수상한 표지판", "text": "\"이곳을 떠나라\"라고 적혀있다.", "weight": 1},
+    {"type": "story", "title": "낡은 비석", "text": "글자가 닳아 읽을 수 없다.", "weight": 1}
+  ]
+}

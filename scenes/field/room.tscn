@@ -1,0 +1,35 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1hqroom00000000"]
+
+[ext_resource type="Script" path="res://scripts/field/room.gd" id="1_room"]
+
+[node name="Room" type="Node2D"]
+script = ExtResource("1_room")
+
+[node name="Floor" type="ColorRect" parent="."]
+offset_right = 640.0
+offset_bottom = 640.0
+color = Color(0.3, 0.58, 0.25, 1)
+
+[node name="Objects" type="Node2D" parent="."]
+
+[node name="EntryPoints" type="Node2D" parent="."]
+
+[node name="North" type="Marker2D" parent="EntryPoints"]
+position = Vector2(320, 20)
+
+[node name="East" type="Marker2D" parent="EntryPoints"]
+position = Vector2(620, 320)
+
+[node name="South" type="Marker2D" parent="EntryPoints"]
+position = Vector2(320, 620)
+
+[node name="West" type="Marker2D" parent="EntryPoints"]
+position = Vector2(20, 320)
+
+[node name="TypeLabel" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 16.0
+offset_right = 620.0
+offset_bottom = 52.0
+text = ""
+theme_override_font_sizes/font_size = 24

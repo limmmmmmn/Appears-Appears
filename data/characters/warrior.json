@@ -1,0 +1,16 @@
+{
+  "id": "warrior",
+  "name": "전사",
+  "description": "거대한 대검을 휘두르는 역전의 용사.",
+  "role": "melee",
+  "base_hp": 80,
+  "base_mp": 5,
+  "base_str": 15,
+  "base_agi": 4,
+  "base_vit": 14,
+  "base_int": 2,
+  "base_luk": 4,
+  "field_sprite": "",
+  "portrait": "",
+  "spells": []
+}

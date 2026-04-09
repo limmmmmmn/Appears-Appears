@@ -1,0 +1,16 @@
+{
+  "id": "hero",
+  "name": "용사",
+  "description": "왕성에서 출발한 용감한 청년.",
+  "role": "melee",
+  "base_hp": 60,
+  "base_mp": 10,
+  "base_str": 12,
+  "base_agi": 7,
+  "base_vit": 10,
+  "base_int": 5,
+  "base_luk": 6,
+  "field_sprite": "",
+  "portrait": "",
+  "spells": []
+}

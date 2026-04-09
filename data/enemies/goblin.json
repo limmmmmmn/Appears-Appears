@@ -1,0 +1,18 @@
+{
+  "id": "goblin",
+  "name": "고블린",
+  "hp": 28,
+  "mp": 0,
+  "str": 6,
+  "agi": 4,
+  "vit": 3,
+  "int": 1,
+  "luk": 2,
+  "sprite": "",
+  "reward_gold": 15,
+  "reward_exp": 10,
+  "description": "작은 녹색 도깨비. 무리 지어 다닌다.",
+  "min_count": 1,
+  "max_count": 2,
+  "spells": []
+}

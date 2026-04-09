@@ -1,0 +1,16 @@
+{
+  "id": "healer",
+  "name": "승려",
+  "description": "신성한 힘으로 동료를 치유한다.",
+  "role": "healer",
+  "base_hp": 45,
+  "base_mp": 25,
+  "base_str": 5,
+  "base_agi": 6,
+  "base_vit": 7,
+  "base_int": 12,
+  "base_luk": 8,
+  "field_sprite": "",
+  "portrait": "",
+  "spells": ["heal"]
+}

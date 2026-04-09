@@ -1,0 +1,18 @@
+{
+  "id": "skeleton",
+  "name": "스켈레톤",
+  "hp": 42,
+  "mp": 5,
+  "str": 9,
+  "agi": 5,
+  "vit": 5,
+  "int": 3,
+  "luk": 3,
+  "sprite": "",
+  "reward_gold": 25,
+  "reward_exp": 18,
+  "description": "덜그럭대는 해골 전사.",
+  "min_count": 1,
+  "max_count": 2,
+  "spells": []
+}

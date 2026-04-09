@@ -1,0 +1,46 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1hqfield00000"]
+
+[ext_resource type="Script" path="res://scripts/field/field.gd" id="1_field"]
+
+[node name="Field" type="Node2D"]
+script = ExtResource("1_field")
+
+[node name="RoomContainer" type="Node2D" parent="."]
+
+[node name="PartySprite" type="Node2D" parent="."]
+position = Vector2(320, 320)
+
+[node name="PartyBody" type="ColorRect" parent="PartySprite"]
+offset_left = -14.0
+offset_top = -40.0
+offset_right = 14.0
+offset_bottom = 8.0
+color = Color(0.96, 0.96, 1, 1)
+
+[node name="PartyShadow" type="ColorRect" parent="PartySprite"]
+offset_left = -18.0
+offset_top = 10.0
+offset_right = 18.0
+offset_bottom = 16.0
+color = Color(0, 0, 0, 0.5)
+
+[node name="Camera" type="Camera2D" parent="."]
+position = Vector2(320, 320)
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
+
+[node name="FieldOverlay" type="CanvasLayer" parent="."]
+layer = 5
+
+[node name="FieldName" type="Label" parent="FieldOverlay"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 80.0
+offset_right = 300.0
+offset_bottom = 130.0
+grow_horizontal = 2
+text = ""
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 32

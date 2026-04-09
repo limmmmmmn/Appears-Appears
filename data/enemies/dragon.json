@@ -1,0 +1,18 @@
+{
+  "id": "dragon",
+  "name": "드래곤",
+  "hp": 180,
+  "mp": 30,
+  "str": 22,
+  "agi": 10,
+  "vit": 18,
+  "int": 12,
+  "luk": 8,
+  "sprite": "",
+  "reward_gold": 200,
+  "reward_exp": 150,
+  "description": "산 정상에 사는 고룡. 불을 내뿜는다.",
+  "min_count": 1,
+  "max_count": 1,
+  "spells": ["fire"]
+}

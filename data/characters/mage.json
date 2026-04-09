@@ -1,0 +1,16 @@
+{
+  "id": "mage",
+  "name": "마법사",
+  "description": "불꽃의 마법을 다루는 마도사.",
+  "role": "magic",
+  "base_hp": 35,
+  "base_mp": 30,
+  "base_str": 3,
+  "base_agi": 6,
+  "base_vit": 4,
+  "base_int": 16,
+  "base_luk": 5,
+  "field_sprite": "",
+  "portrait": "",
+  "spells": ["fire"]
+}

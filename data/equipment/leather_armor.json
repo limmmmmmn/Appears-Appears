@@ -1,0 +1,12 @@
+{
+  "id": "leather_armor",
+  "name": "가죽 갑옷",
+  "description": "가볍지만 튼튼한 갑옷.",
+  "slot": "armor",
+  "str_bonus": 0,
+  "vit_bonus": 4,
+  "agi_bonus": 0,
+  "int_bonus": 0,
+  "buy_price": 80,
+  "sell_price": 40
+}
