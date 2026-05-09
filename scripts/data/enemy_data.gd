@@ -14,6 +14,7 @@ extends Resource
 @export var max_hp: int = 10
 @export var attack: int = 2
 @export var defense: int = 0
+@export var agility: int = 4
 
 ## Reward on defeat.
 @export var gold_reward: int = 1

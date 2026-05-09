@@ -1,14 +1,19 @@
 extends Node
 
 ## Catalog of every modifier in the game.
-## Loads all .tres files under data/modifiers/ on startup.
+## Loads the active prototype pool. Older cards remain under data/modifiers/
+## as archived resources, but are intentionally excluded from shop offers.
 ## Query by id / rarity / category, or pull random offerings for the shop.
 
-const MODIFIERS_ROOT := "res://data/modifiers"
+const ACTIVE_POOL: Resource = preload("res://data/modifiers/prototype_pool.tres")
+const FALLBACK_POOL_DIR: String = "res://data/modifiers/prototype"
+const OFFER_MODE_FIXED_ORDER: int = 0
+const OFFER_MODE_RANDOM_UNIQUE: int = 1
 
 var _all: Array[ModifierData] = []
 var _by_id: Dictionary = {}                  # StringName -> ModifierData
 var _by_rarity: Dictionary = {}              # Rarity -> Array[ModifierData]
+var _active_offer_paths: PackedStringArray = []
 
 
 func _ready() -> void:
@@ -20,33 +25,16 @@ func _load_all() -> void:
 	_all.clear()
 	_by_id.clear()
 	_by_rarity.clear()
-	_load_dir(MODIFIERS_ROOT)
+	_active_offer_paths = _resolve_offer_paths()
+	for path in _active_offer_paths:
+		var resource := load(path)
+		if resource is ModifierData:
+			_register(resource)
 	# Build rarity buckets.
 	for mod: ModifierData in _all:
 		var bucket: Array = _by_rarity.get(mod.rarity, [])
 		bucket.append(mod)
 		_by_rarity[mod.rarity] = bucket
-
-
-func _load_dir(path: String) -> void:
-	var dir := DirAccess.open(path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var entry := dir.get_next()
-	while entry != "":
-		if entry.begins_with("."):
-			entry = dir.get_next()
-			continue
-		var full := path.path_join(entry)
-		if dir.current_is_dir():
-			_load_dir(full)
-		elif entry.ends_with(".tres"):
-			var res := load(full)
-			if res is ModifierData:
-				_register(res)
-		entry = dir.get_next()
-	dir.list_dir_end()
 
 
 func _register(mod: ModifierData) -> void:
@@ -76,12 +64,80 @@ func count() -> int:
 	return _all.size()
 
 
+func get_all() -> Array[ModifierData]:
+	return _all.duplicate()
+
+
 ## Pull `n` random modifiers (with replacement = false).
-## Returns fewer than `n` if the catalog is too small.
+## Prototype mode supports fixed-order offers so purchase data is cleaner.
 func get_random_modifiers(n: int) -> Array[ModifierData]:
-	var pool := _all.duplicate()
-	pool.shuffle()
+	return get_shop_offers(n)
+
+
+func get_shop_offers(n: int) -> Array[ModifierData]:
 	var out: Array[ModifierData] = []
-	for i in mini(n, pool.size()):
-		out.append(pool[i])
+	if int(ACTIVE_POOL.offer_mode) == OFFER_MODE_FIXED_ORDER:
+		for i in mini(n, _active_offer_paths.size()):
+			var fixed_mod := get_by_path(_active_offer_paths[i])
+			if fixed_mod and GameState.can_add_modifier(fixed_mod):
+				out.append(fixed_mod)
+		return out
+	if int(ACTIVE_POOL.offer_mode) == OFFER_MODE_RANDOM_UNIQUE:
+		var pool: Array[ModifierData] = _offerable_modifiers()
+		pool.shuffle()
+		for i in mini(n, pool.size()):
+			out.append(pool[i])
+		return out
+	for i in n:
+		var pool: Array[ModifierData] = _offerable_modifiers()
+		if pool.is_empty():
+			break
+		out.append(pool.pick_random())
 	return out
+
+
+func get_random_offer_excluding(excluded_ids: Dictionary) -> ModifierData:
+	var pool: Array[ModifierData] = []
+	for mod: ModifierData in _offerable_modifiers():
+		if not excluded_ids.has(mod.id):
+			pool.append(mod)
+	if pool.is_empty():
+		return null
+	return pool.pick_random()
+
+
+func get_by_path(path: String) -> ModifierData:
+	var resource := load(path)
+	if resource is ModifierData:
+		return resource
+	return null
+
+
+func _offerable_modifiers() -> Array[ModifierData]:
+	var out: Array[ModifierData] = []
+	for mod: ModifierData in _all:
+		if GameState.can_add_modifier(mod):
+			out.append(mod)
+	return out
+
+
+func _resolve_offer_paths() -> PackedStringArray:
+	var paths := PackedStringArray()
+	for path: String in ACTIVE_POOL.offer_paths:
+		paths.append(path)
+	if not paths.is_empty():
+		return paths
+	push_warning("[ModifierDB] prototype_pool has no offer_paths; scanning %s" % FALLBACK_POOL_DIR)
+	var dir := DirAccess.open(FALLBACK_POOL_DIR)
+	if dir == null:
+		push_warning("[ModifierDB] fallback pool dir not found: %s" % FALLBACK_POOL_DIR)
+		return paths
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while not file_name.is_empty():
+		if not dir.current_is_dir() and file_name.ends_with(".tres"):
+			paths.append("%s/%s" % [FALLBACK_POOL_DIR, file_name])
+		file_name = dir.get_next()
+	dir.list_dir_end()
+	paths.sort()
+	return paths

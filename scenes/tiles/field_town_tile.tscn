@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/field_town_tile.gd" id="1_tile"]
+[ext_resource type="Texture2D" path="res://assets/sprites/objects/town.png" id="2_town"]
+
+[sub_resource type="RectangleShape2D" id="RectShape_town"]
+size = Vector2(34, 28)
+
+[node name="FieldTownTile" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1_tile")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_town")
+centered = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 4)
+shape = SubResource("RectShape_town")

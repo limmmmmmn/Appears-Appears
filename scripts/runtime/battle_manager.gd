@@ -1,8 +1,8 @@
 class_name BattleManager
 extends CanvasLayer
 
-## Spawns BattleWindows on enemy_encountered, assigns each a slot, slides them
-## to the edge so multiple windows can run in parallel.
+## Spawns BattleWindows on enemy_encountered, then lets them drift away from
+## overlapping windows or the player and settle into their new screen position.
 ##
 ## CanvasLayer base = screen-space rendering. Battle windows stay locked to
 ## the viewport regardless of where the world camera is looking.
@@ -10,30 +10,45 @@ extends CanvasLayer
 
 const BATTLE_WINDOW_SCENE: PackedScene = preload("res://scenes/battle_window.tscn")
 
-## A 120x80 window centered in the 640x328 (above-HUD) play area.
-const SPAWN_CENTER: Vector2 = Vector2(260, 124)
+## Fallback if no valid player-relative spawn point exists.
+const SPAWN_CENTER: Vector2 = Vector2(260, 56)
 
-## Edge slot grid (12). Center is left clear so newly popped windows are
-## visible before they slide out.
-const SLOTS: Array[Vector2] = [
-	Vector2(2, 2),   Vector2(132, 2),  Vector2(262, 2),  Vector2(392, 2),  Vector2(518, 2),
-	Vector2(2, 124), Vector2(518, 124),
-	Vector2(2, 246), Vector2(132, 246), Vector2(262, 246), Vector2(392, 246), Vector2(518, 246),
-]
+const SLOT_MARGIN: float = 2.0
+const HUD_RESERVED_BOTTOM: float = 8.0
+const SPAWN_DISTANCE: float = 52.0
+const WINDOW_PUSH_PADDING: float = 10.0
+const WINDOW_PUSH_STRENGTH: float = 260.0
+const PLAYER_PUSH_RADIUS: float = 88.0
+const PLAYER_PUSH_STRENGTH: float = 420.0
+const WALL_PUSH_STRENGTH: float = 900.0
+const VELOCITY_DAMPING: float = 4.6
+const MAX_WINDOW_SPEED: float = 180.0
+const SETTLE_SPEED: float = 10.0
+const SETTLE_INTERVAL: float = 0.08
+const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 0.85
 
-var _free_slots: Array[Vector2] = []
-var _window_slot: Dictionary = {}  ## BattleWindow -> Vector2 slot it took
+var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
+var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 screen velocity.
+var _collision_cooldowns: Dictionary = {}  ## window pair key -> remaining seconds.
+var _settle_timer: float = 0.0
 
 
 func _ready() -> void:
-	_free_slots = SLOTS.duplicate()
-	_free_slots.shuffle()
 	EventBus.enemy_encountered.connect(_on_enemy_encountered)
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
+	EventBus.party_wiped.connect(_on_party_wiped)
+
+
+func _process(delta: float) -> void:
+	if _window_rects.is_empty():
+		return
+	_settle_timer += delta
+	_tick_collision_cooldowns(delta)
+	_apply_window_push(delta)
 
 
 func active_window_count() -> int:
-	return _window_slot.size()
+	return _window_rects.size()
 
 
 # ─── Spawning ─────────────────────────────────────────────────────────
@@ -43,48 +58,236 @@ func _on_enemy_encountered(field_enemy: Node) -> void:
 	var data: EnemyData = field_enemy.data
 	if data == null:
 		return
-	spawn_battle(data)
+	var source := field_enemy as Node2D
+	spawn_battle(data, source)
 	# Echo Strike & friends: roll for bonus duplicate windows.
 	var extras: int = GameState.roll_window_duplicates()
 	for i in extras:
-		spawn_battle(data)
+		spawn_battle(data, source)
 
 
 ## Public API. Used by enemy_encountered handler and debug helpers.
-func spawn_battle(data: EnemyData) -> void:
-	_spawn_window(data)
+func spawn_battle(data: EnemyData, source: Node2D = null) -> void:
+	_spawn_window(data, source)
 
 
-func _spawn_window(data: EnemyData) -> void:
+func _spawn_window(data: EnemyData, source: Node2D = null) -> void:
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
 	window.setup(data)
-	window.position = SPAWN_CENTER
+	var window_size: Vector2 = window.get_expected_window_size()
+	var spawn_position: Vector2 = _spawn_position_for_encounter(window_size, source)
+	window.position = spawn_position
+	_window_rects[window] = Rect2(spawn_position, window_size)
+	_window_velocities[window] = Vector2.ZERO
 	add_child(window)
-	var target: Vector2 = _take_slot()
-	_window_slot[window] = target
-	window.slide_to(target)
+	_apply_window_push(0.0, true)
 
 
-# ─── Slot bookkeeping ────────────────────────────────────────────────
-func _take_slot() -> Vector2:
-	if _free_slots.is_empty():
-		# Overflow: pile near a random slot with jitter for visual chaos.
-		# Trailer cut at 100 windows benefits from spread, not stacking.
-		var base: Vector2 = SLOTS.pick_random()
-		return base + Vector2(randf_range(-32, 32), randf_range(-24, 24))
-	return _free_slots.pop_back()
+# ─── Window drift ─────────────────────────────────────────────────────
+func _spawn_position_for_encounter(window_size: Vector2, source: Node2D) -> Vector2:
+	if source == null or not is_instance_valid(source):
+		return _random_spawn_position(window_size)
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var player_position: Vector2 = _player_screen_position()
+	if player_position == Vector2.INF:
+		return _clamped_position(SPAWN_CENTER, window_size, viewport_size)
+	var source_position: Vector2 = source.get_global_transform_with_canvas().origin
+	var direction: Vector2 = source_position - player_position
+	if direction.length_squared() < 1.0:
+		return _random_spawn_position(window_size)
+	direction = direction.normalized()
+	var half_extent: float = absf(direction.x) * window_size.x * 0.5 + absf(direction.y) * window_size.y * 0.5
+	var center: Vector2 = player_position + direction * (SPAWN_DISTANCE + half_extent)
+	return _clamped_position(center - window_size * 0.5, window_size, viewport_size)
+
+
+func _random_spawn_position(window_size: Vector2) -> Vector2:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var player_position: Vector2 = _player_screen_position()
+	if player_position == Vector2.INF:
+		return _clamped_position(SPAWN_CENTER, window_size, viewport_size)
+	var candidates: Array[Vector2] = [
+		player_position + Vector2(-window_size.x * 0.5, -SPAWN_DISTANCE - window_size.y),
+		player_position + Vector2(-window_size.x * 0.5, SPAWN_DISTANCE),
+		player_position + Vector2(-SPAWN_DISTANCE - window_size.x, -window_size.y * 0.5),
+		player_position + Vector2(SPAWN_DISTANCE, -window_size.y * 0.5),
+	]
+	candidates.shuffle()
+	for candidate: Vector2 in candidates:
+		if _is_spawn_position_valid(candidate, window_size, viewport_size):
+			return candidate
+	return _clamped_position(candidates.front(), window_size, viewport_size)
+
+
+func _is_spawn_position_valid(pos: Vector2, size: Vector2, viewport_size: Vector2) -> bool:
+	var play_bottom: float = viewport_size.y - HUD_RESERVED_BOTTOM
+	return (
+		pos.x >= SLOT_MARGIN
+		and pos.y >= SLOT_MARGIN
+		and pos.x + size.x <= viewport_size.x - SLOT_MARGIN
+		and pos.y + size.y <= play_bottom
+	)
+
+
+func _apply_window_push(delta: float, burst: bool = false) -> void:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var player_position: Vector2 = _player_screen_position()
+	var windows: Array = _window_rects.keys()
+	for window: BattleWindow in windows:
+		if not is_instance_valid(window):
+			continue
+		_window_rects[window] = Rect2(window.position, _window_rects[window].size)
+		var force := Vector2.ZERO
+		var rect: Rect2 = _window_rects[window]
+		for other: BattleWindow in windows:
+			if window == other or not is_instance_valid(other):
+				continue
+			if window.get_instance_id() < other.get_instance_id():
+				_apply_window_collision_damage(window, rect, other, _window_rects[other])
+			force += _window_overlap_push(window, rect, other, _window_rects[other])
+		if player_position != Vector2.INF:
+			force += _player_push(rect, player_position)
+		force += _wall_push(rect, viewport_size)
+		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
+		var step_delta: float = 1.0 / 60.0 if burst else delta
+		velocity += force * step_delta
+		velocity = velocity.limit_length(MAX_WINDOW_SPEED)
+		velocity = velocity.move_toward(Vector2.ZERO, VELOCITY_DAMPING * velocity.length() * step_delta)
+		var next_position: Vector2 = _clamped_position(window.position + velocity * step_delta, rect.size, viewport_size)
+		_window_velocities[window] = velocity
+		_window_rects[window] = Rect2(next_position, rect.size)
+		if burst or velocity.length() >= SETTLE_SPEED:
+			window.push_to(next_position)
+		elif _settle_timer >= SETTLE_INTERVAL:
+			window.settle_to(next_position)
+	if _settle_timer >= SETTLE_INTERVAL:
+		_settle_timer = 0.0
+
+
+func _window_overlap_push(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> Vector2:
+	var padded := Rect2(rect.position - Vector2.ONE * WINDOW_PUSH_PADDING, rect.size + Vector2.ONE * WINDOW_PUSH_PADDING * 2.0)
+	var other_padded := Rect2(other.position - Vector2.ONE * WINDOW_PUSH_PADDING, other.size + Vector2.ONE * WINDOW_PUSH_PADDING * 2.0)
+	if not padded.intersects(other_padded):
+		return Vector2.ZERO
+	var delta: Vector2 = padded.get_center() - other_padded.get_center()
+	if delta == Vector2.ZERO:
+		delta = _stable_separation_direction(window, other_window)
+	var overlap_x: float = minf(padded.end.x, other_padded.end.x) - maxf(padded.position.x, other_padded.position.x)
+	var overlap_y: float = minf(padded.end.y, other_padded.end.y) - maxf(padded.position.y, other_padded.position.y)
+	var push: float = maxf(0.0, minf(overlap_x, overlap_y))
+	return delta.normalized() * push * WINDOW_PUSH_STRENGTH
+
+
+func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> void:
+	var damage_ratio: float = GameState.window_collision_damage_ratio()
+	if damage_ratio <= 0.0:
+		return
+	if not rect.intersects(other):
+		return
+	var key: String = _collision_pair_key(window, other_window)
+	if float(_collision_cooldowns.get(key, 0.0)) > 0.0:
+		return
+	var dealt: int = window.apply_window_collision_damage(damage_ratio)
+	dealt += other_window.apply_window_collision_damage(damage_ratio)
+	if dealt > 0:
+		_collision_cooldowns[key] = WINDOW_COLLISION_DAMAGE_COOLDOWN
+
+
+func _collision_pair_key(window: BattleWindow, other_window: BattleWindow) -> String:
+	var a: int = int(window.get_instance_id())
+	var b: int = int(other_window.get_instance_id())
+	if a > b:
+		var temp: int = a
+		a = b
+		b = temp
+	return "%d:%d" % [a, b]
+
+
+func _tick_collision_cooldowns(delta: float) -> void:
+	for key: String in _collision_cooldowns.keys():
+		var remaining: float = float(_collision_cooldowns[key]) - delta
+		if remaining <= 0.0:
+			_collision_cooldowns.erase(key)
+		else:
+			_collision_cooldowns[key] = remaining
+
+
+func _stable_separation_direction(window: BattleWindow, other_window: BattleWindow) -> Vector2:
+	var pair_hash: int = int(window.get_instance_id() + other_window.get_instance_id())
+	var angle: float = float(pair_hash % 360) * TAU / 360.0
+	var direction := Vector2(cos(angle), sin(angle))
+	if window.get_instance_id() < other_window.get_instance_id():
+		return direction
+	return -direction
+
+
+func _player_push(rect: Rect2, player_position: Vector2) -> Vector2:
+	var closest := Vector2(
+		clampf(player_position.x, rect.position.x, rect.end.x),
+		clampf(player_position.y, rect.position.y, rect.end.y)
+	)
+	var delta: Vector2 = rect.get_center() - player_position
+	var distance: float = player_position.distance_to(closest)
+	if distance > PLAYER_PUSH_RADIUS:
+		return Vector2.ZERO
+	if delta == Vector2.ZERO:
+		delta = Vector2.UP
+	var strength: float = (PLAYER_PUSH_RADIUS - distance) / PLAYER_PUSH_RADIUS
+	return delta.normalized() * strength * PLAYER_PUSH_STRENGTH
+
+
+func _wall_push(rect: Rect2, viewport_size: Vector2) -> Vector2:
+	var play_bottom: float = viewport_size.y - HUD_RESERVED_BOTTOM
+	var force := Vector2.ZERO
+	if rect.position.x < SLOT_MARGIN:
+		force.x += (SLOT_MARGIN - rect.position.x) * WALL_PUSH_STRENGTH
+	if rect.end.x > viewport_size.x - SLOT_MARGIN:
+		force.x -= (rect.end.x - viewport_size.x + SLOT_MARGIN) * WALL_PUSH_STRENGTH
+	if rect.position.y < SLOT_MARGIN:
+		force.y += (SLOT_MARGIN - rect.position.y) * WALL_PUSH_STRENGTH
+	if rect.end.y > play_bottom:
+		force.y -= (rect.end.y - play_bottom) * WALL_PUSH_STRENGTH
+	return force
+
+
+func _clamped_position(pos: Vector2, size: Vector2, viewport_size: Vector2) -> Vector2:
+	var play_bottom: float = viewport_size.y - HUD_RESERVED_BOTTOM
+	return Vector2(
+		clampf(pos.x, SLOT_MARGIN, maxf(SLOT_MARGIN, viewport_size.x - SLOT_MARGIN - size.x)),
+		clampf(pos.y, SLOT_MARGIN, maxf(SLOT_MARGIN, play_bottom - size.y))
+	)
+
+
+func _player_screen_position() -> Vector2:
+	var players: Array[Node] = get_tree().get_nodes_in_group("player")
+	if players.is_empty() or not players[0] is Node2D:
+		return Vector2.INF
+	return (players[0] as Node2D).get_global_transform_with_canvas().origin
 
 
 func _on_battle_window_closed(window: Node) -> void:
-	if not _window_slot.has(window):
+	if not _window_rects.has(window):
 		return
-	var slot: Vector2 = _window_slot[window]
-	_window_slot.erase(window)
-	# Only re-queue real grid slots; overflow picks shouldn't double-add.
-	if slot in SLOTS and not slot in _free_slots:
-		_free_slots.append(slot)
+	_window_rects.erase(window)
+	_window_velocities.erase(window)
 	# Tell anyone who cares (Field, etc.) when the last fight ends. This is
 	# the gate Field uses before declaring stage_cleared — Echo Strike means
 	# the *first* window closing is rarely the last one.
-	if _window_slot.is_empty():
+	if _window_rects.is_empty():
 		EventBus.all_battles_resolved.emit()
+
+
+# ─── Run-over cleanup ─────────────────────────────────────────────────
+func _on_party_wiped() -> void:
+	abort_all_battles()
+
+
+## Force-close every active battle window. No gold, no signals, no log —
+## the run is dead. Used on party_wipe and (later) explicit run resets.
+func abort_all_battles() -> void:
+	for window: Node in _window_rects.keys():
+		if is_instance_valid(window):
+			window.queue_free()
+	_window_rects.clear()
+	_window_velocities.clear()
+	_collision_cooldowns.clear()

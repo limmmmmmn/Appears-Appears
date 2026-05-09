@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"fireburst"
+display_name = "Fireburst"
+description = "Mage attacks 1 extra enemy at reduced damage. Stacks +1 target."
+cost = 20
+rarity = 1
+category = 1
+required_party_member_id = &"mage"
+effect_data = {
+"mage_splash_extra_targets": 1,
+"mage_splash_damage_mult": 0.65
+}

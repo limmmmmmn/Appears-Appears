@@ -16,6 +16,11 @@ const OFFER_COUNT: int = 4
 @onready var _next_button: Button = %NextButton
 
 
+func _enter_tree() -> void:
+	# The settlement is the only interactive layer while the world is paused.
+	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+
+
 func _ready() -> void:
 	_stage_label.text = "Stage %d Cleared" % GameState.current_stage
 	_refresh_gold_label()
@@ -37,6 +42,11 @@ func _spawn_offers() -> void:
 
 
 func _on_card_purchase_requested(card: ModifierCard, mod: ModifierData) -> void:
+	# Validate first — a stale/invalid card (e.g., companion already in party
+	# from another offer in the same settlement) must not eat the player's gold.
+	if not GameState.can_add_modifier(mod):
+		card.mark_unaffordable_flash()
+		return
 	if not GameState.spend_gold(card.cost):
 		card.mark_unaffordable_flash()
 		return

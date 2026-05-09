@@ -1,9 +1,25 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/field_enemy.gd" id="1_fe"]
 
 [sub_resource type="RectangleShape2D" id="RectShape_fe"]
 size = Vector2(14, 14)
+
+[sub_resource type="LabelSettings" id="LabelSettings_alert"]
+font_size = 14
+font_color = Color(0.08, 0.04, 0.02, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_alert"]
+bg_color = Color(1, 0.96, 0.82, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.08, 0.04, 0.02, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
 
 [node name="FieldEnemy" type="Area2D"]
 collision_layer = 0
@@ -12,6 +28,22 @@ script = ExtResource("1_fe")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 centered = true
+
+[node name="AlertBubble" type="PanelContainer" parent="."]
+visible = false
+z_index = 5
+offset_left = -9.0
+offset_top = -34.0
+offset_right = 9.0
+offset_bottom = -14.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_alert")
+
+[node name="Label" type="Label" parent="AlertBubble"]
+layout_mode = 2
+text = "!"
+label_settings = SubResource("LabelSettings_alert")
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectShape_fe")

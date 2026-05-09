@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/characters/mage.tres" id="2_mage"]
+[ext_resource type="Resource" path="res://data/characters/priest.tres" id="3_priest"]
+[ext_resource type="Resource" path="res://data/characters/thief.tres" id="4_thief"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"recruit"
+display_name = "Recruit"
+description = "A random available companion joins your party."
+cost = 30
+rarity = 1
+category = 3
+effect_data = {}
+companion_pool = Array[Resource]([ExtResource("2_mage"), ExtResource("3_priest"), ExtResource("4_thief")])

@@ -9,3 +9,5 @@ id = &"slime"
 display_name = "Slime"
 sprite = ExtResource("2_sprite")
 max_hp = 20
+agility = 5
+gold_reward = 3

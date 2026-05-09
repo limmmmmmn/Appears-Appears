@@ -10,13 +10,27 @@ signal died()
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
 
 @export var data: EnemyData
+@export var attack_lunge_pixels: float = 8.0
+@export var attack_lunge_duration: float = 0.18
+@export var hit_shake_pixels: float = 3.0
+@export var hit_flash_duration: float = 0.12
+@export var death_fade_duration: float = 0.38
 
 @onready var _sprite: Sprite2D = $Sprite2D
 
 var current_hp: int = 0
+var _base_position: Vector2
+var _base_scale: Vector2
+var _hit_tween: Tween
+var _attack_tween: Tween
+var _death_tween: Tween
+var _dying: bool = false
+var _stolen_from: bool = false
 
 
 func _ready() -> void:
+	_base_position = position
+	_base_scale = scale
 	if data:
 		_apply_data()
 
@@ -32,6 +46,11 @@ func _apply_data() -> void:
 	if data == null:
 		return
 	current_hp = data.max_hp
+	_dying = false
+	_stolen_from = false
+	position = _base_position
+	scale = _base_scale
+	modulate = Color.WHITE
 	if data.sprite and _sprite:
 		_sprite.texture = data.sprite
 	hp_changed.emit(current_hp, data.max_hp)
@@ -41,17 +60,43 @@ func is_alive() -> bool:
 	return current_hp > 0
 
 
-func take_damage(amount: int, is_crit: bool = false) -> int:
+func try_steal_gold(chance: float, amount: int) -> int:
+	if _stolen_from or amount <= 0 or randf() >= chance:
+		return 0
+	_stolen_from = true
+	return amount
+
+
+func take_damage(amount: int, is_crit: bool = false, hit_effect: Texture2D = null) -> int:
 	if not is_alive() or data == null:
 		return 0
 	var dealt: int = max(1, amount - data.defense)
 	current_hp = max(0, current_hp - dealt)
 	hp_changed.emit(current_hp, data.max_hp)
 	EventBus.damage_dealt.emit(self, dealt, global_position)
+	_spawn_hit_effect(hit_effect, is_crit)
 	_spawn_damage_number(dealt, is_crit)
+	_play_hit_reaction(is_crit)
 	if current_hp == 0:
 		_die()
 	return dealt
+
+
+## Enemy's own attack anticipation: slide toward the bottom of the battle
+## window, then snap back. BattleWindow calls this before applying party damage.
+func play_attack_lunge() -> void:
+	if _dying:
+		return
+	if _attack_tween and _attack_tween.is_valid():
+		_attack_tween.kill()
+	position = _base_position
+	_attack_tween = create_tween()
+	_attack_tween.tween_property(self, "position", _base_position + Vector2(0, attack_lunge_pixels), attack_lunge_duration * 0.45)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+	_attack_tween.tween_property(self, "position", _base_position, attack_lunge_duration * 0.55)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
 
 
 func _spawn_damage_number(amount: int, is_crit: bool) -> void:
@@ -61,6 +106,58 @@ func _spawn_damage_number(amount: int, is_crit: bool) -> void:
 	num.setup(amount, is_crit)
 
 
+func _spawn_hit_effect(texture: Texture2D, is_crit: bool) -> void:
+	if texture == null:
+		return
+	var effect := Sprite2D.new()
+	effect.texture = texture
+	effect.centered = true
+	effect.z_index = 8
+	effect.position = Vector2(randf_range(-3, 3), randf_range(-5, 1))
+	effect.scale = Vector2.ONE * 0.75
+	effect.rotation = randf_range(-0.25, 0.25)
+	effect.modulate = Color(1, 1, 1, 0.95)
+	add_child(effect)
+	var target_scale: Vector2 = Vector2.ONE * (1.45 if is_crit else 1.15)
+	var tween: Tween = create_tween().set_parallel(true)
+	tween.tween_property(effect, "scale", target_scale, hit_flash_duration * 1.6)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(effect, "modulate:a", 0.0, hit_flash_duration * 2.0)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(effect.queue_free)
+
+
+func _play_hit_reaction(is_crit: bool) -> void:
+	if _dying:
+		return
+	if _hit_tween and _hit_tween.is_valid():
+		_hit_tween.kill()
+	var shake := hit_shake_pixels * (1.5 if is_crit else 1.0)
+	position = _base_position
+	modulate = Color(1.0, 0.95, 0.55, 1.0)
+	_hit_tween = create_tween()
+	_hit_tween.tween_property(self, "position", _base_position + Vector2(shake, 0), hit_flash_duration * 0.25)
+	_hit_tween.tween_property(self, "position", _base_position + Vector2(-shake, 0), hit_flash_duration * 0.25)
+	_hit_tween.tween_property(self, "position", _base_position, hit_flash_duration * 0.25)
+	_hit_tween.tween_property(self, "modulate", Color.WHITE, hit_flash_duration * 0.25)
+
+
 func _die() -> void:
+	_dying = true
+	if _attack_tween and _attack_tween.is_valid():
+		_attack_tween.kill()
+	if _hit_tween and _hit_tween.is_valid():
+		_hit_tween.kill()
+	if _death_tween and _death_tween.is_valid():
+		_death_tween.kill()
+	_death_tween = create_tween().set_parallel(true)
+	_death_tween.tween_property(self, "modulate:a", 0.0, death_fade_duration)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_IN)
+	_death_tween.tween_property(self, "position", _base_position + Vector2(0, 10), death_fade_duration)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_IN)
 	died.emit()
 	EventBus.enemy_defeated.emit(self, data.gold_reward, global_position)

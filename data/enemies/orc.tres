@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/enemy_data.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/orc.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"orc"
+display_name = "Orc"
+sprite = ExtResource("2_sprite")
+max_hp = 38
+attack = 6
+defense = 1
+agility = 3
+gold_reward = 8

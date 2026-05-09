@@ -8,6 +8,9 @@ extends Node
 ## Player collided with an enemy on the field. Triggers a battle_window spawn.
 signal enemy_encountered(enemy: Node)
 
+## Player stepped onto the town field tile. Main handles the scene transition.
+signal town_entered(tile: Node)
+
 # ─── Party Composition ────────────────────────────────────────────────
 ## Party roster changed (run start, swap, revival). Listeners should re-read
 ## GameState.party / party_hp from scratch.
@@ -36,11 +39,19 @@ signal party_hp_changed()
 ## All party members are dead. Game over.
 signal party_wiped()
 
+## Actual HP removed from a party member after clamping overkill.
+signal party_damage_taken(member_index: int, amount: int)
+
 # ─── Stage / Progression ──────────────────────────────────────────────
 signal stage_started(stage_num: int)
 signal stage_cleared(stage_num: int)
+signal run_cleared()
 
 # ─── Economy / Modifiers ──────────────────────────────────────────────
 signal gold_changed(new_gold: int)
 signal modifier_offered(modifiers: Array)  ## Array[ModifierData]
+signal modifier_purchase_requested(modifier: ModifierData, source: Node)
+signal modifier_purchase_succeeded(modifier: ModifierData, source: Node)
+signal modifier_purchase_failed(modifier: ModifierData, source: Node)
+signal card_purchased(modifier: ModifierData, cost: int)
 signal modifier_picked(modifier: ModifierData)

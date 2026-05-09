@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"window_crash"
+display_name = "Window Crash"
+description = "Battle windows deal collision damage to enemies when they bump into each other."
+cost = 20
+max_level = 1
+rarity = 1
+category = 1
+effect_data = {
+"window_collision_damage_ratio": 0.1
+}
