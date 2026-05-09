@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/damage_number.gd" id="1_dn"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_dn"]
+font_size = 9
+font_color = Color(1, 1, 1, 1)
+outline_size = 2
+outline_color = Color(0, 0, 0, 1)
+
+[node name="DamageNumber" type="Node2D"]
+script = ExtResource("1_dn")
+
+[node name="Label" type="Label" parent="."]
+offset_left = -16.0
+offset_top = -10.0
+offset_right = 16.0
+offset_bottom = 6.0
+mouse_filter = 2
+text = "0"
+label_settings = SubResource("LabelSettings_dn")
+horizontal_alignment = 1

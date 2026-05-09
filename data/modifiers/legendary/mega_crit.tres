@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://cmmp16hhtut00" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"mega_crit"
+display_name = "Mega Crit"
+description = "+50% crit chance and 4x crit damage."
+rarity = 3
+category = 1
+effect_data = {
+"crit_chance": 0.5,
+"crit_mult": 4.0
+}

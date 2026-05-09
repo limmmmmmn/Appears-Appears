@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://cmmp16hhtut00" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"hearty"
+display_name = "Hearty"
+description = "+10 max HP to every party member, and heal that much."
+rarity = 0
+category = 0
+effect_data = {
+"hp_flat": 10
+}
