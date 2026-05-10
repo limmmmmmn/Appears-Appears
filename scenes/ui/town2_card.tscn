@@ -1,0 +1,128 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/town2_card.gd" id="1_card"]
+[ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_normal"]
+bg_color = Color(0.93, 0.88, 0.75, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_hover"]
+bg_color = Color(0.97, 0.93, 0.8, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_focus"]
+bg_color = Color(0.99, 0.95, 0.82, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.78, 0.22, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_disabled"]
+bg_color = Color(0.6, 0.56, 0.48, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.18, 0.14, 0.1, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_name"]
+font_size = 10
+font_color = Color(0.1, 0.08, 0.04, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_desc"]
+font_size = 8
+font_color = Color(0.32, 0.22, 0.1, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_cost"]
+font_size = 11
+font_color = Color(0.62, 0.36, 0.06, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_arrow"]
+font_size = 11
+font_color = Color(1, 0.78, 0.22, 1)
+
+[node name="Town2Card" type="Button"]
+custom_minimum_size = Vector2(108, 138)
+focus_mode = 2
+theme = ExtResource("2_theme")
+theme_override_styles/normal = SubResource("StyleBox_normal")
+theme_override_styles/hover = SubResource("StyleBox_hover")
+theme_override_styles/pressed = SubResource("StyleBox_hover")
+theme_override_styles/focus = SubResource("StyleBox_focus")
+theme_override_styles/disabled = SubResource("StyleBox_disabled")
+text = ""
+script = ExtResource("1_card")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="CardIcon" type="TextureRect" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="CardName" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "—"
+label_settings = SubResource("LabelSettings_name")
+horizontal_alignment = 1
+
+[node name="CardDesc" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+text = ""
+label_settings = SubResource("LabelSettings_desc")
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="CardCost" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "0 G"
+label_settings = SubResource("LabelSettings_cost")
+horizontal_alignment = 2
+
+[node name="FocusArrow" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = -10.0
+offset_top = -8.0
+offset_right = 0.0
+offset_bottom = 8.0
+mouse_filter = 2
+text = "▶"
+label_settings = SubResource("LabelSettings_arrow")
+horizontal_alignment = 1
+vertical_alignment = 1

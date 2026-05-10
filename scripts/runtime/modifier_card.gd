@@ -28,7 +28,7 @@ var purchased: bool = false
 ## Inject the modifier this card represents.
 func setup(mod: ModifierData) -> void:
 	data = mod
-	cost = mod.cost
+	cost = GameState.modifier_purchase_cost(mod)
 	purchased = false
 	disabled = false
 	modulate = Color.WHITE
@@ -43,6 +43,7 @@ func _ready() -> void:
 
 
 func _apply_data() -> void:
+	cost = GameState.modifier_purchase_cost(data)
 	_name_label.text = _display_name_with_level()
 	_desc_label.text = data.description
 	_cost_label.text = "%d G" % cost

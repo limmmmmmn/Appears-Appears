@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"pilfer"
 display_name = "Pilfer"
-description = "Thief has an 8% chance to steal 1G on attack. Once per enemy. Stacks chance."
+description = "Thief can steal 1G on attack, once per enemy. Later levels give a smaller chance boost."
 cost = 10
 rarity = 0
 category = 1

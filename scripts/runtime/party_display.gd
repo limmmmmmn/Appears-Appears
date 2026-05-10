@@ -75,25 +75,25 @@ func _affected_boxes_for_modifier(mod: ModifierData) -> Array[Node]:
 
 func _popup_text_for_modifier(mod: ModifierData) -> String:
 	if mod.effect_data.has("hp_flat"):
-		return "+%d HP" % int(mod.effect_data["hp_flat"])
+		return "+%d HP" % GameState.modifier_last_int_effect(mod, "hp_flat")
 	if mod.effect_data.has("atk_flat"):
-		return "+%d ATK" % int(mod.effect_data["atk_flat"])
+		return "+%d ATK" % GameState.modifier_last_int_effect(mod, "atk_flat")
 	if mod.effect_data.has("def_flat"):
-		return "+%d DEF" % int(mod.effect_data["def_flat"])
+		return "+%d DEF" % GameState.modifier_last_int_effect(mod, "def_flat")
 	if mod.effect_data.has("agi_flat"):
-		return "+%d AGI" % int(mod.effect_data["agi_flat"])
+		return "+%d AGI" % GameState.modifier_last_int_effect(mod, "agi_flat")
 	if mod.effect_data.has("move_speed_flat"):
-		return "+%d SPD" % int(mod.effect_data["move_speed_flat"])
+		return "+%d SPD" % GameState.modifier_last_int_effect(mod, "move_speed_flat")
 	if mod.effect_data.has("hero_damage_bonus_mult"):
-		return "+%d%% DMG" % int(round(float(mod.effect_data["hero_damage_bonus_mult"]) * 100.0))
+		return "+%d%% DMG" % int(round(GameState.modifier_last_float_effect(mod, "hero_damage_bonus_mult") * 100.0))
 	if mod.effect_data.has("mage_splash_extra_targets"):
 		return "+%d AOE" % int(mod.effect_data["mage_splash_extra_targets"])
 	if mod.effect_data.has("priest_heal_flat"):
-		return "+%d HEAL" % int(mod.effect_data["priest_heal_flat"])
+		return "+%d HEAL" % GameState.modifier_last_int_effect(mod, "priest_heal_flat")
 	if mod.effect_data.has("thief_steal_chance"):
-		return "+%d%% STEAL" % int(round(float(mod.effect_data["thief_steal_chance"]) * 100.0))
+		return "+%d%% STEAL" % int(round(GameState.modifier_last_float_effect(mod, "thief_steal_chance") * 100.0))
 	if mod.effect_data.has("evade_chance"):
-		return "+%d%% EVA" % int(round(float(mod.effect_data["evade_chance"]) * 100.0))
+		return "+%d%% EVA" % int(round(GameState.modifier_last_float_effect(mod, "evade_chance") * 100.0))
 	if mod.effect_data.has("field_enemies_flat"):
 		return "+%d FIELD" % int(mod.effect_data["field_enemies_flat"])
 	if mod.effect_data.has("extra_enemy_slots_per_window"):

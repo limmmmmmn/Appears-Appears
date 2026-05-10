@@ -13,13 +13,14 @@ const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
 const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.png")
+const TILE_CARD_POPUP_SCENE: PackedScene = preload("res://scenes/ui/tile_card_popup.tscn")
+const TOWN_TILE_TEXTURE: Texture2D = preload("res://assets/sprites/objects/town.png")
+const TOWN_TILE_CARD_ID: StringName = &"town"
+const TOWN_TILE_CARD_TITLE: String = "Town"
+const TOWN_TILE_CARD_DESC: String = "A safe haven appears in your travels."
 
-## Field grows in stage bands until it reaches the old full-size field.
-const MIN_FIELD_SIZE: Vector2 = Vector2(400, 225)
-const MID_FIELD_SIZE_1: Vector2 = Vector2(544, 306)
-const MID_FIELD_SIZE_2: Vector2 = Vector2(672, 378)
-const MID_FIELD_SIZE_3: Vector2 = Vector2(816, 459)
-const MAX_FIELD_SIZE: Vector2 = Vector2(960, 540)
+## Fixed world-map size for every field.
+const FIELD_SIZE: Vector2 = Vector2(720, 405)
 const TILE_SIZE: int = 16
 const SPAWN_MARGIN: float = 48.0
 ## Don't drop slimes within this radius of the player on stage start.
@@ -27,9 +28,15 @@ const PARTY_SAFE_RADIUS: float = 80.0
 const DECOR_SAFE_RADIUS: float = 104.0
 const TOWN_TILE_SAFE_RADIUS: float = 96.0
 const TOWN_TILE_INSET: Vector2 = Vector2(96, 72)
-const TOWN_TILE_EDGE_MARGIN: float = 28.0
-const TOWN_TILE_REVEAL_MIN_DISTANCE: float = 180.0
-const BASE_FIELD_AREA: float = MIN_FIELD_SIZE.x * MIN_FIELD_SIZE.y
+## Just a thin edge margin so the tile sprite doesn't clip the field border.
+## The map is small enough that any spawn position is reachable in seconds,
+## so we don't bother keeping the tile on-camera at reveal time — letting
+## the player walk to it feels more like a proper world map.
+const TOWN_TILE_EDGE_MARGIN: float = 32.0
+## Minimum distance from the player on reveal — keeps the tile from popping
+## right on top of the party.
+const TOWN_TILE_MIN_PLAYER_DISTANCE: float = 120.0
+const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 
 @export var peaceful_start_enemies: int = 3
 @export var enemies_added_per_stage: int = 1
@@ -56,10 +63,13 @@ var _player: Player
 var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
-var _field_size: Vector2 = MIN_FIELD_SIZE
-var _town_kill_goal: int = 0
-var _town_kills: int = 0
+var _field_size: Vector2 = FIELD_SIZE
+## True once the town tile has been placed on the current map (either silently
+## at stage start, or via the unlock-card flow on stage 1's first kill).
 var _town_revealed: bool = false
+## Suppresses re-firing the unlock-card popup if multiple kill signals slip
+## through before the popup actually shows.
+var _showing_town_card: bool = false
 
 
 func _ready() -> void:
@@ -72,7 +82,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if GameState.current_stage <= 0 or GameState.is_party_wiped() or _town_revealed:
+	if GameState.current_stage <= 0 or GameState.is_party_wiped():
 		return
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
@@ -112,16 +122,19 @@ func _setup_party_visuals() -> void:
 func _on_stage_started(_stage_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_stage_field_size(_stage_num)
-	_town_kill_goal = _enemy_count_for_stage(GameState.current_stage)
-	_town_kills = 0
 	_town_revealed = false
+	_showing_town_card = false
 	_clear_field_enemies()
 	_clear_decorations()
 	_town_tile.reset()
 	_recenter_party()
 	_scatter_decorations()
 	_spawn_timer = spawn_interval
-	_refill_enemy_population(_town_kill_goal)
+	_refill_enemy_population(_enemy_count_for_stage(GameState.current_stage))
+	# Town tile drops in immediately on every stage *after* the player has
+	# unlocked it; stage 1's first run shows the unlock-card popup instead.
+	if GameState.has_acquired_tile_card(TOWN_TILE_CARD_ID):
+		_reveal_town_tile()
 
 
 ## Teleport the whole party back to the field center for a fresh start.
@@ -153,7 +166,9 @@ func _clear_decorations() -> void:
 
 
 func _scatter_decorations() -> void:
-	if GameState.current_stage <= 1:
+	# Forest decorations are now a shop unlock — until the player buys the
+	# Forest tile in town, fields stay open grass.
+	if GameState.modifier_level(&"forest_tile") < 1:
 		return
 	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
 	var occupied: Dictionary = {}
@@ -290,8 +305,6 @@ func _max_grid_y() -> int:
 
 
 func _refill_enemy_population(max_to_spawn: int) -> void:
-	if _town_revealed:
-		return
 	var desired_count: int = _enemy_count_for_stage(GameState.current_stage)
 	var missing_count: int = desired_count - _enemies_root.get_child_count()
 	var spawn_count: int = mini(max_to_spawn, missing_count)
@@ -386,72 +399,76 @@ func _random_position() -> Vector2:
 	)
 
 
-func _apply_stage_field_size(stage_num: int) -> void:
-	_field_size = _field_size_for_stage(stage_num)
+func _apply_stage_field_size(_stage_num: int) -> void:
+	_field_size = FIELD_SIZE
 	_background.size = _field_size
 	_town_tile.position = _hidden_town_tile_position()
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 
 
-func _field_size_for_stage(stage_num: int) -> Vector2:
-	if stage_num <= 2:
-		return MIN_FIELD_SIZE
-	if stage_num <= 5:
-		return MID_FIELD_SIZE_1
-	if stage_num <= 8:
-		return MID_FIELD_SIZE_2
-	if stage_num <= 11:
-		return MID_FIELD_SIZE_3
-	return MAX_FIELD_SIZE
-
-
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
-	if _town_revealed or GameState.current_stage <= 0:
+	if GameState.current_stage <= 0:
 		return
-	_town_kills += 1
-	if _town_kills >= _town_kill_goal:
-		_reveal_town_tile()
+	if GameState.has_acquired_tile_card(TOWN_TILE_CARD_ID):
+		return
+	if _showing_town_card:
+		return
+	# First kill of stage 1 unlocks the town tile via a centered card popup;
+	# subsequent stages skip the popup and just drop the tile at stage start.
+	if GameState.current_stage == 1:
+		_show_town_card_popup()
+
+
+func _show_town_card_popup() -> void:
+	_showing_town_card = true
+	var popup: TileCardPopup = TILE_CARD_POPUP_SCENE.instantiate()
+	popup.setup(TOWN_TILE_CARD_TITLE, TOWN_TILE_TEXTURE, TOWN_TILE_CARD_DESC)
+	popup.closed.connect(_on_town_card_closed)
+	get_tree().paused = true
+	# Add to the scene root so the popup survives even if the field is
+	# rebuilt / hidden in some debug edge case.
+	get_parent().add_child(popup)
+
+
+func _on_town_card_closed() -> void:
+	_showing_town_card = false
+	GameState.acquire_tile_card(TOWN_TILE_CARD_ID)
+	get_tree().paused = false
+	_reveal_town_tile()
 
 
 func _reveal_town_tile() -> void:
+	if _town_revealed:
+		return
 	_town_revealed = true
 	var avoid: Vector2 = _player.global_position if _player else _field_size * 0.5
 	_town_tile.position = _town_tile_reveal_position(avoid)
 	_town_tile.reveal_with_impact()
 
 
+## Random spot anywhere on the field (with a thin edge margin so the sprite
+## doesn't clip). Retries a few times to keep at least
+## `TOWN_TILE_MIN_PLAYER_DISTANCE` away from the player so the tile doesn't
+## land on top of them; if no candidate qualifies, returns whatever was
+## sampled — being a bit close is fine on a small map.
 func _town_tile_reveal_position(avoid: Vector2) -> Vector2:
-	var candidates: Array[Vector2] = [
-		Vector2(TOWN_TILE_EDGE_MARGIN, TOWN_TILE_EDGE_MARGIN),
-		Vector2(_field_size.x - TOWN_TILE_EDGE_MARGIN, TOWN_TILE_EDGE_MARGIN),
-		Vector2(TOWN_TILE_EDGE_MARGIN, _field_size.y - TOWN_TILE_EDGE_MARGIN),
-		Vector2(_field_size.x - TOWN_TILE_EDGE_MARGIN, _field_size.y - TOWN_TILE_EDGE_MARGIN),
-		Vector2(_field_size.x * 0.5, TOWN_TILE_EDGE_MARGIN),
-		Vector2(_field_size.x * 0.5, _field_size.y - TOWN_TILE_EDGE_MARGIN),
-		Vector2(TOWN_TILE_EDGE_MARGIN, _field_size.y * 0.5),
-		Vector2(_field_size.x - TOWN_TILE_EDGE_MARGIN, _field_size.y * 0.5),
-	]
-	var best: Vector2 = candidates[0]
-	var best_score: float = -INF
-	for candidate in candidates:
-		var distance: float = candidate.distance_to(avoid)
-		var edge_score: float = _edge_score(candidate)
-		var score: float = distance + edge_score
-		if distance < TOWN_TILE_REVEAL_MIN_DISTANCE:
-			score -= 10000.0
-		if score > best_score:
-			best = candidate
-			best_score = score
-	return best
-
-
-func _edge_score(pos: Vector2) -> float:
-	var edge_distance: float = minf(
-		minf(pos.x, _field_size.x - pos.x),
-		minf(pos.y, _field_size.y - pos.y)
+	var x_min: float = TOWN_TILE_EDGE_MARGIN
+	var x_max: float = _field_size.x - TOWN_TILE_EDGE_MARGIN
+	var y_min: float = TOWN_TILE_EDGE_MARGIN
+	var y_max: float = _field_size.y - TOWN_TILE_EDGE_MARGIN
+	var fallback := Vector2(
+		randf_range(x_min, x_max),
+		randf_range(y_min, y_max),
 	)
-	return -edge_distance * 0.25
+	for attempt in 24:
+		var candidate := Vector2(
+			randf_range(x_min, x_max),
+			randf_range(y_min, y_max),
+		)
+		if candidate.distance_to(avoid) >= TOWN_TILE_MIN_PLAYER_DISTANCE:
+			return candidate
+	return fallback
 
 
 func _hidden_town_tile_position() -> Vector2:

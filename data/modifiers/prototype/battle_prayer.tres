@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"battle_prayer"
 display_name = "Battle Prayer"
-description = "Priest deals 35% damage and heals the most wounded ally +6. Stacks healing."
+description = "Priest deals 35% damage and heals the most wounded ally. Later levels give a smaller heal boost."
 cost = 20
 rarity = 1
 category = 1

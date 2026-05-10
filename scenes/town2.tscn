@@ -1,0 +1,258 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/town2.gd" id="1_town2"]
+[ext_resource type="PackedScene" path="res://scenes/ui/town2_slot.tscn" id="2_slot"]
+[ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="3_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_bg"]
+bg_color = Color(0.84, 0.93, 0.96, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_horizon"]
+bg_color = Color(0.71, 0.87, 0.92, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_divider"]
+bg_color = Color(0.18, 0.32, 0.45, 0.55)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_btn_normal"]
+bg_color = Color(0.13, 0.1, 0.07, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_btn_hover"]
+bg_color = Color(0.2, 0.16, 0.1, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_btn_focus"]
+bg_color = Color(0.22, 0.18, 0.11, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.78, 0.22, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_continue_normal"]
+bg_color = Color(0.85, 0.6, 0.18, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_continue_hover"]
+bg_color = Color(1, 0.72, 0.22, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_continue_focus"]
+bg_color = Color(1, 0.78, 0.22, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_title"]
+font_size = 10
+font_color = Color(0.1, 0.22, 0.32, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_gold"]
+font_size = 14
+font_color = Color(0.7, 0.42, 0.06, 1)
+
+[node name="Town2" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_town2")
+
+[node name="Background" type="Panel" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBox_bg")
+
+[node name="HorizonStrip" type="Panel" parent="."]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -130.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_horizon")
+
+[node name="HeaderBar" type="HBoxContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 14.0
+offset_top = 6.0
+offset_right = -14.0
+offset_bottom = 26.0
+theme = ExtResource("3_theme")
+theme_override_constants/separation = 12
+
+[node name="StageLabel" type="Label" parent="HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 5
+text = "Town"
+label_settings = SubResource("LabelSettings_title")
+vertical_alignment = 1
+
+[node name="GoldLabel" type="Label" parent="HeaderBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0 G"
+label_settings = SubResource("LabelSettings_gold")
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="TopZone" type="HBoxContainer" parent="."]
+unique_name_in_owner = true
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -240.0
+offset_top = 36.0
+offset_right = 240.0
+offset_bottom = 174.0
+theme = ExtResource("3_theme")
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="DividerLine" type="Panel" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+offset_top = 182.0
+offset_right = 260.0
+offset_bottom = 183.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_divider")
+
+[node name="BottomZone" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -304.0
+offset_top = -134.0
+offset_right = 304.0
+offset_bottom = -36.0
+theme = ExtResource("3_theme")
+theme_override_constants/separation = 3
+alignment = 1
+
+[node name="SlotParty" parent="BottomZone" instance=ExtResource("2_slot")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+size_flags_horizontal = 3
+expected_id = &""
+fallback_title = "PARTY"
+
+[node name="SlotHero" parent="BottomZone" instance=ExtResource("2_slot")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+size_flags_horizontal = 3
+expected_id = &"hero"
+fallback_title = "HERO"
+
+[node name="SlotMage" parent="BottomZone" instance=ExtResource("2_slot")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+size_flags_horizontal = 3
+expected_id = &"mage"
+fallback_title = "MAGE"
+
+[node name="SlotPriest" parent="BottomZone" instance=ExtResource("2_slot")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+size_flags_horizontal = 3
+expected_id = &"priest"
+fallback_title = "PRIEST"
+
+[node name="SlotThief" parent="BottomZone" instance=ExtResource("2_slot")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+size_flags_horizontal = 3
+expected_id = &"thief"
+fallback_title = "THIEF"
+
+[node name="BottomBar" type="HBoxContainer" parent="."]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 14.0
+offset_top = -30.0
+offset_right = -14.0
+offset_bottom = -8.0
+theme = ExtResource("3_theme")
+theme_override_constants/separation = 6
+
+[node name="RestButton" type="Button" parent="BottomBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 22)
+layout_mode = 2
+focus_mode = 2
+theme_override_styles/normal = SubResource("StyleBox_btn_normal")
+theme_override_styles/hover = SubResource("StyleBox_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBox_btn_hover")
+theme_override_styles/focus = SubResource("StyleBox_btn_focus")
+theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
+theme_override_colors/font_hover_color = Color(1, 0.93, 0.78, 1)
+theme_override_colors/font_focus_color = Color(1, 0.93, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Rest"
+
+[node name="RerollButton" type="Button" parent="BottomBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 22)
+layout_mode = 2
+focus_mode = 2
+theme_override_styles/normal = SubResource("StyleBox_btn_normal")
+theme_override_styles/hover = SubResource("StyleBox_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBox_btn_hover")
+theme_override_styles/focus = SubResource("StyleBox_btn_focus")
+theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
+theme_override_colors/font_hover_color = Color(1, 0.93, 0.78, 1)
+theme_override_colors/font_focus_color = Color(1, 0.93, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Reroll  5G"
+
+[node name="Spacer" type="Control" parent="BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="ContinueButton" type="Button" parent="BottomBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 22)
+layout_mode = 2
+focus_mode = 2
+theme_override_styles/normal = SubResource("StyleBox_continue_normal")
+theme_override_styles/hover = SubResource("StyleBox_continue_hover")
+theme_override_styles/pressed = SubResource("StyleBox_continue_hover")
+theme_override_styles/focus = SubResource("StyleBox_continue_focus")
+theme_override_colors/font_color = Color(0.1, 0.07, 0.03, 1)
+theme_override_colors/font_hover_color = Color(0.1, 0.07, 0.03, 1)
+theme_override_colors/font_focus_color = Color(0.1, 0.07, 0.03, 1)
+theme_override_font_sizes/font_size = 11
+text = "Continue ▶"

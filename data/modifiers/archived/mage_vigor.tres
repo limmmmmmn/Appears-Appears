@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"mage_vigor"
+display_name = "Iron Body"
+description = "+10 max HP to Mage, and heal that much."
+cost = 6
+rarity = 0
+category = 0
+required_party_member_id = &"mage"
+effect_data = {
+"hp_flat": 10
+}

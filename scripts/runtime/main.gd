@@ -4,7 +4,7 @@ extends Node2D
 ## Sets up the party and drives Field -> Town -> Field stage progression.
 ## Battle window spawning lives in BattleManager.
 
-const TOWN_SCENE: PackedScene = preload("res://scenes/town.tscn")
+const TOWN_SCENE: PackedScene = preload("res://scenes/town2.tscn")
 const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
@@ -19,7 +19,7 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 @onready var _hud: HUD = $HUD
 @onready var _pause_overlay: CanvasLayer = $PauseOverlay
 
-var _town: Town
+var _town: Town2
 var _game_over: GameOver
 var _is_manually_paused: bool = false
 

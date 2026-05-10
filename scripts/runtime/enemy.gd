@@ -19,6 +19,11 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 @onready var _sprite: Sprite2D = $Sprite2D
 
 var current_hp: int = 0
+var max_hp: int = 0
+var attack: int = 0
+var defense: int = 0
+var agility: int = 0
+var gold_reward: int = 0
 var _base_position: Vector2
 var _base_scale: Vector2
 var _hit_tween: Tween
@@ -45,7 +50,12 @@ func setup(enemy_data: EnemyData) -> void:
 func _apply_data() -> void:
 	if data == null:
 		return
-	current_hp = data.max_hp
+	max_hp = GameState.scaled_enemy_max_hp(data)
+	attack = GameState.scaled_enemy_attack(data)
+	defense = GameState.scaled_enemy_defense(data)
+	agility = GameState.scaled_enemy_agility(data)
+	gold_reward = GameState.scaled_enemy_gold_reward(data)
+	current_hp = max_hp
 	_dying = false
 	_stolen_from = false
 	position = _base_position
@@ -53,7 +63,7 @@ func _apply_data() -> void:
 	modulate = Color.WHITE
 	if data.sprite and _sprite:
 		_sprite.texture = data.sprite
-	hp_changed.emit(current_hp, data.max_hp)
+	hp_changed.emit(current_hp, max_hp)
 
 
 func is_alive() -> bool:
@@ -70,9 +80,9 @@ func try_steal_gold(chance: float, amount: int) -> int:
 func take_damage(amount: int, is_crit: bool = false, hit_effect: Texture2D = null) -> int:
 	if not is_alive() or data == null:
 		return 0
-	var dealt: int = max(1, amount - data.defense)
+	var dealt: int = max(1, amount - defense)
 	current_hp = max(0, current_hp - dealt)
-	hp_changed.emit(current_hp, data.max_hp)
+	hp_changed.emit(current_hp, max_hp)
 	EventBus.damage_dealt.emit(self, dealt, global_position)
 	_spawn_hit_effect(hit_effect, is_crit)
 	_spawn_damage_number(dealt, is_crit)
@@ -160,4 +170,4 @@ func _die() -> void:
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_IN)
 	died.emit()
-	EventBus.enemy_defeated.emit(self, data.gold_reward, global_position)
+	EventBus.enemy_defeated.emit(self, gold_reward, global_position)

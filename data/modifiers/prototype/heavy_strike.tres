@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"heavy_strike"
 display_name = "Heavy Strike"
-description = "Hero basic attacks deal +50% damage. Stacks."
+description = "Hero basic attacks hit harder. Later levels give a smaller boost."
 cost = 20
 rarity = 1
 category = 1

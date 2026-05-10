@@ -107,7 +107,7 @@ func apply_window_collision_damage(ratio: float) -> int:
 	for enemy: Enemy in _living_enemies():
 		if enemy.data == null:
 			continue
-		var damage: int = ceili(float(enemy.data.max_hp) * ratio) + enemy.data.defense
+		var damage: int = ceili(float(enemy.max_hp) * ratio) + enemy.defense
 		total_dealt += enemy.take_damage(damage)
 	if total_dealt > 0:
 		_play_crash_flash()
@@ -328,7 +328,7 @@ func _enemy_attack(enemy: Enemy) -> void:
 		enemy.play_attack_lunge()
 		_log_label.text = "%s dodges %s!" % [target.display_name, attacker_name]
 		return
-	var dealt: int = max(1, (enemy.data.attack if enemy.data else enemy_data.attack) - GameState.effective_defense(target_index))
+	var dealt: int = max(1, enemy.attack - GameState.effective_defense(target_index))
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
 	_log_label.text = "%s hits %s -%d" % [attacker_name, target.display_name, dealt]
@@ -340,7 +340,7 @@ func _on_enemy_hp_changed(_current: int, _max_hp: int) -> void:
 
 
 func _on_enemy_died(_enemy: Enemy) -> void:
-	var reward: int = GameState.modify_gold_reward(_enemy.data.gold_reward if _enemy.data else 0)
+	var reward: int = GameState.modify_gold_reward(_enemy.gold_reward)
 	GameState.add_gold(reward)
 	_earned_gold_total += reward
 	_refresh_hp_label()
@@ -363,7 +363,7 @@ func _refresh_hp_label() -> void:
 		if not is_instance_valid(enemy):
 			continue
 		current_total += enemy.current_hp
-		max_total += enemy.data.max_hp if enemy.data else 0
+		max_total += enemy.max_hp
 	_hp_label.text = "HP %d/%d" % [current_total, max_total]
 
 
@@ -425,7 +425,7 @@ func _rebuild_turn_queue() -> void:
 			_turn_queue.append({
 				"type": ACTOR_ENEMY,
 				"enemy": enemy,
-				"agility": enemy.data.agility if enemy.data else 0,
+				"agility": enemy.agility,
 				"tie_break": randf(),
 			})
 	_turn_queue.sort_custom(_compare_turn_actors)

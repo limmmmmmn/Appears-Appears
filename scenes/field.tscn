@@ -4,21 +4,27 @@
 [ext_resource type="PackedScene" path="res://scenes/tiles/field_town_tile.tscn" id="2_town_tile"]
 
 [node name="Field" type="Node2D" unique_id=536184698]
+y_sort_enabled = true
 script = ExtResource("1_field")
 
 [node name="Background" type="ColorRect" parent="." unique_id=1253536074]
+z_index = -100
 offset_right = 960.0
 offset_bottom = 540.0
 mouse_filter = 2
 color = Color(0.6156863, 0.9019608, 0.30588236, 1)
 
 [node name="Decorations" type="Node2D" parent="." unique_id=193672294]
+y_sort_enabled = true
 
 [node name="Tiles" type="Node2D" parent="." unique_id=1406173895]
+y_sort_enabled = true
 
 [node name="TownTile" parent="Tiles" unique_id=797429025 instance=ExtResource("2_town_tile")]
 position = Vector2(768, 128)
 
 [node name="Enemies" type="Node2D" parent="." unique_id=1599293122]
+y_sort_enabled = true
 
 [node name="Party" type="Node2D" parent="." unique_id=1572474564]
+y_sort_enabled = true

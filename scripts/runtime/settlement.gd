@@ -47,6 +47,7 @@ func _on_card_purchase_requested(card: ModifierCard, mod: ModifierData) -> void:
 	if not GameState.can_add_modifier(mod):
 		card.mark_unaffordable_flash()
 		return
+	card.cost = GameState.modifier_purchase_cost(mod)
 	if not GameState.spend_gold(card.cost):
 		card.mark_unaffordable_flash()
 		return

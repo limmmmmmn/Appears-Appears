@@ -27,14 +27,32 @@ var recruited_companions: Array[ModifierData] = []
 # ─── Progression ──────────────────────────────────────────────────────
 var current_stage: int = 0
 
+## Tile-card ids (StringName) the player has unlocked this run. The first
+## time a tile card is unlocked the field shows a centered popup; subsequent
+## stages just drop the tile silently. Cleared on reset_run.
+var acquired_tile_cards: Dictionary = {}
+
+const PRICE_LEVEL_MULTIPLIERS = [1.0, 2.0, 4.0, 7.0, 11.0]
+const EFFECT_STACK_MULTIPLIERS = [1.0, 0.75, 0.55, 0.4, 0.3]
+const DAMAGE_BONUS_STACK_MULTIPLIERS = [1.0, 0.5, 0.3, 0.2, 0.16]
+const ENEMY_HP_STAGE_LINEAR: float = 0.12
+const ENEMY_HP_STAGE_QUADRATIC: float = 0.01
+const ENEMY_ATTACK_STAGE_LINEAR: float = 0.08
+const ENEMY_ATTACK_STAGE_QUADRATIC: float = 0.006
+
+
+func has_acquired_tile_card(id: StringName) -> bool:
+	return acquired_tile_cards.has(id)
+
+
+func acquire_tile_card(id: StringName) -> void:
+	acquired_tile_cards[id] = true
+
 # ─── Run statistics (for the game-over summary) ───────────────────────
 var enemies_killed: int = 0
 var total_gold_earned: int = 0  ## lifetime, not affected by spending
 var biggest_hit: int = 0
 var run_started_at_ms: int = 0
-
-const STAGE_EXTRA_ENEMY_SLOT_CHANCE: float = 0.5
-
 
 func _ready() -> void:
 	# Listen to bus events to keep counters fresh without coupling combat code.
@@ -129,6 +147,40 @@ func spend_gold(amount: int) -> bool:
 	return true
 
 
+func modifier_purchase_cost(mod: ModifierData) -> int:
+	if mod == null:
+		return 0
+	if mod.category == ModifierData.Category.COMPANION or mod.max_level <= 1:
+		return mod.cost
+	var level: int = clampi(modifier_level(mod.id), 0, mod.max_level - 1)
+	var raw_cost: float = float(mod.cost) * _price_multiplier_for_level(level)
+	return maxi(mod.cost, ceili(raw_cost / 5.0) * 5)
+
+
+func modifier_next_int_effect(mod: ModifierData, key: String) -> int:
+	if mod == null:
+		return 0
+	return _int_effect_value_for_stack(mod, key, modifier_level(mod.id))
+
+
+func modifier_last_int_effect(mod: ModifierData, key: String) -> int:
+	if mod == null:
+		return 0
+	return _int_effect_value_for_stack(mod, key, maxi(0, modifier_level(mod.id) - 1))
+
+
+func modifier_next_float_effect(mod: ModifierData, key: String) -> float:
+	if mod == null:
+		return 0.0
+	return _float_effect_value_for_stack(mod, key, modifier_level(mod.id), _multipliers_for_float_key(key))
+
+
+func modifier_last_float_effect(mod: ModifierData, key: String) -> float:
+	if mod == null:
+		return 0.0
+	return _float_effect_value_for_stack(mod, key, maxi(0, modifier_level(mod.id) - 1), _multipliers_for_float_key(key))
+
+
 ## Check whether `mod` can actually be applied right now. Town shops should
 ## call this *before* spending gold so a stale/invalid card doesn't silently
 ## eat the player's coin.
@@ -149,12 +201,13 @@ func _on_modifier_purchase_requested(mod: ModifierData, source: Node) -> void:
 	if not can_add_modifier(mod):
 		EventBus.modifier_purchase_failed.emit(mod, source)
 		return
-	if not spend_gold(mod.cost):
+	var cost: int = modifier_purchase_cost(mod)
+	if not spend_gold(cost):
 		EventBus.modifier_purchase_failed.emit(mod, source)
 		return
 	add_modifier(mod)
 	EventBus.modifier_purchased.emit(mod)
-	EventBus.card_purchased.emit(mod, mod.cost)
+	EventBus.card_purchased.emit(mod, cost)
 	EventBus.modifier_purchase_succeeded.emit(mod, source)
 
 
@@ -167,9 +220,13 @@ func add_modifier(mod: ModifierData) -> void:
 	active_modifiers.append(mod)
 	EventBus.modifier_picked.emit(mod)
 	# Hearty-style: an HP bonus also heals up so the boost is felt immediately.
-	var hp_bonus: int = int(mod.effect_data.get("hp_flat", 0))
+	# Per-hero HP cards only heal their owner; party-wide cards heal everyone.
+	var hp_bonus: int = _int_effect_value_for_stack(mod, "hp_flat", modifier_level(mod.id) - 1)
 	if hp_bonus > 0:
+		var owner_id: StringName = mod.required_party_member_id
 		for i in party.size():
+			if owner_id != &"" and party[i].id != owner_id:
+				continue
 			party_hp[i] = min(party_hp[i] + hp_bonus, effective_max_hp(i))
 			EventBus.party_member_hp_changed.emit(i, party_hp[i], effective_max_hp(i))
 		EventBus.party_hp_changed.emit()
@@ -231,56 +288,207 @@ func advance_stage() -> void:
 	EventBus.stage_started.emit(current_stage)
 
 
+# ─── Enemy scaling ────────────────────────────────────────────────────
+func scaled_enemy_max_hp(data: EnemyData) -> int:
+	if data == null:
+		return 1
+	return maxi(1, int(round(float(data.max_hp) * _enemy_hp_multiplier(data))))
+
+
+func scaled_enemy_attack(data: EnemyData) -> int:
+	if data == null:
+		return 1
+	return maxi(1, int(round(float(data.attack) * _enemy_attack_multiplier(data))))
+
+
+func scaled_enemy_defense(data: EnemyData) -> int:
+	if data == null:
+		return 0
+	var bonus: int = 0
+	if data.id == &"orc":
+		bonus = int(floor(float(_enemy_stage_index()) / 5.0))
+	return maxi(0, data.defense + bonus)
+
+
+func scaled_enemy_agility(data: EnemyData) -> int:
+	if data == null:
+		return 0
+	var bonus: int = 0
+	if data.id == &"bat":
+		bonus = int(floor(float(_enemy_stage_index()) / 3.0))
+	return maxi(0, data.agility + bonus)
+
+
+func scaled_enemy_gold_reward(data: EnemyData) -> int:
+	if data == null:
+		return 0
+	var bonus: int = int(floor(float(_enemy_stage_index()) / 4.0))
+	return maxi(1, data.gold_reward + bonus)
+
+
+func _enemy_stage_index() -> int:
+	return maxi(0, current_stage - 1)
+
+
+func _enemy_hp_multiplier(data: EnemyData) -> float:
+	var s: float = float(_enemy_stage_index())
+	var base_mult: float = 1.0 + s * ENEMY_HP_STAGE_LINEAR + s * s * ENEMY_HP_STAGE_QUADRATIC
+	return _enemy_species_multiplier(data, base_mult, 0.8, 0.85, 1.2)
+
+
+func _enemy_attack_multiplier(data: EnemyData) -> float:
+	var s: float = float(_enemy_stage_index())
+	var base_mult: float = 1.0 + s * ENEMY_ATTACK_STAGE_LINEAR + s * s * ENEMY_ATTACK_STAGE_QUADRATIC
+	return _enemy_species_multiplier(data, base_mult, 0.6, 0.85, 1.15)
+
+
+func _enemy_species_multiplier(
+	data: EnemyData,
+	base_mult: float,
+	slime_growth: float,
+	bat_growth: float,
+	orc_growth: float
+) -> float:
+	var growth: float = 1.0
+	if data.id == &"slime":
+		growth = slime_growth
+	elif data.id == &"bat":
+		growth = bat_growth
+	elif data.id == &"orc":
+		growth = orc_growth
+	return 1.0 + (base_mult - 1.0) * growth
+
+
 # ─── Modifier-aware stat helpers ──────────────────────────────────────
+## True if `mod` should affect the party member with `character_id`. Modifiers
+## with no owner (party-wide) apply to everyone; class-tagged modifiers only
+## apply to the matching member. The per-hero stat splits (ATK/HP/dodge) live
+## here — that's how Sharper Blades-style cards stay scoped to one hero.
+func _modifier_applies_to(mod: ModifierData, character_id: StringName) -> bool:
+	return mod.required_party_member_id == &"" or mod.required_party_member_id == character_id
+
+
+func _price_multiplier_for_level(level: int) -> float:
+	return float(PRICE_LEVEL_MULTIPLIERS[mini(level, PRICE_LEVEL_MULTIPLIERS.size() - 1)])
+
+
+func _effect_multiplier_for_stack(stack_index: int, multipliers: Array) -> float:
+	return float(multipliers[mini(stack_index, multipliers.size() - 1)])
+
+
+func _multipliers_for_float_key(key: String) -> Array:
+	if key == "hero_damage_bonus_mult":
+		return DAMAGE_BONUS_STACK_MULTIPLIERS
+	return EFFECT_STACK_MULTIPLIERS
+
+
+func _int_effect_value_for_stack(mod: ModifierData, key: String, stack_index: int) -> int:
+	var base: int = int(mod.effect_data.get(key, 0))
+	if base <= 0:
+		return 0
+	var scaled: int = int(round(float(base) * _effect_multiplier_for_stack(stack_index, EFFECT_STACK_MULTIPLIERS)))
+	return maxi(1, scaled)
+
+
+func _float_effect_value_for_stack(mod: ModifierData, key: String, stack_index: int, multipliers: Array) -> float:
+	var base: float = float(mod.effect_data.get(key, 0.0))
+	if base <= 0.0:
+		return 0.0
+	return base * _effect_multiplier_for_stack(stack_index, multipliers)
+
+
+func _stacked_int_effect_for_character(character_id: StringName, key: String) -> int:
+	var bonus: int = 0
+	var stacks_by_id: Dictionary = {}
+	for mod: ModifierData in active_modifiers:
+		if not _modifier_applies_to(mod, character_id):
+			continue
+		if not mod.effect_data.has(key):
+			continue
+		var stack_index: int = int(stacks_by_id.get(mod.id, 0))
+		stacks_by_id[mod.id] = stack_index + 1
+		bonus += _int_effect_value_for_stack(mod, key, stack_index)
+	return bonus
+
+
+func _stacked_int_effect(key: String) -> int:
+	var bonus: int = 0
+	var stacks_by_id: Dictionary = {}
+	for mod: ModifierData in active_modifiers:
+		if not mod.effect_data.has(key):
+			continue
+		var stack_index: int = int(stacks_by_id.get(mod.id, 0))
+		stacks_by_id[mod.id] = stack_index + 1
+		bonus += _int_effect_value_for_stack(mod, key, stack_index)
+	return bonus
+
+
+func _stacked_float_effect(key: String, multipliers: Array) -> float:
+	var bonus: float = 0.0
+	var stacks_by_id: Dictionary = {}
+	for mod: ModifierData in active_modifiers:
+		if not mod.effect_data.has(key):
+			continue
+		var stack_index: int = int(stacks_by_id.get(mod.id, 0))
+		stacks_by_id[mod.id] = stack_index + 1
+		bonus += _float_effect_value_for_stack(mod, key, stack_index, multipliers)
+	return bonus
+
+
+func _stacked_float_effect_for_character(character_id: StringName, key: String, multipliers: Array) -> float:
+	var bonus: float = 0.0
+	var stacks_by_id: Dictionary = {}
+	for mod: ModifierData in active_modifiers:
+		if not _modifier_applies_to(mod, character_id):
+			continue
+		if not mod.effect_data.has(key):
+			continue
+		var stack_index: int = int(stacks_by_id.get(mod.id, 0))
+		stacks_by_id[mod.id] = stack_index + 1
+		bonus += _float_effect_value_for_stack(mod, key, stack_index, multipliers)
+	return bonus
+
+
 func effective_attack(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
-	var bonus: int = 0
-	for mod: ModifierData in active_modifiers:
-		bonus += int(mod.effect_data.get("atk_flat", 0))
-	return party[index].attack + bonus
+	var character_id: StringName = party[index].id
+	return party[index].attack + _stacked_int_effect_for_character(character_id, "atk_flat")
 
 
 func effective_defense(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
-	var bonus: int = 0
-	for mod: ModifierData in active_modifiers:
-		bonus += int(mod.effect_data.get("def_flat", 0))
-	return party[index].defense + bonus
+	var character_id: StringName = party[index].id
+	return party[index].defense + _stacked_int_effect_for_character(character_id, "def_flat")
 
 
 func effective_agility(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
-	var bonus: int = 0
-	for mod: ModifierData in active_modifiers:
-		bonus += int(mod.effect_data.get("agi_flat", 0))
-	return party[index].agility + bonus
+	var character_id: StringName = party[index].id
+	return party[index].agility + _stacked_int_effect_for_character(character_id, "agi_flat")
 
 
 func effective_move_speed(base_speed: float) -> float:
-	var flat_bonus: float = 0.0
+	var flat_bonus: float = float(_stacked_int_effect("move_speed_flat"))
 	var mult_bonus: float = 0.0
 	for mod: ModifierData in active_modifiers:
-		flat_bonus += float(mod.effect_data.get("move_speed_flat", 0.0))
 		mult_bonus += float(mod.effect_data.get("move_speed_mult", 0.0))
 	return (base_speed + flat_bonus) * (1.0 + mult_bonus)
 
 
-func roll_evade(_index: int) -> bool:
-	var chance: float = 0.0
-	for mod: ModifierData in active_modifiers:
-		chance += float(mod.effect_data.get("evade_chance", 0.0))
+func roll_evade(index: int) -> bool:
+	if index < 0 or index >= party.size():
+		return false
+	var character_id: StringName = party[index].id
+	var chance: float = _stacked_float_effect_for_character(character_id, "evade_chance", EFFECT_STACK_MULTIPLIERS)
 	chance = clampf(chance, 0.0, 0.75)
 	return randf() < chance
 
 
 func hero_attack_multiplier() -> float:
-	var bonus: float = 0.0
-	for mod: ModifierData in active_modifiers:
-		bonus += float(mod.effect_data.get("hero_damage_bonus_mult", 0.0))
-	return 1.0 + bonus
+	return 1.0 + _stacked_float_effect("hero_damage_bonus_mult", DAMAGE_BONUS_STACK_MULTIPLIERS)
 
 
 func mage_splash_extra_targets() -> int:
@@ -299,10 +507,7 @@ func mage_splash_damage_multiplier() -> float:
 
 
 func priest_heal_amount() -> int:
-	var amount: int = 0
-	for mod: ModifierData in active_modifiers:
-		amount += int(mod.effect_data.get("priest_heal_flat", 0))
-	return amount
+	return _stacked_int_effect("priest_heal_flat")
 
 
 func priest_attack_multiplier() -> float:
@@ -314,9 +519,7 @@ func priest_attack_multiplier() -> float:
 
 
 func thief_steal_chance() -> float:
-	var chance: float = 0.0
-	for mod: ModifierData in active_modifiers:
-		chance += float(mod.effect_data.get("thief_steal_chance", 0.0))
+	var chance: float = _stacked_float_effect("thief_steal_chance", EFFECT_STACK_MULTIPLIERS)
 	return clampf(chance, 0.0, 0.95)
 
 
@@ -330,10 +533,8 @@ func thief_steal_gold_amount() -> int:
 func effective_max_hp(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
-	var bonus: int = 0
-	for mod: ModifierData in active_modifiers:
-		bonus += int(mod.effect_data.get("hp_flat", 0))
-	return party[index].max_hp + bonus
+	var character_id: StringName = party[index].id
+	return party[index].max_hp + _stacked_int_effect_for_character(character_id, "hp_flat")
 
 
 ## Roll a crit. Returns { is_crit: bool, mult: float }.
@@ -368,7 +569,7 @@ func roll_window_duplicates() -> int:
 
 ## Roll extra enemies that may appear inside this battle window.
 func roll_extra_enemies_per_window() -> int:
-	var extras: int = roll_stage_extra_enemies_per_window()
+	var extras: int = 0
 	for mod: ModifierData in active_modifiers:
 		extras += int(mod.effect_data.get("extra_enemies_per_window", 0))
 		var slots: int = int(mod.effect_data.get("extra_enemy_slots_per_window", 0))
@@ -376,16 +577,6 @@ func roll_extra_enemies_per_window() -> int:
 		for i in slots:
 			if randf() < chance:
 				extras += 1
-	return extras
-
-
-func roll_stage_extra_enemies_per_window() -> int:
-	# Fields 2, 4, 6, and 8 each add one random extra-enemy slot.
-	var slots: int = clampi(int(floor(float(current_stage) / 2.0)), 0, 4)
-	var extras: int = 0
-	for i in slots:
-		if randf() < STAGE_EXTRA_ENEMY_SLOT_CHANCE:
-			extras += 1
 	return extras
 
 
@@ -424,6 +615,7 @@ func reset_run() -> void:
 	biggest_hit = 0
 	active_modifiers.clear()
 	recruited_companions.clear()
+	acquired_tile_cards.clear()
 	current_stage = 0
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).

@@ -6,7 +6,7 @@
 script = ExtResource("1_script")
 id = &"swift_boots"
 display_name = "Swift Boots"
-description = "+10 field movement speed."
+description = "Increase field movement speed. Higher levels give a smaller boost."
 cost = 10
 rarity = 0
 category = 0
