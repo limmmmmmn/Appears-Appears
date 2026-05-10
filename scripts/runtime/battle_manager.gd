@@ -18,18 +18,20 @@ const HUD_RESERVED_BOTTOM: float = 8.0
 const SPAWN_DISTANCE: float = 52.0
 const WINDOW_PUSH_PADDING: float = 10.0
 const WINDOW_PUSH_STRENGTH: float = 260.0
-const PLAYER_PUSH_RADIUS: float = 88.0
-const PLAYER_PUSH_STRENGTH: float = 420.0
+const PARTY_COLLISION_SIZE: Vector2 = Vector2(18.0, 24.0)
+const PARTY_COLLISION_STRENGTH: float = 1800.0
 const WALL_PUSH_STRENGTH: float = 900.0
 const VELOCITY_DAMPING: float = 4.6
 const MAX_WINDOW_SPEED: float = 180.0
 const SETTLE_SPEED: float = 10.0
 const SETTLE_INTERVAL: float = 0.08
 const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 0.85
+const PARTY_COLLISION_DAMAGE_COOLDOWN: float = 0.45
 
 var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
 var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 screen velocity.
 var _collision_cooldowns: Dictionary = {}  ## window pair key -> remaining seconds.
+var _party_collision_cooldowns: Dictionary = {}  ## battle window id -> remaining seconds.
 var _settle_timer: float = 0.0
 
 
@@ -44,6 +46,7 @@ func _process(delta: float) -> void:
 		return
 	_settle_timer += delta
 	_tick_collision_cooldowns(delta)
+	_tick_party_collision_cooldowns(delta)
 	_apply_window_push(delta)
 
 
@@ -131,7 +134,7 @@ func _is_spawn_position_valid(pos: Vector2, size: Vector2, viewport_size: Vector
 
 func _apply_window_push(delta: float, burst: bool = false) -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var player_position: Vector2 = _player_screen_position()
+	var party_positions: Array[Vector2] = _party_screen_positions()
 	var windows: Array = _window_rects.keys()
 	for window: BattleWindow in windows:
 		if not is_instance_valid(window):
@@ -145,8 +148,11 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 			if window.get_instance_id() < other.get_instance_id():
 				_apply_window_collision_damage(window, rect, other, _window_rects[other])
 			force += _window_overlap_push(window, rect, other, _window_rects[other])
-		if player_position != Vector2.INF:
-			force += _player_push(rect, player_position)
+		for party_position: Vector2 in party_positions:
+			var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
+			if rect.intersects(party_rect):
+				_apply_party_collision_damage(window)
+			force += _party_collision_push(rect, party_position)
 		force += _wall_push(rect, viewport_size)
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
 		var step_delta: float = 1.0 / 60.0 if burst else delta
@@ -193,6 +199,18 @@ func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_win
 		_collision_cooldowns[key] = WINDOW_COLLISION_DAMAGE_COOLDOWN
 
 
+func _apply_party_collision_damage(window: BattleWindow) -> void:
+	var damage_ratio: float = GameState.window_collision_damage_ratio()
+	if damage_ratio <= 0.0:
+		return
+	var key: String = str(window.get_instance_id())
+	if float(_party_collision_cooldowns.get(key, 0.0)) > 0.0:
+		return
+	var dealt: int = window.apply_window_collision_damage(damage_ratio, "Bump attack")
+	if dealt > 0:
+		_party_collision_cooldowns[key] = PARTY_COLLISION_DAMAGE_COOLDOWN
+
+
 func _collision_pair_key(window: BattleWindow, other_window: BattleWindow) -> String:
 	var a: int = int(window.get_instance_id())
 	var b: int = int(other_window.get_instance_id())
@@ -212,6 +230,15 @@ func _tick_collision_cooldowns(delta: float) -> void:
 			_collision_cooldowns[key] = remaining
 
 
+func _tick_party_collision_cooldowns(delta: float) -> void:
+	for key: String in _party_collision_cooldowns.keys():
+		var remaining: float = float(_party_collision_cooldowns[key]) - delta
+		if remaining <= 0.0:
+			_party_collision_cooldowns.erase(key)
+		else:
+			_party_collision_cooldowns[key] = remaining
+
+
 func _stable_separation_direction(window: BattleWindow, other_window: BattleWindow) -> Vector2:
 	var pair_hash: int = int(window.get_instance_id() + other_window.get_instance_id())
 	var angle: float = float(pair_hash % 360) * TAU / 360.0
@@ -221,19 +248,17 @@ func _stable_separation_direction(window: BattleWindow, other_window: BattleWind
 	return -direction
 
 
-func _player_push(rect: Rect2, player_position: Vector2) -> Vector2:
-	var closest := Vector2(
-		clampf(player_position.x, rect.position.x, rect.end.x),
-		clampf(player_position.y, rect.position.y, rect.end.y)
-	)
-	var delta: Vector2 = rect.get_center() - player_position
-	var distance: float = player_position.distance_to(closest)
-	if distance > PLAYER_PUSH_RADIUS:
+func _party_collision_push(rect: Rect2, party_position: Vector2) -> Vector2:
+	var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
+	if not rect.intersects(party_rect):
 		return Vector2.ZERO
+	var delta: Vector2 = rect.get_center() - party_position
 	if delta == Vector2.ZERO:
 		delta = Vector2.UP
-	var strength: float = (PLAYER_PUSH_RADIUS - distance) / PLAYER_PUSH_RADIUS
-	return delta.normalized() * strength * PLAYER_PUSH_STRENGTH
+	var overlap_x: float = minf(rect.end.x, party_rect.end.x) - maxf(rect.position.x, party_rect.position.x)
+	var overlap_y: float = minf(rect.end.y, party_rect.end.y) - maxf(rect.position.y, party_rect.position.y)
+	var penetration: float = maxf(1.0, minf(overlap_x, overlap_y))
+	return delta.normalized() * penetration * PARTY_COLLISION_STRENGTH
 
 
 func _wall_push(rect: Rect2, viewport_size: Vector2) -> Vector2:
@@ -265,6 +290,14 @@ func _player_screen_position() -> Vector2:
 	return (players[0] as Node2D).get_global_transform_with_canvas().origin
 
 
+func _party_screen_positions() -> Array[Vector2]:
+	var positions: Array[Vector2] = []
+	for member: Node in get_tree().get_nodes_in_group("party_member"):
+		if member is Node2D:
+			positions.append((member as Node2D).get_global_transform_with_canvas().origin)
+	return positions
+
+
 func _on_battle_window_closed(window: Node) -> void:
 	if not _window_rects.has(window):
 		return
@@ -291,3 +324,4 @@ func abort_all_battles() -> void:
 	_window_rects.clear()
 	_window_velocities.clear()
 	_collision_cooldowns.clear()
+	_party_collision_cooldowns.clear()

@@ -11,4 +11,4 @@ sprite = ExtResource("2_sprite")
 max_hp = 20
 agility = 5
 chases_player_on_field = false
-gold_reward = 2
+gold_reward = 1000

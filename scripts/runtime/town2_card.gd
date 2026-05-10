@@ -1,14 +1,8 @@
 class_name Town2Card
 extends Button
 
-## Upgrade box for the town2 grid. Two visual flavors:
-##   • Stat card (atk_flat / hp_flat)  — simplified red/green panel, no name,
-##                                        big "+N" number, no icon. The slot
-##                                        stats panel below verifies the buff,
-##                                        so the card doesn't need to spell it
-##                                        out beyond "ATK" or "HP".
-##   • Full card (skills, recruits, monster cards) — cream parchment with
-##                                        icon + name + description + cost.
+## Upgrade box for the town2 grid. Every offer renders like a small poster:
+## bold flat color, big centered pixel icon, short title, short copy.
 ## A "▶" arrow appears on focus, Zelda 2 style.
 
 signal purchase_requested(card: Town2Card, mod: ModifierData)
@@ -23,15 +17,69 @@ signal purchase_requested(card: Town2Card, mod: ModifierData)
 @onready var _default_name_settings: LabelSettings = _name_label.label_settings
 @onready var _default_desc_settings: LabelSettings = _desc_label.label_settings
 @onready var _default_cost_settings: LabelSettings = _cost_label.label_settings
+@onready var _default_icon_minimum_size: Vector2 = _icon.custom_minimum_size
+@onready var _default_icon_expand_mode: TextureRect.ExpandMode = _icon.expand_mode
+@onready var _default_icon_stretch_mode: TextureRect.StretchMode = _icon.stretch_mode
+@onready var _default_desc_vertical_alignment: VerticalAlignment = _desc_label.vertical_alignment
 
 ## Last-resort icon mapping for non-class modifiers that don't have their own
 ## .icon set. Class-tagged modifiers fall back to the owner's attack_effect.
 const ICON_FALLBACK_BY_ID: Dictionary = {
+	&"atk_up": "res://assets/sprites/slash_basic.png",
+	&"hp_up": "res://assets/sprites/holy.png",
+	&"agi_up": "res://assets/sprites/dagger.png",
+	&"swift_boots": "res://assets/sprites/dagger.png",
 	&"monster_lure": "res://assets/sprites/enemies/slime.png",
 	&"reinforcements": "res://assets/sprites/enemies/slime.png",
 	&"recruit": "res://assets/sprites/objects/village.png",
 	&"forest_tile": "res://assets/sprites/objects/forest 2.png",
+	&"window_crash": "res://assets/sprites/slash_basic.png",
 }
+const CARD_BG_BY_ID: Dictionary = {
+	&"atk_up": Color(0.95, 0.28, 0.31, 1),
+	&"hp_up": Color(0.79, 0.89, 0.55, 1),
+	&"agi_up": Color(0.53, 0.76, 0.93, 1),
+	&"swift_boots": Color(0.96, 0.49, 0.17, 1),
+	&"battle_prayer": Color(0.74, 0.9, 0.94, 1),
+	&"fireburst": Color(0.95, 0.78, 0.14, 1),
+	&"heavy_strike": Color(0.96, 0.55, 0.72, 1),
+	&"pilfer": Color(0.16, 0.58, 0.78, 1),
+	&"monster_lure": Color(0.1, 0.55, 0.43, 1),
+	&"reinforcements": Color(0.18, 0.46, 0.72, 1),
+	&"forest_tile": Color(0.18, 0.56, 0.28, 1),
+	&"window_crash": Color(0.98, 0.66, 0.16, 1),
+	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
+	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
+	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
+}
+const POSTER_DESC_BY_ID: Dictionary = {
+	&"swift_boots": "Move faster on the field.",
+	&"battle_prayer": "Priest heals an ally on attack.",
+	&"fireburst": "Mage burns extra enemies.",
+	&"forest_tile": "Forests appear on future fields.",
+	&"heavy_strike": "Hero basic attacks hit harder.",
+	&"monster_lure": "More monsters roam the field.",
+	&"pilfer": "Thief can steal gold on attack.",
+	&"recruit_mage": "Mage joins your party.",
+	&"recruit_priest": "Priest joins your party.",
+	&"recruit_thief": "Thief joins your party.",
+	&"reinforcements": "Battle windows may add enemies.",
+	&"window_crash": "Bump windows to hurt enemies.",
+}
+const POSTER_TITLE_BY_ID: Dictionary = {
+	&"atk_up": "Attack",
+	&"hp_up": "Health",
+	&"agi_up": "Agility",
+	&"battle_prayer": "Prayer",
+	&"heavy_strike": "Heavy Hit",
+	&"monster_lure": "Lure",
+	&"reinforcements": "Reinforce",
+}
+const DEFAULT_POSTER_BG: Color = Color(0.95, 0.78, 0.14, 1)
+const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1)
+const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1)
+const POSTER_TITLE_YELLOW: Color = Color(1.0, 0.86, 0.18, 1)
+const POSTER_ICON_SLOT_SIZE: Vector2 = Vector2(76, 76)
 
 ## effect_data key → label shown on stat cards.
 const STAT_LABEL_BY_KEY: Dictionary = {
@@ -40,20 +88,12 @@ const STAT_LABEL_BY_KEY: Dictionary = {
 	"agi_flat": "AGI",
 }
 
-## effect_data key → solid panel color for stat cards. Vibrant on purpose so
-## the three stat flavors read instantly against the bright town background.
-const STAT_COLOR_BY_KEY: Dictionary = {
-	"atk_flat": Color(0.82, 0.2, 0.18),
-	"hp_flat": Color(0.22, 0.66, 0.32),
-	"agi_flat": Color(0.16, 0.45, 0.85),
-}
-
 var data: ModifierData
 var purchased: bool = false
 
-var _stat_name_settings: LabelSettings
-var _stat_desc_settings: LabelSettings
-var _stat_cost_settings: LabelSettings
+var _poster_name_settings: LabelSettings
+var _poster_desc_settings: LabelSettings
+var _poster_cost_settings: LabelSettings
 
 
 func _ready() -> void:
@@ -61,7 +101,7 @@ func _ready() -> void:
 	focus_entered.connect(_on_focus_entered)
 	focus_exited.connect(_on_focus_exited)
 	_arrow.visible = false
-	_build_stat_settings()
+	_build_poster_settings()
 	if data:
 		_apply_data()
 
@@ -82,11 +122,7 @@ func _apply_data() -> void:
 	disabled = false
 	focus_mode = Control.FOCUS_ALL
 	modulate = Color.WHITE
-	var stat_key: String = _stat_card_key()
-	if not stat_key.is_empty():
-		_apply_stat_layout(stat_key)
-	else:
-		_apply_default_layout()
+	_apply_poster_layout()
 
 
 func _render_empty() -> void:
@@ -115,32 +151,28 @@ func _stat_card_key() -> String:
 	return ""
 
 
-func _apply_stat_layout(key: String) -> void:
-	var amount: int = GameState.modifier_next_int_effect(data, key)
-	var stat_name: String = STAT_LABEL_BY_KEY[key]
-	var name_text: String = stat_name
-	if data.max_level > 1:
-		var next_level: int = mini(GameState.modifier_level(data.id) + 1, data.max_level)
-		name_text = "%s  %d/%d" % [stat_name, next_level, data.max_level]
-	_icon.visible = false
-	_name_label.label_settings = _stat_name_settings
-	_desc_label.label_settings = _stat_desc_settings
-	_cost_label.label_settings = _stat_cost_settings
-	_name_label.text = name_text
-	_desc_label.text = "+%d" % amount
-	_cost_label.text = "%d G" % GameState.modifier_purchase_cost(data)
-	_cost_label.visible = true
-	_apply_panel_color(STAT_COLOR_BY_KEY[key])
-
-
-# ─── Default (parchment) layout ───────────────────────────────────────
-func _apply_default_layout() -> void:
+func _apply_poster_layout() -> void:
 	_apply_default_layout_chrome()
-	_name_label.text = _display_name_with_level()
-	_desc_label.text = data.description
-	_cost_label.text = "%d G" % GameState.modifier_purchase_cost(data)
-	_cost_label.visible = true
-	_apply_icon()
+	var bg: Color = CARD_BG_BY_ID.get(data.id, DEFAULT_POSTER_BG)
+	var text_color: Color = _poster_text_color(bg)
+	_name_label.text = _poster_title()
+	_desc_label.text = _poster_description()
+	_cost_label.text = _poster_cost_text()
+	_cost_label.visible = not _cost_label.text.is_empty()
+	_name_label.label_settings = _poster_name_settings
+	_desc_label.label_settings = _poster_desc_settings
+	_cost_label.label_settings = _poster_cost_settings
+	_name_label.label_settings.font_color = _poster_title_color(bg)
+	_desc_label.label_settings.font_color = text_color
+	_cost_label.label_settings.font_color = _poster_title_color(bg)
+	_desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_desc_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_icon.texture = _resolve_icon()
+	_icon.visible = true
+	_icon.custom_minimum_size = POSTER_ICON_SLOT_SIZE
+	_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	_apply_poster_color(bg, bg.darkened(0.35))
 
 
 ## Reset the visual chrome (label settings + panel styleboxes + icon visibility)
@@ -148,6 +180,13 @@ func _apply_default_layout() -> void:
 ## from a stat layout to a regular card or to the empty state.
 func _apply_default_layout_chrome() -> void:
 	_icon.visible = true
+	_icon.custom_minimum_size = _default_icon_minimum_size
+	_icon.expand_mode = _default_icon_expand_mode
+	_icon.stretch_mode = _default_icon_stretch_mode
+	_name_label.visible = true
+	_cost_label.visible = true
+	_desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_desc_label.vertical_alignment = _default_desc_vertical_alignment
 	_name_label.label_settings = _default_name_settings
 	_desc_label.label_settings = _default_desc_settings
 	_cost_label.label_settings = _default_cost_settings
@@ -157,39 +196,85 @@ func _apply_default_layout_chrome() -> void:
 	remove_theme_stylebox_override("focus")
 
 
-func _build_stat_settings() -> void:
-	_stat_name_settings = LabelSettings.new()
-	_stat_name_settings.font_size = 14
-	_stat_name_settings.font_color = Color.WHITE
-	_stat_desc_settings = LabelSettings.new()
-	_stat_desc_settings.font_size = 30
-	_stat_desc_settings.font_color = Color.WHITE
-	_stat_cost_settings = LabelSettings.new()
-	_stat_cost_settings.font_size = 11
-	_stat_cost_settings.font_color = Color.WHITE
+func _build_poster_settings() -> void:
+	_poster_name_settings = LabelSettings.new()
+	_poster_name_settings.font_size = 10
+	_poster_name_settings.font_color = POSTER_DARK_TEXT
+	_poster_name_settings.shadow_size = 1
+	_poster_name_settings.shadow_color = Color(0, 0, 0, 0.2)
+	_poster_desc_settings = LabelSettings.new()
+	_poster_desc_settings.font_size = 7
+	_poster_desc_settings.font_color = POSTER_DARK_TEXT
+	_poster_cost_settings = LabelSettings.new()
+	_poster_cost_settings.font_size = 9
+	_poster_cost_settings.font_color = POSTER_DARK_TEXT
 
 
-func _apply_panel_color(bg: Color) -> void:
+func _apply_poster_color(bg: Color, border: Color) -> void:
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = bg
-	normal.border_width_left = 2
-	normal.border_width_top = 2
-	normal.border_width_right = 2
-	normal.border_width_bottom = 2
-	normal.border_color = Color.BLACK
+	normal.border_width_left = 0
+	normal.border_width_top = 0
+	normal.border_width_right = 0
+	normal.border_width_bottom = 0
+	normal.border_color = bg
 	var hover: StyleBoxFlat = normal.duplicate()
-	hover.bg_color = bg.lightened(0.12)
+	hover.bg_color = bg.lightened(0.08)
+	var pressed: StyleBoxFlat = normal.duplicate()
+	pressed.bg_color = bg.darkened(0.08)
 	var focus: StyleBoxFlat = normal.duplicate()
-	focus.bg_color = bg.lightened(0.18)
-	focus.border_width_left = 3
-	focus.border_width_top = 3
-	focus.border_width_right = 3
-	focus.border_width_bottom = 3
-	focus.border_color = Color(1, 0.78, 0.22, 1)
+	focus.bg_color = bg.lightened(0.12)
+	focus.border_width_left = 0
+	focus.border_width_top = 0
+	focus.border_width_right = 0
+	focus.border_width_bottom = 0
+	focus.border_color = bg
 	add_theme_stylebox_override("normal", normal)
 	add_theme_stylebox_override("hover", hover)
-	add_theme_stylebox_override("pressed", hover)
+	add_theme_stylebox_override("pressed", pressed)
 	add_theme_stylebox_override("focus", focus)
+
+
+func _poster_title() -> String:
+	var title: String = POSTER_TITLE_BY_ID.get(data.id, data.display_name)
+	if data.max_level <= 1 or data.category == ModifierData.Category.COMPANION:
+		return title
+	var next_level: int = mini(GameState.modifier_level(data.id) + 1, data.max_level)
+	return "%s Lv %d/%d" % [title, next_level, data.max_level]
+
+
+func _poster_description() -> String:
+	var stat_key: String = _stat_card_key()
+	if not stat_key.is_empty():
+		var amount: int = GameState.modifier_next_int_effect(data, stat_key)
+		return "+%d %s" % [amount, STAT_LABEL_BY_KEY[stat_key]]
+	if data.effect_data.has("move_speed_flat"):
+		return "+%d Move Speed" % GameState.modifier_next_int_effect(data, "move_speed_flat")
+	if data.effect_data.has("hero_damage_bonus_mult"):
+		var amount: int = int(round(GameState.modifier_next_float_effect(data, "hero_damage_bonus_mult") * 100.0))
+		return "+%d%% Hero Damage" % amount
+	if data.effect_data.has("priest_heal_flat"):
+		var amount: int = GameState.modifier_next_int_effect(data, "priest_heal_flat")
+		return "Heal ally +%d" % amount
+	if data.effect_data.has("thief_steal_chance"):
+		var amount: int = int(round(GameState.modifier_next_float_effect(data, "thief_steal_chance") * 100.0))
+		return "%d%% steal chance" % amount
+	return POSTER_DESC_BY_ID.get(data.id, data.description)
+
+
+func _poster_cost_text() -> String:
+	var cost: int = GameState.modifier_purchase_cost(data)
+	if cost <= 0:
+		return ""
+	return "%d G" % cost
+
+
+func _poster_text_color(bg: Color) -> Color:
+	return POSTER_LIGHT_TEXT if bg.get_luminance() < 0.42 else POSTER_DARK_TEXT
+
+
+func _poster_title_color(bg: Color) -> Color:
+	return POSTER_TITLE_YELLOW if bg.get_luminance() < 0.42 else Color(0.21, 0.28, 0.52, 1)
 
 
 # ─── Icon resolution (default-layout cards only) ──────────────────────
@@ -211,9 +296,9 @@ func _resolve_icon() -> Texture2D:
 		if character and character.attack_effect:
 			return character.attack_effect
 	if data.category == ModifierData.Category.COMPANION:
-		var portrait: Texture2D = _build_recruit_portrait(data)
-		if portrait:
-			return portrait
+		var sprite: Texture2D = _recruit_sprite(data)
+		if sprite:
+			return sprite
 	var path: String = ICON_FALLBACK_BY_ID.get(data.id, "")
 	if not path.is_empty() and ResourceLoader.exists(path):
 		var res := load(path)
@@ -224,10 +309,8 @@ func _resolve_icon() -> Texture2D:
 
 ## Pre-resolved single-companion recruit cards (recruit_mage etc.) carry the
 ## character directly; older random-pool recruit cards fall back to the first
-## still-available pool entry so the offer at least previews someone. Crops a
-## head+shoulders square from the idle-down frame so the icon scales 2× cleanly
-## to 32×32 instead of fractional-stretching the full 16×24 sprite.
-func _build_recruit_portrait(mod: ModifierData) -> Texture2D:
+## still-available pool entry. Use one original-size full-body idle frame.
+func _recruit_sprite(mod: ModifierData) -> Texture2D:
 	var character: CharacterData = mod.companion_data
 	if character == null and not mod.companion_pool.is_empty():
 		for c in mod.companion_pool:
@@ -237,10 +320,11 @@ func _build_recruit_portrait(mod: ModifierData) -> Texture2D:
 	if character == null or character.sprite_sheet == null:
 		return null
 	var fw: int = character.frame_size.x
+	var fh: int = character.frame_size.y
 	var idle_col: int = clampi(1, 0, maxi(0, character.frames_per_direction - 1))
 	var atlas := AtlasTexture.new()
 	atlas.atlas = character.sprite_sheet
-	atlas.region = Rect2(idle_col * fw, 0, fw, fw)
+	atlas.region = Rect2(idle_col * fw, 0, fw, fh)
 	atlas.filter_clip = true
 	return atlas
 

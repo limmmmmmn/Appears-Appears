@@ -102,7 +102,7 @@ func push_to(target: Vector2) -> void:
 	position = target
 
 
-func apply_window_collision_damage(ratio: float) -> int:
+func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash") -> int:
 	var total_dealt: int = 0
 	for enemy: Enemy in _living_enemies():
 		if enemy.data == null:
@@ -111,7 +111,7 @@ func apply_window_collision_damage(ratio: float) -> int:
 		total_dealt += enemy.take_damage(damage)
 	if total_dealt > 0:
 		_play_crash_flash()
-		_log_label.text = "Window crash! -%d" % total_dealt
+		_log_label.text = "%s! -%d" % [log_prefix, total_dealt]
 	return total_dealt
 
 

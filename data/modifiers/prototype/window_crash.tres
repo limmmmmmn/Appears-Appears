@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"window_crash"
-display_name = "Window Crash"
-description = "Battle windows deal collision damage to enemies when they bump into each other."
+display_name = "Bump Attack"
+description = "Party and battle windows deal collision damage to enemies when they bump into windows."
 cost = 20
 max_level = 1
 rarity = 1

@@ -150,6 +150,8 @@ func spend_gold(amount: int) -> bool:
 func modifier_purchase_cost(mod: ModifierData) -> int:
 	if mod == null:
 		return 0
+	if mod.id == &"forest_tile":
+		return 0
 	if mod.category == ModifierData.Category.COMPANION or mod.max_level <= 1:
 		return mod.cost
 	var level: int = clampi(modifier_level(mod.id), 0, mod.max_level - 1)
