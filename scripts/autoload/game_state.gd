@@ -153,6 +153,7 @@ func _on_modifier_purchase_requested(mod: ModifierData, source: Node) -> void:
 		EventBus.modifier_purchase_failed.emit(mod, source)
 		return
 	add_modifier(mod)
+	EventBus.modifier_purchased.emit(mod)
 	EventBus.card_purchased.emit(mod, mod.cost)
 	EventBus.modifier_purchase_succeeded.emit(mod, source)
 

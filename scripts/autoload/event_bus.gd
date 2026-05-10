@@ -53,5 +53,6 @@ signal modifier_offered(modifiers: Array)  ## Array[ModifierData]
 signal modifier_purchase_requested(modifier: ModifierData, source: Node)
 signal modifier_purchase_succeeded(modifier: ModifierData, source: Node)
 signal modifier_purchase_failed(modifier: ModifierData, source: Node)
+signal modifier_purchased(modifier: ModifierData)
 signal card_purchased(modifier: ModifierData, cost: int)
 signal modifier_picked(modifier: ModifierData)

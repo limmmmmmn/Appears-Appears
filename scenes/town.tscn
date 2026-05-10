@@ -5,11 +5,11 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/shrine.png" id="3_shrine"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/bonfire.png" id="4_bonfire"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/forest 2.png" id="5_tree"]
-[ext_resource type="Texture2D" path="res://assets/sprites/objects/hill.png" id="6_hill"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/tower.png" id="7_tower"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/village.png" id="8_village"]
-[ext_resource type="Texture2D" path="res://assets/sprites/objects/grass.png" id="9_grass"]
+[ext_resource type="Texture2D" path="res://assets/sprites/decorations/grass.png" id="9_grass"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/save_point.png" id="10_save"]
+[ext_resource type="PackedScene" path="res://scenes/ui/party_display.tscn" id="11_party_display"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_title"]
 font_size = 14
@@ -175,24 +175,6 @@ texture = ExtResource("9_grass")
 modulate = Color(0.85, 0.95, 0.7, 1)
 
 [node name="Backdrop" type="Node2D" parent="."]
-
-[node name="Hill1" type="Sprite2D" parent="Backdrop"]
-position = Vector2(80, 138)
-scale = Vector2(2.5, 1.6)
-texture = ExtResource("6_hill")
-modulate = Color(0.55, 0.62, 0.55, 1)
-
-[node name="Hill2" type="Sprite2D" parent="Backdrop"]
-position = Vector2(560, 140)
-scale = Vector2(2.6, 1.7)
-texture = ExtResource("6_hill")
-modulate = Color(0.5, 0.58, 0.52, 1)
-
-[node name="Hill3" type="Sprite2D" parent="Backdrop"]
-position = Vector2(320, 134)
-scale = Vector2(3.0, 1.4)
-texture = ExtResource("6_hill")
-modulate = Color(0.42, 0.52, 0.46, 1)
 
 [node name="Tower1" type="Sprite2D" parent="Backdrop"]
 position = Vector2(38, 128)
@@ -666,11 +648,22 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -260.0
-offset_top = -22.0
+offset_top = -70.0
 offset_right = 260.0
-offset_bottom = 124.0
+offset_bottom = 76.0
 theme_override_constants/separation = 8
 alignment = 1
+
+[node name="PartyDisplay" parent="." instance=ExtResource("11_party_display")]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -256.0
+offset_top = 78.0
+offset_right = 256.0
+offset_bottom = 148.0
 
 [node name="NextButton" type="Button" parent="."]
 unique_name_in_owner = true
@@ -680,9 +673,9 @@ anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -64.0
-offset_top = -42.0
+offset_top = -32.0
 offset_right = 64.0
-offset_bottom = -16.0
+offset_bottom = -6.0
 theme_override_styles/normal = SubResource("StyleBox_next")
 theme_override_styles/hover = SubResource("StyleBox_next_hover")
 theme_override_styles/pressed = SubResource("StyleBox_next")

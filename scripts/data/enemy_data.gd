@@ -16,6 +16,10 @@ extends Resource
 @export var defense: int = 0
 @export var agility: int = 4
 
+## Field personality.
+## Passive enemies wander and only fight if the player touches them.
+@export var chases_player_on_field: bool = true
+
 ## Reward on defeat.
 @export var gold_reward: int = 1
 @export var xp_reward: int = 1

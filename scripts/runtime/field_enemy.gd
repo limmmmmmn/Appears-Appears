@@ -73,11 +73,12 @@ func _physics_process(delta: float) -> void:
 
 
 func _process_wander(delta: float) -> void:
-	var detected := _find_nearest_party_member(detect_radius)
-	if detected:
-		_target = detected
-		_enter_alert()
-		return
+	if _can_chase_player():
+		var detected := _find_nearest_party_member(detect_radius)
+		if detected:
+			_target = detected
+			_enter_alert()
+			return
 	_wander_timer -= delta
 	if _wander_timer <= 0.0:
 		_pick_next_wander_action()
@@ -114,6 +115,10 @@ func _process_chase(delta: float) -> void:
 
 func _find_player() -> Node2D:
 	return get_tree().get_first_node_in_group("player") as Node2D
+
+
+func _can_chase_player() -> bool:
+	return data == null or data.chases_player_on_field
 
 
 func _find_nearest_party_member(radius: float) -> Node2D:
