@@ -596,6 +596,10 @@ func window_collision_damage_ratio() -> float:
 	return ratio
 
 
+func window_collision_heal_amount() -> int:
+	return _stacked_int_effect("window_collision_heal_flat")
+
+
 ## Apply gold modifiers to a base reward. Multiplicative then additive.
 func modify_gold_reward(base: int) -> int:
 	var mult: float = 1.0

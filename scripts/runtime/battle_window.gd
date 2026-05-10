@@ -39,6 +39,7 @@ const ENEMY_AREA_BOTTOM: float = 32.0
 const TARGET_WINDOW_RATIO: float = 4.0 / 3.0
 const DIAMOND_EDGE_WEIGHT: float = 0.5
 const CRASH_FLASH_COLOR: Color = Color(1.0, 0.48, 0.12, 1.0)
+const HEAL_FLASH_COLOR: Color = Color(0.45, 1.0, 0.56, 1.0)
 const CRASH_FLASH_DURATION: float = 0.18
 
 var _enemies: Array[Enemy] = []
@@ -115,12 +116,29 @@ func apply_window_collision_damage(ratio: float, log_prefix: String = "Window cr
 	return total_dealt
 
 
+func show_window_collision_heal(member_name: String, amount: int) -> void:
+	_play_heal_flash()
+	_log_label.text = "Bump blessing! %s +%d" % [member_name, amount]
+
+
 func _play_crash_flash() -> void:
 	if _background == null:
 		return
 	if _crash_tween and _crash_tween.is_valid():
 		_crash_tween.kill()
 	_background.modulate = CRASH_FLASH_COLOR
+	_crash_tween = create_tween()
+	_crash_tween.tween_property(_background, "modulate", Color.WHITE, CRASH_FLASH_DURATION)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+
+
+func _play_heal_flash() -> void:
+	if _background == null:
+		return
+	if _crash_tween and _crash_tween.is_valid():
+		_crash_tween.kill()
+	_background.modulate = HEAL_FLASH_COLOR
 	_crash_tween = create_tween()
 	_crash_tween.tween_property(_background, "modulate", Color.WHITE, CRASH_FLASH_DURATION)\
 		.set_trans(Tween.TRANS_QUAD)\

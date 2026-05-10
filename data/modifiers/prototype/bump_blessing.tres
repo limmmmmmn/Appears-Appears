@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"bump_blessing"
+display_name = "Bump Blessing"
+description = "Heal the most wounded ally when the party bumps into a battle window."
+cost = 15
+max_level = 5
+rarity = 1
+category = 1
+effect_data = {
+"window_collision_heal_flat": 4
+}

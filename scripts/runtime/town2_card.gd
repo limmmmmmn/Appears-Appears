@@ -34,6 +34,7 @@ const ICON_FALLBACK_BY_ID: Dictionary = {
 	&"recruit": "res://assets/sprites/objects/village.png",
 	&"forest_tile": "res://assets/sprites/objects/forest 2.png",
 	&"window_crash": "res://assets/sprites/slash_basic.png",
+	&"bump_blessing": "res://assets/sprites/holy.png",
 }
 const CARD_BG_BY_ID: Dictionary = {
 	&"atk_up": Color(0.95, 0.28, 0.31, 1),
@@ -48,6 +49,7 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"reinforcements": Color(0.18, 0.46, 0.72, 1),
 	&"forest_tile": Color(0.18, 0.56, 0.28, 1),
 	&"window_crash": Color(0.98, 0.66, 0.16, 1),
+	&"bump_blessing": Color(0.63, 0.86, 0.68, 1),
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
@@ -65,6 +67,7 @@ const POSTER_DESC_BY_ID: Dictionary = {
 	&"recruit_thief": "Thief joins your party.",
 	&"reinforcements": "Battle windows may add enemies.",
 	&"window_crash": "Bump windows to hurt enemies.",
+	&"bump_blessing": "Bump windows to heal an ally.",
 }
 const POSTER_TITLE_BY_ID: Dictionary = {
 	&"atk_up": "Attack",
@@ -74,6 +77,7 @@ const POSTER_TITLE_BY_ID: Dictionary = {
 	&"heavy_strike": "Heavy Hit",
 	&"monster_lure": "Lure",
 	&"reinforcements": "Reinforce",
+	&"bump_blessing": "Blessing",
 }
 const DEFAULT_POSTER_BG: Color = Color(0.95, 0.78, 0.14, 1)
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1)
@@ -259,6 +263,8 @@ func _poster_description() -> String:
 	if data.effect_data.has("thief_steal_chance"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "thief_steal_chance") * 100.0))
 		return "%d%% steal chance" % amount
+	if data.effect_data.has("window_collision_heal_flat"):
+		return "Bump heal +%d" % GameState.modifier_next_int_effect(data, "window_collision_heal_flat")
 	return POSTER_DESC_BY_ID.get(data.id, data.description)
 
 

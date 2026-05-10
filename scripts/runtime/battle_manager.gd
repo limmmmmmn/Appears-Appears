@@ -151,7 +151,7 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 		for party_position: Vector2 in party_positions:
 			var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
 			if rect.intersects(party_rect):
-				_apply_party_collision_damage(window)
+				_apply_party_collision_effects(window)
 			force += _party_collision_push(rect, party_position)
 		force += _wall_push(rect, viewport_size)
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
@@ -199,16 +199,51 @@ func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_win
 		_collision_cooldowns[key] = WINDOW_COLLISION_DAMAGE_COOLDOWN
 
 
-func _apply_party_collision_damage(window: BattleWindow) -> void:
+func _apply_party_collision_effects(window: BattleWindow) -> void:
 	var damage_ratio: float = GameState.window_collision_damage_ratio()
-	if damage_ratio <= 0.0:
+	var heal_amount: int = GameState.window_collision_heal_amount()
+	if damage_ratio <= 0.0 and heal_amount <= 0:
 		return
 	var key: String = str(window.get_instance_id())
 	if float(_party_collision_cooldowns.get(key, 0.0)) > 0.0:
 		return
-	var dealt: int = window.apply_window_collision_damage(damage_ratio, "Bump attack")
-	if dealt > 0:
+	var dealt: int = 0
+	if damage_ratio > 0.0:
+		dealt = window.apply_window_collision_damage(damage_ratio, "Bump attack")
+	var healed: int = 0
+	if heal_amount > 0:
+		healed = _apply_party_collision_heal(window, heal_amount)
+	if dealt > 0 or healed > 0:
 		_party_collision_cooldowns[key] = PARTY_COLLISION_DAMAGE_COOLDOWN
+
+
+func _apply_party_collision_heal(window: BattleWindow, amount: int) -> int:
+	var target_index: int = _lowest_wounded_party_index()
+	if target_index == -1:
+		return 0
+	var before_hp: int = GameState.party_hp[target_index]
+	GameState.heal_party_member(target_index, amount)
+	var healed: int = GameState.party_hp[target_index] - before_hp
+	if healed > 0:
+		var member_name: String = GameState.party[target_index].display_name
+		window.show_window_collision_heal(member_name, healed)
+	return healed
+
+
+func _lowest_wounded_party_index() -> int:
+	var best_index: int = -1
+	var best_ratio: float = 1.1
+	for i in GameState.party_size():
+		if not GameState.is_alive(i):
+			continue
+		var max_hp: int = GameState.effective_max_hp(i)
+		if max_hp <= 0 or GameState.party_hp[i] >= max_hp:
+			continue
+		var ratio: float = float(GameState.party_hp[i]) / float(max_hp)
+		if ratio < best_ratio:
+			best_ratio = ratio
+			best_index = i
+	return best_index
 
 
 func _collision_pair_key(window: BattleWindow, other_window: BattleWindow) -> String:

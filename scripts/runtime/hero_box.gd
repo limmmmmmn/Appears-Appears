@@ -144,7 +144,7 @@ func _add_upgrade_label(text: String, color: Color) -> void:
 func _color_for_modifier(mod: ModifierData) -> Color:
 	if mod.required_party_member_id == &"mage" or mod.effect_data.has("mage_splash_extra_targets"):
 		return MAGIC_COLOR
-	if mod.effect_data.has("hp_flat") or mod.effect_data.has("priest_heal_flat"):
+	if mod.effect_data.has("hp_flat") or mod.effect_data.has("priest_heal_flat") or mod.effect_data.has("window_collision_heal_flat"):
 		return SUPPORT_COLOR
 	if mod.effect_data.has("def_flat") or mod.effect_data.has("evade_chance"):
 		return DEFENSE_COLOR
