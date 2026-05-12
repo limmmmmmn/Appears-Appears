@@ -57,6 +57,8 @@ signal party_damage_taken(member_index: int, amount: int)
 signal stage_started(stage_num: int)
 signal stage_cleared(stage_num: int)
 signal run_cleared()
+signal wave_timer_changed(remaining_seconds: int)
+signal wave_cleanup_started()
 
 # ─── Economy / Modifiers ──────────────────────────────────────────────
 signal gold_changed(new_gold: int)

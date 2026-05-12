@@ -53,6 +53,7 @@ var _charge_dir: Vector2 = Vector2.ZERO
 var _wander_timer: float = 0.0
 var _wander_dir: Vector2 = Vector2.RIGHT
 var _squish_time: float = 0.0
+var _despawning: bool = false
 
 enum State { WANDER, ALERT, CHASE, CHARGE }
 enum WanderMode { MOVE, PAUSE }
@@ -89,7 +90,7 @@ func _apply_data() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _triggered or _spawning:
+	if _triggered or _spawning or _despawning:
 		return
 	_charge_cooldown_timer = maxf(0.0, _charge_cooldown_timer - delta)
 	if _state == State.WANDER:
@@ -305,6 +306,32 @@ func _start_spawn_telegraph() -> void:
 	monitoring = true
 	monitorable = true
 	_spawning = false
+
+
+func despawn_with_pop() -> void:
+	if _despawning or _triggered:
+		return
+	_despawning = true
+	monitoring = false
+	monitorable = false
+	_collision_shape.disabled = true
+	_alert_bubble.visible = false
+	_sprite.visible = true
+	var drift: Vector2 = Vector2(randf_range(-4.0, 4.0), randf_range(-12.0, -6.0))
+	var tween: Tween = create_tween().set_parallel(true)
+	tween.tween_property(self, "position", position + drift, 0.24)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(_sprite, "scale", Vector2(1.45, 0.55), 0.10)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(_sprite, "scale", Vector2(0.05, 1.65), 0.18)\
+		.set_delay(0.08)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_IN)
+	tween.tween_property(_sprite, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.16)\
+		.set_delay(0.08)
+	tween.chain().tween_callback(queue_free)
 
 
 func _build_spawn_sparkle() -> Node2D:

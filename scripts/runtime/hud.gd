@@ -20,6 +20,7 @@ const LEVEL_UP_SKILL_BY_CHARACTER_ID: Dictionary = {
 const LEVEL_UP_STAT_CARD_KINDS: Array[String] = ["blade", "vigor", "step"]
 
 @onready var _stage_label: Label = %StageLabel
+@onready var _countdown_label: Label = %CountdownLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _member_row: HBoxContainer = %MemberRow
 
@@ -29,6 +30,8 @@ const LEVEL_UP_STAT_CARD_KINDS: Array[String] = ["blade", "vigor", "step"]
 var _member_boxes: Array[PartyMemberBox] = []
 var _level_up_panel: LevelUpPanel
 var _level_up_ui_enabled: bool = true
+var _queued_level_up_members: Array[int] = []
+var _level_up_pause_active: bool = false
 
 
 func _ready() -> void:
@@ -39,6 +42,7 @@ func _ready() -> void:
 	EventBus.party_equipment_changed.connect(_on_party_equipment_changed)
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.stage_started.connect(_on_stage_started)
+	EventBus.wave_timer_changed.connect(_on_wave_timer_changed)
 	_refresh_gold()
 	_refresh_stage()
 	_rebuild_member_boxes()
@@ -82,6 +86,8 @@ func _on_party_member_leveled_up(index: int, _new_level: int) -> void:
 		return
 	var mark: LevelUpMark = _member_boxes[index].show_level_up_mark()
 	mark.visible = _level_up_ui_enabled
+	if _level_up_ui_enabled:
+		_queue_level_up_choice(index)
 
 
 func _on_level_up_mark_pressed(index: int) -> void:
@@ -89,7 +95,30 @@ func _on_level_up_mark_pressed(index: int) -> void:
 		return
 	if index < 0 or index >= GameState.party_size():
 		return
-	var offers: Array[ModifierData] = _level_up_offers_for_member(index)
+	_queue_level_up_choice(index)
+
+
+func _queue_level_up_choice(index: int) -> void:
+	_queued_level_up_members.append(index)
+	_open_next_level_up_choice()
+
+
+func _open_next_level_up_choice() -> void:
+	if not _level_up_ui_enabled or is_instance_valid(_level_up_panel):
+		return
+	while not _queued_level_up_members.is_empty():
+		var index: int = _queued_level_up_members.pop_front()
+		if index < 0 or index >= GameState.party_size():
+			continue
+		var offers: Array[ModifierData] = _level_up_offers_for_member(index)
+		if offers.is_empty():
+			_clear_level_up_mark(index)
+			continue
+		_open_level_up_panel(index, offers)
+		return
+
+
+func _open_level_up_panel(index: int, offers: Array[ModifierData]) -> void:
 	if offers.is_empty():
 		return
 	if is_instance_valid(_level_up_panel):
@@ -99,18 +128,38 @@ func _on_level_up_mark_pressed(index: int) -> void:
 	add_child(_level_up_panel)
 	_level_up_panel.setup(index, member_name, offers)
 	_level_up_panel.modifier_chosen.connect(_on_level_up_modifier_chosen)
+	_level_up_pause_active = true
+	get_tree().paused = true
 
 
 func _on_level_up_modifier_chosen(index: int, mod: ModifierData) -> void:
+	var accepted: bool = false
 	if index < 0 or index >= GameState.party_size():
+		_finish_level_up_choice(index, accepted)
 		return
-	if not _modifier_matches_member(mod, GameState.party[index].id):
+	if _modifier_matches_member(mod, GameState.party[index].id) and GameState.can_add_modifier(mod):
+		GameState.add_modifier(mod)
+		EventBus.modifier_purchased.emit(mod)
+		_refresh_member_box(index)
+		accepted = true
+	_finish_level_up_choice(index, accepted)
+
+
+func _finish_level_up_choice(index: int, accepted: bool) -> void:
+	if accepted:
+		_clear_level_up_mark(index)
+	_level_up_panel = null
+	if _queued_level_up_members.is_empty():
+		_level_up_pause_active = false
+		get_tree().paused = false
+	else:
+		call_deferred("_open_next_level_up_choice")
+
+
+func _clear_level_up_mark(index: int) -> void:
+	if index < 0 or index >= _member_boxes.size():
 		return
-	if not GameState.can_add_modifier(mod):
-		return
-	GameState.add_modifier(mod)
-	EventBus.modifier_purchased.emit(mod)
-	_refresh_member_box(index)
+	_member_boxes[index].clear_level_up_mark()
 
 
 func _level_up_offers_for_member(index: int) -> Array[ModifierData]:
@@ -153,6 +202,10 @@ func set_level_up_ui_enabled(is_enabled: bool) -> void:
 	if not is_enabled and is_instance_valid(_level_up_panel):
 		_level_up_panel.queue_free()
 		_level_up_panel = null
+		_queued_level_up_members.clear()
+		if _level_up_pause_active:
+			_level_up_pause_active = false
+			get_tree().paused = false
 
 
 func _on_party_equipment_changed(index: int) -> void:
@@ -168,6 +221,10 @@ func _on_gold_changed(_new_gold: int) -> void:
 
 func _on_stage_started(_stage_num: int) -> void:
 	_refresh_stage()
+
+
+func _on_wave_timer_changed(remaining_seconds: int) -> void:
+	_countdown_label.text = str(maxi(0, remaining_seconds))
 
 
 func _refresh_gold() -> void:

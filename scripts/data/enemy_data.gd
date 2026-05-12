@@ -15,6 +15,7 @@ extends Resource
 @export var attack: int = 2
 @export var defense: int = 0
 @export var agility: int = 4
+@export var party_bump_counter_damage_ratio: float = 0.0
 
 ## Field personality.
 ## Passive enemies wander and only fight if the player touches them.

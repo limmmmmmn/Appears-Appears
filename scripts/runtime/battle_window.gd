@@ -10,6 +10,7 @@ const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tres")
 const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
 const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
+const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 
 @export var enemy_data: EnemyData
 @export var turn_interval: float = 0.5
@@ -47,6 +48,7 @@ const WINDOW_FLASH_HOLD_DURATION: float = 0.16
 const WINDOW_FLASH_FADE_DURATION: float = 0.42
 const BASE_ENEMY_REPEAT_CHANCE: float = 0.68
 const STRONGER_SUPPORT_CHANCE: float = 0.06
+const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
 const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1.0)
 const DEFAULT_WINDOW_BG: Color = Color(0.95, 0.78, 0.14, 1.0)
@@ -55,12 +57,14 @@ const WINDOW_BG_BY_ENEMY_ID: Dictionary = {
 	&"slime_chaser": Color(0.2, 0.68, 0.35, 1.0),
 	&"bat": Color(0.18, 0.46, 0.72, 1.0),
 	&"orc": Color(0.98, 0.66, 0.16, 1.0),
+	&"blade_bug": Color(0.72, 0.22, 0.2, 1.0),
 }
 const ENEMY_TIER_BY_ID: Dictionary = {
 	&"slime": 0,
 	&"slime_chaser": 1,
 	&"bat": 2,
 	&"orc": 3,
+	&"blade_bug": 3,
 }
 
 var _enemies: Array[Enemy] = []
@@ -147,16 +151,43 @@ func field_drop_position() -> Vector2:
 
 func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash") -> int:
 	var total_dealt: int = 0
+	var effective_ratio: float = ratio * _window_collision_damage_multiplier(log_prefix)
 	for enemy: Enemy in _living_enemies():
 		if enemy.data == null:
 			continue
-		var damage: int = ceili(float(enemy.max_hp) * ratio) + enemy.defense
+		var damage: int = ceili(float(enemy.max_hp) * effective_ratio) + enemy.defense
 		total_dealt += enemy.take_damage(damage, false, null, false)
 	if total_dealt > 0:
 		_play_crash_flash()
 		_spawn_window_damage_number(total_dealt, _window_damage_label(log_prefix))
 		_log_label.text = "%s! -%d" % [log_prefix, total_dealt]
 	return total_dealt
+
+
+func _window_collision_damage_multiplier(log_prefix: String) -> float:
+	if log_prefix.to_lower().contains("bump") and has_living_enemy_id(&"orc"):
+		return ORC_BUMP_DAMAGE_MULTIPLIER
+	return 1.0
+
+
+func party_bump_counter_damage_ratio() -> float:
+	var total_ratio: float = 0.0
+	for enemy: Enemy in _living_enemies():
+		if enemy.data == null:
+			continue
+		total_ratio += maxf(0.0, enemy.data.party_bump_counter_damage_ratio)
+	return total_ratio
+
+
+func has_living_enemy_id(enemy_id: StringName) -> bool:
+	for enemy: Enemy in _living_enemies():
+		if enemy.data != null and enemy.data.id == enemy_id:
+			return true
+	return false
+
+
+func show_party_bump_counter_damage(total_amount: int, ratio: float) -> void:
+	_log_label.text = "Blade counter! Party -%d%% (%d)" % [int(round(ratio * 100.0)), total_amount]
 
 
 func show_window_collision_heal(member_name: String, amount: int) -> void:
@@ -325,6 +356,7 @@ func _available_support_enemies() -> Array[EnemyData]:
 	if GameState.current_stage >= 3:
 		out.append(BAT_DATA)
 	if GameState.current_stage >= 5:
+		out.append(BLADE_BUG_DATA)
 		out.append(ORC_DATA)
 	return out
 

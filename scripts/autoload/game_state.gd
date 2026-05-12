@@ -23,6 +23,10 @@ var party_levels: Array[int] = []
 var party_xp: Array[int] = []
 var party_equipment: Array[Array] = []
 var inventory: Array[ItemData] = []
+var _move_speed_drag_multiplier: float = 1.0
+var _move_speed_drag_until_msec: int = 0
+var _move_speed_boost_multiplier: float = 1.0
+var _move_speed_boost_until_msec: int = 0
 
 # ─── Economy ──────────────────────────────────────────────────────────
 const STARTING_GOLD: int = 30
@@ -690,7 +694,34 @@ func effective_move_speed(base_speed: float) -> float:
 	var mult_bonus: float = 0.0
 	for mod: ModifierData in active_modifiers:
 		mult_bonus += float(mod.effect_data.get("move_speed_mult", 0.0))
-	return (base_speed + flat_bonus) * (1.0 + mult_bonus)
+	return (base_speed + flat_bonus) * (1.0 + mult_bonus) * _active_move_speed_drag_multiplier() * _active_move_speed_boost_multiplier()
+
+
+func apply_move_speed_drag(multiplier: float, duration: float) -> void:
+	_move_speed_drag_multiplier = minf(_active_move_speed_drag_multiplier(), clampf(multiplier, 0.05, 1.0))
+	_move_speed_drag_until_msec = Time.get_ticks_msec() + int(duration * 1000.0)
+
+
+func apply_move_speed_boost(multiplier: float, duration: float) -> void:
+	_move_speed_boost_multiplier = maxf(_active_move_speed_boost_multiplier(), maxf(multiplier, 1.0))
+	_move_speed_boost_until_msec = Time.get_ticks_msec() + int(duration * 1000.0)
+
+
+func clear_move_speed_drag() -> void:
+	_move_speed_drag_multiplier = 1.0
+	_move_speed_drag_until_msec = 0
+
+
+func _active_move_speed_drag_multiplier() -> float:
+	if Time.get_ticks_msec() > _move_speed_drag_until_msec:
+		_move_speed_drag_multiplier = 1.0
+	return _move_speed_drag_multiplier
+
+
+func _active_move_speed_boost_multiplier() -> float:
+	if Time.get_ticks_msec() > _move_speed_boost_until_msec:
+		_move_speed_boost_multiplier = 1.0
+	return _move_speed_boost_multiplier
 
 
 func roll_evade(index: int) -> bool:
@@ -843,6 +874,10 @@ func reset_run() -> void:
 	biggest_hit = 0
 	active_modifiers.clear()
 	recruited_companions.clear()
+	_move_speed_drag_multiplier = 1.0
+	_move_speed_drag_until_msec = 0
+	_move_speed_boost_multiplier = 1.0
+	_move_speed_boost_until_msec = 0
 	current_stage = 0
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).

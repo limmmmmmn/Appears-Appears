@@ -110,6 +110,12 @@ func set_level_up_mark_visible(is_visible: bool) -> void:
 		existing.visible = is_visible
 
 
+func clear_level_up_mark() -> void:
+	var existing: Node = _portrait.get_node_or_null(NodePath(String(LEVEL_UP_MARK_NODE_NAME)))
+	if existing:
+		existing.queue_free()
+
+
 # ─── Internal ─────────────────────────────────────────────────────────
 func _on_level_up_mark_dismissed() -> void:
 	level_up_mark_pressed.emit(party_index)

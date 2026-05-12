@@ -15,6 +15,7 @@ const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tres")
 const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
 const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
+const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.png")
 
 ## Fixed world-map size for every field.
@@ -49,6 +50,11 @@ const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 @export var treasure_kills_required_stage_step: int = 1
 @export var treasure_gold_base: int = 45
 @export var treasure_gold_per_stage: int = 15
+@export var stage_one_town_time: float = 20.0
+@export var stage_ten_town_time: float = 60.0
+@export var max_town_time: float = 90.0
+@export var cleanup_time: float = 5.0
+@export var cleanup_move_speed_multiplier: float = 1.8
 
 @onready var _background: ColorRect = $Background
 @onready var _decorations_root: Node2D = $Decorations
@@ -67,6 +73,12 @@ var _field_size: Vector2 = FIELD_SIZE
 var _town_revealed: bool = false
 var _treasure_kills: int = 0
 var _treasure_spawned: bool = false
+var _stage_elapsed: float = 0.0
+var _stage_town_time: float = 20.0
+var _stage_complete: bool = false
+var _cleanup_elapsed: float = 0.0
+var _cleanup_active: bool = false
+var _last_countdown_seconds: int = -1
 
 
 func _ready() -> void:
@@ -81,6 +93,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if GameState.current_stage <= 0 or GameState.is_party_wiped():
+		return
+	_update_wave_timer(delta)
+	if _stage_complete or _cleanup_active:
 		return
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
@@ -124,6 +139,13 @@ func _on_stage_started(_stage_num: int) -> void:
 	_town_revealed = false
 	_treasure_kills = 0
 	_treasure_spawned = false
+	_stage_elapsed = 0.0
+	_stage_town_time = _town_time_for_stage(_stage_num)
+	_stage_complete = false
+	_cleanup_elapsed = 0.0
+	_cleanup_active = false
+	_last_countdown_seconds = -1
+	_emit_wave_timer_changed()
 	_clear_field_enemies()
 	_clear_decorations()
 	_clear_treasures()
@@ -131,7 +153,6 @@ func _on_stage_started(_stage_num: int) -> void:
 	_crowd_pressure = entry_burst_bonus
 	_town_tile.reset()
 	_recenter_party()
-	_reveal_town_tile()
 	_scatter_decorations()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
@@ -157,6 +178,14 @@ func _recenter_party() -> void:
 func _clear_field_enemies() -> void:
 	for child in _enemies_root.get_children():
 		child.queue_free()
+
+
+func _despawn_field_enemies() -> void:
+	for child in _enemies_root.get_children():
+		if child is FieldEnemy:
+			(child as FieldEnemy).despawn_with_pop()
+		else:
+			child.queue_free()
 
 
 func _clear_decorations() -> void:
@@ -327,6 +356,19 @@ func _refill_enemy_population(max_to_spawn: int) -> void:
 		_spawn_field_enemy(_enemy_data_for_stage(GameState.current_stage))
 
 
+func debug_spawn_all_enemy_types() -> int:
+	var enemy_types: Array[EnemyData] = [
+		SLIME_DATA,
+		SLIME_CHASER_DATA,
+		BAT_DATA,
+		ORC_DATA,
+		BLADE_BUG_DATA,
+	]
+	for data: EnemyData in enemy_types:
+		_spawn_field_enemy(data)
+	return enemy_types.size()
+
+
 func _desired_enemy_count() -> int:
 	return _enemy_count_for_stage(GameState.current_stage) + _crowd_pressure
 
@@ -351,11 +393,13 @@ func _enemy_count_for_stage(_stage: int) -> int:
 func _enemy_data_for_stage(stage: int) -> EnemyData:
 	var roll: float = randf()
 	if stage >= 5:
-		if roll < 0.18:
+		if roll < 0.16:
+			return BLADE_BUG_DATA
+		if roll < 0.32:
 			return ORC_DATA
-		if roll < 0.42:
+		if roll < 0.52:
 			return BAT_DATA
-		if roll < 0.68:
+		if roll < 0.76:
 			return SLIME_CHASER_DATA
 		return SLIME_DATA
 	if stage >= 3:
@@ -495,6 +539,64 @@ func _reveal_town_tile() -> void:
 	_town_tile.reveal_with_impact()
 
 
+func _update_wave_timer(delta: float) -> void:
+	if _stage_complete:
+		return
+	if _cleanup_active:
+		_update_cleanup_timer(delta)
+		return
+	_stage_elapsed += delta
+	_emit_wave_timer_changed()
+	if _stage_elapsed >= _stage_town_time:
+		_start_cleanup_phase()
+
+
+func _start_cleanup_phase() -> void:
+	_cleanup_active = true
+	_cleanup_elapsed = 0.0
+	_last_countdown_seconds = -1
+	_despawn_field_enemies()
+	GameState.clear_move_speed_drag()
+	GameState.apply_move_speed_boost(cleanup_move_speed_multiplier, cleanup_time)
+	EventBus.wave_cleanup_started.emit()
+	_emit_cleanup_timer_changed()
+
+
+func _update_cleanup_timer(delta: float) -> void:
+	_cleanup_elapsed += delta
+	_emit_cleanup_timer_changed()
+	if _cleanup_elapsed >= cleanup_time:
+		_stage_complete = true
+		_cleanup_active = false
+		EventBus.wave_timer_changed.emit(0)
+		EventBus.stage_cleared.emit(GameState.current_stage)
+
+
+func _emit_cleanup_timer_changed() -> void:
+	var remaining: int = maxi(0, ceili(cleanup_time - _cleanup_elapsed))
+	if remaining == _last_countdown_seconds:
+		return
+	_last_countdown_seconds = remaining
+	EventBus.wave_timer_changed.emit(remaining)
+
+
+func _emit_wave_timer_changed() -> void:
+	var remaining: int = maxi(0, ceili(_stage_town_time - _stage_elapsed))
+	if remaining == _last_countdown_seconds:
+		return
+	_last_countdown_seconds = remaining
+	EventBus.wave_timer_changed.emit(remaining)
+
+
+func _town_time_for_stage(stage: int) -> float:
+	if stage <= 1:
+		return stage_one_town_time
+	var stage_ten_delta: float = stage_ten_town_time - stage_one_town_time
+	var seconds_per_stage: float = stage_ten_delta / 9.0
+	var seconds: float = stage_one_town_time + seconds_per_stage * float(stage - 1)
+	return clampf(seconds, stage_one_town_time, max_town_time)
+
+
 func _town_tile_corner_position() -> Vector2:
 	var candidates: Array[Vector2] = [
 		TOWN_TILE_INSET,
@@ -514,5 +616,7 @@ func _hidden_town_tile_position() -> Vector2:
 ## consumed, so we listen to all_battles_resolved (not battle_window_closed)
 ## and combine with the field-empty check.
 func _check_stage_clear() -> void:
+	if _stage_complete or _cleanup_active:
+		return
 	if not _town_revealed and _enemies_root.get_child_count() == 0:
 		_refill_enemy_population(spawn_batch_size)

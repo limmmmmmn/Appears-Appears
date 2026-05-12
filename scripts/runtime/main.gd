@@ -36,6 +36,7 @@ func _ready() -> void:
 	EventBus.party_wiped.connect(_on_party_wiped)
 	EventBus.stage_cleared.connect(_on_stage_cleared)
 	EventBus.town_entered.connect(_on_town_entered)
+	EventBus.wave_cleanup_started.connect(_on_wave_cleanup_started)
 	# Kick off the first stage. Field listens to stage_started and spawns enemies.
 	GameState.advance_stage()
 
@@ -53,7 +54,13 @@ func _setup_default_party() -> void:
 # ─── Stage flow ───────────────────────────────────────────────────────
 func _on_stage_cleared(stage_num: int) -> void:
 	print("[main] field cleared: %d (gold=%d)" % [stage_num, GameState.gold])
+	_battle_manager.abort_all_battles()
 	_show_town("Field %d Cleared" % stage_num)
+
+
+func _on_wave_cleanup_started() -> void:
+	print("[main] wave cleanup started — closing battles with no rewards")
+	_battle_manager.abort_all_battles()
 
 
 func _on_town_entered(_tile: Node) -> void:
@@ -147,7 +154,7 @@ func _can_toggle_manual_pause() -> bool:
 
 ## F1 = instant stage clear (skip combat to test town)
 ## F2 = stress spawn 20 battle windows
-## F3 = stress spawn 100 battle windows (TRAILER CUT)
+## F3 = spawn one of each field enemy type
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_SPACE and _can_toggle_manual_pause():
@@ -163,7 +170,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F2:
 				_debug_stress_spawn(20)
 			KEY_F3:
-				_debug_stress_spawn(100)
+				_debug_spawn_all_enemy_types()
 
 
 func _debug_stress_spawn(count: int) -> void:
@@ -173,3 +180,8 @@ func _debug_stress_spawn(count: int) -> void:
 	for i in count:
 		mgr.spawn_battle(SLIME_DATA)
 	print("[main] DEBUG: spawned %d battle windows (active=%d)" % [count, mgr.active_window_count()])
+
+
+func _debug_spawn_all_enemy_types() -> void:
+	var spawned_count: int = _field.debug_spawn_all_enemy_types()
+	print("[main] DEBUG: spawned %d field enemy types" % spawned_count)

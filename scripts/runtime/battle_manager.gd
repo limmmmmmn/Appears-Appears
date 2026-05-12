@@ -22,6 +22,9 @@ const WINDOW_PUSH_STRENGTH: float = 260.0
 const PARTY_COLLISION_SIZE: Vector2 = Vector2(18.0, 24.0)
 const PARTY_COLLISION_STRENGTH: float = 1800.0
 const WALL_PUSH_STRENGTH: float = 900.0
+const ORC_WINDOW_PUSH_MULTIPLIER: float = 0.35
+const ORC_WINDOW_DRAG_SPEED_MULTIPLIER: float = 0.45
+const ORC_WINDOW_DRAG_DURATION: float = 0.12
 const VELOCITY_DAMPING: float = 4.6
 const MAX_WINDOW_SPEED: float = 180.0
 const SETTLE_SPEED: float = 10.0
@@ -158,9 +161,11 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 				var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
 				if rect.intersects(party_rect):
 					_apply_party_collision_effects(window)
+					_apply_party_drag_effects(window)
 				force += _party_collision_push(rect, party_position)
 		if window_collision_enabled or party_collision_enabled:
 			force += _wall_push(rect, viewport_size)
+		force *= _window_push_multiplier(window)
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
 		var step_delta: float = 1.0 / 60.0 if burst else delta
 		velocity += force * step_delta
@@ -191,6 +196,17 @@ func _window_overlap_push(window: BattleWindow, rect: Rect2, other_window: Battl
 	return delta.normalized() * push * WINDOW_PUSH_STRENGTH
 
 
+func _window_push_multiplier(window: BattleWindow) -> float:
+	if window.has_living_enemy_id(&"orc"):
+		return ORC_WINDOW_PUSH_MULTIPLIER
+	return 1.0
+
+
+func _apply_party_drag_effects(window: BattleWindow) -> void:
+	if window.has_living_enemy_id(&"orc"):
+		GameState.apply_move_speed_drag(ORC_WINDOW_DRAG_SPEED_MULTIPLIER, ORC_WINDOW_DRAG_DURATION)
+
+
 func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> void:
 	var damage_ratio: float = GameState.window_collision_damage_ratio()
 	if damage_ratio <= 0.0:
@@ -215,13 +231,36 @@ func _apply_party_collision_effects(window: BattleWindow) -> void:
 	if float(_party_collision_cooldowns.get(key, 0.0)) > 0.0:
 		return
 	var dealt: int = 0
+	var counter_damage_ratio: float = 0.0
 	if damage_ratio > 0.0:
+		counter_damage_ratio = window.party_bump_counter_damage_ratio()
 		dealt = window.apply_window_collision_damage(damage_ratio, "Bump attack")
 	var healed: int = 0
 	if heal_amount > 0:
 		healed = _apply_party_collision_heal(window, heal_amount)
-	if dealt > 0 or healed > 0:
+	var countered: int = 0
+	if dealt > 0 and counter_damage_ratio > 0.0:
+		countered = _apply_party_bump_counter_damage(window, counter_damage_ratio)
+	if dealt > 0 or healed > 0 or countered > 0:
 		_party_collision_cooldowns[key] = PARTY_COLLISION_DAMAGE_COOLDOWN
+
+
+func _apply_party_bump_counter_damage(window: BattleWindow, ratio: float) -> int:
+	var total_dealt: int = 0
+	for i in GameState.party_size():
+		if not GameState.is_alive(i):
+			continue
+		var amount: int = maxi(1, ceili(float(GameState.effective_max_hp(i)) * ratio))
+		var before_hp: int = GameState.party_hp[i]
+		GameState.damage_party_member(i, amount)
+		var dealt: int = before_hp - GameState.party_hp[i]
+		if dealt <= 0:
+			continue
+		total_dealt += dealt
+		_spawn_party_damage_number(i, dealt)
+	if total_dealt > 0:
+		window.show_party_bump_counter_damage(total_dealt, ratio)
+	return total_dealt
 
 
 func _apply_party_collision_heal(window: BattleWindow, amount: int) -> int:
@@ -236,6 +275,17 @@ func _apply_party_collision_heal(window: BattleWindow, amount: int) -> int:
 		_spawn_party_heal_number(target_index, healed)
 		window.show_window_collision_heal(member_name, healed)
 	return healed
+
+
+func _spawn_party_damage_number(party_index: int, amount: int) -> void:
+	var target: Node2D = _party_member_node_for_index(party_index)
+	if target == null:
+		return
+	var num: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
+	target.add_child(num)
+	num.position = Vector2(randf_range(-5.0, 5.0), -18.0 + randf_range(-2.0, 2.0))
+	num.z_index = 30
+	num.setup_text("-%d" % amount, Color(1.0, 0.28, 0.18, 1.0))
 
 
 func _spawn_party_heal_number(party_index: int, amount: int) -> void:
