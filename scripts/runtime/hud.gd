@@ -1,156 +1,179 @@
 class_name HUD
 extends CanvasLayer
 
-## macOS-dock-styled bottom bar.
-## Each party member is one app-icon-style box (rounded square + face crop +
-## per-character background color), with a thin HP bar floating above.
-## A vertical divider separates party from gold readout, like Dock vs Trash.
+## Field HUD:
+##   • Top bar:   "Field N" (left) | "Gold N" (right)
+##   • Bottom bar: a row of party member boxes — portrait + name on the left
+##                 column, HP bar / EXP bar / equipment slots on the right.
+##
+## Pure presentation node. State comes from GameState, change notifications
+## come through EventBus.
 
-const SLOT_COUNT: int = 4
+const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.tscn")
+const LEVEL_UP_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_panel.tscn")
+const LEVEL_UP_SKILL_BY_CHARACTER_ID: Dictionary = {
+	&"hero": preload("res://data/modifiers/prototype/heavy_strike.tres"),
+	&"mage": preload("res://data/modifiers/prototype/fireburst.tres"),
+	&"priest": preload("res://data/modifiers/prototype/battle_prayer.tres"),
+	&"thief": preload("res://data/modifiers/prototype/pilfer.tres"),
+}
+const LEVEL_UP_STAT_CARD_KINDS: Array[String] = ["blade", "vigor", "step"]
 
-# Width budget — every part of the dock has a fixed slot here so the panel
-# can resize itself smoothly as the party grows.
-const SIDE_PADDING: float = 8.0
-const SECTION_GAP: float = 6.0      ## space between slots / divider / gold
-const FIELD_WIDTH: float = 38.0
-const SLOT_WIDTH: float = 20.0
-const SLOT_GAP: float = 4.0
-const DIVIDER_WIDTH: float = 1.0
-const GOLD_WIDTH: float = 36.0
-
-const PANEL_HEIGHT: float = 26.0
-const PANEL_BOTTOM_MARGIN: float = 8.0
-
-# How many pixels of the sprite frame's top to keep for the icon's "face".
-# 24-tall sprites cleanly show head + shoulders in the top ~14px.
-const FACE_CROP_HEIGHT: int = 14
-
-@onready var _party_panel: Panel = $BottomBar
-@onready var _field_label: Label = %FieldLabel
-@onready var _slots_container: HBoxContainer = %SlotsContainer
+@onready var _stage_label: Label = %StageLabel
 @onready var _gold_label: Label = %GoldLabel
+@onready var _member_row: HBoxContainer = %MemberRow
 
-var _slots: Array[Control] = []
-var _icon_boxes: Array[Panel] = []
-var _portraits: Array[TextureRect] = []
-var _hp_bars: Array[ProgressBar] = []
+## Live member box references, parallel to GameState.party. Rebuilt from
+## scratch on party_changed so we never have stale indices when a recruit
+## or wipe shifts the party array.
+var _member_boxes: Array[PartyMemberBox] = []
+var _level_up_panel: LevelUpPanel
+var _level_up_ui_enabled: bool = true
 
 
 func _ready() -> void:
-	_collect_slot_refs()
-	# Child _ready() runs before Main._ready() in Godot, so the party may not
-	# be set up yet at this point. Listen for party_changed and (re)populate
-	# whenever the roster lands.
-	EventBus.party_changed.connect(_populate_from_game_state)
+	EventBus.party_changed.connect(_rebuild_member_boxes)
 	EventBus.party_member_hp_changed.connect(_on_party_member_hp_changed)
+	EventBus.party_member_xp_changed.connect(_on_party_member_xp_changed)
+	EventBus.party_member_leveled_up.connect(_on_party_member_leveled_up)
+	EventBus.party_equipment_changed.connect(_on_party_equipment_changed)
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.stage_started.connect(_on_stage_started)
-	_populate_from_game_state()
-	_refresh_field_label()
-	_gold_label.text = "%d G" % GameState.gold
+	_refresh_gold()
+	_refresh_stage()
+	_rebuild_member_boxes()
 
 
-func _collect_slot_refs() -> void:
-	for i in SLOT_COUNT:
-		var slot: Control = _slots_container.get_child(i)
-		_slots.append(slot)
-		_hp_bars.append(slot.get_node("HPBar") as ProgressBar)
-		var icon_box: Panel = slot.get_node("IconBox") as Panel
-		_icon_boxes.append(icon_box)
-		_portraits.append(icon_box.get_node("Portrait") as TextureRect)
+# ─── Bottom row ───────────────────────────────────────────────────────
+func _rebuild_member_boxes() -> void:
+	for box in _member_boxes:
+		if is_instance_valid(box):
+			box.queue_free()
+	_member_boxes.clear()
+	for i in GameState.party_size():
+		# Layout flags are authored on the box scene root, so each member
+		# keeps its natural size and stays pinned to the bottom row.
+		var box: PartyMemberBox = MEMBER_BOX_SCENE.instantiate()
+		_member_row.add_child(box)
+		box.setup(i, GameState.party[i])
+		box.level_up_mark_pressed.connect(_on_level_up_mark_pressed)
+		box.set_level_up_mark_visible(_level_up_ui_enabled)
+		_member_boxes.append(box)
 
 
-func _populate_from_game_state() -> void:
-	var visible_count: int = mini(GameState.party_size(), SLOT_COUNT)
-	_resize_dock(visible_count)
-	for i in SLOT_COUNT:
-		var has_member: bool = i < visible_count
-		_slots[i].visible = has_member
-		if not has_member:
-			continue
-		var member: CharacterData = GameState.party[i]
-		_portraits[i].texture = _build_face_portrait(member)
-		_apply_icon_color(i, member)
-		_set_hp_ratio(i, GameState.party_hp[i], GameState.effective_max_hp(i))
-		_slots[i].modulate = Color.WHITE
-
-
-## Recompute the dock width so it hugs the visible slots — no empty padding
-## when only the leader is alive, but room for all four when fully recruited.
-func _resize_dock(member_count: int) -> void:
-	var slot_count: int = maxi(1, member_count)
-	var slots_width: float = slot_count * SLOT_WIDTH + maxi(0, slot_count - 1) * SLOT_GAP
-	var content_width: float = (
-		FIELD_WIDTH
-		+ SECTION_GAP + DIVIDER_WIDTH
-		+ SECTION_GAP + slots_width
-		+ SECTION_GAP + DIVIDER_WIDTH
-		+ SECTION_GAP + GOLD_WIDTH
-	)
-	var total_width: float = SIDE_PADDING * 2.0 + content_width
-	_party_panel.offset_left = -total_width * 0.5
-	_party_panel.offset_right = total_width * 0.5
-	_party_panel.offset_top = -PANEL_HEIGHT - PANEL_BOTTOM_MARGIN
-	_party_panel.offset_bottom = -PANEL_BOTTOM_MARGIN
-
-
-## Crop the top portion of the idle frame (col 1, row 0 = facing down) so
-## only head + shoulders show in the icon — like an avatar crop.
-func _build_face_portrait(member: CharacterData) -> AtlasTexture:
-	if member.sprite_sheet == null:
-		return null
-	var atlas := AtlasTexture.new()
-	atlas.atlas = member.sprite_sheet
-	var fw: int = member.frame_size.x
-	var fh: int = member.frame_size.y
-	var crop_h: int = mini(fh, FACE_CROP_HEIGHT)
-	atlas.region = Rect2(fw, 0, fw, crop_h)
-	return atlas
-
-
-## Stable random color per character (hash of id). Same character = same
-## color across runs, so the player learns "blue square = mage" intuitively.
-func _apply_icon_color(index: int, member: CharacterData) -> void:
-	var hash_value: int = abs(int(member.id.hash()))
-	var hue: float = float(hash_value % 360) / 360.0
-	var color: Color = Color.from_hsv(hue, 0.55, 0.78, 1.0)
-	var stylebox := StyleBoxFlat.new()
-	stylebox.bg_color = color
-	stylebox.corner_radius_top_left = 4
-	stylebox.corner_radius_top_right = 4
-	stylebox.corner_radius_bottom_left = 4
-	stylebox.corner_radius_bottom_right = 4
-	stylebox.anti_aliasing = false
-	_icon_boxes[index].add_theme_stylebox_override("panel", stylebox)
-
-
-func _set_hp_ratio(index: int, current: int, max_hp: int) -> void:
-	if index < 0 or index >= _hp_bars.size():
-		return
-	if max_hp <= 0:
-		_hp_bars[index].value = 0.0
-		return
-	_hp_bars[index].value = clampf(float(current) / float(max_hp), 0.0, 1.0)
-
-
-# ─── Signal handlers ──────────────────────────────────────────────────
 func _on_party_member_hp_changed(index: int, new_hp: int, max_hp: int) -> void:
-	if index < 0 or index >= SLOT_COUNT or index >= _hp_bars.size():
+	if index < 0 or index >= _member_boxes.size():
 		return
-	_set_hp_ratio(index, new_hp, max_hp)
-	if new_hp <= 0:
-		_slots[index].modulate = Color(0.4, 0.4, 0.4, 1.0)
-	else:
-		_slots[index].modulate = Color.WHITE
+	_member_boxes[index].set_hp(new_hp, max_hp)
 
 
-func _on_gold_changed(new_gold: int) -> void:
-	_gold_label.text = "%d G" % new_gold
+func _on_party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: int) -> void:
+	if index < 0 or index >= _member_boxes.size():
+		return
+	var ratio: float = 1.0 if level >= GameState.MAX_CHARACTER_LEVEL else clampf(float(xp) / float(maxi(1, xp_to_next)), 0.0, 1.0)
+	_member_boxes[index].set_exp_ratio(ratio)
+	_member_boxes[index].set_level(level)
+
+
+## Persistent "+" badge over the leveled-up member's portrait. The box owns
+## the layout / dedupe; we just route the signal to the right slot.
+func _on_party_member_leveled_up(index: int, _new_level: int) -> void:
+	if index < 0 or index >= _member_boxes.size():
+		return
+	var mark: LevelUpMark = _member_boxes[index].show_level_up_mark()
+	mark.visible = _level_up_ui_enabled
+
+
+func _on_level_up_mark_pressed(index: int) -> void:
+	if not _level_up_ui_enabled:
+		return
+	if index < 0 or index >= GameState.party_size():
+		return
+	var offers: Array[ModifierData] = _level_up_offers_for_member(index)
+	if offers.is_empty():
+		return
+	if is_instance_valid(_level_up_panel):
+		_level_up_panel.queue_free()
+	var member_name: String = GameState.party[index].display_name
+	_level_up_panel = LEVEL_UP_PANEL_SCENE.instantiate()
+	add_child(_level_up_panel)
+	_level_up_panel.setup(index, member_name, offers)
+	_level_up_panel.modifier_chosen.connect(_on_level_up_modifier_chosen)
+
+
+func _on_level_up_modifier_chosen(index: int, mod: ModifierData) -> void:
+	if index < 0 or index >= GameState.party_size():
+		return
+	if not _modifier_matches_member(mod, GameState.party[index].id):
+		return
+	if not GameState.can_add_modifier(mod):
+		return
+	GameState.add_modifier(mod)
+	EventBus.modifier_purchased.emit(mod)
+	_refresh_member_box(index)
+
+
+func _level_up_offers_for_member(index: int) -> Array[ModifierData]:
+	var offers: Array[ModifierData] = []
+	if index < 0 or index >= GameState.party_size():
+		return offers
+	var member_id: StringName = GameState.party[index].id
+	var skill: ModifierData = LEVEL_UP_SKILL_BY_CHARACTER_ID.get(member_id, null)
+	if skill and GameState.can_add_modifier(skill):
+		offers.append(skill)
+	for kind: String in LEVEL_UP_STAT_CARD_KINDS:
+		var path: String = "res://data/modifiers/archived/%s_%s.tres" % [String(member_id), kind]
+		if not ResourceLoader.exists(path):
+			continue
+		var mod: ModifierData = load(path) as ModifierData
+		if mod and GameState.can_add_modifier(mod):
+			offers.append(mod)
+	return offers
+
+
+func _modifier_matches_member(mod: ModifierData, member_id: StringName) -> bool:
+	return mod != null and mod.required_party_member_id == member_id
+
+
+func _refresh_member_box(index: int) -> void:
+	if index < 0 or index >= _member_boxes.size():
+		return
+	var box: PartyMemberBox = _member_boxes[index]
+	var max_hp: int = GameState.effective_max_hp(index)
+	box.set_hp(GameState.party_hp[index], max_hp)
+	box.set_exp_ratio(GameState.party_xp_ratio(index))
+	box.set_level(GameState.party_level(index))
+
+
+func set_level_up_ui_enabled(is_enabled: bool) -> void:
+	_level_up_ui_enabled = is_enabled
+	for box in _member_boxes:
+		if is_instance_valid(box):
+			box.set_level_up_mark_visible(is_enabled)
+	if not is_enabled and is_instance_valid(_level_up_panel):
+		_level_up_panel.queue_free()
+		_level_up_panel = null
+
+
+func _on_party_equipment_changed(index: int) -> void:
+	if index < 0 or index >= _member_boxes.size():
+		return
+	_member_boxes[index].set_equipment(GameState.equipment_for_member(index))
+
+
+# ─── Top bar ──────────────────────────────────────────────────────────
+func _on_gold_changed(_new_gold: int) -> void:
+	_refresh_gold()
 
 
 func _on_stage_started(_stage_num: int) -> void:
-	_refresh_field_label()
+	_refresh_stage()
 
 
-func _refresh_field_label() -> void:
-	_field_label.text = "Field %d" % maxi(1, GameState.current_stage)
+func _refresh_gold() -> void:
+	_gold_label.text = "Gold %d" % GameState.gold
+
+
+func _refresh_stage() -> void:
+	var stage: int = maxi(GameState.current_stage, 1)
+	_stage_label.text = "Field %d" % stage

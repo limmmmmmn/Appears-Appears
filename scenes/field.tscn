@@ -12,7 +12,7 @@ z_index = -100
 offset_right = 960.0
 offset_bottom = 540.0
 mouse_filter = 2
-color = Color(0.6156863, 0.9019608, 0.30588236, 1)
+color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 
 [node name="Decorations" type="Node2D" parent="." unique_id=193672294]
 y_sort_enabled = true
@@ -22,6 +22,12 @@ y_sort_enabled = true
 
 [node name="TownTile" parent="Tiles" unique_id=797429025 instance=ExtResource("2_town_tile")]
 position = Vector2(768, 128)
+
+[node name="Treasures" type="Node2D" parent="." unique_id=1062582089]
+y_sort_enabled = true
+
+[node name="Items" type="Node2D" parent="." unique_id=630235893]
+y_sort_enabled = true
 
 [node name="Enemies" type="Node2D" parent="." unique_id=1599293122]
 y_sort_enabled = true

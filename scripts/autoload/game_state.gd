@@ -19,6 +19,10 @@ var party: Array[CharacterData] = []
 ## Current HP/MP per party member. Index matches `party`.
 var party_hp: Array[int] = []
 var party_mp: Array[int] = []
+var party_levels: Array[int] = []
+var party_xp: Array[int] = []
+var party_equipment: Array[Array] = []
+var inventory: Array[ItemData] = []
 
 # ─── Economy ──────────────────────────────────────────────────────────
 const STARTING_GOLD: int = 30
@@ -34,6 +38,26 @@ var recruited_companions: Array[ModifierData] = []
 
 # ─── Progression ──────────────────────────────────────────────────────
 var current_stage: int = 0
+
+const MAX_CHARACTER_LEVEL: int = 20
+const EQUIPMENT_SLOT_COUNT: int = 6
+const EQUIPMENT_ACCESSORY_SLOT_A: int = 4
+const EQUIPMENT_ACCESSORY_SLOT_B: int = 5
+const XP_CURVE_BASE: int = 10
+const XP_CURVE_LEVEL_STEP: int = 5
+const XP_CURVE_QUADRATIC: int = 3
+const DEFAULT_LEVEL_GROWTH: Dictionary = {
+	"hp": 4,
+	"atk": 2,
+	"def": 1,
+	"agi": 1,
+}
+const LEVEL_GROWTH_BY_CHARACTER_ID: Dictionary = {
+	&"hero": {"hp": 5, "atk": 2, "def": 1, "agi": 1},
+	&"mage": {"hp": 3, "atk": 3, "def": 0, "agi": 1},
+	&"priest": {"hp": 5, "atk": 1, "def": 1, "agi": 1},
+	&"thief": {"hp": 3, "atk": 2, "def": 0, "agi": 2},
+}
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
 const EFFECT_STACK_MULTIPLIERS = [1.0, 0.75, 0.55, 0.4, 0.3]
@@ -82,8 +106,15 @@ func set_party(members: Array[CharacterData]) -> void:
 	party = members.duplicate()
 	party_hp.clear()
 	party_mp.clear()
+	party_levels.clear()
+	party_xp.clear()
+	party_equipment.clear()
+	inventory.clear()
 	for m: CharacterData in party:
-		party_hp.append(m.max_hp)
+		party_levels.append(1)
+		party_xp.append(0)
+		party_equipment.append(_empty_equipment_slots())
+		party_hp.append(effective_max_hp(party_hp.size()))
 		party_mp.append(m.max_mp)
 	# A fresh party means a fresh run timer.
 	run_started_at_ms = Time.get_ticks_msec()
@@ -127,6 +158,89 @@ func heal_party_member(index: int, amount: int) -> void:
 	party_hp[index] = min(effective_max_hp(index), party_hp[index] + amount)
 	EventBus.party_member_hp_changed.emit(index, party_hp[index], effective_max_hp(index))
 	EventBus.party_hp_changed.emit()
+
+
+# ─── Experience / Levels ──────────────────────────────────────────────
+func add_party_xp(amount: int) -> void:
+	if amount <= 0:
+		return
+	for i in party.size():
+		_add_xp_to_member(i, amount)
+
+
+func party_level(index: int) -> int:
+	if index < 0 or index >= party_levels.size():
+		return 1
+	return party_levels[index]
+
+
+func party_xp_to_next(index: int) -> int:
+	return _xp_required_for_level(party_level(index))
+
+
+func party_xp_ratio(index: int) -> float:
+	if index < 0 or index >= party_xp.size():
+		return 0.0
+	if party_level(index) >= MAX_CHARACTER_LEVEL:
+		return 1.0
+	return clampf(float(party_xp[index]) / float(party_xp_to_next(index)), 0.0, 1.0)
+
+
+func _add_xp_to_member(index: int, amount: int) -> void:
+	if index < 0 or index >= party.size():
+		return
+	if index >= party_levels.size() or index >= party_xp.size():
+		return
+	if party_levels[index] >= MAX_CHARACTER_LEVEL:
+		party_xp[index] = 0
+		_emit_member_xp_changed(index)
+		return
+	party_xp[index] += amount
+	var leveled: bool = false
+	var was_alive: bool = is_alive(index)
+	while party_levels[index] < MAX_CHARACTER_LEVEL and party_xp[index] >= _xp_required_for_level(party_levels[index]):
+		party_xp[index] -= _xp_required_for_level(party_levels[index])
+		_level_up_member(index, was_alive)
+		leveled = true
+	if party_levels[index] >= MAX_CHARACTER_LEVEL:
+		party_xp[index] = 0
+	_emit_member_xp_changed(index)
+	if leveled:
+		EventBus.party_hp_changed.emit()
+
+
+func _level_up_member(index: int, heal_if_alive: bool) -> void:
+	var old_max_hp: int = effective_max_hp(index)
+	party_levels[index] += 1
+	var new_max_hp: int = effective_max_hp(index)
+	if heal_if_alive and index < party_hp.size():
+		party_hp[index] = min(new_max_hp, party_hp[index] + maxi(0, new_max_hp - old_max_hp))
+	EventBus.party_member_leveled_up.emit(index, party_levels[index])
+	EventBus.party_member_hp_changed.emit(index, party_hp[index], new_max_hp)
+
+
+func _emit_member_xp_changed(index: int) -> void:
+	EventBus.party_member_xp_changed.emit(index, party_xp[index], party_xp_to_next(index), party_levels[index])
+
+
+func _xp_required_for_level(level: int) -> int:
+	var l: int = maxi(1, level)
+	var t: int = l - 1
+	return XP_CURVE_BASE + t * XP_CURVE_LEVEL_STEP + t * t * XP_CURVE_QUADRATIC
+
+
+func _level_bonus(index: int, key: String) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	var level: int = party_level(index)
+	if level <= 1:
+		return 0
+	return _level_growth_value(party[index].id, key) * (level - 1)
+
+
+func _level_growth_value(character_id: StringName, key: String) -> int:
+	var growth: Dictionary = LEVEL_GROWTH_BY_CHARACTER_ID.get(character_id, DEFAULT_LEVEL_GROWTH)
+	return int(growth.get(key, DEFAULT_LEVEL_GROWTH.get(key, 0)))
 
 
 # ─── Economy ──────────────────────────────────────────────────────────
@@ -246,6 +360,9 @@ func _recruit_companion(mod: ModifierData) -> void:
 	var recruited: CharacterData = recruits.pick_random()
 	party.append(recruited)
 	var idx: int = party.size() - 1
+	party_levels.append(1)
+	party_xp.append(0)
+	party_equipment.append(_empty_equipment_slots())
 	party_hp.append(effective_max_hp(idx))
 	party_mp.append(recruited.max_mp)
 	recruited_companions.append(mod)
@@ -336,6 +453,92 @@ func scaled_enemy_gold_reward(data: EnemyData) -> int:
 		int(floor(float(_enemy_stage_index()) / float(ENEMY_GOLD_STAGE_INTERVAL)))
 	)
 	return maxi(1, data.gold_reward + bonus)
+
+
+func scaled_enemy_xp_reward(data: EnemyData) -> int:
+	if data == null:
+		return 0
+	var stage_bonus: int = int(floor(float(_enemy_stage_index()) / 3.0))
+	return maxi(1, data.xp_reward + stage_bonus)
+
+
+# ─── Equipment ────────────────────────────────────────────────────────
+func collect_item(item: ItemData) -> bool:
+	if item == null:
+		return false
+	if equip_item(item):
+		return true
+	add_item_to_inventory(item)
+	return true
+
+
+func add_item_to_inventory(item: ItemData) -> void:
+	if item == null:
+		return
+	inventory.append(item)
+	EventBus.inventory_changed.emit()
+
+
+func equip_item(item: ItemData) -> bool:
+	if item == null:
+		return false
+	var target_index: int = _equipment_target_index(item)
+	if target_index < 0:
+		return false
+	var slot_index: int = _equipment_slot_index(target_index, item)
+	if slot_index < 0:
+		return false
+	party_equipment[target_index][slot_index] = item
+	party_hp[target_index] = mini(party_hp[target_index], effective_max_hp(target_index))
+	EventBus.party_member_hp_changed.emit(target_index, party_hp[target_index], effective_max_hp(target_index))
+	EventBus.party_equipment_changed.emit(target_index)
+	return true
+
+
+func can_equip_item(item: ItemData) -> bool:
+	return item != null and _equipment_target_index(item) >= 0
+
+
+func inventory_items() -> Array[ItemData]:
+	return inventory.duplicate()
+
+
+func equipment_for_member(index: int) -> Array:
+	if index < 0 or index >= party_equipment.size():
+		return _empty_equipment_slots()
+	return party_equipment[index].duplicate()
+
+
+func _equipment_target_index(item: ItemData) -> int:
+	if item.allowed_character_id != &"":
+		for i in party.size():
+			if party[i].id == item.allowed_character_id:
+				return i
+		return -1
+	for i in party.size():
+		var slot_index: int = _equipment_slot_index(i, item, false)
+		if slot_index >= 0 and party_equipment[i][slot_index] == null:
+			return i
+	return 0 if not party.is_empty() else -1
+
+
+func _equipment_slot_index(member_index: int, item: ItemData, allow_replace: bool = true) -> int:
+	if member_index < 0 or member_index >= party_equipment.size():
+		return -1
+	if item.slot == ItemData.Slot.ACCESSORY:
+		if party_equipment[member_index][EQUIPMENT_ACCESSORY_SLOT_A] == null:
+			return EQUIPMENT_ACCESSORY_SLOT_A
+		if party_equipment[member_index][EQUIPMENT_ACCESSORY_SLOT_B] == null:
+			return EQUIPMENT_ACCESSORY_SLOT_B
+		return EQUIPMENT_ACCESSORY_SLOT_A if allow_replace else -1
+	return int(item.slot)
+
+
+func _empty_equipment_slots() -> Array:
+	var slots: Array = []
+	for i in EQUIPMENT_SLOT_COUNT:
+		slots.append(null)
+	return slots
 
 
 func _enemy_stage_index() -> int:
@@ -465,21 +668,21 @@ func effective_attack(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].attack + _stacked_int_effect_for_character(character_id, "atk_flat")
+	return party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat")
 
 
 func effective_defense(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].defense + _stacked_int_effect_for_character(character_id, "def_flat")
+	return party[index].defense + _level_bonus(index, "def") + _equipment_bonus(index, "defense_bonus") + _stacked_int_effect_for_character(character_id, "def_flat")
 
 
 func effective_agility(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].agility + _stacked_int_effect_for_character(character_id, "agi_flat")
+	return party[index].agility + _level_bonus(index, "agi") + _equipment_bonus(index, "agility_bonus") + _stacked_int_effect_for_character(character_id, "agi_flat")
 
 
 func effective_move_speed(base_speed: float) -> float:
@@ -546,7 +749,17 @@ func effective_max_hp(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].max_hp + _stacked_int_effect_for_character(character_id, "hp_flat")
+	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat")
+
+
+func _equipment_bonus(index: int, property_name: StringName) -> int:
+	if index < 0 or index >= party_equipment.size():
+		return 0
+	var total: int = 0
+	for item in party_equipment[index]:
+		if item is ItemData:
+			total += int((item as ItemData).get(property_name))
+	return total
 
 
 ## Roll a crit. Returns { is_crit: bool, mult: float }.
@@ -620,6 +833,10 @@ func reset_run() -> void:
 	party.clear()
 	party_hp.clear()
 	party_mp.clear()
+	party_levels.clear()
+	party_xp.clear()
+	party_equipment.clear()
+	inventory.clear()
 	gold = STARTING_GOLD
 	total_gold_earned = 0
 	enemies_killed = 0

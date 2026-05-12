@@ -1,0 +1,111 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/party_member_box.gd" id="1_box"]
+[ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/character_portrait.tscn" id="3_portrait"]
+[ext_resource type="PackedScene" path="res://scenes/ui/stat_bar.tscn" id="4_stat_bar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/equip_slot.tscn" id="5_equip_slot"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
+bg_color = Color(0.18, 0.18, 0.2, 0.7)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0, 0, 0.6)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="LabelSettings" id="LabelSettings_name"]
+font_size = 7
+font_color = Color(1, 1, 1, 1)
+shadow_size = 1
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_offset = Vector2(1, 1)
+
+[node name="PartyMemberBox" type="Panel"]
+custom_minimum_size = Vector2(92, 32)
+size_flags_horizontal = 0
+size_flags_vertical = 8
+mouse_filter = 2
+theme = ExtResource("2_theme")
+theme_override_styles/panel = SubResource("StyleBox_panel")
+script = ExtResource("1_box")
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 1.0
+offset_top = 1.0
+offset_right = -1.0
+offset_bottom = -1.0
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="LeftCol" type="VBoxContainer" parent="HBox"]
+custom_minimum_size = Vector2(22, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Portrait" parent="HBox/LeftCol" instance=ExtResource("3_portrait")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="NameLabel" type="Label" parent="HBox/LeftCol"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "—"
+label_settings = SubResource("LabelSettings_name")
+horizontal_alignment = 1
+
+[node name="RightCol" type="VBoxContainer" parent="HBox"]
+custom_minimum_size = Vector2(65, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="HPBar" parent="HBox/RightCol" instance=ExtResource("4_stat_bar")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+fill_color = Color(0.84, 0.22, 0.22, 1)
+label_alignment = 0
+
+[node name="ExpBar" parent="HBox/RightCol" instance=ExtResource("4_stat_bar")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+fill_color = Color(0.28, 0.58, 0.95, 1)
+label_alignment = 1
+
+[node name="EquipRow" type="HBoxContainer" parent="HBox/RightCol"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Slot1" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+layout_mode = 2
+
+[node name="Slot2" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+layout_mode = 2
+
+[node name="Slot3" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+layout_mode = 2
+
+[node name="Slot4" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+layout_mode = 2
+
+[node name="Slot5" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+layout_mode = 2
+
+[node name="Slot6" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+layout_mode = 2

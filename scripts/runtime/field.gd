@@ -7,6 +7,8 @@ extends Node2D
 
 const FIELD_ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/field_enemy.tscn")
 const FIELD_DECORATION_SCENE: PackedScene = preload("res://scenes/decorations/field_decoration.tscn")
+const FIELD_TREASURE_CHEST_SCENE: PackedScene = preload("res://scenes/objects/field_treasure_chest.tscn")
+const FIELD_ITEM_DROP_SCENE: PackedScene = preload("res://scenes/objects/field_item_drop.tscn")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const COMPANION_SCENE: PackedScene = preload("res://scenes/companion.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
@@ -43,10 +45,16 @@ const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 @export var entry_burst_bonus: int = 2
 @export var crowd_growth_per_wave: int = 1
 @export var max_crowd_pressure: int = 7
+@export var treasure_kills_required_base: int = 3
+@export var treasure_kills_required_stage_step: int = 1
+@export var treasure_gold_base: int = 45
+@export var treasure_gold_per_stage: int = 15
 
 @onready var _background: ColorRect = $Background
 @onready var _decorations_root: Node2D = $Decorations
 @onready var _town_tile: FieldTownTile = $Tiles/TownTile
+@onready var _treasures_root: Node2D = $Treasures
+@onready var _items_root: Node2D = $Items
 @onready var _enemies_root: Node2D = $Enemies
 @onready var _party_root: Node2D = $Party
 
@@ -57,12 +65,16 @@ var _spawn_timer: float = 0.0
 var _crowd_pressure: int = 0
 var _field_size: Vector2 = FIELD_SIZE
 var _town_revealed: bool = false
+var _treasure_kills: int = 0
+var _treasure_spawned: bool = false
 
 
 func _ready() -> void:
 	EventBus.party_changed.connect(_setup_party_visuals)
 	EventBus.all_battles_resolved.connect(_check_stage_clear)
 	EventBus.stage_started.connect(_on_stage_started)
+	EventBus.enemy_defeated.connect(_on_enemy_defeated)
+	EventBus.field_item_drop_requested.connect(_on_field_item_drop_requested)
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
 
@@ -110,8 +122,12 @@ func _on_stage_started(_stage_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_stage_field_size(_stage_num)
 	_town_revealed = false
+	_treasure_kills = 0
+	_treasure_spawned = false
 	_clear_field_enemies()
 	_clear_decorations()
+	_clear_treasures()
+	_clear_items()
 	_crowd_pressure = entry_burst_bonus
 	_town_tile.reset()
 	_recenter_party()
@@ -146,6 +162,16 @@ func _clear_field_enemies() -> void:
 func _clear_decorations() -> void:
 	_forest_cells.clear()
 	for child in _decorations_root.get_children():
+		child.queue_free()
+
+
+func _clear_treasures() -> void:
+	for child in _treasures_root.get_children():
+		child.queue_free()
+
+
+func _clear_items() -> void:
+	for child in _items_root.get_children():
 		child.queue_free()
 
 
@@ -387,6 +413,59 @@ func _random_safe_position(avoid: Vector2) -> Vector2:
 
 func _is_safe_enemy_spawn_position(pos: Vector2, avoid: Vector2) -> bool:
 	return pos.distance_to(avoid) >= PARTY_SAFE_RADIUS and not _is_near_town_tile(pos)
+
+
+func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
+	if GameState.current_stage <= 0 or _treasure_spawned:
+		return
+	_treasure_kills += 1
+	if _treasure_kills >= _treasure_kills_required():
+		_spawn_treasure_chest()
+
+
+func _treasure_kills_required() -> int:
+	var stage_bonus: int = int(floor(float(maxi(0, GameState.current_stage - 1)) / 2.0)) * treasure_kills_required_stage_step
+	return maxi(1, treasure_kills_required_base + stage_bonus)
+
+
+func _spawn_treasure_chest() -> void:
+	_treasure_spawned = true
+	var chest := FIELD_TREASURE_CHEST_SCENE.instantiate() as FieldTreasureChest
+	chest.gold_amount = _treasure_gold_amount()
+	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
+	chest.position = _random_safe_treasure_position(safe_origin)
+	_treasures_root.add_child(chest)
+	chest.reveal_with_pop()
+
+
+func _treasure_gold_amount() -> int:
+	var stage_index: int = maxi(0, GameState.current_stage - 1)
+	return treasure_gold_base + stage_index * treasure_gold_per_stage
+
+
+func _random_safe_treasure_position(avoid: Vector2) -> Vector2:
+	for attempt in 40:
+		var pos: Vector2 = _random_safe_position(avoid)
+		if pos.distance_to(avoid) >= DECOR_SAFE_RADIUS:
+			return pos
+	return _random_safe_position(avoid)
+
+
+func _on_field_item_drop_requested(item: ItemData, world_position: Vector2) -> void:
+	if item == null:
+		return
+	var drop := FIELD_ITEM_DROP_SCENE.instantiate() as FieldItemDrop
+	drop.setup(item)
+	drop.position = _clamp_field_position(world_position)
+	_items_root.add_child(drop)
+	drop.reveal_with_pop()
+
+
+func _clamp_field_position(pos: Vector2) -> Vector2:
+	return Vector2(
+		clampf(pos.x, 16.0, _field_size.x - 16.0),
+		clampf(pos.y, 16.0, _field_size.y - 16.0)
+	)
 
 
 func _is_near_town_tile(pos: Vector2) -> bool:

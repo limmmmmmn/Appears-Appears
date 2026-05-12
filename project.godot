@@ -21,6 +21,7 @@ EventBus="*res://scripts/autoload/event_bus.gd"
 GameState="*res://scripts/autoload/game_state.gd"
 ModifierDB="*res://scripts/autoload/modifier_db.gd"
 GameStats="*res://scripts/autoload/game_stats.gd"
+ItemDB="*res://scripts/autoload/item_db.gd"
 
 [display]
 

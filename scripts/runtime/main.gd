@@ -66,6 +66,7 @@ func _show_town(title: String = "") -> void:
 	if _town and is_instance_valid(_town):
 		return
 	_set_manual_pause(false)
+	_hud.set_level_up_ui_enabled(false)
 	_town = TOWN_SCENE.instantiate()
 	_town.setup(title)
 	_town.closed.connect(_on_town_closed)
@@ -78,6 +79,7 @@ func _on_town_closed() -> void:
 	_town = null
 	get_tree().paused = false
 	_set_run_layers_visible(true)
+	_hud.set_level_up_ui_enabled(true)
 	GameState.advance_stage()
 
 
@@ -114,6 +116,7 @@ func _show_game_over() -> void:
 		_town = null
 		get_tree().paused = false
 		_set_run_layers_visible(true)
+		_hud.set_level_up_ui_enabled(true)
 	_game_over = GAME_OVER_SCENE.instantiate()
 	_game_over.try_again_pressed.connect(_on_try_again_pressed)
 	add_child(_game_over)

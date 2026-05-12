@@ -1,0 +1,41 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/low_health_overlay.gd" id="1_overlay"]
+
+[sub_resource type="Shader" id="Shader_vignette"]
+code = "shader_type canvas_item;
+
+uniform float intensity : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 tint_color : source_color = vec3(0.02, 0.02, 0.04);
+uniform float vignette_inner : hint_range(0.0, 1.0) = 0.22;
+uniform float vignette_outer : hint_range(0.0, 1.0) = 0.7;
+uniform float max_alpha : hint_range(0.0, 1.0) = 0.72;
+
+void fragment() {
+    // Radial mask: 0 at the screen center, 1 toward the corners.
+    float dist = length(UV - vec2(0.5, 0.5));
+    float vignette = smoothstep(vignette_inner, vignette_outer, dist);
+    COLOR = vec4(tint_color, vignette * intensity * max_alpha);
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
+shader = SubResource("Shader_vignette")
+shader_parameter/intensity = 0.0
+shader_parameter/tint_color = Color(0.02, 0.02, 0.04, 1)
+shader_parameter/vignette_inner = 0.22
+shader_parameter/vignette_outer = 0.7
+shader_parameter/max_alpha = 0.72
+
+[node name="LowHealthOverlay" type="CanvasLayer"]
+layer = 4
+script = ExtResource("1_overlay")
+
+[node name="VignetteRect" type="ColorRect" parent="."]
+unique_name_in_owner = true
+material = SubResource("ShaderMaterial_vignette")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(1, 1, 1, 1)

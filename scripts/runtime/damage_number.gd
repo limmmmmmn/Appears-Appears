@@ -62,6 +62,36 @@ func setup_heal(amount: int) -> void:
 	duration = 0.55
 
 
+func setup_gold(amount: int) -> void:
+	_label.text = "+%d G" % amount
+	_label.offset_left = -24.0
+	_label.offset_top = -12.0
+	_label.offset_right = 24.0
+	_label.offset_bottom = 8.0
+	var ls: LabelSettings = _label.label_settings.duplicate()
+	ls.font_color = Color(1.0, 0.82, 0.24, 1.0)
+	ls.font_size = 11
+	ls.outline_size = 3
+	_label.label_settings = ls
+	rise_pixels = 16.0
+	duration = 0.75
+
+
+func setup_text(text: String, text_color: Color = Color.WHITE) -> void:
+	_label.text = text
+	_label.offset_left = -42.0
+	_label.offset_top = -12.0
+	_label.offset_right = 42.0
+	_label.offset_bottom = 8.0
+	var ls: LabelSettings = _label.label_settings.duplicate()
+	ls.font_color = text_color
+	ls.font_size = 8
+	ls.outline_size = 3
+	_label.label_settings = ls
+	rise_pixels = 14.0
+	duration = 0.75
+
+
 func _ready() -> void:
 	call_deferred("_start_float")
 

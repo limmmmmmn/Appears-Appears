@@ -12,3 +12,4 @@ max_hp = 20
 agility = 5
 chases_player_on_field = false
 gold_reward = 3
+xp_reward = 3

@@ -105,6 +105,7 @@ func _most_bought_card() -> String:
 
 func _party_names() -> String:
 	var names: PackedStringArray = []
-	for member: CharacterData in GameState.party:
-		names.append(member.display_name)
+	for i in GameState.party.size():
+		var member: CharacterData = GameState.party[i]
+		names.append("%s Lv.%d" % [member.display_name, GameState.party_level(i)])
 	return ", ".join(names)

@@ -33,6 +33,17 @@ signal enemy_defeated(enemy: Node, gold: int, world_position: Vector2)
 ## Party HP changed for a specific member. Used by HUD.
 signal party_member_hp_changed(index: int, new_hp: int, max_hp: int)
 
+## Party EXP/level changed for a specific member. Used by HUD.
+signal party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: int)
+signal party_member_leveled_up(index: int, new_level: int)
+
+## Party equipment changed for a specific member. Used by HUD.
+signal party_equipment_changed(index: int)
+signal inventory_changed()
+
+## Field should spawn an item pickup at this world position.
+signal field_item_drop_requested(item: ItemData, world_position: Vector2)
+
 ## At least one party member changed HP. Used for "any-change" listeners.
 signal party_hp_changed()
 

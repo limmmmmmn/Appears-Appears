@@ -14,6 +14,7 @@ const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 @export var enemy_data: EnemyData
 @export var turn_interval: float = 0.5
 @export var close_delay: float = 0.4
+@export_range(0.0, 1.0, 0.05) var item_drop_chance: float = 0.5
 
 ## How long to linger at spawn center before sliding to the assigned slot.
 @export var slide_delay: float = 0.3
@@ -66,6 +67,9 @@ var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
 var _running: bool = false
 var _earned_gold_total: int = 0
+var _earned_xp_total: int = 0
+var _field_drop_position: Vector2 = Vector2.INF
+var _item_drops: Array[ItemData] = []
 var _enemy_row_counts: Array[int] = [1]
 var _planned_enemy_count: int = 0
 var _planned_enemy_data: Array[EnemyData] = []
@@ -87,8 +91,9 @@ func _ready() -> void:
 
 
 ## Allow spawner to inject data before _ready completes.
-func setup(data: EnemyData) -> void:
+func setup(data: EnemyData, field_drop_position: Vector2 = Vector2.INF) -> void:
 	enemy_data = data
+	_field_drop_position = field_drop_position
 
 
 func get_expected_window_size() -> Vector2:
@@ -122,6 +127,22 @@ func push_to(target: Vector2) -> void:
 	if _slide_tween and _slide_tween.is_valid():
 		_slide_tween.kill()
 	position = target
+
+
+func claim_xp_reward() -> int:
+	var xp: int = _earned_xp_total
+	_earned_xp_total = 0
+	return xp
+
+
+func claim_item_drops() -> Array[ItemData]:
+	var drops: Array[ItemData] = _item_drops.duplicate()
+	_item_drops.clear()
+	return drops
+
+
+func field_drop_position() -> Vector2:
+	return _field_drop_position
 
 
 func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash") -> int:
@@ -457,6 +478,9 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	var reward: int = GameState.modify_gold_reward(_enemy.gold_reward)
 	GameState.add_gold(reward)
 	_earned_gold_total += reward
+	if _enemy.data:
+		_earned_xp_total += GameState.scaled_enemy_xp_reward(_enemy.data)
+		_roll_item_drop()
 	_refresh_hp_label()
 	if not _living_enemies().is_empty():
 		var defeated_name: String = _enemy.data.display_name if _enemy.data else "Enemy"
@@ -468,6 +492,14 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	await get_tree().create_timer(close_delay).timeout
 	EventBus.battle_window_closed.emit(self)
 	queue_free()
+
+
+func _roll_item_drop() -> void:
+	if randf() > item_drop_chance:
+		return
+	var item: ItemData = ItemDB.random_drop()
+	if item:
+		_item_drops.append(item)
 
 
 func _refresh_hp_label() -> void:

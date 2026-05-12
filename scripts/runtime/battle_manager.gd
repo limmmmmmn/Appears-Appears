@@ -77,7 +77,8 @@ func spawn_battle(data: EnemyData, source: Node2D = null) -> void:
 
 func _spawn_window(data: EnemyData, source: Node2D = null) -> void:
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
-	window.setup(data)
+	var field_drop_position: Vector2 = source.global_position if source != null and is_instance_valid(source) else Vector2.INF
+	window.setup(data, field_drop_position)
 	var window_size: Vector2 = window.get_expected_window_size()
 	var spawn_position: Vector2 = _spawn_position_for_encounter(window_size, source)
 	window.position = spawn_position
@@ -388,11 +389,31 @@ func _on_battle_window_closed(window: Node) -> void:
 		return
 	_window_rects.erase(window)
 	_window_velocities.erase(window)
+	var battle_window := window as BattleWindow
+	if battle_window:
+		var xp_reward: int = battle_window.claim_xp_reward()
+		if xp_reward > 0:
+			GameState.add_party_xp(xp_reward)
+		_drop_items_from_window(battle_window)
 	# Tell anyone who cares (Field, etc.) when the last fight ends. This is
 	# the gate Field uses before declaring stage_cleared — Echo Strike means
 	# the *first* window closing is rarely the last one.
 	if _window_rects.is_empty():
 		EventBus.all_battles_resolved.emit()
+
+
+func _drop_items_from_window(window: BattleWindow) -> void:
+	var drops: Array[ItemData] = window.claim_item_drops()
+	if drops.is_empty():
+		return
+	var base_pos: Vector2 = window.field_drop_position()
+	if base_pos == Vector2.INF:
+		var player := get_tree().get_first_node_in_group("player") as Node2D
+		base_pos = player.global_position if player else Vector2.ZERO
+	for i in drops.size():
+		var angle: float = TAU * float(i) / float(maxi(1, drops.size()))
+		var radius: float = 10.0 if drops.size() > 1 else 0.0
+		EventBus.field_item_drop_requested.emit(drops[i], base_pos + Vector2(cos(angle), sin(angle)) * radius)
 
 
 # ─── Run-over cleanup ─────────────────────────────────────────────────

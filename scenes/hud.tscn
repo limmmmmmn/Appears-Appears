@@ -1,254 +1,52 @@
-[gd_scene format=3 uid="uid://c2cjn8arjiui3"]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" uid="uid://b1m4vxga6tiqb" path="res://scripts/runtime/hud.gd" id="1_hud"]
+[ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBox_dock"]
-bg_color = Color(0.78, 0.82, 0.92, 0.22)
-corner_radius_top_left = 9
-corner_radius_top_right = 9
-corner_radius_bottom_right = 9
-corner_radius_bottom_left = 9
-shadow_color = Color(0, 0, 0, 0.45)
-shadow_size = 5
-shadow_offset = Vector2(0, 2)
-anti_aliasing = false
+[sub_resource type="LabelSettings" id="LabelSettings_top"]
+font_size = 18
+font_color = Color(1, 1, 1, 1)
+shadow_size = 2
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_offset = Vector2(1, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBox_icon_default"]
-bg_color = Color(0.45, 0.5, 0.6, 1)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
-anti_aliasing = false
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_hp_bg"]
-bg_color = Color(0, 0, 0, 0.55)
-corner_radius_top_left = 1
-corner_radius_top_right = 1
-corner_radius_bottom_right = 1
-corner_radius_bottom_left = 1
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_hp_fill"]
-bg_color = Color(0.55, 0.92, 0.6, 1)
-corner_radius_top_left = 1
-corner_radius_top_right = 1
-corner_radius_bottom_right = 1
-corner_radius_bottom_left = 1
-
-[sub_resource type="LabelSettings" id="LabelSettings_gold"]
-font_size = 8
-font_color = Color(1, 0.86, 0.42, 1)
-
-[sub_resource type="LabelSettings" id="LabelSettings_field"]
-font_size = 8
-font_color = Color(0.92, 0.96, 0.9, 1)
-
-[node name="HUD" type="CanvasLayer" unique_id=856776848]
+[node name="HUD" type="CanvasLayer"]
 layer = 5
 script = ExtResource("1_hud")
 
-[node name="BottomBar" type="Panel" parent="." unique_id=650009755]
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -100.0
-offset_top = -34.0
-offset_right = 100.0
-offset_bottom = -8.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBox_dock")
-
-[node name="Content" type="HBoxContainer" parent="BottomBar" unique_id=17342382]
-layout_mode = 0
+[node name="TopBar" type="HBoxContainer" parent="."]
+anchors_preset = 10
 anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 3.0
-offset_right = -8.0
-offset_bottom = -3.0
-mouse_filter = 2
-theme_override_constants/separation = 6
+offset_left = 18.0
+offset_top = 10.0
+offset_right = -18.0
+offset_bottom = 36.0
+theme = ExtResource("2_theme")
 
-[node name="FieldLabel" type="Label" parent="BottomBar/Content"]
+[node name="StageLabel" type="Label" parent="TopBar"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(38, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Field 1"
-label_settings = SubResource("LabelSettings_field")
-horizontal_alignment = 1
-vertical_alignment = 1
+label_settings = SubResource("LabelSettings_top")
 
-[node name="FieldDivider" type="ColorRect" parent="BottomBar/Content"]
-custom_minimum_size = Vector2(1, 14)
-layout_mode = 2
-size_flags_vertical = 4
-color = Color(1, 1, 1, 0.28)
-
-[node name="SlotsContainer" type="HBoxContainer" parent="BottomBar/Content" unique_id=1905528950]
+[node name="GoldLabel" type="Label" parent="TopBar"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-theme_override_constants/separation = 4
+text = "Gold 0"
+label_settings = SubResource("LabelSettings_top")
+horizontal_alignment = 2
 
-[node name="Slot0" type="Control" parent="BottomBar/Content/SlotsContainer" unique_id=1898422892]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="IconBox" type="Panel" parent="BottomBar/Content/SlotsContainer/Slot0" unique_id=641163550]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBox_icon_default")
-
-[node name="Portrait" type="TextureRect" parent="BottomBar/Content/SlotsContainer/Slot0/IconBox" unique_id=1112153227]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -1.0
-offset_bottom = -1.0
-mouse_filter = 2
-stretch_mode = 3
-
-[node name="HPBar" type="ProgressBar" parent="BottomBar/Content/SlotsContainer/Slot0" unique_id=2036679523]
-custom_minimum_size = Vector2(0, 4)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_top = -6.0
-offset_bottom = -2.0
-mouse_filter = 2
-theme_override_styles/background = SubResource("StyleBox_hp_bg")
-theme_override_styles/fill = SubResource("StyleBox_hp_fill")
-max_value = 1.0
-step = 0.001
-value = 1.0
-show_percentage = false
-
-[node name="Slot1" type="Control" parent="BottomBar/Content/SlotsContainer" unique_id=1420550531]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="IconBox" type="Panel" parent="BottomBar/Content/SlotsContainer/Slot1" unique_id=231628203]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBox_icon_default")
-
-[node name="Portrait" type="TextureRect" parent="BottomBar/Content/SlotsContainer/Slot1/IconBox" unique_id=1158001550]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -1.0
-offset_bottom = -1.0
-mouse_filter = 2
-stretch_mode = 3
-
-[node name="HPBar" type="ProgressBar" parent="BottomBar/Content/SlotsContainer/Slot1" unique_id=1624729894]
-custom_minimum_size = Vector2(0, 4)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_top = -6.0
-offset_bottom = -2.0
-mouse_filter = 2
-theme_override_styles/background = SubResource("StyleBox_hp_bg")
-theme_override_styles/fill = SubResource("StyleBox_hp_fill")
-max_value = 1.0
-step = 0.001
-value = 1.0
-show_percentage = false
-
-[node name="Slot2" type="Control" parent="BottomBar/Content/SlotsContainer" unique_id=2083101021]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="IconBox" type="Panel" parent="BottomBar/Content/SlotsContainer/Slot2" unique_id=964649947]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBox_icon_default")
-
-[node name="Portrait" type="TextureRect" parent="BottomBar/Content/SlotsContainer/Slot2/IconBox" unique_id=918258604]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -1.0
-offset_bottom = -1.0
-mouse_filter = 2
-stretch_mode = 3
-
-[node name="HPBar" type="ProgressBar" parent="BottomBar/Content/SlotsContainer/Slot2" unique_id=1979253258]
-custom_minimum_size = Vector2(0, 4)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_top = -6.0
-offset_bottom = -2.0
-mouse_filter = 2
-theme_override_styles/background = SubResource("StyleBox_hp_bg")
-theme_override_styles/fill = SubResource("StyleBox_hp_fill")
-max_value = 1.0
-step = 0.001
-value = 1.0
-show_percentage = false
-
-[node name="Slot3" type="Control" parent="BottomBar/Content/SlotsContainer" unique_id=87759115]
-custom_minimum_size = Vector2(20, 20)
-layout_mode = 2
-mouse_filter = 2
-
-[node name="IconBox" type="Panel" parent="BottomBar/Content/SlotsContainer/Slot3" unique_id=2002083392]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBox_icon_default")
-
-[node name="Portrait" type="TextureRect" parent="BottomBar/Content/SlotsContainer/Slot3/IconBox" unique_id=1842831215]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -1.0
-offset_bottom = -1.0
-mouse_filter = 2
-stretch_mode = 3
-
-[node name="HPBar" type="ProgressBar" parent="BottomBar/Content/SlotsContainer/Slot3" unique_id=1926416484]
-custom_minimum_size = Vector2(0, 4)
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_top = -6.0
-offset_bottom = -2.0
-mouse_filter = 2
-theme_override_styles/background = SubResource("StyleBox_hp_bg")
-theme_override_styles/fill = SubResource("StyleBox_hp_fill")
-max_value = 1.0
-step = 0.001
-value = 1.0
-show_percentage = false
-
-[node name="Divider" type="ColorRect" parent="BottomBar/Content" unique_id=1429000919]
+[node name="MemberRow" type="HBoxContainer" parent="."]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(1, 14)
-layout_mode = 2
-size_flags_vertical = 4
-color = Color(1, 1, 1, 0.28)
-
-[node name="GoldLabel" type="Label" parent="BottomBar/Content" unique_id=273007326]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(36, 0)
-layout_mode = 2
-text = "0 G"
-label_settings = SubResource("LabelSettings_gold")
-horizontal_alignment = 1
-vertical_alignment = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -44.0
+offset_right = -12.0
+offset_bottom = -10.0
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 8
+alignment = 1

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"bump_blessing"
-display_name = "Bump Blessing"
+display_name = "Bump Heal"
 description = "Heal the most wounded ally when the party bumps into a battle window."
 cost = 15
 max_level = 5

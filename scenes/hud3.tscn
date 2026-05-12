@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://be34jrp3ifo7r"]
+
+[ext_resource type="Script" path="res://scripts/runtime/hud3.gd" id="1_hud3"]
+[ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_top"]
+font_size = 18
+shadow_size = 2
+shadow_color = Color(0, 0, 0, 0.7)
+
+[node name="HUD3" type="CanvasLayer" unique_id=414321428]
+layer = 5
+script = ExtResource("1_hud3")
+
+[node name="TopBar" type="HBoxContainer" parent="." unique_id=1277458853]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 18.0
+offset_top = 10.0
+offset_right = -18.0
+offset_bottom = 36.0
+theme = ExtResource("2_theme")
+
+[node name="StageLabel" type="Label" parent="TopBar" unique_id=229650890]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Field 1"
+label_settings = SubResource("LabelSettings_top")
+
+[node name="GoldLabel" type="Label" parent="TopBar" unique_id=1369998321]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Gold 0"
+label_settings = SubResource("LabelSettings_top")
+horizontal_alignment = 2
+
+[node name="MemberRow" type="HBoxContainer" parent="." unique_id=361738804]
+unique_name_in_owner = true
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -44.0
+offset_right = -12.0
+offset_bottom = -10.0
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 8
+alignment = 1

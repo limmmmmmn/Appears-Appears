@@ -160,7 +160,7 @@ func _redraw_card(card_index: int) -> void:
 func _offerable_pool() -> Array[ModifierData]:
 	var out: Array[ModifierData] = []
 	for mod: ModifierData in ModifierDB.get_all():
-		if GameState.can_add_modifier(mod):
+		if ModifierDB.is_shop_offer(mod) and GameState.can_add_modifier(mod):
 			out.append(mod)
 	return out
 

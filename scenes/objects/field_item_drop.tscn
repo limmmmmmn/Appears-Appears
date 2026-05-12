@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/field_item_drop.gd" id="1_drop"]
+
+[sub_resource type="RectangleShape2D" id="RectShape_item"]
+size = Vector2(14, 14)
+
+[node name="FieldItemDrop" type="Area2D"]
+collision_layer = 0
+collision_mask = 1
+script = ExtResource("1_drop")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+centered = true
+texture_filter = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectShape_item")

@@ -88,7 +88,8 @@ func _refresh_stats_text() -> void:
 		return
 	var hp: int = GameState.party_hp[_party_index]
 	var max_hp: int = GameState.effective_max_hp(_party_index)
-	_stats_label.text = "HP %d/%d   ATK %d   DEF %d   AGI %d" % [
+	_stats_label.text = "LV %d   HP %d/%d   ATK %d   DEF %d   AGI %d" % [
+		GameState.party_level(_party_index),
 		hp, max_hp,
 		GameState.effective_attack(_party_index),
 		GameState.effective_defense(_party_index),

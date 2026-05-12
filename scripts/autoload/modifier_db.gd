@@ -9,6 +9,17 @@ const ACTIVE_POOL: Resource = preload("res://data/modifiers/prototype_pool.tres"
 const FALLBACK_POOL_DIR: String = "res://data/modifiers/prototype"
 const OFFER_MODE_FIXED_ORDER: int = 0
 const OFFER_MODE_RANDOM_UNIQUE: int = 1
+const LEVEL_UP_ONLY_EFFECT_KEYS: Array[String] = [
+	"atk_flat",
+	"hp_flat",
+	"def_flat",
+	"agi_flat",
+	"evade_chance",
+	"hero_damage_bonus_mult",
+	"mage_splash_extra_targets",
+	"priest_heal_flat",
+	"thief_steal_chance",
+]
 
 var _all: Array[ModifierData] = []
 var _by_id: Dictionary = {}                  # StringName -> ModifierData
@@ -68,6 +79,15 @@ func get_all() -> Array[ModifierData]:
 	return _all.duplicate()
 
 
+func is_shop_offer(mod: ModifierData) -> bool:
+	if mod == null:
+		return false
+	for key: String in LEVEL_UP_ONLY_EFFECT_KEYS:
+		if mod.effect_data.has(key):
+			return false
+	return true
+
+
 ## Pull `n` random modifiers (with replacement = false).
 ## Prototype mode supports fixed-order offers so purchase data is cleaner.
 func get_random_modifiers(n: int) -> Array[ModifierData]:
@@ -116,7 +136,7 @@ func get_by_path(path: String) -> ModifierData:
 func _offerable_modifiers() -> Array[ModifierData]:
 	var out: Array[ModifierData] = []
 	for mod: ModifierData in _all:
-		if GameState.can_add_modifier(mod):
+		if is_shop_offer(mod) and GameState.can_add_modifier(mod):
 			out.append(mod)
 	return out
 

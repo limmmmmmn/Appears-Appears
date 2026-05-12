@@ -30,9 +30,15 @@ const ICON_FALLBACK_BY_ID: Dictionary = {
 	&"agi_up": "res://assets/sprites/dagger.png",
 	&"swift_boots": "res://assets/sprites/dagger.png",
 	&"recruit": "res://assets/sprites/objects/village.png",
-	&"bump_attack": "res://assets/sprites/slash_basic.png",
-	&"window_crash": "res://assets/sprites/slash_basic.png",
-	&"bump_blessing": "res://assets/sprites/holy.png",
+	&"bump_attack": "res://assets/sprites/bump_attack.png",
+	&"window_crash": "res://assets/sprites/window_crash.png",
+	&"bump_blessing": "res://assets/sprites/bump_heal.png",
+}
+const ICON_FALLBACK_BY_EFFECT: Dictionary = {
+	"atk_flat": "res://assets/sprites/slash_basic.png",
+	"hp_flat": "res://assets/sprites/holy.png",
+	"agi_flat": "res://assets/sprites/dagger.png",
+	"evade_chance": "res://assets/sprites/dagger.png",
 }
 const CARD_BG_BY_ID: Dictionary = {
 	&"atk_up": Color(0.95, 0.28, 0.31, 1),
@@ -49,6 +55,12 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
+}
+const CARD_BG_BY_EFFECT: Dictionary = {
+	"atk_flat": Color(0.95, 0.28, 0.31, 1),
+	"hp_flat": Color(0.79, 0.89, 0.55, 1),
+	"agi_flat": Color(0.53, 0.76, 0.93, 1),
+	"evade_chance": Color(0.53, 0.76, 0.93, 1),
 }
 const POSTER_DESC_BY_ID: Dictionary = {
 	&"swift_boots": "Move faster on the field.",
@@ -69,9 +81,9 @@ const POSTER_TITLE_BY_ID: Dictionary = {
 	&"agi_up": "Agility",
 	&"battle_prayer": "Prayer",
 	&"heavy_strike": "Heavy Hit",
-	&"bump_attack": "Bump Atk",
-	&"window_crash": "Crash",
-	&"bump_blessing": "Blessing",
+	&"bump_attack": "Bump Attack",
+	&"window_crash": "Window Crash",
+	&"bump_blessing": "Bump Heal",
 }
 const DEFAULT_POSTER_BG: Color = Color(0.95, 0.78, 0.14, 1)
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1)
@@ -88,6 +100,7 @@ const STAT_LABEL_BY_KEY: Dictionary = {
 
 var data: ModifierData
 var purchased: bool = false
+var free_offer: bool = false
 
 var _poster_name_settings: LabelSettings
 var _poster_desc_settings: LabelSettings
@@ -105,9 +118,10 @@ func _ready() -> void:
 
 
 ## Inject the modifier this slot represents. Pass null to leave the slot blank.
-func setup(mod: ModifierData) -> void:
+func setup(mod: ModifierData, is_free_offer: bool = false) -> void:
 	data = mod
 	purchased = false
+	free_offer = is_free_offer
 	if is_inside_tree():
 		_apply_data()
 
@@ -151,9 +165,19 @@ func _stat_card_key() -> String:
 	return ""
 
 
+func _effect_key_for_card() -> String:
+	var stat_key: String = _stat_card_key()
+	if not stat_key.is_empty():
+		return stat_key
+	for key in ["evade_chance", "hero_damage_bonus_mult", "priest_heal_flat", "thief_steal_chance"]:
+		if data != null and data.effect_data.has(key):
+			return key
+	return ""
+
+
 func _apply_poster_layout() -> void:
 	_apply_default_layout_chrome()
-	var bg: Color = CARD_BG_BY_ID.get(data.id, DEFAULT_POSTER_BG)
+	var bg: Color = _poster_background()
 	var text_color: Color = _poster_text_color(bg)
 	_name_label.text = _poster_title()
 	_desc_label.text = _poster_description()
@@ -281,6 +305,9 @@ func _poster_description() -> String:
 	if data.effect_data.has("thief_steal_chance"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "thief_steal_chance") * 100.0))
 		return "%d%% steal chance" % amount
+	if data.effect_data.has("evade_chance"):
+		var amount: int = int(round(GameState.modifier_next_float_effect(data, "evade_chance") * 100.0))
+		return "+%d%% Dodge" % amount
 	if data.effect_data.has("party_bump_damage_ratio"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "party_bump_damage_ratio") * 100.0))
 		return "Bump attack +%d%%" % amount
@@ -293,6 +320,8 @@ func _poster_description() -> String:
 
 
 func _poster_cost_text() -> String:
+	if free_offer:
+		return "LEVEL UP"
 	var cost: int = GameState.modifier_purchase_cost(data)
 	if cost <= 0:
 		return ""
@@ -305,6 +334,17 @@ func _poster_text_color(bg: Color) -> Color:
 
 func _poster_title_color(bg: Color) -> Color:
 	return POSTER_TITLE_YELLOW if bg.get_luminance() < 0.42 else Color(0.21, 0.28, 0.52, 1)
+
+
+func _poster_background() -> Color:
+	if data == null:
+		return DEFAULT_POSTER_BG
+	if CARD_BG_BY_ID.has(data.id):
+		return CARD_BG_BY_ID[data.id]
+	var effect_key: String = _effect_key_for_card()
+	if CARD_BG_BY_EFFECT.has(effect_key):
+		return CARD_BG_BY_EFFECT[effect_key]
+	return DEFAULT_POSTER_BG
 
 
 # ─── Icon resolution (default-layout cards only) ──────────────────────
@@ -321,6 +361,12 @@ func _apply_icon() -> void:
 func _resolve_icon() -> Texture2D:
 	if data.icon:
 		return data.icon
+	var effect_key: String = _effect_key_for_card()
+	var effect_path: String = ICON_FALLBACK_BY_EFFECT.get(effect_key, "")
+	if not effect_path.is_empty() and ResourceLoader.exists(effect_path):
+		var effect_res := load(effect_path)
+		if effect_res is Texture2D:
+			return effect_res
 	if data.required_party_member_id != &"":
 		var character: CharacterData = _load_character(data.required_party_member_id)
 		if character and character.attack_effect:

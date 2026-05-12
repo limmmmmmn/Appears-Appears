@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="EnemyData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="EnemyData" format=3 uid="uid://d0qwxplg0uog6"]
 
-[ext_resource type="Script" path="res://scripts/data/enemy_data.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/sprites/enemies/orc.png" id="2_sprite"]
+[ext_resource type="Script" uid="uid://cg0rdfbebp8i0" path="res://scripts/data/enemy_data.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://567y3pxr0f61" path="res://assets/sprites/enemies/orc.png" id="2_sprite"]
 
 [resource]
 script = ExtResource("1_script")
@@ -13,3 +13,4 @@ attack = 6
 defense = 1
 agility = 3
 gold_reward = 8
+xp_reward = 9
