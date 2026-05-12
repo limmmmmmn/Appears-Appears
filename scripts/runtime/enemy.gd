@@ -17,6 +17,7 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 @export var death_fade_duration: float = 0.38
 
 @onready var _sprite: Sprite2D = $Sprite2D
+@onready var _hp_bar: ProgressBar = $HPBar
 
 var current_hp: int = 0
 var max_hp: int = 0
@@ -63,6 +64,7 @@ func _apply_data() -> void:
 	modulate = Color.WHITE
 	if data.sprite and _sprite:
 		_sprite.texture = data.sprite
+	_refresh_hp_bar()
 	hp_changed.emit(current_hp, max_hp)
 
 
@@ -77,15 +79,17 @@ func try_steal_gold(chance: float, amount: int) -> int:
 	return amount
 
 
-func take_damage(amount: int, is_crit: bool = false, hit_effect: Texture2D = null) -> int:
+func take_damage(amount: int, is_crit: bool = false, hit_effect: Texture2D = null, show_damage_number: bool = true) -> int:
 	if not is_alive() or data == null:
 		return 0
 	var dealt: int = max(1, amount - defense)
 	current_hp = max(0, current_hp - dealt)
+	_refresh_hp_bar()
 	hp_changed.emit(current_hp, max_hp)
 	EventBus.damage_dealt.emit(self, dealt, global_position)
 	_spawn_hit_effect(hit_effect, is_crit)
-	_spawn_damage_number(dealt, is_crit)
+	if show_damage_number:
+		_spawn_damage_number(dealt, is_crit)
 	_play_hit_reaction(is_crit)
 	if current_hp == 0:
 		_die()
@@ -114,6 +118,12 @@ func _spawn_damage_number(amount: int, is_crit: bool) -> void:
 	add_child(num)
 	num.position = Vector2(randf_range(-4, 4), randf_range(-12, -6))
 	num.setup(amount, is_crit)
+
+
+func _refresh_hp_bar() -> void:
+	if _hp_bar == null:
+		return
+	_hp_bar.value = 0.0 if max_hp <= 0 else clampf(float(current_hp) / float(max_hp), 0.0, 1.0)
 
 
 func _spawn_hit_effect(texture: Texture2D, is_crit: bool) -> void:

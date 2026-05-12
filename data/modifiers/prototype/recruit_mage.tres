@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 id = &"recruit_mage"
 display_name = "Recruit Mage"
-description = "Mage joins your party."
+description = "Mage joins with Fireburst: attacks 1 extra enemy at reduced damage."
 cost = 30
 max_level = 1
 rarity = 1

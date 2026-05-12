@@ -29,10 +29,8 @@ const ICON_FALLBACK_BY_ID: Dictionary = {
 	&"hp_up": "res://assets/sprites/holy.png",
 	&"agi_up": "res://assets/sprites/dagger.png",
 	&"swift_boots": "res://assets/sprites/dagger.png",
-	&"monster_lure": "res://assets/sprites/enemies/slime.png",
-	&"reinforcements": "res://assets/sprites/enemies/slime.png",
 	&"recruit": "res://assets/sprites/objects/village.png",
-	&"forest_tile": "res://assets/sprites/objects/forest 2.png",
+	&"bump_attack": "res://assets/sprites/slash_basic.png",
 	&"window_crash": "res://assets/sprites/slash_basic.png",
 	&"bump_blessing": "res://assets/sprites/holy.png",
 }
@@ -45,9 +43,7 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"fireburst": Color(0.95, 0.78, 0.14, 1),
 	&"heavy_strike": Color(0.96, 0.55, 0.72, 1),
 	&"pilfer": Color(0.16, 0.58, 0.78, 1),
-	&"monster_lure": Color(0.1, 0.55, 0.43, 1),
-	&"reinforcements": Color(0.18, 0.46, 0.72, 1),
-	&"forest_tile": Color(0.18, 0.56, 0.28, 1),
+	&"bump_attack": Color(0.98, 0.5, 0.12, 1),
 	&"window_crash": Color(0.98, 0.66, 0.16, 1),
 	&"bump_blessing": Color(0.63, 0.86, 0.68, 1),
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
@@ -58,15 +54,13 @@ const POSTER_DESC_BY_ID: Dictionary = {
 	&"swift_boots": "Move faster on the field.",
 	&"battle_prayer": "Priest heals an ally on attack.",
 	&"fireburst": "Mage burns extra enemies.",
-	&"forest_tile": "Forests appear on future fields.",
 	&"heavy_strike": "Hero basic attacks hit harder.",
-	&"monster_lure": "More monsters roam the field.",
 	&"pilfer": "Thief can steal gold on attack.",
-	&"recruit_mage": "Mage joins your party.",
-	&"recruit_priest": "Priest joins your party.",
-	&"recruit_thief": "Thief joins your party.",
-	&"reinforcements": "Battle windows may add enemies.",
-	&"window_crash": "Bump windows to hurt enemies.",
+	&"recruit_mage": "Joins with Fireburst: hits +1 enemy.",
+	&"recruit_priest": "Joins with Prayer: attacks and heals.",
+	&"recruit_thief": "Joins with Pilfer: steals 1G.",
+	&"bump_attack": "Bump windows to hurt enemies.",
+	&"window_crash": "Battle windows can crash.",
 	&"bump_blessing": "Bump windows to heal an ally.",
 }
 const POSTER_TITLE_BY_ID: Dictionary = {
@@ -75,8 +69,8 @@ const POSTER_TITLE_BY_ID: Dictionary = {
 	&"agi_up": "Agility",
 	&"battle_prayer": "Prayer",
 	&"heavy_strike": "Heavy Hit",
-	&"monster_lure": "Lure",
-	&"reinforcements": "Reinforce",
+	&"bump_attack": "Bump Atk",
+	&"window_crash": "Crash",
 	&"bump_blessing": "Blessing",
 }
 const DEFAULT_POSTER_BG: Color = Color(0.95, 0.78, 0.14, 1)
@@ -110,8 +104,7 @@ func _ready() -> void:
 		_apply_data()
 
 
-## Inject the modifier this slot represents. Pass null to render an empty slot
-## (pool exhausted) — the box is then disabled and dimmed.
+## Inject the modifier this slot represents. Pass null to leave the slot blank.
 func setup(mod: ModifierData) -> void:
 	data = mod
 	purchased = false
@@ -132,11 +125,14 @@ func _apply_data() -> void:
 func _render_empty() -> void:
 	disabled = true
 	focus_mode = Control.FOCUS_NONE
-	modulate = Color(0.55, 0.55, 0.6, 1)
-	_apply_default_layout_chrome()
-	_name_label.text = "—"
+	modulate = Color.WHITE
+	_arrow.visible = false
+	_apply_empty_layout_chrome()
+	_name_label.text = ""
 	_desc_label.text = ""
 	_cost_label.text = ""
+	_name_label.visible = false
+	_desc_label.visible = false
 	_cost_label.visible = false
 	_icon.texture = null
 	_icon.visible = false
@@ -188,6 +184,7 @@ func _apply_default_layout_chrome() -> void:
 	_icon.expand_mode = _default_icon_expand_mode
 	_icon.stretch_mode = _default_icon_stretch_mode
 	_name_label.visible = true
+	_desc_label.visible = true
 	_cost_label.visible = true
 	_desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_desc_label.vertical_alignment = _default_desc_vertical_alignment
@@ -198,6 +195,27 @@ func _apply_default_layout_chrome() -> void:
 	remove_theme_stylebox_override("hover")
 	remove_theme_stylebox_override("pressed")
 	remove_theme_stylebox_override("focus")
+	remove_theme_stylebox_override("disabled")
+
+
+func _apply_empty_layout_chrome() -> void:
+	var transparent := _transparent_style()
+	add_theme_stylebox_override("normal", transparent)
+	add_theme_stylebox_override("hover", transparent)
+	add_theme_stylebox_override("pressed", transparent)
+	add_theme_stylebox_override("focus", transparent)
+	add_theme_stylebox_override("disabled", transparent)
+
+
+func _transparent_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_width_left = 0
+	style.border_width_top = 0
+	style.border_width_right = 0
+	style.border_width_bottom = 0
+	style.border_color = Color(0, 0, 0, 0)
+	return style
 
 
 func _build_poster_settings() -> void:
@@ -263,6 +281,12 @@ func _poster_description() -> String:
 	if data.effect_data.has("thief_steal_chance"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "thief_steal_chance") * 100.0))
 		return "%d%% steal chance" % amount
+	if data.effect_data.has("party_bump_damage_ratio"):
+		var amount: int = int(round(GameState.modifier_next_float_effect(data, "party_bump_damage_ratio") * 100.0))
+		return "Bump attack +%d%%" % amount
+	if data.effect_data.has("window_collision_damage_ratio"):
+		var amount: int = int(round(GameState.modifier_next_float_effect(data, "window_collision_damage_ratio") * 100.0))
+		return "Crash damage +%d%%" % amount
 	if data.effect_data.has("window_collision_heal_flat"):
 		return "Bump heal +%d" % GameState.modifier_next_int_effect(data, "window_collision_heal_flat")
 	return POSTER_DESC_BY_ID.get(data.id, data.description)

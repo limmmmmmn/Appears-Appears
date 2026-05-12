@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 id = &"recruit_priest"
 display_name = "Recruit Priest"
-description = "Priest joins your party."
+description = "Priest joins with Battle Prayer: attacks and heals the most wounded ally."
 cost = 30
 max_level = 1
 rarity = 1

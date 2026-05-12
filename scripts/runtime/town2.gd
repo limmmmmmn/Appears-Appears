@@ -2,12 +2,12 @@ class_name Town2
 extends CanvasLayer
 
 ## Streamlined between-stage town. Three zones, in descending size:
-##   • Top:    4 big offer cards (the actual decision). Buying redraws just
-##             the bought slot; a new offer takes its place.
+##   • Top:    4 big offer cards (the actual decision). Buying exhausts that
+##             slot until the player rerolls or visits town again.
 ##   • Middle: a thin feed of party rows — one line each, "[NAME] [stats]
 ##             [• upgrade • upgrade ...]". Empty hero rows are hidden so the
 ##             feed only shows recruited members and grows organically.
-##   • Bottom: utility bar — Rest, Reroll (small), and a prominent Continue.
+##   • Bottom: utility bar — Reroll (small), and a prominent Continue.
 
 signal closed
 
@@ -28,7 +28,6 @@ const SILENT_STAT_IDS: Dictionary = {
 @onready var _gold_label: Label = %GoldLabel
 @onready var _top_zone: HBoxContainer = %TopZone
 @onready var _reroll_button: Button = %RerollButton
-@onready var _rest_button: Button = %RestButton
 @onready var _continue_button: Button = %ContinueButton
 @onready var _slot_party: Town2Slot = %SlotParty
 @onready var _slot_hero: Town2Slot = %SlotHero
@@ -52,13 +51,13 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	_stage_label.text = _title_override if not _title_override.is_empty() else "Town"
+	_heal_party_to_full()
 	_refresh_gold_label()
 	_register_slots()
 	_seed_slots_from_active_modifiers()
 	_build_top_cards()
 	_refresh_offers()
 	_continue_button.pressed.connect(_on_continue_pressed)
-	_rest_button.pressed.connect(_on_rest_pressed)
 	_reroll_button.pressed.connect(_on_reroll_pressed)
 	_reroll_button.text = "Reroll  %d G" % REROLL_COST
 	EventBus.gold_changed.connect(_on_gold_changed)
@@ -136,8 +135,9 @@ func _refresh_offers() -> void:
 		_cards[i].setup(pool[i] if i < pool.size() else null)
 
 
-## Replace just the bought slot with a new offer the player doesn't already
-## see in another card. Falls back to empty if the pool is exhausted.
+## Replace just one slot with a new offer the player doesn't already see in
+## another card. Kept for future targeted redraws; purchases intentionally do
+## not call this so the shop cannot refill forever.
 func _redraw_card(card_index: int) -> void:
 	var displayed: Dictionary = {}
 	for i in CARD_SLOTS:
@@ -176,16 +176,10 @@ func _on_modifier_purchase_succeeded(mod: ModifierData, source: Node) -> void:
 		return
 	_route_to_slot(mod)
 	_refresh_all_slots()
-	# Recruits expand which slots are eligible — fully redraw so the new
-	# member's column starts surfacing offers.
-	if mod.category == ModifierData.Category.COMPANION:
-		_refresh_offers()
-		_focus_first_available_card()
-		return
 	var idx: int = _cards.find(card)
 	if idx >= 0:
-		_redraw_card(idx)
-		_focus_after_purchase(idx)
+		card.setup(null)
+		_focus_first_available_card()
 
 
 func _on_modifier_purchase_failed(_mod: ModifierData, source: Node) -> void:
@@ -195,7 +189,7 @@ func _on_modifier_purchase_failed(_mod: ModifierData, source: Node) -> void:
 	card.mark_unaffordable_flash()
 
 
-# ─── Reroll / Rest ────────────────────────────────────────────────────
+# ─── Reroll / Recovery ────────────────────────────────────────────────
 func _on_reroll_pressed() -> void:
 	if not GameState.spend_gold(REROLL_COST):
 		_flash_red(_reroll_button)
@@ -204,16 +198,16 @@ func _on_reroll_pressed() -> void:
 	_focus_first_available_card()
 
 
-func _on_rest_pressed() -> void:
+func _heal_party_to_full() -> void:
 	for i in GameState.party_size():
 		var max_hp: int = GameState.effective_max_hp(i)
 		if GameState.party_hp[i] < max_hp:
 			GameState.heal_party_member(i, max_hp - GameState.party_hp[i])
-	_refresh_all_slots()
 
 
 # ─── Reactive plumbing ────────────────────────────────────────────────
 func _on_party_changed() -> void:
+	_seed_slots_from_active_modifiers()
 	_refresh_all_slots()
 
 

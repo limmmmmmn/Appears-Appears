@@ -19,6 +19,15 @@ extends Resource
 ## Field personality.
 ## Passive enemies wander and only fight if the player touches them.
 @export var chases_player_on_field: bool = true
+@export var field_wander_speed: float = 18.0
+@export var field_chase_speed: float = 58.0
+@export var field_detect_radius: float = 92.0
+@export var field_lose_radius: float = 180.0
+@export var field_charge_enabled: bool = false
+@export var field_charge_trigger_radius: float = 72.0
+@export var field_charge_speed: float = 180.0
+@export var field_charge_duration: float = 0.28
+@export var field_charge_cooldown: float = 1.1
 
 ## Reward on defeat.
 @export var gold_reward: int = 1

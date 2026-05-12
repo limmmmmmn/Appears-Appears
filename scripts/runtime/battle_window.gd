@@ -5,7 +5,9 @@ extends Control
 ## Runs in parallel with up to 100 sibling windows — must stay independent.
 
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/enemy.tscn")
+const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
+const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tres")
 const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
 const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 
@@ -23,6 +25,7 @@ const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 @onready var _enemy_anchor: Node2D = %EnemyAnchor
 @onready var _turn_timer: Timer = $TurnTimer
 @onready var _background: Panel = $Background
+@onready var _log_panel: Panel = $LogPanel
 
 const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
@@ -39,8 +42,25 @@ const ENEMY_AREA_BOTTOM: float = 32.0
 const TARGET_WINDOW_RATIO: float = 4.0 / 3.0
 const DIAMOND_EDGE_WEIGHT: float = 0.5
 const CRASH_FLASH_COLOR: Color = Color(1.0, 0.48, 0.12, 1.0)
-const HEAL_FLASH_COLOR: Color = Color(0.45, 1.0, 0.56, 1.0)
-const CRASH_FLASH_DURATION: float = 0.18
+const WINDOW_FLASH_HOLD_DURATION: float = 0.16
+const WINDOW_FLASH_FADE_DURATION: float = 0.42
+const BASE_ENEMY_REPEAT_CHANCE: float = 0.68
+const STRONGER_SUPPORT_CHANCE: float = 0.06
+const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
+const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1.0)
+const DEFAULT_WINDOW_BG: Color = Color(0.95, 0.78, 0.14, 1.0)
+const WINDOW_BG_BY_ENEMY_ID: Dictionary = {
+	&"slime": Color(0.1, 0.55, 0.43, 1.0),
+	&"slime_chaser": Color(0.2, 0.68, 0.35, 1.0),
+	&"bat": Color(0.18, 0.46, 0.72, 1.0),
+	&"orc": Color(0.98, 0.66, 0.16, 1.0),
+}
+const ENEMY_TIER_BY_ID: Dictionary = {
+	&"slime": 0,
+	&"slime_chaser": 1,
+	&"bat": 2,
+	&"orc": 3,
+}
 
 var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
@@ -56,6 +76,7 @@ var _crash_tween: Tween
 func _ready() -> void:
 	_name_label.hide()
 	_hp_label.hide()
+	_apply_card_color_chrome()
 	_turn_timer.wait_time = turn_interval
 	_turn_timer.timeout.connect(_on_turn_tick)
 	_spawn_enemy()
@@ -109,40 +130,108 @@ func apply_window_collision_damage(ratio: float, log_prefix: String = "Window cr
 		if enemy.data == null:
 			continue
 		var damage: int = ceili(float(enemy.max_hp) * ratio) + enemy.defense
-		total_dealt += enemy.take_damage(damage)
+		total_dealt += enemy.take_damage(damage, false, null, false)
 	if total_dealt > 0:
 		_play_crash_flash()
+		_spawn_window_damage_number(total_dealt, _window_damage_label(log_prefix))
 		_log_label.text = "%s! -%d" % [log_prefix, total_dealt]
 	return total_dealt
 
 
 func show_window_collision_heal(member_name: String, amount: int) -> void:
-	_play_heal_flash()
 	_log_label.text = "Bump blessing! %s +%d" % [member_name, amount]
 
 
 func _play_crash_flash() -> void:
-	if _background == null:
+	_play_window_color_flash(CRASH_FLASH_COLOR)
+
+
+func _play_window_color_flash(flash_color: Color) -> void:
+	if _background == null or _log_panel == null:
 		return
 	if _crash_tween and _crash_tween.is_valid():
 		_crash_tween.kill()
-	_background.modulate = CRASH_FLASH_COLOR
+	var base_bg: Color = _window_bg_color()
+	var base_border: Color = base_bg.darkened(0.42)
+	var base_log_bg: Color = _log_bg_color(base_bg)
+	var base_log_border: Color = base_border
+	var flash_log_bg: Color = flash_color.lightened(0.22)
+	var flash_style := _flat_panel_style(flash_color, flash_color.darkened(0.4))
+	var flash_log_style := _flat_panel_style(flash_log_bg, flash_color.darkened(0.18))
+	_background.add_theme_stylebox_override("panel", flash_style)
+	_log_panel.add_theme_stylebox_override("panel", flash_log_style)
+	_apply_label_color(_log_label, POSTER_DARK_TEXT)
 	_crash_tween = create_tween()
-	_crash_tween.tween_property(_background, "modulate", Color.WHITE, CRASH_FLASH_DURATION)\
+	_crash_tween.tween_interval(WINDOW_FLASH_HOLD_DURATION)
+	_crash_tween.tween_property(flash_style, "bg_color", base_bg, WINDOW_FLASH_FADE_DURATION)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_OUT)
+	_crash_tween.parallel().tween_property(flash_style, "border_color", base_border, WINDOW_FLASH_FADE_DURATION)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+	_crash_tween.parallel().tween_property(flash_log_style, "bg_color", base_log_bg, WINDOW_FLASH_FADE_DURATION)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+	_crash_tween.parallel().tween_property(flash_log_style, "border_color", base_log_border, WINDOW_FLASH_FADE_DURATION)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+	_crash_tween.tween_callback(_apply_card_color_chrome)
 
 
-func _play_heal_flash() -> void:
-	if _background == null:
+func _apply_card_color_chrome() -> void:
+	var bg: Color = _window_bg_color()
+	var border: Color = bg.darkened(0.42)
+	var log_bg: Color = _log_bg_color(bg)
+	var text_color: Color = POSTER_LIGHT_TEXT if log_bg.get_luminance() < 0.42 else POSTER_DARK_TEXT
+	_background.add_theme_stylebox_override("panel", _flat_panel_style(bg, border))
+	_log_panel.add_theme_stylebox_override("panel", _flat_panel_style(log_bg, border))
+	_apply_label_color(_log_label, text_color)
+	_apply_label_color(_name_label, text_color)
+	_apply_label_color(_hp_label, text_color)
+
+
+func _flat_panel_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = border
+	style.anti_aliasing = false
+	return style
+
+
+func _apply_label_color(label: Label, color: Color) -> void:
+	if label == null:
 		return
-	if _crash_tween and _crash_tween.is_valid():
-		_crash_tween.kill()
-	_background.modulate = HEAL_FLASH_COLOR
-	_crash_tween = create_tween()
-	_crash_tween.tween_property(_background, "modulate", Color.WHITE, CRASH_FLASH_DURATION)\
-		.set_trans(Tween.TRANS_QUAD)\
-		.set_ease(Tween.EASE_OUT)
+	var settings: LabelSettings = label.label_settings.duplicate()
+	settings.font_color = color
+	label.label_settings = settings
+
+
+func _window_bg_color() -> Color:
+	if enemy_data == null:
+		return DEFAULT_WINDOW_BG
+	return WINDOW_BG_BY_ENEMY_ID.get(enemy_data.id, DEFAULT_WINDOW_BG)
+
+
+func _log_bg_color(bg: Color) -> Color:
+	return bg.lightened(0.34 if bg.get_luminance() < 0.42 else 0.14)
+
+
+func _spawn_window_damage_number(amount: int, label_prefix: String) -> void:
+	var num: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
+	add_child(num)
+	num.position = Vector2(size.x * 0.5 + randf_range(-18.0, 18.0), 10.0 + randf_range(-2.0, 4.0))
+	num.z_index = 20
+	num.setup_window_damage(amount, label_prefix)
+
+
+func _window_damage_label(log_prefix: String) -> String:
+	if log_prefix.to_lower().contains("bump"):
+		return "BUMP"
+	return "CRASH"
 
 
 func _spawn_enemy() -> void:
@@ -168,7 +257,7 @@ func _spawn_enemy() -> void:
 func _ensure_enemy_plan() -> void:
 	if _planned_enemy_count > 0:
 		return
-	_planned_enemy_count = 1 + GameState.roll_extra_enemies_per_window()
+	_planned_enemy_count = randi_range(1, _max_enemies_per_window())
 	_planned_enemy_data = _plan_enemy_mix(_planned_enemy_count)
 
 
@@ -176,46 +265,53 @@ func _ensure_enemy_count_planned() -> void:
 	_ensure_enemy_plan()
 
 
+func _max_enemies_per_window() -> int:
+	return maxi(1, GameState.party_size() + 1)
+
+
 func _plan_enemy_mix(total: int) -> Array[EnemyData]:
 	var planned: Array[EnemyData] = []
-	var support_pool: Array[EnemyData] = _support_enemy_pool()
-	var base_count: int = 0
-	var support_counts: Dictionary = {}
-	var support_index: int = 0
 	for i in total:
-		if support_pool.is_empty() or _must_add_base(base_count, support_counts, support_pool):
+		if i == 0 or randf() < BASE_ENEMY_REPEAT_CHANCE:
 			planned.append(enemy_data)
-			base_count += 1
 		else:
-			var support: EnemyData = support_pool[support_index % support_pool.size()]
-			planned.append(support)
-			support_counts[support.id] = int(support_counts.get(support.id, 0)) + 1
-			support_index += 1
+			planned.append(_pick_support_enemy())
 	planned.shuffle()
 	return planned
 
 
-func _must_add_base(base_count: int, support_counts: Dictionary, support_pool: Array[EnemyData]) -> bool:
-	if base_count == 0:
-		return true
-	for support: EnemyData in support_pool:
-		var count: int = int(support_counts.get(support.id, 0))
-		if count < base_count:
-			return false
-	return true
+func _pick_support_enemy() -> EnemyData:
+	var pool: Array[EnemyData] = _support_enemy_pool()
+	return enemy_data if pool.is_empty() else pool.pick_random()
 
 
 func _support_enemy_pool() -> Array[EnemyData]:
 	var pool: Array[EnemyData] = []
-	if enemy_data.id != SLIME_DATA.id:
-		pool.append(SLIME_DATA)
-	if GameState.current_stage >= 3 and enemy_data.id != BAT_DATA.id:
-		pool.append(BAT_DATA)
-	if GameState.current_stage >= 5 and enemy_data.id != ORC_DATA.id:
-		pool.append(ORC_DATA)
-	if pool.is_empty():
-		pool.append(enemy_data)
+	var base_tier: int = _enemy_tier(enemy_data)
+	for candidate: EnemyData in _available_support_enemies():
+		if candidate == enemy_data:
+			continue
+		var candidate_tier: int = _enemy_tier(candidate)
+		if candidate_tier <= base_tier or randf() < STRONGER_SUPPORT_CHANCE:
+			pool.append(candidate)
 	return pool
+
+
+func _available_support_enemies() -> Array[EnemyData]:
+	var out: Array[EnemyData] = [SLIME_DATA]
+	if GameState.current_stage >= 2:
+		out.append(SLIME_CHASER_DATA)
+	if GameState.current_stage >= 3:
+		out.append(BAT_DATA)
+	if GameState.current_stage >= 5:
+		out.append(ORC_DATA)
+	return out
+
+
+func _enemy_tier(data: EnemyData) -> int:
+	if data == null:
+		return 0
+	return int(ENEMY_TIER_BY_ID.get(data.id, 0))
 
 
 func _encounter_display_name() -> String:

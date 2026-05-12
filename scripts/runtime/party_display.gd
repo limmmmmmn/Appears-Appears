@@ -94,12 +94,10 @@ func _popup_text_for_modifier(mod: ModifierData) -> String:
 		return "+%d%% STEAL" % int(round(GameState.modifier_last_float_effect(mod, "thief_steal_chance") * 100.0))
 	if mod.effect_data.has("evade_chance"):
 		return "+%d%% EVA" % int(round(GameState.modifier_last_float_effect(mod, "evade_chance") * 100.0))
-	if mod.effect_data.has("field_enemies_flat"):
-		return "+%d FIELD" % int(mod.effect_data["field_enemies_flat"])
-	if mod.effect_data.has("extra_enemy_slots_per_window"):
-		return "+%d SLOT" % int(mod.effect_data["extra_enemy_slots_per_window"])
 	if mod.effect_data.has("window_collision_heal_flat"):
 		return "+%d BUMP HEAL" % GameState.modifier_last_int_effect(mod, "window_collision_heal_flat")
+	if mod.effect_data.has("party_bump_damage_ratio"):
+		return "BUMP ATK"
 	if mod.effect_data.has("window_collision_damage_ratio"):
 		return "CRASH"
 	return mod.display_name

@@ -21,7 +21,52 @@ func setup(amount: int, is_crit: bool = false) -> void:
 		_label.label_settings = ls
 
 
+func setup_window_damage(amount: int, label_prefix: String = "CRASH") -> void:
+	_label.text = "%s -%d" % [label_prefix, amount]
+	_label.offset_left = -36.0
+	_label.offset_top = -12.0
+	_label.offset_right = 36.0
+	_label.offset_bottom = 8.0
+	var ls: LabelSettings = _label.label_settings.duplicate()
+	ls.font_color = Color(1.0, 0.48, 0.12, 1.0)
+	ls.font_size = 11
+	ls.outline_size = 3
+	_label.label_settings = ls
+	rise_pixels = 8.0
+	duration = 0.5
+
+
+func setup_window_heal(amount: int, label_prefix: String = "HEAL") -> void:
+	_label.text = "%s +%d" % [label_prefix, amount]
+	_label.offset_left = -36.0
+	_label.offset_top = -12.0
+	_label.offset_right = 36.0
+	_label.offset_bottom = 8.0
+	var ls: LabelSettings = _label.label_settings.duplicate()
+	ls.font_color = Color(0.45, 1.0, 0.56, 1.0)
+	ls.font_size = 11
+	ls.outline_size = 3
+	_label.label_settings = ls
+	rise_pixels = 8.0
+	duration = 0.5
+
+
+func setup_heal(amount: int) -> void:
+	_label.text = "+%d" % amount
+	var ls: LabelSettings = _label.label_settings.duplicate()
+	ls.font_color = Color(0.45, 1.0, 0.56, 1.0)
+	ls.font_size = 10
+	ls.outline_size = 3
+	_label.label_settings = ls
+	rise_pixels = 12.0
+	duration = 0.55
+
+
 func _ready() -> void:
+	call_deferred("_start_float")
+
+
+func _start_float() -> void:
 	var tween: Tween = create_tween().set_parallel(true)
 	tween.tween_property(self, "position:y", position.y - rise_pixels, duration)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)

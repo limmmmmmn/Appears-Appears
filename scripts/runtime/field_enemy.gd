@@ -11,6 +11,11 @@ extends Area2D
 @export var chase_speed: float = 58.0  ## pixels/sec. Player is 80.
 @export var detect_radius: float = 92.0
 @export var lose_radius: float = 180.0
+@export var charge_enabled: bool = false
+@export var charge_trigger_radius: float = 72.0
+@export var charge_speed: float = 180.0
+@export var charge_duration: float = 0.28
+@export var charge_cooldown: float = 1.1
 @export var alert_duration: float = 0.45
 @export var wander_turn_time_min: float = 0.7
 @export var wander_turn_time_max: float = 1.8
@@ -20,6 +25,13 @@ extends Area2D
 @export var spawn_telegraph_duration: float = 0.75
 @export var wander_bounds_min: Vector2 = Vector2(16, 16)
 @export var wander_bounds_max: Vector2 = Vector2(1264, 704)
+@export var chase_squish_amount: float = 0.08
+@export var chase_squish_speed: float = 10.0
+@export var wander_squish_amount: float = 0.035
+@export var wander_squish_speed: float = 5.5
+@export var charge_squish_amount: float = 0.14
+@export var squish_recover_speed: float = 10.0
+## Enemy sprites are authored facing left. Flip only when moving right.
 ## When |velocity.x| is below this we leave flip_h alone so vertical chases
 ## don't jitter the sprite back and forth between frames.
 @export var flip_threshold: float = 1.0
@@ -35,10 +47,14 @@ var _spawning: bool = true
 var _state: int = State.WANDER
 var _wander_mode: int = WanderMode.MOVE
 var _alert_timer: float = 0.0
+var _charge_timer: float = 0.0
+var _charge_cooldown_timer: float = 0.0
+var _charge_dir: Vector2 = Vector2.ZERO
 var _wander_timer: float = 0.0
 var _wander_dir: Vector2 = Vector2.RIGHT
+var _squish_time: float = 0.0
 
-enum State { WANDER, ALERT, CHASE }
+enum State { WANDER, ALERT, CHASE, CHARGE }
 enum WanderMode { MOVE, PAUSE }
 
 func _ready() -> void:
@@ -59,17 +75,32 @@ func setup(enemy_data: EnemyData) -> void:
 func _apply_data() -> void:
 	if data and data.sprite and _sprite:
 		_sprite.texture = data.sprite
+	if data == null:
+		return
+	wander_speed = data.field_wander_speed
+	chase_speed = data.field_chase_speed
+	detect_radius = data.field_detect_radius
+	lose_radius = data.field_lose_radius
+	charge_enabled = data.field_charge_enabled
+	charge_trigger_radius = data.field_charge_trigger_radius
+	charge_speed = data.field_charge_speed
+	charge_duration = data.field_charge_duration
+	charge_cooldown = data.field_charge_cooldown
 
 
 func _physics_process(delta: float) -> void:
 	if _triggered or _spawning:
 		return
+	_charge_cooldown_timer = maxf(0.0, _charge_cooldown_timer - delta)
 	if _state == State.WANDER:
 		_process_wander(delta)
 	elif _state == State.ALERT:
 		_process_alert(delta)
-	else:
+		_recover_sprite_scale(delta)
+	elif _state == State.CHASE:
 		_process_chase(delta)
+	else:
+		_process_charge(delta)
 
 
 func _process_wander(delta: float) -> void:
@@ -83,11 +114,13 @@ func _process_wander(delta: float) -> void:
 	if _wander_timer <= 0.0:
 		_pick_next_wander_action()
 	if _wander_mode == WanderMode.PAUSE:
+		_recover_sprite_scale(delta)
 		return
 	var velocity: Vector2 = _wander_dir * wander_speed
 	global_position += velocity * delta
 	_keep_inside_field()
 	_update_sprite_flip(velocity)
+	_apply_wander_squish(delta)
 
 
 func _process_alert(delta: float) -> void:
@@ -107,10 +140,35 @@ func _process_chase(delta: float) -> void:
 		return
 	if to_target.length_squared() < 1.0:
 		return
+	if _can_charge(to_target):
+		_enter_charge(to_target.normalized())
+		return
 	var velocity: Vector2 = to_target.normalized() * chase_speed
 	global_position += velocity * delta
 	_keep_inside_field()
 	_update_sprite_flip(velocity)
+	_apply_chase_squish(delta, chase_squish_amount)
+
+
+func _process_charge(delta: float) -> void:
+	_charge_timer -= delta
+	var velocity: Vector2 = _charge_dir * charge_speed
+	global_position += velocity * delta
+	_keep_inside_field()
+	_update_sprite_flip(velocity)
+	_apply_chase_squish(delta, charge_squish_amount)
+	if _charge_timer <= 0.0:
+		_sprite.modulate = Color.WHITE
+		_enter_chase()
+
+
+func _can_charge(to_target: Vector2) -> bool:
+	return (
+		charge_enabled
+		and _charge_cooldown_timer <= 0.0
+		and to_target.length() <= charge_trigger_radius
+		and to_target.length_squared() >= 1.0
+	)
 
 
 func _find_player() -> Node2D:
@@ -153,6 +211,7 @@ func _enter_alert() -> void:
 func _enter_chase() -> void:
 	_state = State.CHASE
 	_alert_bubble.visible = false
+	_sprite.modulate = Color.WHITE
 	_refresh_target()
 
 
@@ -160,7 +219,17 @@ func _enter_wander() -> void:
 	_state = State.WANDER
 	_target = null
 	_alert_bubble.visible = false
+	_sprite.modulate = Color.WHITE
 	_pick_next_wander_action()
+
+
+func _enter_charge(direction: Vector2) -> void:
+	_state = State.CHARGE
+	_charge_dir = direction
+	_charge_timer = charge_duration
+	_charge_cooldown_timer = charge_cooldown
+	_alert_bubble.visible = false
+	_sprite.modulate = Color(1.0, 0.55, 0.36, 1.0)
 
 
 func _pick_new_wander_dir() -> void:
@@ -189,7 +258,23 @@ func _keep_inside_field() -> void:
 
 func _update_sprite_flip(velocity: Vector2) -> void:
 	if absf(velocity.x) > flip_threshold:
-		_sprite.flip_h = velocity.x < 0
+		_sprite.flip_h = velocity.x > 0
+
+
+func _apply_chase_squish(delta: float, amount: float) -> void:
+	_squish_time += delta * chase_squish_speed
+	var wave: float = sin(_squish_time)
+	_sprite.scale = Vector2(1.0 + wave * amount, 1.0 - wave * amount * 0.65)
+
+
+func _apply_wander_squish(delta: float) -> void:
+	_squish_time += delta * wander_squish_speed
+	var wave: float = sin(_squish_time)
+	_sprite.scale = Vector2(1.0 + wave * wander_squish_amount, 1.0 - wave * wander_squish_amount * 0.55)
+
+
+func _recover_sprite_scale(delta: float) -> void:
+	_sprite.scale = _sprite.scale.move_toward(Vector2.ONE, squish_recover_speed * delta)
 
 
 func _start_spawn_telegraph() -> void:

@@ -28,7 +28,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_set_run_layers_process_mode(Node.PROCESS_MODE_PAUSABLE)
 	_pause_overlay.visible = false
-	print("Hyper Quest booted on Godot 4.6 | %dx%d" % [
+	print("Appears! Appears! booted on Godot 4.6 | %dx%d" % [
 		ProjectSettings.get_setting("display/window/size/viewport_width"),
 		ProjectSettings.get_setting("display/window/size/viewport_height"),
 	])

@@ -6,6 +6,12 @@ extends Node
 ## Use the effective_* helpers when you need stat values during combat —
 ## they fold in active_modifiers. Raw fields on CharacterData are base only.
 
+const STARTER_SKILL_BY_CHARACTER_ID: Dictionary = {
+	&"mage": preload("res://data/modifiers/prototype/fireburst.tres"),
+	&"priest": preload("res://data/modifiers/prototype/battle_prayer.tres"),
+	&"thief": preload("res://data/modifiers/prototype/pilfer.tres"),
+}
+
 # ─── Party ────────────────────────────────────────────────────────────
 ## The 4 party members chosen for this run.
 var party: Array[CharacterData] = []
@@ -15,7 +21,9 @@ var party_hp: Array[int] = []
 var party_mp: Array[int] = []
 
 # ─── Economy ──────────────────────────────────────────────────────────
-var gold: int = 0
+const STARTING_GOLD: int = 30
+
+var gold: int = STARTING_GOLD
 ## Stat-affecting modifiers picked this run.
 var active_modifiers: Array[ModifierData] = []
 ## Recruit cards that successfully added a member to `party` this run.
@@ -27,26 +35,16 @@ var recruited_companions: Array[ModifierData] = []
 # ─── Progression ──────────────────────────────────────────────────────
 var current_stage: int = 0
 
-## Tile-card ids (StringName) the player has unlocked this run. The first
-## time a tile card is unlocked the field shows a centered popup; subsequent
-## stages just drop the tile silently. Cleared on reset_run.
-var acquired_tile_cards: Dictionary = {}
-
-const PRICE_LEVEL_MULTIPLIERS = [1.0, 2.0, 4.0, 7.0, 11.0]
+const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
 const EFFECT_STACK_MULTIPLIERS = [1.0, 0.75, 0.55, 0.4, 0.3]
 const DAMAGE_BONUS_STACK_MULTIPLIERS = [1.0, 0.5, 0.3, 0.2, 0.16]
+const ENEMY_GOLD_STAGE_INTERVAL: int = 5
+const ENEMY_GOLD_STAGE_BONUS_CAP: int = 4
 const ENEMY_HP_STAGE_LINEAR: float = 0.12
 const ENEMY_HP_STAGE_QUADRATIC: float = 0.01
 const ENEMY_ATTACK_STAGE_LINEAR: float = 0.08
 const ENEMY_ATTACK_STAGE_QUADRATIC: float = 0.006
 
-
-func has_acquired_tile_card(id: StringName) -> bool:
-	return acquired_tile_cards.has(id)
-
-
-func acquire_tile_card(id: StringName) -> void:
-	acquired_tile_cards[id] = true
 
 # ─── Run statistics (for the game-over summary) ───────────────────────
 var enemies_killed: int = 0
@@ -150,11 +148,11 @@ func spend_gold(amount: int) -> bool:
 func modifier_purchase_cost(mod: ModifierData) -> int:
 	if mod == null:
 		return 0
-	if mod.id == &"forest_tile":
-		return 0
 	if mod.category == ModifierData.Category.COMPANION or mod.max_level <= 1:
 		return mod.cost
 	var level: int = clampi(modifier_level(mod.id), 0, mod.max_level - 1)
+	if level == 0:
+		return mod.cost
 	var raw_cost: float = float(mod.cost) * _price_multiplier_for_level(level)
 	return maxi(mod.cost, ceili(raw_cost / 5.0) * 5)
 
@@ -251,8 +249,17 @@ func _recruit_companion(mod: ModifierData) -> void:
 	party_hp.append(effective_max_hp(idx))
 	party_mp.append(recruited.max_mp)
 	recruited_companions.append(mod)
+	_grant_starter_skill(recruited)
 	EventBus.modifier_picked.emit(mod)
 	EventBus.party_changed.emit()
+
+
+func _grant_starter_skill(character: CharacterData) -> void:
+	var starter := STARTER_SKILL_BY_CHARACTER_ID.get(character.id, null) as ModifierData
+	if starter == null or modifier_level(starter.id) > 0:
+		return
+	active_modifiers.append(starter)
+	EventBus.modifier_picked.emit(starter)
 
 
 func _available_recruits(mod: ModifierData) -> Array[CharacterData]:
@@ -324,7 +331,10 @@ func scaled_enemy_agility(data: EnemyData) -> int:
 func scaled_enemy_gold_reward(data: EnemyData) -> int:
 	if data == null:
 		return 0
-	var bonus: int = int(floor(float(_enemy_stage_index()) / 4.0))
+	var bonus: int = mini(
+		ENEMY_GOLD_STAGE_BONUS_CAP,
+		int(floor(float(_enemy_stage_index()) / float(ENEMY_GOLD_STAGE_INTERVAL)))
+	)
 	return maxi(1, data.gold_reward + bonus)
 
 
@@ -569,26 +579,6 @@ func roll_window_duplicates() -> int:
 	return extras
 
 
-## Roll extra enemies that may appear inside this battle window.
-func roll_extra_enemies_per_window() -> int:
-	var extras: int = 0
-	for mod: ModifierData in active_modifiers:
-		extras += int(mod.effect_data.get("extra_enemies_per_window", 0))
-		var slots: int = int(mod.effect_data.get("extra_enemy_slots_per_window", 0))
-		var chance: float = clampf(float(mod.effect_data.get("extra_enemy_spawn_chance", 1.0)), 0.0, 1.0)
-		for i in slots:
-			if randf() < chance:
-				extras += 1
-	return extras
-
-
-func extra_field_enemies() -> int:
-	var extras: int = 0
-	for mod: ModifierData in active_modifiers:
-		extras += int(mod.effect_data.get("field_enemies_flat", 0))
-	return extras
-
-
 func window_collision_damage_ratio() -> float:
 	var ratio: float = 0.0
 	for mod: ModifierData in active_modifiers:
@@ -596,8 +586,23 @@ func window_collision_damage_ratio() -> float:
 	return ratio
 
 
+func party_bump_damage_ratio() -> float:
+	var ratio: float = 0.0
+	for mod: ModifierData in active_modifiers:
+		ratio = maxf(ratio, float(mod.effect_data.get("party_bump_damage_ratio", 0.0)))
+	return ratio
+
+
 func window_collision_heal_amount() -> int:
 	return _stacked_int_effect("window_collision_heal_flat")
+
+
+func battle_window_push_enabled() -> bool:
+	return window_collision_damage_ratio() > 0.0
+
+
+func party_window_push_enabled() -> bool:
+	return party_bump_damage_ratio() > 0.0 or window_collision_heal_amount() > 0
 
 
 ## Apply gold modifiers to a base reward. Multiplicative then additive.
@@ -615,13 +620,12 @@ func reset_run() -> void:
 	party.clear()
 	party_hp.clear()
 	party_mp.clear()
-	gold = 0
+	gold = STARTING_GOLD
 	total_gold_earned = 0
 	enemies_killed = 0
 	biggest_hit = 0
 	active_modifiers.clear()
 	recruited_companions.clear()
-	acquired_tile_cards.clear()
 	current_stage = 0
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).

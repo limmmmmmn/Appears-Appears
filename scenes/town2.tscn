@@ -207,21 +207,6 @@ offset_bottom = -8.0
 theme = ExtResource("3_theme")
 theme_override_constants/separation = 6
 
-[node name="RestButton" type="Button" parent="BottomBar"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(80, 22)
-layout_mode = 2
-focus_mode = 2
-theme_override_styles/normal = SubResource("StyleBox_btn_normal")
-theme_override_styles/hover = SubResource("StyleBox_btn_hover")
-theme_override_styles/pressed = SubResource("StyleBox_btn_hover")
-theme_override_styles/focus = SubResource("StyleBox_btn_focus")
-theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
-theme_override_colors/font_hover_color = Color(1, 0.93, 0.78, 1)
-theme_override_colors/font_focus_color = Color(1, 0.93, 0.78, 1)
-theme_override_font_sizes/font_size = 9
-text = "Rest"
-
 [node name="RerollButton" type="Button" parent="BottomBar"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(80, 22)

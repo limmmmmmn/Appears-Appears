@@ -9,6 +9,7 @@ extends CanvasLayer
 ## Windows themselves are independent — manager only decides where they live.
 
 const BATTLE_WINDOW_SCENE: PackedScene = preload("res://scenes/battle_window.tscn")
+const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
 
 ## Fallback if no valid player-relative spawn point exists.
 const SPAWN_CENTER: Vector2 = Vector2(260, 56)
@@ -135,6 +136,8 @@ func _is_spawn_position_valid(pos: Vector2, size: Vector2, viewport_size: Vector
 func _apply_window_push(delta: float, burst: bool = false) -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var party_positions: Array[Vector2] = _party_screen_positions()
+	var window_collision_enabled: bool = GameState.battle_window_push_enabled()
+	var party_collision_enabled: bool = GameState.party_window_push_enabled()
 	var windows: Array = _window_rects.keys()
 	for window: BattleWindow in windows:
 		if not is_instance_valid(window):
@@ -145,15 +148,18 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 		for other: BattleWindow in windows:
 			if window == other or not is_instance_valid(other):
 				continue
-			if window.get_instance_id() < other.get_instance_id():
-				_apply_window_collision_damage(window, rect, other, _window_rects[other])
-			force += _window_overlap_push(window, rect, other, _window_rects[other])
-		for party_position: Vector2 in party_positions:
-			var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
-			if rect.intersects(party_rect):
-				_apply_party_collision_effects(window)
-			force += _party_collision_push(rect, party_position)
-		force += _wall_push(rect, viewport_size)
+			if window_collision_enabled:
+				if window.get_instance_id() < other.get_instance_id():
+					_apply_window_collision_damage(window, rect, other, _window_rects[other])
+				force += _window_overlap_push(window, rect, other, _window_rects[other])
+		if party_collision_enabled:
+			for party_position: Vector2 in party_positions:
+				var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
+				if rect.intersects(party_rect):
+					_apply_party_collision_effects(window)
+				force += _party_collision_push(rect, party_position)
+		if window_collision_enabled or party_collision_enabled:
+			force += _wall_push(rect, viewport_size)
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
 		var step_delta: float = 1.0 / 60.0 if burst else delta
 		velocity += force * step_delta
@@ -200,7 +206,7 @@ func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_win
 
 
 func _apply_party_collision_effects(window: BattleWindow) -> void:
-	var damage_ratio: float = GameState.window_collision_damage_ratio()
+	var damage_ratio: float = GameState.party_bump_damage_ratio()
 	var heal_amount: int = GameState.window_collision_heal_amount()
 	if damage_ratio <= 0.0 and heal_amount <= 0:
 		return
@@ -226,8 +232,52 @@ func _apply_party_collision_heal(window: BattleWindow, amount: int) -> int:
 	var healed: int = GameState.party_hp[target_index] - before_hp
 	if healed > 0:
 		var member_name: String = GameState.party[target_index].display_name
+		_spawn_party_heal_number(target_index, healed)
 		window.show_window_collision_heal(member_name, healed)
 	return healed
+
+
+func _spawn_party_heal_number(party_index: int, amount: int) -> void:
+	var target: Node2D = _party_member_node_for_index(party_index)
+	if target == null:
+		return
+	var num: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
+	target.add_child(num)
+	num.position = Vector2(randf_range(-5.0, 5.0), -18.0 + randf_range(-2.0, 2.0))
+	num.z_index = 30
+	num.setup_heal(amount)
+
+
+func _party_member_node_for_index(party_index: int) -> Node2D:
+	if party_index < 0:
+		return null
+	var player := get_tree().get_first_node_in_group("player") as Node2D
+	if player == null:
+		return _party_member_node_from_group(party_index)
+	if party_index == 0:
+		return player
+	var party_root: Node = player.get_parent()
+	if party_root == null:
+		return _party_member_node_from_group(party_index)
+	var current_index: int = 0
+	for child in party_root.get_children():
+		if child is Node2D and child.is_in_group("party_member"):
+			if current_index == party_index:
+				return child as Node2D
+			current_index += 1
+	return _party_member_node_from_group(party_index)
+
+
+func _party_member_node_from_group(party_index: int) -> Node2D:
+	var current_index: int = 0
+	for node in get_tree().get_nodes_in_group("party_member"):
+		var member := node as Node2D
+		if member == null:
+			continue
+		if current_index == party_index:
+			return member
+		current_index += 1
+	return null
 
 
 func _lowest_wounded_party_index() -> int:

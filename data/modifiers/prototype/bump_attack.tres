@@ -4,11 +4,13 @@
 
 [resource]
 script = ExtResource("1_script")
-id = &"forest_tile"
-display_name = "Forest"
-description = "Forests appear on future fields."
-cost = 0
+id = &"bump_attack"
+display_name = "Bump Attack"
+description = "Damage enemies when the party bumps into a battle window."
+cost = 20
 max_level = 1
-rarity = 0
-category = 2
-effect_data = {}
+rarity = 1
+category = 1
+effect_data = {
+"party_bump_damage_ratio": 0.1
+}

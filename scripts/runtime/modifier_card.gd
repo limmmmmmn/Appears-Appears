@@ -11,6 +11,7 @@ const RARITY_COLORS: Dictionary = {
 	ModifierData.Rarity.RARE: Color(0.45, 0.6, 0.95, 1),
 	ModifierData.Rarity.LEGENDARY: Color(0.95, 0.65, 0.25, 1),
 }
+const CARD_BG_COLOR: Color = Color(0.12, 0.12, 0.16, 0.95)
 
 @onready var _name_label: Label = %CardName
 @onready var _desc_label: Label = %CardDesc
@@ -30,28 +31,45 @@ func setup(mod: ModifierData) -> void:
 	data = mod
 	cost = GameState.modifier_purchase_cost(mod)
 	purchased = false
-	disabled = false
-	modulate = Color.WHITE
 	if is_inside_tree():
 		_apply_data()
 
 
 func _ready() -> void:
 	pressed.connect(_on_pressed)
-	if data:
-		_apply_data()
+	_apply_data()
 
 
 func _apply_data() -> void:
+	if data == null:
+		_render_empty()
+		return
+	disabled = false
+	modulate = Color.WHITE
 	cost = GameState.modifier_purchase_cost(data)
 	_name_label.text = _display_name_with_level()
 	_desc_label.text = data.description
 	_cost_label.text = "%d G" % cost
 	# Recolor the border via a duplicated stylebox so other cards aren't affected.
 	var stylebox: StyleBoxFlat = _border.get_theme_stylebox("panel").duplicate()
+	stylebox.bg_color = CARD_BG_COLOR
 	stylebox.border_color = RARITY_COLORS.get(data.rarity, Color.WHITE)
 	_border.add_theme_stylebox_override("panel", stylebox)
 	_apply_class_header()
+
+
+func _render_empty() -> void:
+	purchased = true
+	disabled = true
+	modulate = Color(0.28, 0.28, 0.32, 0.35)
+	_name_label.text = ""
+	_desc_label.text = ""
+	_cost_label.text = ""
+	_class_header.visible = false
+	var stylebox: StyleBoxFlat = _border.get_theme_stylebox("panel").duplicate()
+	stylebox.bg_color = Color(0, 0, 0, 0)
+	stylebox.border_color = Color(0, 0, 0, 0)
+	_border.add_theme_stylebox_override("panel", stylebox)
 
 
 ## Class-specific upgrade cards (e.g. Heavy Strike → hero) get a header strip

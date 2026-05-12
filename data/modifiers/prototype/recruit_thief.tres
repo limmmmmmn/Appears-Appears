@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 id = &"recruit_thief"
 display_name = "Recruit Thief"
-description = "Thief joins your party."
+description = "Thief joins with Pilfer: can steal 1G when attacking an enemy."
 cost = 30
 max_level = 1
 rarity = 1
