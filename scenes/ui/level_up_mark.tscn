@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/level_up_mark.gd" id="1_mark"]
-[ext_resource type="FontFile" uid="uid://b36dptialhgb3" path="res://assets/fonts/poppins/Poppins-Bold.ttf" id="2_font"]
+[ext_resource type="FontFile" uid="uid://byvkqrhl8o8un" path="res://assets/fonts/pretendard/public/static/Pretendard-Bold.otf" id="2_font"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_plus"]
 font = ExtResource("2_font")

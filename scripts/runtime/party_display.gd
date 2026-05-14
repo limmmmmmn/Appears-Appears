@@ -86,6 +86,8 @@ func _popup_text_for_modifier(mod: ModifierData) -> String:
 		return "+%d SPD" % GameState.modifier_last_int_effect(mod, "move_speed_flat")
 	if mod.effect_data.has("hero_damage_bonus_mult"):
 		return "+%d%% DMG" % int(round(GameState.modifier_last_float_effect(mod, "hero_damage_bonus_mult") * 100.0))
+	if mod.effect_data.has("mage_firewall_damage_flat"):
+		return "FIREWALL %d" % GameState.modifier_last_int_effect(mod, "mage_firewall_damage_flat")
 	if mod.effect_data.has("mage_splash_extra_targets"):
 		return "+%d AOE" % int(mod.effect_data["mage_splash_extra_targets"])
 	if mod.effect_data.has("priest_heal_flat"):

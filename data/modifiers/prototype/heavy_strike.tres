@@ -5,12 +5,15 @@
 [resource]
 script = ExtResource("1_script")
 id = &"heavy_strike"
-display_name = "Heavy Strike"
-description = "Hero basic attacks hit harder. Later levels give a smaller boost."
+display_name = "강타"
+description = "MP 2 소모. 적 하나에게 통상 공격의 1.75배 데미지를 준다."
 cost = 20
+max_level = 3
 rarity = 1
 category = 1
 required_party_member_id = &"hero"
+required_modifier_id = &"bump_attack"
+level_up_only = true
 effect_data = {
-"hero_damage_bonus_mult": 0.5
+"hero_damage_bonus_mult": 0.75
 }

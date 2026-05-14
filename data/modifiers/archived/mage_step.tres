@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"mage_step"
-display_name = "Quick Step"
-description = "+15% chance for Mage to dodge enemy attacks."
+display_name = "마법사의 잔영"
+description = "마법사가 적 공격을 15% 확률로 회피."
 cost = 12
 rarity = 1
 category = 1

@@ -63,6 +63,7 @@ func _ready() -> void:
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.party_changed.connect(_on_party_changed)
 	EventBus.party_member_hp_changed.connect(_on_party_member_hp_changed)
+	EventBus.party_member_mp_changed.connect(_on_party_member_mp_changed)
 	EventBus.modifier_purchase_succeeded.connect(_on_modifier_purchase_succeeded)
 	EventBus.modifier_purchase_failed.connect(_on_modifier_purchase_failed)
 	_focus_first_available_card()
@@ -203,6 +204,7 @@ func _heal_party_to_full() -> void:
 		var max_hp: int = GameState.effective_max_hp(i)
 		if GameState.party_hp[i] < max_hp:
 			GameState.heal_party_member(i, max_hp - GameState.party_hp[i])
+	GameState.restore_party_mp_to_full()
 
 
 # ─── Reactive plumbing ────────────────────────────────────────────────
@@ -212,6 +214,10 @@ func _on_party_changed() -> void:
 
 
 func _on_party_member_hp_changed(_index: int, _new_hp: int, _max_hp: int) -> void:
+	_refresh_all_slots()
+
+
+func _on_party_member_mp_changed(_index: int, _new_mp: int, _max_mp: int) -> void:
 	_refresh_all_slots()
 
 

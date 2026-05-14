@@ -11,6 +11,19 @@ signal enemy_encountered(enemy: Node)
 ## Player stepped onto the town field tile. Main handles the scene transition.
 signal town_entered(tile: Node)
 
+## A field event tile (campfire etc.) was triggered by walking into it.
+## Main listens, pauses the field, and instantiates the matching event
+## window with the right dialogue + recruit data.
+signal event_tile_triggered(tile: Node)
+
+## The town scene was just dismissed. Field listens to consume the current
+## town tile and schedule the next one elsewhere on the map.
+signal town_closed()
+
+## Fires every time the rolling difficulty tier crosses another threshold.
+## Tier 1 = ~30s elapsed, tier 2 = ~60s, etc. HUD listens for a toast.
+signal difficulty_increased(tier: int)
+
 # ─── Party Composition ────────────────────────────────────────────────
 ## Party roster changed (run start, swap, revival). Listeners should re-read
 ## GameState.party / party_hp from scratch.
@@ -32,10 +45,20 @@ signal enemy_defeated(enemy: Node, gold: int, world_position: Vector2)
 
 ## Party HP changed for a specific member. Used by HUD.
 signal party_member_hp_changed(index: int, new_hp: int, max_hp: int)
+signal party_member_mp_changed(index: int, new_mp: int, max_mp: int)
 
 ## Party EXP/level changed for a specific member. Used by HUD.
 signal party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: int)
 signal party_member_leveled_up(index: int, new_level: int)
+
+## Skill tree state changed. SP is a shared pool; signals carry only the
+## new totals / fact-of-change so the panel can fully refresh.
+signal party_skill_points_changed(points: int)
+signal party_skills_changed()
+
+## A party member just fired a tree skill in battle. Picked up by the
+## HUD skill chips to play a "knock!" feedback animation.
+signal party_skill_activated(member_index: int, skill_id: StringName)
 
 ## Party equipment changed for a specific member. Used by HUD.
 signal party_equipment_changed(index: int)
@@ -43,6 +66,7 @@ signal inventory_changed()
 
 ## Field should spawn an item pickup at this world position.
 signal field_item_drop_requested(item: ItemData, world_position: Vector2)
+signal field_recovery_orb_requested(kind: StringName, world_position: Vector2)
 
 ## At least one party member changed HP. Used for "any-change" listeners.
 signal party_hp_changed()
@@ -57,8 +81,6 @@ signal party_damage_taken(member_index: int, amount: int)
 signal stage_started(stage_num: int)
 signal stage_cleared(stage_num: int)
 signal run_cleared()
-signal wave_timer_changed(remaining_seconds: int)
-signal wave_cleanup_started()
 
 # ─── Economy / Modifiers ──────────────────────────────────────────────
 signal gold_changed(new_gold: int)

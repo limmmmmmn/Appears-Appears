@@ -53,9 +53,9 @@ func _on_body_entered(body: Node) -> void:
 	_collected = true
 	GameState.add_gold(gold_amount)
 	_spawn_gold_popup()
-	monitoring = false
-	monitorable = false
-	_collision_shape.disabled = true
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
+	_collision_shape.set_deferred("disabled", true)
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween().set_parallel(true)

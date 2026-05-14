@@ -6,12 +6,6 @@ extends Node
 ## Use the effective_* helpers when you need stat values during combat —
 ## they fold in active_modifiers. Raw fields on CharacterData are base only.
 
-const STARTER_SKILL_BY_CHARACTER_ID: Dictionary = {
-	&"mage": preload("res://data/modifiers/prototype/fireburst.tres"),
-	&"priest": preload("res://data/modifiers/prototype/battle_prayer.tres"),
-	&"thief": preload("res://data/modifiers/prototype/pilfer.tres"),
-}
-
 # ─── Party ────────────────────────────────────────────────────────────
 ## The 4 party members chosen for this run.
 var party: Array[CharacterData] = []
@@ -19,10 +13,20 @@ var party: Array[CharacterData] = []
 ## Current HP/MP per party member. Index matches `party`.
 var party_hp: Array[int] = []
 var party_mp: Array[int] = []
-var party_levels: Array[int] = []
-var party_xp: Array[int] = []
+## Shared progression. Every member levels in lockstep and pulls XP from
+## the same pool — recruits get inserted at the current shared level so
+## the party never has a "weak link". Indexed accessors below are kept for
+## existing call sites; they all return the same number now.
+var current_level: int = 1
+var current_xp: int = 0
 var party_equipment: Array[Array] = []
 var inventory: Array[ItemData] = []
+## Skill tree state. SP is a single shared pool across the entire party —
+## any member's level-up adds to the same wallet, and unlocks come out of it.
+## unlocked_tree_skills tracks every id picked from the tree so reset_skills()
+## can refund cleanly without scanning the broader active_modifiers list.
+var party_skill_points: int = 1
+var unlocked_tree_skills: Array[StringName] = []
 var _move_speed_drag_multiplier: float = 1.0
 var _move_speed_drag_until_msec: int = 0
 var _move_speed_boost_multiplier: float = 1.0
@@ -50,17 +54,20 @@ const EQUIPMENT_ACCESSORY_SLOT_B: int = 5
 const XP_CURVE_BASE: int = 10
 const XP_CURVE_LEVEL_STEP: int = 5
 const XP_CURVE_QUADRATIC: int = 3
+## Every stat goes up by exactly 1 per level. Class flavor is meant to
+## come from base stats + the skill tree picks instead of the level curve.
 const DEFAULT_LEVEL_GROWTH: Dictionary = {
-	"hp": 4,
-	"atk": 2,
+	"hp": 1,
+	"mp": 1,
+	"atk": 1,
 	"def": 1,
 	"agi": 1,
 }
 const LEVEL_GROWTH_BY_CHARACTER_ID: Dictionary = {
-	&"hero": {"hp": 5, "atk": 2, "def": 1, "agi": 1},
-	&"mage": {"hp": 3, "atk": 3, "def": 0, "agi": 1},
-	&"priest": {"hp": 5, "atk": 1, "def": 1, "agi": 1},
-	&"thief": {"hp": 3, "atk": 2, "def": 0, "agi": 2},
+	&"hero": {"hp": 1, "mp": 1, "atk": 1, "def": 1, "agi": 1},
+	&"mage": {"hp": 1, "mp": 1, "atk": 1, "def": 1, "agi": 1},
+	&"priest": {"hp": 1, "mp": 1, "atk": 1, "def": 1, "agi": 1},
+	&"thief": {"hp": 1, "mp": 1, "atk": 1, "def": 1, "agi": 1},
 }
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
@@ -72,6 +79,8 @@ const ENEMY_HP_STAGE_LINEAR: float = 0.12
 const ENEMY_HP_STAGE_QUADRATIC: float = 0.01
 const ENEMY_ATTACK_STAGE_LINEAR: float = 0.08
 const ENEMY_ATTACK_STAGE_QUADRATIC: float = 0.006
+const BATTLE_WINDOW_MAX_ENEMIES: int = 5
+const STAGE_ONE_ENEMY_COUNT_WEIGHTS: Array[int] = [58, 25, 11, 5, 1]
 
 
 # ─── Run statistics (for the game-over summary) ───────────────────────
@@ -79,6 +88,17 @@ var enemies_killed: int = 0
 var total_gold_earned: int = 0  ## lifetime, not affected by spending
 var biggest_hit: int = 0
 var run_started_at_ms: int = 0
+
+const RECOVERY_ORB_MISSING_RATIO: float = 0.10
+const RECOVERY_ORB_HP: StringName = &"hp"
+const RECOVERY_ORB_MP: StringName = &"mp"
+
+## Rolling difficulty: the longer the run goes, the higher the enemy stage
+## index climbs. Tier 1 unlocks ~30 seconds in, tier 2 at 60s, etc. Pause
+## stalls the counter so town visits don't burn the budget.
+const DIFFICULTY_TICK_SECONDS: float = 30.0
+var _difficulty_elapsed: float = 0.0
+var _difficulty_tier_announced: int = 0
 
 func _ready() -> void:
 	# Listen to bus events to keep counters fresh without coupling combat code.
@@ -102,6 +122,41 @@ func get_run_elapsed_seconds() -> float:
 	return float(Time.get_ticks_msec() - run_started_at_ms) / 1000.0
 
 
+# ─── Difficulty pacing ────────────────────────────────────────────────
+## Ticks the rolling difficulty timer and emits when a new tier unlocks.
+## Pause-friendly: _process is suspended on get_tree().paused, so town
+## visits + popups don't accidentally ramp difficulty in the background.
+func _process(delta: float) -> void:
+	if party.is_empty():
+		return
+	_difficulty_elapsed += delta
+	var tier: int = current_difficulty_tier()
+	if tier > _difficulty_tier_announced:
+		_difficulty_tier_announced = tier
+		EventBus.difficulty_increased.emit(tier)
+
+
+func current_difficulty_tier() -> int:
+	return int(floor(_difficulty_elapsed / DIFFICULTY_TICK_SECONDS))
+
+
+## 1-based effective stage = base stage + rolling difficulty tier.
+## Spawn tables (enemy species, support pool, encounter size) key off this
+## so the field gets new species mixed in as the threat clock climbs.
+func effective_stage() -> int:
+	return maxi(1, current_stage) + current_difficulty_tier()
+
+
+## Debug / tuning hook: jump straight to the next difficulty tier without
+## waiting for the 30s clock. HUD wires this to the "▲" button next to the
+## field label so the player can rev up the threat curve on demand.
+func bump_difficulty_tier() -> void:
+	var next_tier: int = current_difficulty_tier() + 1
+	_difficulty_elapsed = float(next_tier) * DIFFICULTY_TICK_SECONDS
+	_difficulty_tier_announced = next_tier
+	EventBus.difficulty_increased.emit(next_tier)
+
+
 # ─── Party setup ──────────────────────────────────────────────────────
 ## Initialize the party from a list of CharacterData. Resets HP/MP to max.
 ## Emits party_changed so listeners (HUD, etc.) can re-populate from scratch
@@ -110,18 +165,23 @@ func set_party(members: Array[CharacterData]) -> void:
 	party = members.duplicate()
 	party_hp.clear()
 	party_mp.clear()
-	party_levels.clear()
-	party_xp.clear()
 	party_equipment.clear()
 	inventory.clear()
+	# Shared progression resets each run.
+	current_level = 1
+	current_xp = 0
+	# Fresh shared SP wallet. Starts empty; the first level-up grants the
+	# first point and the HUD pops the tree open as a tutorial moment.
+	party_skill_points = 0
+	unlocked_tree_skills.clear()
 	for m: CharacterData in party:
-		party_levels.append(1)
-		party_xp.append(0)
 		party_equipment.append(_empty_equipment_slots())
 		party_hp.append(effective_max_hp(party_hp.size()))
-		party_mp.append(m.max_mp)
+		party_mp.append(effective_max_mp(party_mp.size()))
 	# A fresh party means a fresh run timer.
 	run_started_at_ms = Time.get_ticks_msec()
+	_difficulty_elapsed = 0.0
+	_difficulty_tier_announced = 0
 	EventBus.party_changed.emit()
 
 
@@ -164,67 +224,234 @@ func heal_party_member(index: int, amount: int) -> void:
 	EventBus.party_hp_changed.emit()
 
 
-# ─── Experience / Levels ──────────────────────────────────────────────
-func add_party_xp(amount: int) -> void:
+func can_spend_mp(index: int, amount: int) -> bool:
 	if amount <= 0:
+		return true
+	return index >= 0 and index < party_mp.size() and party_mp[index] >= amount
+
+
+func spend_mp(index: int, amount: int) -> bool:
+	if amount <= 0:
+		return true
+	if not can_spend_mp(index, amount):
+		return false
+	party_mp[index] = maxi(0, party_mp[index] - amount)
+	EventBus.party_member_mp_changed.emit(index, party_mp[index], effective_max_mp(index))
+	return true
+
+
+func restore_mp(index: int, amount: int) -> void:
+	if index < 0 or index >= party_mp.size() or amount <= 0:
+		return
+	party_mp[index] = mini(effective_max_mp(index), party_mp[index] + amount)
+	EventBus.party_member_mp_changed.emit(index, party_mp[index], effective_max_mp(index))
+
+
+func restore_party_mp_to_full() -> void:
+	for i in party.size():
+		if i >= party_mp.size():
+			continue
+		var max_mp: int = effective_max_mp(i)
+		if party_mp[i] < max_mp:
+			party_mp[i] = max_mp
+			EventBus.party_member_mp_changed.emit(i, party_mp[i], max_mp)
+
+
+func collect_recovery_orb(kind: StringName) -> int:
+	if kind == RECOVERY_ORB_MP:
+		return _restore_party_resource_evenly(kind, _orb_restore_amount(kind))
+	return _restore_party_resource_evenly(RECOVERY_ORB_HP, _orb_restore_amount(RECOVERY_ORB_HP))
+
+
+func _orb_restore_amount(kind: StringName) -> int:
+	var missing: int = _total_missing_resource(kind)
+	if missing <= 0:
+		return 0
+	return maxi(1, ceili(float(missing) * RECOVERY_ORB_MISSING_RATIO))
+
+
+func _total_missing_resource(kind: StringName) -> int:
+	var total: int = 0
+	for i in party.size():
+		total += _missing_resource(i, kind)
+	return total
+
+
+func _restore_party_resource_evenly(kind: StringName, amount: int) -> int:
+	var remaining: int = maxi(0, amount)
+	var restored: int = 0
+	while remaining > 0:
+		var targets: Array[int] = _resource_restore_targets(kind)
+		if targets.is_empty():
+			break
+		var share: int = maxi(1, ceili(float(remaining) / float(targets.size())))
+		var restored_this_pass: int = 0
+		for index: int in targets:
+			if remaining <= 0:
+				break
+			var restore_amount: int = mini(mini(share, remaining), _missing_resource(index, kind))
+			if restore_amount <= 0:
+				continue
+			_apply_resource_restore(index, kind, restore_amount)
+			remaining -= restore_amount
+			restored += restore_amount
+			restored_this_pass += restore_amount
+		if restored_this_pass <= 0:
+			break
+	return restored
+
+
+func _resource_restore_targets(kind: StringName) -> Array[int]:
+	var targets: Array[int] = []
+	for i in party.size():
+		if _missing_resource(i, kind) > 0:
+			targets.append(i)
+	targets.sort_custom(func(a: int, b: int) -> bool:
+		return _missing_resource(a, kind) > _missing_resource(b, kind)
+	)
+	return targets
+
+
+func _missing_resource(index: int, kind: StringName) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	if kind == RECOVERY_ORB_MP:
+		if index >= party_mp.size():
+			return 0
+		return maxi(0, effective_max_mp(index) - party_mp[index])
+	if index >= party_hp.size():
+		return 0
+	return maxi(0, effective_max_hp(index) - party_hp[index])
+
+
+func _apply_resource_restore(index: int, kind: StringName, amount: int) -> void:
+	if kind == RECOVERY_ORB_MP:
+		restore_mp(index, amount)
+	else:
+		heal_party_member(index, amount)
+
+
+# ─── Experience / Levels ──────────────────────────────────────────────
+## Central XP / level pool. Every member shares the same counter so
+## recruits never trail behind, and one level-up tick refreshes stats /
+## HP / MP / SP for the entire party in one pass.
+func add_party_xp(amount: int) -> void:
+	if amount <= 0 or party.is_empty():
+		return
+	if current_level >= MAX_CHARACTER_LEVEL:
+		if current_xp != 0:
+			current_xp = 0
+			_emit_party_xp_changed()
+		return
+	var level_before: int = current_level
+	current_xp += amount
+	while current_level < MAX_CHARACTER_LEVEL and current_xp >= _xp_required_for_level(current_level):
+		current_xp -= _xp_required_for_level(current_level)
+		current_level += 1
+	if current_level >= MAX_CHARACTER_LEVEL:
+		current_xp = 0
+	var levels_gained: int = current_level - level_before
+	if levels_gained > 0:
+		_apply_shared_level_gains(levels_gained)
+		party_skill_points += levels_gained
+		EventBus.party_skill_points_changed.emit(party_skill_points)
+		EventBus.party_hp_changed.emit()
+	_emit_party_xp_changed()
+
+
+## Indexed accessors — every party member reports the same shared numbers,
+## but the index-taking signature stays so HUD / boxes / tooltips don't
+## need to change. The argument is ignored.
+func party_level(_index: int = 0) -> int:
+	return current_level
+
+
+func party_xp_to_next(_index: int = 0) -> int:
+	if current_level >= MAX_CHARACTER_LEVEL:
+		return 1
+	return _xp_required_for_level(current_level)
+
+
+func party_xp_ratio(_index: int = 0) -> float:
+	if current_level >= MAX_CHARACTER_LEVEL:
+		return 1.0
+	var to_next: int = _xp_required_for_level(current_level)
+	if to_next <= 0:
+		return 0.0
+	return clampf(float(current_xp) / float(to_next), 0.0, 1.0)
+
+
+## Bumps every member's HP/MP cap by their per-level growth × levels_gained,
+## tops them off (if alive) by the gain, and emits all the per-member
+## signals the HUD listens to.
+func _apply_shared_level_gains(levels_gained: int) -> void:
+	if levels_gained <= 0:
 		return
 	for i in party.size():
-		_add_xp_to_member(i, amount)
+		if i >= party_hp.size() or i >= party_mp.size():
+			continue
+		var character_id: StringName = party[i].id
+		var hp_gain: int = _level_growth_value(character_id, "hp") * levels_gained
+		var mp_gain: int = _level_growth_value(character_id, "mp") * levels_gained
+		var new_max_hp: int = effective_max_hp(i)
+		var new_max_mp: int = effective_max_mp(i)
+		if is_alive(i):
+			party_hp[i] = mini(new_max_hp, party_hp[i] + maxi(0, hp_gain))
+			party_mp[i] = mini(new_max_mp, party_mp[i] + maxi(0, mp_gain))
+		EventBus.party_member_hp_changed.emit(i, party_hp[i], new_max_hp)
+		EventBus.party_member_mp_changed.emit(i, party_mp[i], new_max_mp)
+		EventBus.party_member_leveled_up.emit(i, current_level)
 
 
-func party_level(index: int) -> int:
-	if index < 0 or index >= party_levels.size():
-		return 1
-	return party_levels[index]
+# ─── Skill tree ───────────────────────────────────────────────────────
+## Spend one shared SP to unlock (or level up) a tree node. The pick goes
+## into active_modifiers exactly like a level-up card pick so existing
+## battle-effect code keeps working untouched.
+func unlock_skill(mod: ModifierData) -> bool:
+	if mod == null:
+		return false
+	if party_skill_points <= 0:
+		return false
+	if not can_add_modifier(mod):
+		return false
+	party_skill_points -= 1
+	unlocked_tree_skills.append(mod.id)
+	add_modifier(mod)
+	EventBus.party_skill_points_changed.emit(party_skill_points)
+	EventBus.party_skills_changed.emit()
+	return true
 
 
-func party_xp_to_next(index: int) -> int:
-	return _xp_required_for_level(party_level(index))
-
-
-func party_xp_ratio(index: int) -> float:
-	if index < 0 or index >= party_xp.size():
-		return 0.0
-	if party_level(index) >= MAX_CHARACTER_LEVEL:
-		return 1.0
-	return clampf(float(party_xp[index]) / float(party_xp_to_next(index)), 0.0, 1.0)
-
-
-func _add_xp_to_member(index: int, amount: int) -> void:
-	if index < 0 or index >= party.size():
+## Refund every tree node the party has spent SP on, removing the matching
+## modifiers from active_modifiers so stats / abilities revert immediately.
+func reset_skills() -> void:
+	var refund: int = unlocked_tree_skills.size()
+	if refund <= 0:
 		return
-	if index >= party_levels.size() or index >= party_xp.size():
-		return
-	if party_levels[index] >= MAX_CHARACTER_LEVEL:
-		party_xp[index] = 0
-		_emit_member_xp_changed(index)
-		return
-	party_xp[index] += amount
-	var leveled: bool = false
-	var was_alive: bool = is_alive(index)
-	while party_levels[index] < MAX_CHARACTER_LEVEL and party_xp[index] >= _xp_required_for_level(party_levels[index]):
-		party_xp[index] -= _xp_required_for_level(party_levels[index])
-		_level_up_member(index, was_alive)
-		leveled = true
-	if party_levels[index] >= MAX_CHARACTER_LEVEL:
-		party_xp[index] = 0
-	_emit_member_xp_changed(index)
-	if leveled:
-		EventBus.party_hp_changed.emit()
+	var skill_ids: Dictionary = {}
+	for id: StringName in unlocked_tree_skills:
+		skill_ids[id] = true
+	var kept: Array[ModifierData] = []
+	for mod: ModifierData in active_modifiers:
+		if skill_ids.has(mod.id):
+			continue
+		kept.append(mod)
+	active_modifiers = kept
+	unlocked_tree_skills.clear()
+	party_skill_points += refund
+	EventBus.party_skill_points_changed.emit(party_skill_points)
+	EventBus.party_skills_changed.emit()
+	EventBus.party_hp_changed.emit()
 
 
-func _level_up_member(index: int, heal_if_alive: bool) -> void:
-	var old_max_hp: int = effective_max_hp(index)
-	party_levels[index] += 1
-	var new_max_hp: int = effective_max_hp(index)
-	if heal_if_alive and index < party_hp.size():
-		party_hp[index] = min(new_max_hp, party_hp[index] + maxi(0, new_max_hp - old_max_hp))
-	EventBus.party_member_leveled_up.emit(index, party_levels[index])
-	EventBus.party_member_hp_changed.emit(index, party_hp[index], new_max_hp)
+func skill_points() -> int:
+	return party_skill_points
 
 
-func _emit_member_xp_changed(index: int) -> void:
-	EventBus.party_member_xp_changed.emit(index, party_xp[index], party_xp_to_next(index), party_levels[index])
+func _emit_party_xp_changed() -> void:
+	var to_next: int = _xp_required_for_level(current_level) if current_level < MAX_CHARACTER_LEVEL else 1
+	for i in party.size():
+		EventBus.party_member_xp_changed.emit(i, current_xp, to_next, current_level)
 
 
 func _xp_required_for_level(level: int) -> int:
@@ -236,10 +463,9 @@ func _xp_required_for_level(level: int) -> int:
 func _level_bonus(index: int, key: String) -> int:
 	if index < 0 or index >= party.size():
 		return 0
-	var level: int = party_level(index)
-	if level <= 1:
+	if current_level <= 1:
 		return 0
-	return _level_growth_value(party[index].id, key) * (level - 1)
+	return _level_growth_value(party[index].id, key) * (current_level - 1)
 
 
 func _level_growth_value(character_id: StringName, key: String) -> int:
@@ -307,6 +533,8 @@ func can_add_modifier(mod: ModifierData) -> bool:
 		return false
 	if mod.required_party_member_id != &"" and not has_party_member(mod.required_party_member_id):
 		return false
+	if mod.required_modifier_id != &"" and modifier_level(mod.required_modifier_id) < 1:
+		return false
 	if mod.category == ModifierData.Category.COMPANION:
 		if _available_recruits(mod).is_empty():
 			return false
@@ -340,14 +568,53 @@ func add_modifier(mod: ModifierData) -> void:
 	# Hearty-style: an HP bonus also heals up so the boost is felt immediately.
 	# Per-hero HP cards only heal their owner; party-wide cards heal everyone.
 	var hp_bonus: int = _int_effect_value_for_stack(mod, "hp_flat", modifier_level(mod.id) - 1)
-	if hp_bonus > 0:
+	if hp_bonus != 0:
 		var owner_id: StringName = mod.required_party_member_id
 		for i in party.size():
 			if owner_id != &"" and party[i].id != owner_id:
 				continue
-			party_hp[i] = min(party_hp[i] + hp_bonus, effective_max_hp(i))
-			EventBus.party_member_hp_changed.emit(i, party_hp[i], effective_max_hp(i))
+			var new_max_hp: int = effective_max_hp(i)
+			if hp_bonus > 0:
+				# Hearty-style heal: max HP gain also restores that much.
+				party_hp[i] = min(party_hp[i] + hp_bonus, new_max_hp)
+			else:
+				# Risk-reward cards (Glass Cannon, etc): keep at least 1 HP and
+				# clamp current HP to the new max so the cap shrinks honestly.
+				new_max_hp = maxi(1, new_max_hp)
+				party_hp[i] = clampi(party_hp[i], 1, new_max_hp)
+			EventBus.party_member_hp_changed.emit(i, party_hp[i], new_max_hp)
 		EventBus.party_hp_changed.emit()
+	var mp_bonus: int = _int_effect_value_for_stack(mod, "mp_flat", modifier_level(mod.id) - 1)
+	if mp_bonus != 0:
+		var mp_owner_id: StringName = mod.required_party_member_id
+		for i in party.size():
+			if mp_owner_id != &"" and party[i].id != mp_owner_id:
+				continue
+			var new_max_mp: int = effective_max_mp(i)
+			if mp_bonus > 0:
+				party_mp[i] = min(party_mp[i] + mp_bonus, new_max_mp)
+			else:
+				new_max_mp = maxi(0, new_max_mp)
+				party_mp[i] = clampi(party_mp[i], 0, new_max_mp)
+			EventBus.party_member_mp_changed.emit(i, party_mp[i], new_max_mp)
+
+
+## Direct character recruit — used by field events (campfire etc.) where
+## there's no recruit modifier card to feed through _recruit_companion.
+## Returns true if the character was added; false if they're already in
+## the party (no duplicates).
+func add_recruit(character: CharacterData) -> bool:
+	if character == null:
+		return false
+	for existing: CharacterData in party:
+		if existing != null and existing.id == character.id:
+			return false
+	party.append(character)
+	party_equipment.append(_empty_equipment_slots())
+	party_hp.append(effective_max_hp(party.size() - 1))
+	party_mp.append(effective_max_mp(party.size() - 1))
+	EventBus.party_changed.emit()
+	return true
 
 
 ## Add the companion to the party. Caller must verify with can_add_modifier()
@@ -364,23 +631,15 @@ func _recruit_companion(mod: ModifierData) -> void:
 	var recruited: CharacterData = recruits.pick_random()
 	party.append(recruited)
 	var idx: int = party.size() - 1
-	party_levels.append(1)
-	party_xp.append(0)
+	# No per-member level/xp arrays anymore — recruits inherit the shared
+	# current_level automatically. HP / MP start at the level-scaled max so
+	# they're battle-ready instead of dragging around a Lv 1 statblock.
 	party_equipment.append(_empty_equipment_slots())
 	party_hp.append(effective_max_hp(idx))
-	party_mp.append(recruited.max_mp)
+	party_mp.append(effective_max_mp(idx))
 	recruited_companions.append(mod)
-	_grant_starter_skill(recruited)
 	EventBus.modifier_picked.emit(mod)
 	EventBus.party_changed.emit()
-
-
-func _grant_starter_skill(character: CharacterData) -> void:
-	var starter := STARTER_SKILL_BY_CHARACTER_ID.get(character.id, null) as ModifierData
-	if starter == null or modifier_level(starter.id) > 0:
-		return
-	active_modifiers.append(starter)
-	EventBus.modifier_picked.emit(starter)
 
 
 func _available_recruits(mod: ModifierData) -> Array[CharacterData]:
@@ -466,6 +725,27 @@ func scaled_enemy_xp_reward(data: EnemyData) -> int:
 	return maxi(1, data.xp_reward + stage_bonus)
 
 
+func roll_battle_window_enemy_count() -> int:
+	if current_stage <= 1:
+		return _weighted_enemy_count(STAGE_ONE_ENEMY_COUNT_WEIGHTS)
+	return randi_range(1, BATTLE_WINDOW_MAX_ENEMIES)
+
+
+func _weighted_enemy_count(weights: Array[int]) -> int:
+	var total_weight: int = 0
+	for weight: int in weights:
+		total_weight += maxi(0, weight)
+	if total_weight <= 0:
+		return 1
+	var roll: int = randi_range(1, total_weight)
+	var running: int = 0
+	for i in weights.size():
+		running += maxi(0, weights[i])
+		if roll <= running:
+			return i + 1
+	return weights.size()
+
+
 # ─── Equipment ────────────────────────────────────────────────────────
 func collect_item(item: ItemData) -> bool:
 	if item == null:
@@ -494,7 +774,9 @@ func equip_item(item: ItemData) -> bool:
 		return false
 	party_equipment[target_index][slot_index] = item
 	party_hp[target_index] = mini(party_hp[target_index], effective_max_hp(target_index))
+	party_mp[target_index] = mini(party_mp[target_index], effective_max_mp(target_index))
 	EventBus.party_member_hp_changed.emit(target_index, party_hp[target_index], effective_max_hp(target_index))
+	EventBus.party_member_mp_changed.emit(target_index, party_mp[target_index], effective_max_mp(target_index))
 	EventBus.party_equipment_changed.emit(target_index)
 	return true
 
@@ -545,8 +827,11 @@ func _empty_equipment_slots() -> Array:
 	return slots
 
 
+## Stage index now blends the (mostly-static) current_stage with the
+## time-based difficulty tier so the field gets harder even without
+## advancing stages.
 func _enemy_stage_index() -> int:
-	return maxi(0, current_stage - 1)
+	return maxi(0, current_stage - 1) + current_difficulty_tier()
 
 
 func _enemy_hp_multiplier(data: EnemyData) -> float:
@@ -603,10 +888,14 @@ func _multipliers_for_float_key(key: String) -> Array:
 
 func _int_effect_value_for_stack(mod: ModifierData, key: String, stack_index: int) -> int:
 	var base: int = int(mod.effect_data.get(key, 0))
-	if base <= 0:
+	if base == 0:
 		return 0
 	var scaled: int = int(round(float(base) * _effect_multiplier_for_stack(stack_index, EFFECT_STACK_MULTIPLIERS)))
-	return maxi(1, scaled)
+	# Preserve sign and guarantee non-zero magnitude so risk-reward cards
+	# (Glass Cannon: hp_flat=-10) still apply even after stacking decay.
+	if base > 0:
+		return maxi(1, scaled)
+	return mini(-1, scaled)
 
 
 func _float_effect_value_for_stack(mod: ModifierData, key: String, stack_index: int, multipliers: Array) -> float:
@@ -752,8 +1041,60 @@ func mage_splash_damage_multiplier() -> float:
 	return mult
 
 
+func mage_firewall_damage(index: int) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	return _stacked_int_effect_for_character(party[index].id, "mage_firewall_damage_flat")
+
+
+func mage_firewall_unlocked(index: int) -> bool:
+	if index < 0 or index >= party.size():
+		return false
+	return _stacked_int_effect_for_character(party[index].id, "mage_firewall_damage_flat") > 0
+
+
 func priest_heal_amount() -> int:
 	return _stacked_int_effect("priest_heal_flat")
+
+
+# ─── Skill amounts driven by tree picks ───────────────────────────────
+## Hero's Hoimi: small targeted heal. Hero-tagged so only the hero's own
+## modifier stack contributes, even if another member somehow ends up with
+## the same effect key.
+func hero_hoimi_amount(index: int) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	return _stacked_int_effect_for_character(party[index].id, "hero_heal_flat")
+
+
+## Mage's Lightning Bolt: single-target damage + a chained spark.
+func mage_lightning_damage(index: int) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	return _stacked_int_effect_for_character(party[index].id, "lightning_damage_flat")
+
+
+func mage_lightning_chain_chance(index: int) -> float:
+	if index < 0 or index >= party.size():
+		return 0.0
+	return clampf(
+		_stacked_float_effect_for_character(party[index].id, "lightning_chain_chance", DAMAGE_BONUS_STACK_MULTIPLIERS),
+		0.0,
+		1.0,
+	)
+
+
+## Priest's Holy Strike: chip damage that also tops the priest up.
+func priest_holy_damage(index: int) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	return _stacked_int_effect_for_character(party[index].id, "priest_holy_damage_flat")
+
+
+func priest_holy_self_heal(index: int) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	return _stacked_int_effect_for_character(party[index].id, "priest_holy_self_heal_flat")
 
 
 func priest_attack_multiplier() -> float:
@@ -781,6 +1122,13 @@ func effective_max_hp(index: int) -> int:
 		return 0
 	var character_id: StringName = party[index].id
 	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat")
+
+
+func effective_max_mp(index: int) -> int:
+	if index < 0 or index >= party.size():
+		return 0
+	var character_id: StringName = party[index].id
+	return party[index].max_mp + _level_bonus(index, "mp") + _equipment_bonus(index, "max_mp_bonus") + _stacked_int_effect_for_character(character_id, "mp_flat")
 
 
 func _equipment_bonus(index: int, property_name: StringName) -> int:
@@ -864,8 +1212,8 @@ func reset_run() -> void:
 	party.clear()
 	party_hp.clear()
 	party_mp.clear()
-	party_levels.clear()
-	party_xp.clear()
+	current_level = 1
+	current_xp = 0
 	party_equipment.clear()
 	inventory.clear()
 	gold = STARTING_GOLD
@@ -874,6 +1222,8 @@ func reset_run() -> void:
 	biggest_hit = 0
 	active_modifiers.clear()
 	recruited_companions.clear()
+	party_skill_points = 0
+	unlocked_tree_skills.clear()
 	_move_speed_drag_multiplier = 1.0
 	_move_speed_drag_until_msec = 0
 	_move_speed_boost_multiplier = 1.0

@@ -5,13 +5,15 @@
 [resource]
 script = ExtResource("1_script")
 id = &"fireburst"
-display_name = "Fireburst"
-description = "Mage attacks 1 extra enemy at reduced damage. Stacks +1 target."
+display_name = "파이어월"
+description = "MP 6 소모. 모든 적을 공격한다. 첫 레벨은 슬라임을 잡을 만큼의 데미지."
 cost = 20
+max_level = 3
 rarity = 1
 category = 1
 required_party_member_id = &"mage"
+required_modifier_id = &"fireball"
+level_up_only = true
 effect_data = {
-"mage_splash_extra_targets": 1,
-"mage_splash_damage_mult": 0.65
+"mage_firewall_damage_flat": 14
 }

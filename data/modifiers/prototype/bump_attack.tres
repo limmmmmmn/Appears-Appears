@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"bump_attack"
-display_name = "Bump Attack"
-description = "Damage enemies when the party bumps into a battle window."
+display_name = "범프 공격"
+description = "파티가 전투 창문에 부딪힐 때 안의 적에게 데미지를 준다."
 cost = 20
 max_level = 1
 rarity = 1

@@ -41,7 +41,12 @@ func refresh() -> void:
 	var data: CharacterData = GameState.party[member_index]
 	member_id = data.id
 	_name_label.text = data.display_name
-	_hp_label.text = "HP %d/%d" % [GameState.party_hp[member_index], GameState.effective_max_hp(member_index)]
+	_hp_label.text = "HP %d/%d  MP %d/%d" % [
+		GameState.party_hp[member_index],
+		GameState.effective_max_hp(member_index),
+		GameState.party_mp[member_index],
+		GameState.effective_max_mp(member_index),
+	]
 	_atk_label.text = "ATK %d" % GameState.effective_attack(member_index)
 	_portrait.texture = _build_portrait_texture(data)
 	_rebuild_upgrade_labels()
@@ -142,7 +147,7 @@ func _add_upgrade_label(text: String, color: Color) -> void:
 
 
 func _color_for_modifier(mod: ModifierData) -> Color:
-	if mod.required_party_member_id == &"mage" or mod.effect_data.has("mage_splash_extra_targets"):
+	if mod.required_party_member_id == &"mage" or mod.effect_data.has("mage_splash_extra_targets") or mod.effect_data.has("mage_firewall_damage_flat"):
 		return MAGIC_COLOR
 	if mod.effect_data.has("hp_flat") or mod.effect_data.has("priest_heal_flat") or mod.effect_data.has("window_collision_heal_flat"):
 		return SUPPORT_COLOR

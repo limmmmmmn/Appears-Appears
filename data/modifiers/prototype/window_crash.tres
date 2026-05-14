@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"window_crash"
-display_name = "Window Crash"
-description = "Battle windows collide with each other, damaging the enemies inside."
+display_name = "창문 충돌"
+description = "전투 창문끼리 충돌해 안의 적에게 데미지를 준다."
 cost = 20
 max_level = 1
 rarity = 1

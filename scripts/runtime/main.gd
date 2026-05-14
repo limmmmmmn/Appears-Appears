@@ -6,6 +6,8 @@ extends Node2D
 
 const TOWN_SCENE: PackedScene = preload("res://scenes/town2.tscn")
 const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
+const HOME_BASE_SCENE: PackedScene = preload("res://scenes/home_base.tscn")
+const EVENT_WINDOW_SCENE: PackedScene = preload("res://scenes/event_window.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
 ## The run starts with the leader alone. Companions are recruited via
@@ -21,6 +23,7 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 
 var _town: Town2
 var _game_over: GameOver
+var _home_base: HomeBase
 var _is_manually_paused: bool = false
 
 
@@ -36,7 +39,7 @@ func _ready() -> void:
 	EventBus.party_wiped.connect(_on_party_wiped)
 	EventBus.stage_cleared.connect(_on_stage_cleared)
 	EventBus.town_entered.connect(_on_town_entered)
-	EventBus.wave_cleanup_started.connect(_on_wave_cleanup_started)
+	EventBus.event_tile_triggered.connect(_on_event_tile_triggered)
 	# Kick off the first stage. Field listens to stage_started and spawns enemies.
 	GameState.advance_stage()
 
@@ -58,22 +61,90 @@ func _on_stage_cleared(stage_num: int) -> void:
 	_show_town("Field %d Cleared" % stage_num)
 
 
-func _on_wave_cleanup_started() -> void:
-	print("[main] wave cleanup started — closing battles with no rewards")
-	_battle_manager.abort_all_battles()
-
-
 func _on_town_entered(_tile: Node) -> void:
 	print("[main] town tile entered — aborting active battles with no rewards")
 	_battle_manager.abort_all_battles()
 	_show_town("Town")
 
 
+# ─── Field events ─────────────────────────────────────────────────────
+## Campfire (and future event tiles) walk-into trigger. Pauses the field,
+## pops a non-combat event window with the matching dialogue, and on
+## completion applies the recruit + frees the tile so it can't re-fire.
+func _on_event_tile_triggered(tile: Node) -> void:
+	var ev_id: StringName = &""
+	if tile != null and tile.has_method("event_id"):
+		ev_id = tile.event_id()
+	var dialogue: Array = _dialogue_for_event(ev_id)
+	var recruit: CharacterData = _recruit_for_event(ev_id)
+	var tile_tex: Texture2D = _tile_texture_for_event(ev_id)
+	if dialogue.is_empty():
+		return
+	_battle_manager.abort_all_battles()
+	var layer := CanvasLayer.new()
+	layer.layer = 10
+	add_child(layer)
+	var window: EventWindow = EVENT_WINDOW_SCENE.instantiate()
+	# IMPORTANT: setup must run before add_child. Once we add the window,
+	# its _ready fires immediately and reads recruit_data — if we set it
+	# afterwards the mage visual never gets built.
+	window.setup(ev_id, dialogue, recruit, tile_tex)
+	layer.add_child(window)
+	get_tree().paused = true
+	window.event_completed.connect(_on_event_completed.bind(tile, recruit, layer))
+
+
+func _dialogue_for_event(ev_id: StringName) -> Array:
+	if ev_id == FieldCampfire.EVENT_ID:
+		return [
+			{"speaker": "마법사", "line": "난 불이 좋아"},
+			{"speaker": "용사", "line": "더 태워볼래?"},
+			{"speaker": "마법사", "line": "좋아 함께 가자"},
+		]
+	if ev_id == FieldShrine.EVENT_ID:
+		return [
+			{"speaker": "사제", "line": "상처를 입은 어린양이 여기 있군"},
+			{"speaker": "용사", "line": "그게 바로 나야."},
+		]
+	return []
+
+
+func _recruit_for_event(ev_id: StringName) -> CharacterData:
+	if ev_id == FieldCampfire.EVENT_ID:
+		var path: String = "res://data/characters/mage.tres"
+		if ResourceLoader.exists(path):
+			return load(path) as CharacterData
+	if ev_id == FieldShrine.EVENT_ID:
+		var path: String = "res://data/characters/priest.tres"
+		if ResourceLoader.exists(path):
+			return load(path) as CharacterData
+	return null
+
+
+## Picks the centerpiece sprite for the event window. New event tiles add
+## a branch here so the right texture follows them into the popup.
+func _tile_texture_for_event(ev_id: StringName) -> Texture2D:
+	if ev_id == FieldCampfire.EVENT_ID:
+		return load("res://assets/sprites/objects/bonfire.png") as Texture2D
+	if ev_id == FieldShrine.EVENT_ID:
+		return load("res://assets/sprites/objects/shrine.png") as Texture2D
+	return null
+
+
+func _on_event_completed(_ev_id: StringName, tile: Node, recruit: CharacterData, layer: CanvasLayer) -> void:
+	if recruit != null:
+		GameState.add_recruit(recruit)
+	if tile != null and is_instance_valid(tile) and tile.has_method("consume"):
+		tile.consume()
+	if is_instance_valid(layer):
+		layer.queue_free()
+	get_tree().paused = false
+
+
 func _show_town(title: String = "") -> void:
 	if _town and is_instance_valid(_town):
 		return
 	_set_manual_pause(false)
-	_hud.set_level_up_ui_enabled(false)
 	_town = TOWN_SCENE.instantiate()
 	_town.setup(title)
 	_town.closed.connect(_on_town_closed)
@@ -86,14 +157,15 @@ func _on_town_closed() -> void:
 	_town = null
 	get_tree().paused = false
 	_set_run_layers_visible(true)
-	_hud.set_level_up_ui_enabled(true)
-	GameState.advance_stage()
+	# No stage advance — the player keeps their position, enemies stay,
+	# and the field consumes the used town tile + schedules the next one.
+	EventBus.town_closed.emit()
 
 
-func _set_run_layers_visible(is_visible: bool) -> void:
-	_field.visible = is_visible
-	_battle_manager.visible = is_visible
-	_hud.visible = is_visible
+func _set_run_layers_visible(should_show: bool) -> void:
+	_field.visible = should_show
+	_battle_manager.visible = should_show
+	_hud.visible = should_show
 
 
 func _set_run_layers_process_mode(mode: ProcessMode) -> void:
@@ -109,31 +181,33 @@ func _on_party_wiped() -> void:
 		GameState.recruited_companions.size(),
 		GameState.party_size(),
 	])
-	_show_game_over()
+	_show_home_base()
 
 
-# ─── Game over ────────────────────────────────────────────────────────
-func _show_game_over() -> void:
-	if _game_over and is_instance_valid(_game_over):
+# ─── Home base (post-wipe Suikoden hub) ───────────────────────────────
+func _show_home_base() -> void:
+	if _home_base and is_instance_valid(_home_base):
 		return
 	_set_manual_pause(false)
 	# Close town if it happens to be up (defensive — shouldn't be).
 	if _town and is_instance_valid(_town):
 		_town.queue_free()
 		_town = null
-		get_tree().paused = false
-		_set_run_layers_visible(true)
-		_hud.set_level_up_ui_enabled(true)
-	_game_over = GAME_OVER_SCENE.instantiate()
-	_game_over.try_again_pressed.connect(_on_try_again_pressed)
-	add_child(_game_over)
+	# Hide the run layers so only the base shows. We keep the party intact
+	# here so the base can render its current roster; reset happens on deploy.
+	_set_run_layers_visible(false)
+	get_tree().paused = false
+	_home_base = HOME_BASE_SCENE.instantiate()
+	_home_base.deploy_pressed.connect(_on_deploy_pressed)
+	add_child(_home_base)
 
 
-func _on_try_again_pressed() -> void:
+func _on_deploy_pressed() -> void:
 	_set_manual_pause(false)
-	if _game_over and is_instance_valid(_game_over):
-		_game_over.queue_free()
-	_game_over = null
+	if _home_base and is_instance_valid(_home_base):
+		_home_base.queue_free()
+	_home_base = null
+	_set_run_layers_visible(true)
 	GameState.reset_run()
 	_setup_default_party()
 	# Field listens for stage_started to clear/respawn enemies + recenter the
@@ -149,7 +223,13 @@ func _set_manual_pause(is_paused: bool) -> void:
 
 
 func _can_toggle_manual_pause() -> bool:
-	return not (_town and is_instance_valid(_town)) and not (_game_over and is_instance_valid(_game_over))
+	if _town and is_instance_valid(_town):
+		return false
+	if _game_over and is_instance_valid(_game_over):
+		return false
+	if _home_base and is_instance_valid(_home_base):
+		return false
+	return true
 
 
 ## F1 = instant stage clear (skip combat to test town)

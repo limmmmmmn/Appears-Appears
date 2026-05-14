@@ -9,6 +9,9 @@ const FIELD_ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/field_enemy
 const FIELD_DECORATION_SCENE: PackedScene = preload("res://scenes/decorations/field_decoration.tscn")
 const FIELD_TREASURE_CHEST_SCENE: PackedScene = preload("res://scenes/objects/field_treasure_chest.tscn")
 const FIELD_ITEM_DROP_SCENE: PackedScene = preload("res://scenes/objects/field_item_drop.tscn")
+const FIELD_RECOVERY_ORB_SCENE: PackedScene = preload("res://scenes/objects/field_recovery_orb.tscn")
+const FIELD_CAMPFIRE_SCENE: PackedScene = preload("res://scenes/objects/field_campfire.tscn")
+const FIELD_SHRINE_SCENE: PackedScene = preload("res://scenes/objects/field_shrine.tscn")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const COMPANION_SCENE: PackedScene = preload("res://scenes/companion.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
@@ -50,11 +53,6 @@ const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 @export var treasure_kills_required_stage_step: int = 1
 @export var treasure_gold_base: int = 45
 @export var treasure_gold_per_stage: int = 15
-@export var stage_one_town_time: float = 20.0
-@export var stage_ten_town_time: float = 60.0
-@export var max_town_time: float = 90.0
-@export var cleanup_time: float = 5.0
-@export var cleanup_move_speed_multiplier: float = 1.8
 
 @onready var _background: ColorRect = $Background
 @onready var _decorations_root: Node2D = $Decorations
@@ -73,12 +71,7 @@ var _field_size: Vector2 = FIELD_SIZE
 var _town_revealed: bool = false
 var _treasure_kills: int = 0
 var _treasure_spawned: bool = false
-var _stage_elapsed: float = 0.0
-var _stage_town_time: float = 20.0
 var _stage_complete: bool = false
-var _cleanup_elapsed: float = 0.0
-var _cleanup_active: bool = false
-var _last_countdown_seconds: int = -1
 
 
 func _ready() -> void:
@@ -87,15 +80,94 @@ func _ready() -> void:
 	EventBus.stage_started.connect(_on_stage_started)
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
 	EventBus.field_item_drop_requested.connect(_on_field_item_drop_requested)
+	EventBus.field_recovery_orb_requested.connect(_on_field_recovery_orb_requested)
+	# Surface the town tile to a group so HUD-side widgets (compass arrow,
+	# distance readout) can find it without poking through the scene tree.
+	if is_instance_valid(_town_tile):
+		_town_tile.add_to_group("town_tile")
+	# HUD reads `town_respawn_seconds_left()` off this group for its
+	# countdown label.
+	add_to_group("field_root")
+	# Town respawn cycle — once the party leaves a town, the tile vanishes
+	# and a new one fades in elsewhere 30s later.
+	EventBus.town_closed.connect(_on_town_closed)
+	_build_town_respawn_timer()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
+
+
+## Town respawn: when the party walks out of town, hide the current tile
+## and start a one-shot timer. When it fires, the tile pops back in at a
+## random corner that's far from the party's current position.
+const TOWN_RESPAWN_DELAY: float = 30.0
+## First-ever town spawn at the start of a run is faster so the player
+## sees the destination/mechanic quickly.
+const FIRST_TOWN_DELAY: float = 10.0
+const TOWN_RESPAWN_MIN_DISTANCE: float = 220.0
+var _town_respawn_timer: Timer
+
+
+func _build_town_respawn_timer() -> void:
+	_town_respawn_timer = Timer.new()
+	_town_respawn_timer.one_shot = true
+	_town_respawn_timer.wait_time = TOWN_RESPAWN_DELAY
+	_town_respawn_timer.timeout.connect(_spawn_town_tile_elsewhere)
+	add_child(_town_respawn_timer)
+
+
+func _on_town_closed() -> void:
+	if not is_instance_valid(_town_tile):
+		return
+	# Consume the used tile: hide + clear its trigger flag so the next
+	# reveal is fresh. The player ends up standing where the tile was.
+	_town_revealed = false
+	_town_tile.reset()
+	_town_respawn_timer.start(TOWN_RESPAWN_DELAY)
+
+
+## Seconds until the next town tile reveals. Used by the HUD countdown.
+## Returns 0 when the timer isn't running (town is currently on the map).
+func town_respawn_seconds_left() -> float:
+	if not is_instance_valid(_town_respawn_timer):
+		return 0.0
+	if _town_respawn_timer.is_stopped():
+		return 0.0
+	return _town_respawn_timer.time_left
+
+
+## Picks the corner farthest from the party (with a minimum-distance
+## guard) so the player has to actually travel to the next town instead
+## of bumping into it immediately.
+func _spawn_town_tile_elsewhere() -> void:
+	if not is_instance_valid(_town_tile):
+		return
+	var anchor: Vector2 = _player.global_position if is_instance_valid(_player) else _field_size * 0.5
+	var candidates: Array[Vector2] = [
+		TOWN_TILE_INSET,
+		Vector2(_field_size.x - TOWN_TILE_INSET.x, TOWN_TILE_INSET.y),
+		Vector2(TOWN_TILE_INSET.x, _field_size.y - TOWN_TILE_INSET.y),
+		_field_size - TOWN_TILE_INSET,
+	]
+	candidates.shuffle()
+	var picked: Vector2 = candidates[0]
+	var best_distance: float = picked.distance_to(anchor)
+	for candidate in candidates:
+		var d: float = candidate.distance_to(anchor)
+		if d >= TOWN_RESPAWN_MIN_DISTANCE:
+			picked = candidate
+			break
+		if d > best_distance:
+			picked = candidate
+			best_distance = d
+	_town_revealed = true
+	_town_tile.position = picked
+	_town_tile.reveal_with_impact()
 
 
 func _process(delta: float) -> void:
 	if GameState.current_stage <= 0 or GameState.is_party_wiped():
 		return
-	_update_wave_timer(delta)
-	if _stage_complete or _cleanup_active:
+	if _stage_complete:
 		return
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
@@ -108,8 +180,18 @@ func _process(delta: float) -> void:
 # ─── Party visuals (data-driven) ──────────────────────────────────────
 ## Rebuilds the visible party from GameState.party. Slot 0 = player avatar,
 ## slots 1..N = companions trailing each previous member like a JRPG snake.
+## Mid-run recruits preserve everyone's current world position so the hero
+## doesn't teleport back to spawn — the new companion just falls in at the
+## tail of the trail.
 func _setup_party_visuals() -> void:
+	# Snapshot existing world positions so a recruit doesn't yank everyone
+	# back to the field center. Index 0 = player, then companions in order.
+	var cached_positions: Array[Vector2] = []
+	if _player and is_instance_valid(_player):
+		cached_positions.append(_player.position)
 	for child in _party_root.get_children():
+		if child is Companion:
+			cached_positions.append((child as Node2D).position)
 		child.queue_free()
 	_player = null
 	if GameState.party_size() == 0:
@@ -118,16 +200,24 @@ func _setup_party_visuals() -> void:
 	_player.setup(GameState.party[0])
 	if _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
-	_player.position = _field_size * 0.5
+	# Restore the hero where they were standing; fresh runs start at center.
+	if cached_positions.size() > 0:
+		_player.position = cached_positions[0]
+	else:
+		_player.position = _field_size * 0.5
 	_party_root.add_child(_player)
 	var leader: Node2D = _player
 	for i in range(1, GameState.party_size()):
 		var comp: Companion = COMPANION_SCENE.instantiate()
 		comp.setup(GameState.party[i])
 		comp.leader = leader
-		# All stack on the player exactly — z_index on the player keeps the
-		# leader visible until the column starts trailing on first move.
-		comp.position = _player.position
+		if i < cached_positions.size():
+			# Existing companion — keep them right where they were.
+			comp.position = cached_positions[i]
+		else:
+			# Brand-new recruit — drop them on the current tail so they
+			# naturally trail behind the player on the very next step.
+			comp.position = leader.position
 		_party_root.add_child(comp)
 		leader = comp
 
@@ -136,26 +226,39 @@ func _setup_party_visuals() -> void:
 func _on_stage_started(_stage_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_stage_field_size(_stage_num)
-	_town_revealed = false
 	_treasure_kills = 0
 	_treasure_spawned = false
-	_stage_elapsed = 0.0
-	_stage_town_time = _town_time_for_stage(_stage_num)
 	_stage_complete = false
-	_cleanup_elapsed = 0.0
-	_cleanup_active = false
-	_last_countdown_seconds = -1
-	_emit_wave_timer_changed()
 	_clear_field_enemies()
 	_clear_decorations()
 	_clear_treasures()
 	_clear_items()
 	_crowd_pressure = entry_burst_bonus
+	_town_revealed = false
 	_town_tile.reset()
 	_recenter_party()
 	_scatter_decorations()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
+	# Player sees the town pop in 10 seconds in, instead of from frame one.
+	_town_respawn_timer.start(FIRST_TOWN_DELAY)
+	# Recruit event tiles — campfire (마법사) + shrine (사제), one of each
+	# per run, placed at random safe spots.
+	_spawn_event_tile(FIELD_CAMPFIRE_SCENE)
+	_spawn_event_tile(FIELD_SHRINE_SCENE)
+
+
+## Picks a sensible spawn slot for an event tile (campfire, shrine, …) —
+## somewhere on the map that isn't right next to the player or buried
+## inside town/decoration guard zones. Single-shot per run.
+func _spawn_event_tile(scene: PackedScene) -> void:
+	if scene == null:
+		return
+	var party_anchor: Vector2 = _player.global_position if is_instance_valid(_player) else _field_size * 0.5
+	var spawn_pos: Vector2 = _random_safe_position(party_anchor)
+	var tile := scene.instantiate()
+	tile.position = spawn_pos
+	_decorations_root.add_child(tile)
 
 
 ## Teleport the whole party back to the field center for a fresh start.
@@ -353,7 +456,7 @@ func _refill_enemy_population(max_to_spawn: int) -> void:
 	var missing_count: int = desired_count - _enemies_root.get_child_count()
 	var spawn_count: int = mini(max_to_spawn, missing_count)
 	for i in spawn_count:
-		_spawn_field_enemy(_enemy_data_for_stage(GameState.current_stage))
+		_spawn_field_enemy(_enemy_data_for_stage(GameState.effective_stage()))
 
 
 func debug_spawn_all_enemy_types() -> int:
@@ -370,7 +473,7 @@ func debug_spawn_all_enemy_types() -> int:
 
 
 func _desired_enemy_count() -> int:
-	return _enemy_count_for_stage(GameState.current_stage) + _crowd_pressure
+	return _enemy_count_for_stage(GameState.effective_stage()) + _crowd_pressure
 
 
 func _spawn_field_enemy(data: EnemyData) -> void:
@@ -505,6 +608,14 @@ func _on_field_item_drop_requested(item: ItemData, world_position: Vector2) -> v
 	drop.reveal_with_pop()
 
 
+func _on_field_recovery_orb_requested(kind: StringName, world_position: Vector2) -> void:
+	var orb := FIELD_RECOVERY_ORB_SCENE.instantiate() as FieldRecoveryOrb
+	orb.setup(kind)
+	orb.position = _clamp_field_position(world_position)
+	_items_root.add_child(orb)
+	orb.reveal_with_pop()
+
+
 func _clamp_field_position(pos: Vector2) -> Vector2:
 	return Vector2(
 		clampf(pos.x, 16.0, _field_size.x - 16.0),
@@ -531,70 +642,18 @@ func _apply_stage_field_size(_stage_num: int) -> void:
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 
 
+func _place_start_town_tile() -> void:
+	_town_revealed = true
+	_town_tile.position = _town_tile_corner_position()
+	_town_tile.reveal_with_impact()
+
+
 func _reveal_town_tile() -> void:
 	if _town_revealed:
 		return
 	_town_revealed = true
 	_town_tile.position = _town_tile_corner_position()
 	_town_tile.reveal_with_impact()
-
-
-func _update_wave_timer(delta: float) -> void:
-	if _stage_complete:
-		return
-	if _cleanup_active:
-		_update_cleanup_timer(delta)
-		return
-	_stage_elapsed += delta
-	_emit_wave_timer_changed()
-	if _stage_elapsed >= _stage_town_time:
-		_start_cleanup_phase()
-
-
-func _start_cleanup_phase() -> void:
-	_cleanup_active = true
-	_cleanup_elapsed = 0.0
-	_last_countdown_seconds = -1
-	_despawn_field_enemies()
-	GameState.clear_move_speed_drag()
-	GameState.apply_move_speed_boost(cleanup_move_speed_multiplier, cleanup_time)
-	EventBus.wave_cleanup_started.emit()
-	_emit_cleanup_timer_changed()
-
-
-func _update_cleanup_timer(delta: float) -> void:
-	_cleanup_elapsed += delta
-	_emit_cleanup_timer_changed()
-	if _cleanup_elapsed >= cleanup_time:
-		_stage_complete = true
-		_cleanup_active = false
-		EventBus.wave_timer_changed.emit(0)
-		EventBus.stage_cleared.emit(GameState.current_stage)
-
-
-func _emit_cleanup_timer_changed() -> void:
-	var remaining: int = maxi(0, ceili(cleanup_time - _cleanup_elapsed))
-	if remaining == _last_countdown_seconds:
-		return
-	_last_countdown_seconds = remaining
-	EventBus.wave_timer_changed.emit(remaining)
-
-
-func _emit_wave_timer_changed() -> void:
-	var remaining: int = maxi(0, ceili(_stage_town_time - _stage_elapsed))
-	if remaining == _last_countdown_seconds:
-		return
-	_last_countdown_seconds = remaining
-	EventBus.wave_timer_changed.emit(remaining)
-
-
-func _town_time_for_stage(stage: int) -> float:
-	if stage <= 1:
-		return stage_one_town_time
-	var stage_ten_delta: float = stage_ten_town_time - stage_one_town_time
-	var seconds_per_stage: float = stage_ten_delta / 9.0
-	var seconds: float = stage_one_town_time + seconds_per_stage * float(stage - 1)
-	return clampf(seconds, stage_one_town_time, max_town_time)
 
 
 func _town_tile_corner_position() -> Vector2:
@@ -616,7 +675,7 @@ func _hidden_town_tile_position() -> Vector2:
 ## consumed, so we listen to all_battles_resolved (not battle_window_closed)
 ## and combine with the field-empty check.
 func _check_stage_clear() -> void:
-	if _stage_complete or _cleanup_active:
+	if _stage_complete:
 		return
 	if not _town_revealed and _enemies_root.get_child_count() == 0:
 		_refill_enemy_population(spawn_batch_size)

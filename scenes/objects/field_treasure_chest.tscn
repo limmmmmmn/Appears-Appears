@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/field_treasure_chest.gd" id="1_chest"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/treasure_chest.png" id="2_chest"]
+[ext_resource type="Script" path="res://scripts/runtime/field_shadow.gd" id="3_shadow"]
 
 [sub_resource type="RectangleShape2D" id="RectShape_chest"]
 size = Vector2(16, 14)
@@ -10,6 +11,13 @@ size = Vector2(16, 14)
 collision_layer = 0
 collision_mask = 1
 script = ExtResource("1_chest")
+
+[node name="Shadow" type="Polygon2D" parent="."]
+position = Vector2(0, 8)
+z_index = -1
+script = ExtResource("3_shadow")
+shadow_size = Vector2(15, 5)
+shadow_alpha = 0.34
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture = ExtResource("2_chest")

@@ -4,7 +4,7 @@
 
 [node name="EquipSlot" type="ColorRect"]
 custom_minimum_size = Vector2(10, 10)
-mouse_filter = 2
+mouse_filter = 1
 color = Color(0.66, 0.66, 0.68, 0.85)
 script = ExtResource("1_slot")
 

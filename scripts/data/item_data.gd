@@ -12,8 +12,9 @@ enum Slot { WEAPON, SHIELD, HELMET, ARMOR, ACCESSORY }
 ## Empty = any party member. Weapons can set this to hero/mage/priest/thief.
 @export var allowed_character_id: StringName = &""
 
-## Future stat hooks. Currently display-only equipment, but data is ready.
+## Stat bonuses. Applied via GameState.effective_* getters.
 @export var attack_bonus: int = 0
 @export var defense_bonus: int = 0
 @export var agility_bonus: int = 0
 @export var max_hp_bonus: int = 0
+@export var max_mp_bonus: int = 0

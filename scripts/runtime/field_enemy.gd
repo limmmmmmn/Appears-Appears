@@ -31,11 +31,15 @@ extends Area2D
 @export var wander_squish_speed: float = 5.5
 @export var charge_squish_amount: float = 0.14
 @export var squish_recover_speed: float = 10.0
+@export var shadow_alpha: float = 0.34
+@export var shadow_y_offset: float = 1.0
+@export var encounter_size_scale_step: float = 0.14
 ## Enemy sprites are authored facing left. Flip only when moving right.
 ## When |velocity.x| is below this we leave flip_h alone so vertical chases
 ## don't jitter the sprite back and forth between frames.
 @export var flip_threshold: float = 1.0
 
+@onready var _shadow: Polygon2D = $Shadow
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _alert_bubble: Control = $AlertBubble
 @onready var _collision_shape: CollisionShape2D = $CollisionShape2D
@@ -54,6 +58,8 @@ var _wander_timer: float = 0.0
 var _wander_dir: Vector2 = Vector2.RIGHT
 var _squish_time: float = 0.0
 var _despawning: bool = false
+var _battle_enemy_count: int = 1
+var _visual_base_scale: Vector2 = Vector2.ONE
 
 enum State { WANDER, ALERT, CHASE, CHARGE }
 enum WanderMode { MOVE, PAUSE }
@@ -67,15 +73,26 @@ func _ready() -> void:
 
 
 ## Allow callers to inject data after instantiate().
-func setup(enemy_data: EnemyData) -> void:
+func setup(enemy_data: EnemyData, battle_enemy_count: int = 0) -> void:
 	data = enemy_data
+	_battle_enemy_count = clampi(
+		battle_enemy_count if battle_enemy_count > 0 else GameState.roll_battle_window_enemy_count(),
+		1,
+		GameState.BATTLE_WINDOW_MAX_ENEMIES
+	)
 	if is_inside_tree():
 		_apply_data()
+
+
+func encounter_enemy_count() -> int:
+	return _battle_enemy_count
 
 
 func _apply_data() -> void:
 	if data and data.sprite and _sprite:
 		_sprite.texture = data.sprite
+		_apply_encounter_visual_scale()
+		_fit_shadow_to_sprite()
 	if data == null:
 		return
 	wander_speed = data.field_wander_speed
@@ -87,6 +104,24 @@ func _apply_data() -> void:
 	charge_speed = data.field_charge_speed
 	charge_duration = data.field_charge_duration
 	charge_cooldown = data.field_charge_cooldown
+
+
+func _apply_encounter_visual_scale() -> void:
+	var scale_value: float = 1.0 + float(maxi(0, _battle_enemy_count - 1)) * encounter_size_scale_step
+	_visual_base_scale = Vector2.ONE * scale_value
+	_sprite.scale = _visual_base_scale
+
+
+func _fit_shadow_to_sprite() -> void:
+	if _shadow == null or _sprite == null or _sprite.texture == null:
+		return
+	var texture_size: Vector2 = _sprite.texture.get_size()
+	var visual_size: Vector2 = texture_size * _sprite.scale.abs()
+	var shadow_width: float = clampf(visual_size.x * 0.72, 10.0, 30.0)
+	var shadow_height: float = clampf(visual_size.y * 0.18, 4.0, 9.0)
+	_shadow.position.y = clampf(visual_size.y * 0.46, 6.0, 22.0) + shadow_y_offset
+	if _shadow.has_method("setup_shadow"):
+		_shadow.call("setup_shadow", Vector2(shadow_width, shadow_height), shadow_alpha)
 
 
 func _physics_process(delta: float) -> void:
@@ -265,17 +300,23 @@ func _update_sprite_flip(velocity: Vector2) -> void:
 func _apply_chase_squish(delta: float, amount: float) -> void:
 	_squish_time += delta * chase_squish_speed
 	var wave: float = sin(_squish_time)
-	_sprite.scale = Vector2(1.0 + wave * amount, 1.0 - wave * amount * 0.65)
+	_sprite.scale = Vector2(
+		_visual_base_scale.x * (1.0 + wave * amount),
+		_visual_base_scale.y * (1.0 - wave * amount * 0.65)
+	)
 
 
 func _apply_wander_squish(delta: float) -> void:
 	_squish_time += delta * wander_squish_speed
 	var wave: float = sin(_squish_time)
-	_sprite.scale = Vector2(1.0 + wave * wander_squish_amount, 1.0 - wave * wander_squish_amount * 0.55)
+	_sprite.scale = Vector2(
+		_visual_base_scale.x * (1.0 + wave * wander_squish_amount),
+		_visual_base_scale.y * (1.0 - wave * wander_squish_amount * 0.55)
+	)
 
 
 func _recover_sprite_scale(delta: float) -> void:
-	_sprite.scale = _sprite.scale.move_toward(Vector2.ONE, squish_recover_speed * delta)
+	_sprite.scale = _sprite.scale.move_toward(_visual_base_scale, squish_recover_speed * delta)
 
 
 func _start_spawn_telegraph() -> void:
@@ -284,6 +325,7 @@ func _start_spawn_telegraph() -> void:
 	monitorable = false
 	_collision_shape.disabled = true
 	_alert_bubble.visible = false
+	_shadow.visible = false
 	_sprite.visible = false
 	var sparkle: Node2D = _build_spawn_sparkle()
 	add_child(sparkle)
@@ -298,6 +340,7 @@ func _start_spawn_telegraph() -> void:
 	if not is_instance_valid(self):
 		return
 	sparkle.queue_free()
+	_shadow.visible = true
 	_sprite.visible = true
 	_sprite.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	var reveal: Tween = create_tween()
@@ -316,16 +359,17 @@ func despawn_with_pop() -> void:
 	monitorable = false
 	_collision_shape.disabled = true
 	_alert_bubble.visible = false
+	_shadow.visible = false
 	_sprite.visible = true
 	var drift: Vector2 = Vector2(randf_range(-4.0, 4.0), randf_range(-12.0, -6.0))
 	var tween: Tween = create_tween().set_parallel(true)
 	tween.tween_property(self, "position", position + drift, 0.24)\
 		.set_trans(Tween.TRANS_BACK)\
 		.set_ease(Tween.EASE_OUT)
-	tween.tween_property(_sprite, "scale", Vector2(1.45, 0.55), 0.10)\
+	tween.tween_property(_sprite, "scale", _visual_base_scale * Vector2(1.45, 0.55), 0.10)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_OUT)
-	tween.tween_property(_sprite, "scale", Vector2(0.05, 1.65), 0.18)\
+	tween.tween_property(_sprite, "scale", _visual_base_scale * Vector2(0.05, 1.65), 0.18)\
 		.set_delay(0.08)\
 		.set_trans(Tween.TRANS_BACK)\
 		.set_ease(Tween.EASE_IN)

@@ -36,7 +36,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _apply() -> void:
-	_title_label.text = "%s Level Up" % _member_name
+	_title_label.text = "%s 레벨업 — 카드를 고르세요" % _member_name
 	for child in _cards.get_children():
 		child.queue_free()
 	for mod: ModifierData in _offers:

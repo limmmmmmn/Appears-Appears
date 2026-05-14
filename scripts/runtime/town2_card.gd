@@ -55,6 +55,12 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
+	# Risk/reward — darker, more ominous than plain ATK red.
+	&"glass_cannon": Color(0.55, 0.12, 0.18, 1),
+	&"berserker_pact": Color(0.45, 0.18, 0.28, 1),
+	# Synergy cards — purple to read clearly as "advanced" relative to stats.
+	&"combo_striker": Color(0.55, 0.35, 0.72, 1),
+	&"mana_hoarder": Color(0.4, 0.45, 0.78, 1),
 }
 const CARD_BG_BY_EFFECT: Dictionary = {
 	"atk_flat": Color(0.95, 0.28, 0.31, 1),
@@ -62,40 +68,32 @@ const CARD_BG_BY_EFFECT: Dictionary = {
 	"agi_flat": Color(0.53, 0.76, 0.93, 1),
 	"evade_chance": Color(0.53, 0.76, 0.93, 1),
 }
-const POSTER_DESC_BY_ID: Dictionary = {
-	&"swift_boots": "Move faster on the field.",
-	&"battle_prayer": "Priest heals an ally on attack.",
-	&"fireburst": "Mage burns extra enemies.",
-	&"heavy_strike": "Hero basic attacks hit harder.",
-	&"pilfer": "Thief can steal gold on attack.",
-	&"recruit_mage": "Joins with Fireburst: hits +1 enemy.",
-	&"recruit_priest": "Joins with Prayer: attacks and heals.",
-	&"recruit_thief": "Joins with Pilfer: steals 1G.",
-	&"bump_attack": "Bump windows to hurt enemies.",
-	&"window_crash": "Battle windows can crash.",
-	&"bump_blessing": "Bump windows to heal an ally.",
-}
-const POSTER_TITLE_BY_ID: Dictionary = {
-	&"atk_up": "Attack",
-	&"hp_up": "Health",
-	&"agi_up": "Agility",
-	&"battle_prayer": "Prayer",
-	&"heavy_strike": "Heavy Hit",
-	&"bump_attack": "Bump Attack",
-	&"window_crash": "Window Crash",
-	&"bump_blessing": "Bump Heal",
-}
+## Legacy English fallbacks intentionally removed: titles/descriptions now flow
+## straight from each ModifierData.display_name / .description, which are
+## already localized in Korean.
 const DEFAULT_POSTER_BG: Color = Color(0.95, 0.78, 0.14, 1)
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1)
 const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1)
 const POSTER_TITLE_YELLOW: Color = Color(1.0, 0.86, 0.18, 1)
 const POSTER_ICON_SLOT_SIZE: Vector2 = Vector2(76, 76)
 
-## effect_data key → label shown on stat cards.
+## effect_data key → label shown on stat cards. Order also controls render
+## order when a card carries multiple stat changes (Glass Cannon etc.).
 const STAT_LABEL_BY_KEY: Dictionary = {
-	"atk_flat": "ATK",
-	"hp_flat": "HP",
-	"agi_flat": "AGI",
+	"atk_flat": "공격력",
+	"def_flat": "방어력",
+	"hp_flat": "최대 HP",
+	"mp_flat": "최대 MP",
+	"agi_flat": "민첩",
+}
+
+## Active-skill MP costs by card id. Surfaced as a second description line
+## so players can tell skills apart from passive stat-ups at a glance.
+const SKILL_MP_COST_BY_ID: Dictionary = {
+	&"heavy_strike": 2,
+	&"fireburst": 6,
+	&"battle_prayer": 4,
+	&"pilfer": 2,
 }
 
 var data: ModifierData
@@ -180,7 +178,11 @@ func _apply_poster_layout() -> void:
 	var bg: Color = _poster_background()
 	var text_color: Color = _poster_text_color(bg)
 	_name_label.text = _poster_title()
-	_desc_label.text = _poster_description()
+	var desc_text: String = _poster_description()
+	var meta_text: String = _poster_meta_line()
+	if not meta_text.is_empty():
+		desc_text = "%s\n%s" % [desc_text, meta_text]
+	_desc_label.text = desc_text
 	_cost_label.text = _poster_cost_text()
 	_cost_label.visible = not _cost_label.text.is_empty()
 	_name_label.label_settings = _poster_name_settings
@@ -249,7 +251,7 @@ func _build_poster_settings() -> void:
 	_poster_name_settings.shadow_size = 1
 	_poster_name_settings.shadow_color = Color(0, 0, 0, 0.2)
 	_poster_desc_settings = LabelSettings.new()
-	_poster_desc_settings.font_size = 7
+	_poster_desc_settings.font_size = 9
 	_poster_desc_settings.font_color = POSTER_DARK_TEXT
 	_poster_cost_settings = LabelSettings.new()
 	_poster_cost_settings.font_size = 9
@@ -282,7 +284,7 @@ func _apply_poster_color(bg: Color, border: Color) -> void:
 
 
 func _poster_title() -> String:
-	var title: String = POSTER_TITLE_BY_ID.get(data.id, data.display_name)
+	var title: String = data.display_name
 	if data.max_level <= 1 or data.category == ModifierData.Category.COMPANION:
 		return title
 	var next_level: int = mini(GameState.modifier_level(data.id) + 1, data.max_level)
@@ -290,38 +292,69 @@ func _poster_title() -> String:
 
 
 func _poster_description() -> String:
-	var stat_key: String = _stat_card_key()
-	if not stat_key.is_empty():
-		var amount: int = GameState.modifier_next_int_effect(data, stat_key)
-		return "+%d %s" % [amount, STAT_LABEL_BY_KEY[stat_key]]
+	if data == null:
+		return ""
+	# Multi-stat readout. Walks STAT_LABEL_BY_KEY in order so trade-off cards
+	# (Glass Cannon = +ATK / -HP) show both lines with a proper sign prefix.
+	var stat_lines: PackedStringArray = []
+	for key in STAT_LABEL_BY_KEY:
+		if not data.effect_data.has(key):
+			continue
+		var value: int = GameState.modifier_next_int_effect(data, key)
+		if value == 0:
+			continue
+		var sign_prefix: String = "+" if value > 0 else ""
+		stat_lines.append("%s%d %s" % [sign_prefix, value, STAT_LABEL_BY_KEY[key]])
+	if not stat_lines.is_empty():
+		return "\n".join(stat_lines)
 	if data.effect_data.has("move_speed_flat"):
-		return "+%d Move Speed" % GameState.modifier_next_int_effect(data, "move_speed_flat")
+		return "이동 속도 +%d" % GameState.modifier_next_int_effect(data, "move_speed_flat")
 	if data.effect_data.has("hero_damage_bonus_mult"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "hero_damage_bonus_mult") * 100.0))
-		return "+%d%% Hero Damage" % amount
+		return "용사 데미지 +%d%%" % amount
+	if data.effect_data.has("mage_firewall_damage_flat"):
+		return "모든 적: %d 데미지" % GameState.modifier_next_int_effect(data, "mage_firewall_damage_flat")
 	if data.effect_data.has("priest_heal_flat"):
 		var amount: int = GameState.modifier_next_int_effect(data, "priest_heal_flat")
-		return "Heal ally +%d" % amount
+		return "아군 회복 +%d" % amount
 	if data.effect_data.has("thief_steal_chance"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "thief_steal_chance") * 100.0))
-		return "%d%% steal chance" % amount
+		return "훔치기 확률 %d%%" % amount
 	if data.effect_data.has("evade_chance"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "evade_chance") * 100.0))
-		return "+%d%% Dodge" % amount
+		return "회피 +%d%%" % amount
 	if data.effect_data.has("party_bump_damage_ratio"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "party_bump_damage_ratio") * 100.0))
-		return "Bump attack +%d%%" % amount
+		return "범프 공격 +%d%%" % amount
 	if data.effect_data.has("window_collision_damage_ratio"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "window_collision_damage_ratio") * 100.0))
-		return "Crash damage +%d%%" % amount
+		return "충돌 데미지 +%d%%" % amount
 	if data.effect_data.has("window_collision_heal_flat"):
-		return "Bump heal +%d" % GameState.modifier_next_int_effect(data, "window_collision_heal_flat")
-	return POSTER_DESC_BY_ID.get(data.id, data.description)
+		return "범프 회복 +%d" % GameState.modifier_next_int_effect(data, "window_collision_heal_flat")
+	return data.description
+
+
+## Extra one-liner appended below the main effect — flags MP cost on active
+## skills and synergy gates (required_modifier_id). Returns "" when nothing
+## special applies so the card stays compact for plain stat picks.
+func _poster_meta_line() -> String:
+	if data == null:
+		return ""
+	var parts: PackedStringArray = []
+	if SKILL_MP_COST_BY_ID.has(data.id):
+		parts.append("MP %d 소모" % int(SKILL_MP_COST_BY_ID[data.id]))
+	if data.required_modifier_id != &"":
+		var gate: ModifierData = ModifierDB.get_by_id(data.required_modifier_id)
+		var gate_name: String = gate.display_name if gate else String(data.required_modifier_id)
+		parts.append("%s 필요" % gate_name)
+	return " · ".join(parts)
 
 
 func _poster_cost_text() -> String:
+	# Level-up cards don't show a price tag — the panel itself signals the
+	# context, and freeing this slot gives the description more room.
 	if free_offer:
-		return "LEVEL UP"
+		return ""
 	var cost: int = GameState.modifier_purchase_cost(data)
 	if cost <= 0:
 		return ""

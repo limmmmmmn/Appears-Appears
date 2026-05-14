@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"hp_up"
-display_name = "HP"
-description = "Increase max HP and heal. Higher levels cost more and give a smaller boost."
+display_name = "체력"
+description = "최대 체력을 올리고 그만큼 회복한다. 레벨이 오를수록 비용은 늘고 효과는 줄어든다."
 cost = 6
 max_level = 5
 rarity = 0

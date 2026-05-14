@@ -5,12 +5,12 @@
 [resource]
 script = ExtResource("1_script")
 id = &"bump_blessing"
-display_name = "Bump Heal"
-description = "Heal the most wounded ally when the party bumps into a battle window."
+display_name = "범프 회복"
+description = "파티가 전투 창문에 부딪힐 때 가장 다친 아군을 회복한다."
 cost = 15
 max_level = 5
 rarity = 1
 category = 1
 effect_data = {
-"window_collision_heal_flat": 4
+"window_collision_heal_flat": 2
 }

@@ -4,52 +4,150 @@ extends CanvasLayer
 ## Field HUD:
 ##   • Top bar:   "Field N" (left) | "Gold N" (right)
 ##   • Bottom bar: a row of party member boxes — portrait + name on the left
-##                 column, HP bar / EXP bar / equipment slots on the right.
+##                 column, HP bar / MP bar / EXP bar / equipment slots on the right.
 ##
 ## Pure presentation node. State comes from GameState, change notifications
 ## come through EventBus.
 
 const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.tscn")
-const LEVEL_UP_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_panel.tscn")
-const LEVEL_UP_SKILL_BY_CHARACTER_ID: Dictionary = {
-	&"hero": preload("res://data/modifiers/prototype/heavy_strike.tres"),
-	&"mage": preload("res://data/modifiers/prototype/fireburst.tres"),
-	&"priest": preload("res://data/modifiers/prototype/battle_prayer.tres"),
-	&"thief": preload("res://data/modifiers/prototype/pilfer.tres"),
-}
-const LEVEL_UP_STAT_CARD_KINDS: Array[String] = ["blade", "vigor", "step"]
+const SKILL_TREE_PANEL_SCENE: PackedScene = preload("res://scenes/ui/skill_tree_panel.tscn")
+const LEVEL_UP_STAT_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_stat_panel.tscn")
 
 @onready var _stage_label: Label = %StageLabel
-@onready var _countdown_label: Label = %CountdownLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _member_row: HBoxContainer = %MemberRow
+## Built dynamically so it sits on whatever HUD scene variant is active.
+var _town_countdown: Label
 
 ## Live member box references, parallel to GameState.party. Rebuilt from
 ## scratch on party_changed so we never have stale indices when a recruit
 ## or wipe shifts the party array.
 var _member_boxes: Array[PartyMemberBox] = []
-var _level_up_panel: LevelUpPanel
-var _level_up_ui_enabled: bool = true
-var _queued_level_up_members: Array[int] = []
-var _level_up_pause_active: bool = false
-
-
+var _skill_tree_panel: SkillTreePanel
+var _stat_panel: LevelUpStatPanel
+## Tracks the party level seen on the previous level-up emit so the stat
+## panel can show old→new deltas for multi-level jumps.
+var _previous_party_level: int = 1
+## Per-frame throttle: party members now level in lockstep so the level-up
+## signal fires N times in the same frame. We only want one toast + one
+## tree popup, so we ignore repeated emits from the same frame.
+var _last_level_up_frame: int = -1
 func _ready() -> void:
 	EventBus.party_changed.connect(_rebuild_member_boxes)
 	EventBus.party_member_hp_changed.connect(_on_party_member_hp_changed)
+	EventBus.party_member_mp_changed.connect(_on_party_member_mp_changed)
 	EventBus.party_member_xp_changed.connect(_on_party_member_xp_changed)
 	EventBus.party_member_leveled_up.connect(_on_party_member_leveled_up)
 	EventBus.party_equipment_changed.connect(_on_party_equipment_changed)
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.stage_started.connect(_on_stage_started)
-	EventBus.wave_timer_changed.connect(_on_wave_timer_changed)
+	EventBus.difficulty_increased.connect(_on_difficulty_increased)
+	_build_town_countdown()
+	_build_field_bump_button()
 	_refresh_gold()
 	_refresh_stage()
 	_rebuild_member_boxes()
 
 
+## Town respawn countdown updates every frame. Pulls state from the
+## field_root group so the HUD doesn't need a direct reference.
+func _process(_delta: float) -> void:
+	_update_town_countdown()
+
+
+## Debug knob next to the Field N label. Each click jumps the time-based
+## difficulty tier forward by one, so playtesters can dial up the threat
+## curve without waiting on the 30s clock.
+func _build_field_bump_button() -> void:
+	if not is_instance_valid(_stage_label):
+		return
+	var parent: Node = _stage_label.get_parent()
+	if parent == null:
+		return
+	var btn := Button.new()
+	btn.text = "▲"
+	btn.tooltip_text = "필드 레벨 +1"
+	btn.add_theme_font_size_override("font_size", 9)
+	btn.custom_minimum_size = Vector2(18, 14)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.pressed.connect(_on_field_bump_pressed)
+	parent.add_child(btn)
+	# Park it directly after the stage label so the HBox keeps them paired.
+	parent.move_child(btn, _stage_label.get_index() + 1)
+
+
+func _on_field_bump_pressed() -> void:
+	GameState.bump_difficulty_tier()
+
+
+func _build_town_countdown() -> void:
+	_town_countdown = Label.new()
+	_town_countdown.add_theme_font_size_override("font_size", 9)
+	_town_countdown.add_theme_color_override("font_color", Color(0.96, 0.86, 0.42))
+	_town_countdown.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
+	_town_countdown.add_theme_constant_override("outline_size", 3)
+	# Top-left, tucked just under the Field N label so HUD reads as one
+	# stacked widget: Field N / 다음 마을까지 N초.
+	_town_countdown.position = Vector2(18, 38)
+	_town_countdown.size = Vector2(160, 12)
+	_town_countdown.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_town_countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_town_countdown.visible = false
+	add_child(_town_countdown)
+
+
+func _update_town_countdown() -> void:
+	if not is_instance_valid(_town_countdown):
+		return
+	var field: Node = get_tree().get_first_node_in_group("field_root")
+	if field == null or not field.has_method("town_respawn_seconds_left"):
+		_town_countdown.visible = false
+		return
+	var left: float = field.town_respawn_seconds_left()
+	if left <= 0.0:
+		_town_countdown.visible = false
+		return
+	_town_countdown.visible = true
+	_town_countdown.text = "다음 마을까지 %d초" % int(ceil(left))
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# TAB toggles the skill tree panel. Pause the game while it's open so
+	# the field doesn't keep running underneath.
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key := (event as InputEventKey).keycode
+		if key == KEY_TAB:
+			_toggle_skill_tree_panel()
+			get_viewport().set_input_as_handled()
+
+
+func _toggle_skill_tree_panel() -> void:
+	if is_instance_valid(_skill_tree_panel):
+		_skill_tree_panel.queue_free_and_unpause()
+		_skill_tree_panel = null
+		return
+	_open_skill_tree_panel()
+
+
+## Shared open path so both the TAB toggle and the first-level-up auto-popup
+## go through the same code — pause, attach, wire the cleanup signal.
+func _open_skill_tree_panel() -> void:
+	if is_instance_valid(_skill_tree_panel):
+		return
+	_skill_tree_panel = SKILL_TREE_PANEL_SCENE.instantiate()
+	add_child(_skill_tree_panel)
+	get_tree().paused = true
+	_skill_tree_panel.tree_exited.connect(func() -> void:
+		_skill_tree_panel = null
+	)
+
+
 # ─── Bottom row ───────────────────────────────────────────────────────
 func _rebuild_member_boxes() -> void:
+	# Fresh party — reset throttle so the first level-up of the new run
+	# still pops its banner.
+	_last_level_up_frame = -1
+	_previous_party_level = GameState.current_level
 	for box in _member_boxes:
 		if is_instance_valid(box):
 			box.queue_free()
@@ -60,8 +158,6 @@ func _rebuild_member_boxes() -> void:
 		var box: PartyMemberBox = MEMBER_BOX_SCENE.instantiate()
 		_member_row.add_child(box)
 		box.setup(i, GameState.party[i])
-		box.level_up_mark_pressed.connect(_on_level_up_mark_pressed)
-		box.set_level_up_mark_visible(_level_up_ui_enabled)
 		_member_boxes.append(box)
 
 
@@ -69,6 +165,12 @@ func _on_party_member_hp_changed(index: int, new_hp: int, max_hp: int) -> void:
 	if index < 0 or index >= _member_boxes.size():
 		return
 	_member_boxes[index].set_hp(new_hp, max_hp)
+
+
+func _on_party_member_mp_changed(index: int, new_mp: int, max_mp: int) -> void:
+	if index < 0 or index >= _member_boxes.size():
+		return
+	_member_boxes[index].set_mp(new_mp, max_mp)
 
 
 func _on_party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: int) -> void:
@@ -79,109 +181,119 @@ func _on_party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: in
 	_member_boxes[index].set_level(level)
 
 
-## Persistent "+" badge over the leveled-up member's portrait. The box owns
-## the layout / dedupe; we just route the signal to the right slot.
-func _on_party_member_leveled_up(index: int, _new_level: int) -> void:
-	if index < 0 or index >= _member_boxes.size():
+## On level-up: "레벨 업!" toast → stat-delta panel → skill tree. The toast
+## reads, the panel lets the player parse the +HP/+ATK gains for the whole
+## party, then the tree pops for SP spending. Frame-id throttle keeps the
+## synced N-member emits from triggering the whole chain N times.
+func _on_party_member_leveled_up(_index: int, new_level: int) -> void:
+	var current_frame: int = Engine.get_process_frames()
+	if current_frame == _last_level_up_frame:
 		return
-	var mark: LevelUpMark = _member_boxes[index].show_level_up_mark()
-	mark.visible = _level_up_ui_enabled
-	if _level_up_ui_enabled:
-		_queue_level_up_choice(index)
-
-
-func _on_level_up_mark_pressed(index: int) -> void:
-	if not _level_up_ui_enabled:
+	_last_level_up_frame = current_frame
+	var levels_gained: int = maxi(1, new_level - _previous_party_level)
+	_previous_party_level = new_level
+	_show_level_up_toast(new_level)
+	if is_instance_valid(_skill_tree_panel) or is_instance_valid(_stat_panel):
 		return
-	if index < 0 or index >= GameState.party_size():
+	# Wait for the toast to finish *and* clear the screen so the stat panel
+	# opens on a clean stage.
+	await get_tree().create_timer(1.45).timeout
+	if not is_inside_tree():
 		return
-	_queue_level_up_choice(index)
-
-
-func _queue_level_up_choice(index: int) -> void:
-	_queued_level_up_members.append(index)
-	_open_next_level_up_choice()
-
-
-func _open_next_level_up_choice() -> void:
-	if not _level_up_ui_enabled or is_instance_valid(_level_up_panel):
+	if is_instance_valid(_skill_tree_panel) or is_instance_valid(_stat_panel):
 		return
-	while not _queued_level_up_members.is_empty():
-		var index: int = _queued_level_up_members.pop_front()
-		if index < 0 or index >= GameState.party_size():
-			continue
-		var offers: Array[ModifierData] = _level_up_offers_for_member(index)
-		if offers.is_empty():
-			_clear_level_up_mark(index)
-			continue
-		_open_level_up_panel(index, offers)
-		return
+	_open_stat_panel(levels_gained)
 
 
-func _open_level_up_panel(index: int, offers: Array[ModifierData]) -> void:
-	if offers.is_empty():
-		return
-	if is_instance_valid(_level_up_panel):
-		_level_up_panel.queue_free()
-	var member_name: String = GameState.party[index].display_name
-	_level_up_panel = LEVEL_UP_PANEL_SCENE.instantiate()
-	add_child(_level_up_panel)
-	_level_up_panel.setup(index, member_name, offers)
-	_level_up_panel.modifier_chosen.connect(_on_level_up_modifier_chosen)
-	_level_up_pause_active = true
+func _open_stat_panel(levels_gained: int) -> void:
+	_stat_panel = LEVEL_UP_STAT_PANEL_SCENE.instantiate()
+	add_child(_stat_panel)
+	_stat_panel.setup(levels_gained)
 	get_tree().paused = true
+	_stat_panel.confirmed.connect(_on_stat_panel_confirmed)
+	_stat_panel.tree_exited.connect(func() -> void:
+		_stat_panel = null
+	)
 
 
-func _on_level_up_modifier_chosen(index: int, mod: ModifierData) -> void:
-	var accepted: bool = false
-	if index < 0 or index >= GameState.party_size():
-		_finish_level_up_choice(index, accepted)
-		return
-	if _modifier_matches_member(mod, GameState.party[index].id) and GameState.can_add_modifier(mod):
-		GameState.add_modifier(mod)
-		EventBus.modifier_purchased.emit(mod)
-		_refresh_member_box(index)
-		accepted = true
-	_finish_level_up_choice(index, accepted)
+func _on_stat_panel_confirmed() -> void:
+	# Unpause briefly so the tree's own pause toggles cleanly, then open it.
+	get_tree().paused = false
+	call_deferred("_open_skill_tree_panel")
 
 
-func _finish_level_up_choice(index: int, accepted: bool) -> void:
-	if accepted:
-		_clear_level_up_mark(index)
-	_level_up_panel = null
-	if _queued_level_up_members.is_empty():
-		_level_up_pause_active = false
-		get_tree().paused = false
-	else:
-		call_deferred("_open_next_level_up_choice")
+## Centered "레벨 업! → Lv N" banner. Lands with a TRANS_BACK punch (same
+## family as the battle-window popup), holds, then fades out. Stays above
+## the field but below the skill tree so the tree's own open animation
+## reads cleanly when it follows.
+func _show_level_up_toast(new_level: int) -> void:
+	var toast := Label.new()
+	toast.text = "레벨 업!  Lv %d" % new_level
+	toast.add_theme_font_size_override("font_size", 26)
+	toast.add_theme_color_override("font_color", Color(1.0, 0.92, 0.42))
+	toast.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.02, 1.0))
+	toast.add_theme_constant_override("outline_size", 6)
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	toast.set_anchors_preset(Control.PRESET_FULL_RECT)
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.z_index = 4096
+	toast.top_level = true
+	toast.modulate.a = 0.0
+	# Pivot at viewport center so scale punches from the middle.
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	toast.pivot_offset = vp * 0.5
+	toast.scale = Vector2(0.5, 0.5)
+	add_child(toast)
+	toast.move_to_front()
+
+	var enter_tween: Tween = toast.create_tween()
+	enter_tween.set_parallel(true)
+	enter_tween.tween_property(toast, "scale", Vector2.ONE, 0.28)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	enter_tween.tween_property(toast, "modulate:a", 1.0, 0.14)
+
+	var exit_tween: Tween = toast.create_tween()
+	exit_tween.tween_interval(0.7)
+	exit_tween.tween_property(toast, "modulate:a", 0.0, 0.35)
+	exit_tween.tween_callback(toast.queue_free)
 
 
-func _clear_level_up_mark(index: int) -> void:
-	if index < 0 or index >= _member_boxes.size():
-		return
-	_member_boxes[index].clear_level_up_mark()
+## Generic centered banner — used by stage announcements and any future
+## "big event" cue. Cool blue tint differentiates from the yellow level-up
+## toast so the two read as different categories at a glance.
+func _show_phase_toast(text: String) -> void:
+	var toast := Label.new()
+	toast.text = text
+	toast.add_theme_font_size_override("font_size", 22)
+	toast.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
+	toast.add_theme_color_override("font_outline_color", Color(0.04, 0.05, 0.12, 1.0))
+	toast.add_theme_constant_override("outline_size", 6)
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	toast.set_anchors_preset(Control.PRESET_FULL_RECT)
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.z_index = 4096
+	toast.top_level = true
+	toast.modulate.a = 0.0
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	toast.pivot_offset = vp * 0.5
+	toast.scale = Vector2(0.55, 0.55)
+	add_child(toast)
+	toast.move_to_front()
 
+	var enter_tween: Tween = toast.create_tween()
+	enter_tween.set_parallel(true)
+	enter_tween.tween_property(toast, "scale", Vector2.ONE, 0.34)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	enter_tween.tween_property(toast, "modulate:a", 1.0, 0.2)
 
-func _level_up_offers_for_member(index: int) -> Array[ModifierData]:
-	var offers: Array[ModifierData] = []
-	if index < 0 or index >= GameState.party_size():
-		return offers
-	var member_id: StringName = GameState.party[index].id
-	var skill: ModifierData = LEVEL_UP_SKILL_BY_CHARACTER_ID.get(member_id, null)
-	if skill and GameState.can_add_modifier(skill):
-		offers.append(skill)
-	for kind: String in LEVEL_UP_STAT_CARD_KINDS:
-		var path: String = "res://data/modifiers/archived/%s_%s.tres" % [String(member_id), kind]
-		if not ResourceLoader.exists(path):
-			continue
-		var mod: ModifierData = load(path) as ModifierData
-		if mod and GameState.can_add_modifier(mod):
-			offers.append(mod)
-	return offers
-
-
-func _modifier_matches_member(mod: ModifierData, member_id: StringName) -> bool:
-	return mod != null and mod.required_party_member_id == member_id
+	var exit_tween: Tween = toast.create_tween()
+	exit_tween.tween_interval(1.2)
+	exit_tween.tween_property(toast, "modulate:a", 0.0, 0.5)
+	exit_tween.tween_callback(toast.queue_free)
 
 
 func _refresh_member_box(index: int) -> void:
@@ -190,22 +302,9 @@ func _refresh_member_box(index: int) -> void:
 	var box: PartyMemberBox = _member_boxes[index]
 	var max_hp: int = GameState.effective_max_hp(index)
 	box.set_hp(GameState.party_hp[index], max_hp)
+	box.set_mp(GameState.party_mp[index], GameState.effective_max_mp(index))
 	box.set_exp_ratio(GameState.party_xp_ratio(index))
 	box.set_level(GameState.party_level(index))
-
-
-func set_level_up_ui_enabled(is_enabled: bool) -> void:
-	_level_up_ui_enabled = is_enabled
-	for box in _member_boxes:
-		if is_instance_valid(box):
-			box.set_level_up_mark_visible(is_enabled)
-	if not is_enabled and is_instance_valid(_level_up_panel):
-		_level_up_panel.queue_free()
-		_level_up_panel = null
-		_queued_level_up_members.clear()
-		if _level_up_pause_active:
-			_level_up_pause_active = false
-			get_tree().paused = false
 
 
 func _on_party_equipment_changed(index: int) -> void:
@@ -219,18 +318,30 @@ func _on_gold_changed(_new_gold: int) -> void:
 	_refresh_gold()
 
 
-func _on_stage_started(_stage_num: int) -> void:
+func _on_stage_started(stage_num: int) -> void:
 	_refresh_stage()
+	# Stage 2+ banner — Stage 1 fires once on game start, the toast there
+	# would just be noise on top of the title screen flow.
+	if stage_num >= 2:
+		_show_phase_toast("Stage %d" % stage_num)
 
 
-func _on_wave_timer_changed(remaining_seconds: int) -> void:
-	_countdown_label.text = str(maxi(0, remaining_seconds))
+## Time-based difficulty just crossed another 30s tick. The corner label
+## auto-rolls to the new Field number; the toast announces it.
+func _on_difficulty_increased(_tier: int) -> void:
+	_refresh_stage()
+	var field_num: int = maxi(GameState.current_stage, 1) + GameState.current_difficulty_tier()
+	_show_phase_toast("Field %d  ⚠" % field_num)
 
 
 func _refresh_gold() -> void:
 	_gold_label.text = "Gold %d" % GameState.gold
 
 
+## Field number doubles as the threat tier — every 30s of run time the
+## difficulty climbs by one and the displayed Field N goes up to match.
+## current_stage is mostly static now (one field per run), so the value
+## you see in the corner is "how dangerous things have gotten."
 func _refresh_stage() -> void:
-	var stage: int = maxi(GameState.current_stage, 1)
-	_stage_label.text = "Field %d" % stage
+	var field_num: int = maxi(GameState.current_stage, 1) + GameState.current_difficulty_tier()
+	_stage_label.text = "Field %d" % field_num

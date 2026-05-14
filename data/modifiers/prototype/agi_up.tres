@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"agi_up"
-display_name = "AGI"
-description = "Increase AGI. Higher levels cost more and give a smaller boost."
+display_name = "민첩"
+description = "민첩을 올린다. 레벨이 오를수록 비용은 늘고 효과는 줄어든다."
 cost = 6
 max_level = 5
 rarity = 0

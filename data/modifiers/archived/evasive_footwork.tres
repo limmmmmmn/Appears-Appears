@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"evasive_footwork"
-display_name = "Evasive Footwork"
-description = "+15% chance to dodge enemy attacks."
+display_name = "회피 보법"
+description = "적 공격을 15% 확률로 회피."
 cost = 20
 rarity = 1
 category = 1

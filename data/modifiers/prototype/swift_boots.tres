@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"swift_boots"
-display_name = "Swift Boots"
-description = "Increase field movement speed. Higher levels give a smaller boost."
+display_name = "신속의 부츠"
+description = "필드 이동 속도를 올린다. 레벨이 오를수록 효과가 줄어든다."
 cost = 10
 rarity = 0
 category = 0

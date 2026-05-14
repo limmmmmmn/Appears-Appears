@@ -15,7 +15,18 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 @export var hit_shake_pixels: float = 3.0
 @export var hit_flash_duration: float = 0.12
 @export var death_fade_duration: float = 0.38
+@export var shadow_alpha: float = 0.34
+@export var shadow_y_offset: float = 1.0
 
+## Juicy drain feedback — yellow afterimage held briefly in the slice the
+## ProgressBar just lost, then chased down and faded out. Same idea (and
+## numbers) as StatBar's ghost so HP feedback reads consistently between
+## the party HUD and the enemy stack.
+const HP_GHOST_FLASH_COLOR: Color = Color(1.0, 0.95, 0.55, 1.0)
+const HP_GHOST_HOLD_DURATION: float = 0.18
+const HP_GHOST_DRAIN_DURATION: float = 0.45
+
+@onready var _shadow: Polygon2D = $Shadow
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _hp_bar: ProgressBar = $HPBar
 
@@ -32,13 +43,34 @@ var _attack_tween: Tween
 var _death_tween: Tween
 var _dying: bool = false
 var _stolen_from: bool = false
+var _hp_ghost: ColorRect
+var _last_hp_ratio: float = 1.0
+var _hp_ghost_drain_tween: Tween
+var _hp_ghost_color_tween: Tween
 
 
 func _ready() -> void:
 	_base_position = position
 	_base_scale = scale
+	_build_hp_ghost()
 	if data:
 		_apply_data()
+
+
+## Lives as a child of the ProgressBar so it occupies the exact same rect
+## without us having to track size/position changes. anchor_right rides
+## the slice width; z_index puts it just above the ProgressBar's fill.
+func _build_hp_ghost() -> void:
+	if not is_instance_valid(_hp_bar):
+		return
+	_hp_ghost = ColorRect.new()
+	_hp_ghost.color = HP_GHOST_FLASH_COLOR
+	_hp_ghost.color.a = 0.0
+	_hp_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hp_ghost.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	_hp_ghost.anchor_right = 0.0
+	_hp_ghost.z_index = 1
+	_hp_bar.add_child(_hp_ghost)
 
 
 ## Allows callers to inject data after instantiate() but before adding to tree.
@@ -64,8 +96,21 @@ func _apply_data() -> void:
 	modulate = Color.WHITE
 	if data.sprite and _sprite:
 		_sprite.texture = data.sprite
+		_fit_shadow_to_sprite()
 	_refresh_hp_bar()
 	hp_changed.emit(current_hp, max_hp)
+
+
+func _fit_shadow_to_sprite() -> void:
+	if _shadow == null or _sprite == null or _sprite.texture == null:
+		return
+	var texture_size: Vector2 = _sprite.texture.get_size()
+	var visual_size: Vector2 = texture_size * _sprite.scale.abs()
+	var shadow_width: float = clampf(visual_size.x * 0.72, 10.0, 30.0)
+	var shadow_height: float = clampf(visual_size.y * 0.18, 4.0, 9.0)
+	_shadow.position.y = clampf(visual_size.y * 0.46, 6.0, 22.0) + shadow_y_offset
+	if _shadow.has_method("setup_shadow"):
+		_shadow.call("setup_shadow", Vector2(shadow_width, shadow_height), shadow_alpha)
 
 
 func is_alive() -> bool:
@@ -123,7 +168,41 @@ func _spawn_damage_number(amount: int, is_crit: bool) -> void:
 func _refresh_hp_bar() -> void:
 	if _hp_bar == null:
 		return
-	_hp_bar.value = 0.0 if max_hp <= 0 else clampf(float(current_hp) / float(max_hp), 0.0, 1.0)
+	var new_ratio: float = 0.0 if max_hp <= 0 else clampf(float(current_hp) / float(max_hp), 0.0, 1.0)
+	_hp_bar.value = new_ratio
+	if is_instance_valid(_hp_ghost):
+		if new_ratio < _last_hp_ratio:
+			_start_hp_ghost_drain(_last_hp_ratio, new_ratio)
+		else:
+			_cancel_hp_ghost_tweens()
+			_hp_ghost.anchor_right = new_ratio
+			_hp_ghost.color.a = 0.0
+	_last_hp_ratio = new_ratio
+
+
+func _start_hp_ghost_drain(old_ratio: float, new_ratio: float) -> void:
+	if not is_instance_valid(_hp_ghost):
+		return
+	_cancel_hp_ghost_tweens()
+	_hp_ghost.anchor_right = old_ratio
+	_hp_ghost.color = HP_GHOST_FLASH_COLOR
+
+	_hp_ghost_drain_tween = create_tween()
+	_hp_ghost_drain_tween.tween_interval(HP_GHOST_HOLD_DURATION)
+	_hp_ghost_drain_tween.tween_property(_hp_ghost, "anchor_right", new_ratio, HP_GHOST_DRAIN_DURATION)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+
+	_hp_ghost_color_tween = create_tween()
+	_hp_ghost_color_tween.tween_interval(HP_GHOST_HOLD_DURATION)
+	_hp_ghost_color_tween.tween_property(_hp_ghost, "color:a", 0.0, HP_GHOST_DRAIN_DURATION)
+
+
+func _cancel_hp_ghost_tweens() -> void:
+	if _hp_ghost_drain_tween and _hp_ghost_drain_tween.is_valid():
+		_hp_ghost_drain_tween.kill()
+	if _hp_ghost_color_tween and _hp_ghost_color_tween.is_valid():
+		_hp_ghost_color_tween.kill()
 
 
 func _spawn_hit_effect(texture: Texture2D, is_crit: bool) -> void:

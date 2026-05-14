@@ -6,8 +6,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"recruit_thief"
-display_name = "Recruit Thief"
-description = "Thief joins with Pilfer: can steal 1G when attacking an enemy."
+display_name = "도적 영입"
+description = "도적이 레벨업하며 훔치기를 배운다. MP 2로 적에게서 1G를 훔친다."
 cost = 30
 max_level = 1
 rarity = 1
