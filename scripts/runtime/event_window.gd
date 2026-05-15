@@ -1,10 +1,9 @@
 class_name EventWindow
 extends Control
 
-## A non-combat counterpart to BattleWindow. Pops up the same way (와앙 팍
-## open animation, dim log strip at the bottom), but instead of an enemy
-## stack the center holds an event tile (campfire, shrine, …) and a
-## scripted dialogue plays between the party leader and an NPC.
+## A paused-run event popup. The game tree stops while this window stays alive,
+## just like level-up panels. The center holds an event tile (campfire, shrine,
+## …) and a scripted dialogue plays between the party leader and an NPC.
 ##
 ## When the script ends, event_completed fires so Main can apply the
 ## recruit + consume the field tile.
@@ -27,12 +26,13 @@ var recruit_data: CharacterData
 ## Centerpiece sprite. main injects this per event_id; defaults to the
 ## bonfire if a caller forgets to pass one.
 var tile_texture: Texture2D
-
 var _player_visual: CharacterVisual
 var _mage_visual: CharacterVisual
 var _log_label: Label
 var _campfire_center: Vector2
 var _running: bool = true
+var _waiting_for_advance: bool = false
+var _advance_requested: bool = false
 
 
 ## Inject the event config before adding to the tree. Must run *before*
@@ -47,11 +47,10 @@ func setup(id: StringName, dialog_lines: Array, recruit: CharacterData, texture:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	custom_minimum_size = WINDOW_SIZE
 	size = WINDOW_SIZE
-	# Park ourselves in the middle of the viewport.
-	var vp: Vector2 = get_viewport().get_visible_rect().size
-	position = (vp - WINDOW_SIZE) * 0.5
+	position = _center_position()
 	_campfire_center = WINDOW_SIZE * 0.5 + TILE_CENTER_OFFSET
 	_build_chrome()
 	_build_log()
@@ -62,6 +61,35 @@ func _ready() -> void:
 	if _running:
 		event_completed.emit(event_id)
 		queue_free()
+
+
+func _center_position() -> Vector2:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	return (viewport_size - WINDOW_SIZE) * 0.5
+
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		_request_dialogue_advance()
+		get_viewport().set_input_as_handled()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		_request_dialogue_advance()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventKey and event.pressed and not event.echo:
+		var key := (event as InputEventKey).keycode
+		if key == KEY_ENTER or key == KEY_KP_ENTER:
+			_request_dialogue_advance()
+			get_viewport().set_input_as_handled()
+
+
+func _request_dialogue_advance() -> void:
+	if not _waiting_for_advance:
+		return
+	_advance_requested = true
 
 
 # ─── Layout ───────────────────────────────────────────────────────────
@@ -184,7 +212,7 @@ func _play_open_animation() -> void:
 # ─── Dialogue loop ────────────────────────────────────────────────────
 func _run_dialogue() -> void:
 	# Let the window settle before the actors animate.
-	await get_tree().create_timer(OPEN_ANIMATION_DURATION + 0.12).timeout
+	await get_tree().create_timer(OPEN_ANIMATION_DURATION + 0.12, true).timeout
 	if not _running:
 		return
 	await _mage_emerges_from_fire()
@@ -192,9 +220,21 @@ func _run_dialogue() -> void:
 		if not _running:
 			return
 		_log_label.text = "%s: %s" % [String(line.get("speaker", "")), String(line.get("line", ""))]
-		await get_tree().create_timer(LINE_HOLD_SECONDS).timeout
+		await _wait_for_click_or_timeout(LINE_HOLD_SECONDS)
 	# Tiny breather after the last line so it doesn't snap-close mid-read.
-	await get_tree().create_timer(0.3).timeout
+	await _wait_for_click_or_timeout(0.3)
+
+
+func _wait_for_click_or_timeout(duration: float) -> void:
+	_waiting_for_advance = true
+	_advance_requested = false
+	var remaining: float = duration
+	while _running and remaining > 0.0 and not _advance_requested:
+		var step: float = minf(0.05, remaining)
+		await get_tree().create_timer(step, true).timeout
+		remaining -= step
+	_waiting_for_advance = false
+	_advance_requested = false
 
 
 ## Mage fades in at the fire, slides right while walking, then turns to

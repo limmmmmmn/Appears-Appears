@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"combo_striker"
-display_name = "연계 강타"
-description = "용사: 공격력 +4. 강타를 익혀야 등장한다."
+display_name = "Combo Strike"
+description = "용사: 공격력 +4. Heavy Strike를 익혀야 등장한다."
 cost = 0
 max_level = 2
 rarity = 2

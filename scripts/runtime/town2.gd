@@ -20,6 +20,10 @@ const REROLL_COST: int = 5
 ## redundant noise.
 const SILENT_STAT_IDS: Dictionary = {
 	&"atk_up": true,
+	&"hero_atk_10p": true,
+	&"mage_atk_10p": true,
+	&"priest_atk_10p": true,
+	&"thief_atk_10p": true,
 	&"hp_up": true,
 	&"agi_up": true,
 }

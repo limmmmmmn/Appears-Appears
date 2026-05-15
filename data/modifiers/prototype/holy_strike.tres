@@ -5,14 +5,14 @@
 [resource]
 script = ExtResource("1_script")
 id = &"holy_strike"
-display_name = "홀리 강타"
+display_name = "Holy Strike"
 description = "MP 4 소모. 적 1에게 약한 데미지 + 본인 약하게 회복."
 cost = 0
 max_level = 3
 rarity = 1
 category = 1
 required_party_member_id = &"priest"
-required_modifier_id = &"blessing"
+required_modifier_id = &"battle_prayer"
 level_up_only = true
 effect_data = {
 "priest_holy_damage_flat": 5,

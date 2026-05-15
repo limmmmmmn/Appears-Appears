@@ -1,10 +1,10 @@
 class_name LevelUpStatPanel
 extends Control
 
-## Shown *before* the skill tree on level-up. One card per party member,
+## Shown before the single level-up card pick. One card per party member,
 ## stacked: portrait on top, name below, then a small column of stat
 ## deltas (old → new with a green arrow + gain). Pressing 확인 closes
-## the panel and hands off to the tree popup.
+## the panel and hands off to the card popup.
 
 signal confirmed
 
@@ -29,11 +29,13 @@ const STAT_KEYS: Array = [
 ]
 
 var _levels_gained: int = 1
+var _learned_skills: Array[ModifierData] = []
 var _built: bool = false
 
 
-func setup(levels_gained: int) -> void:
+func setup(levels_gained: int, learned_skills: Array[ModifierData]) -> void:
 	_levels_gained = maxi(1, levels_gained)
+	_learned_skills = learned_skills.duplicate()
 	if is_inside_tree() and not _built:
 		_build_ui()
 		_built = true
@@ -170,8 +172,37 @@ func _build_member_card(index: int) -> Control:
 	# Stat deltas
 	for entry: Dictionary in _stat_entries(index):
 		vbox.add_child(_build_stat_line(entry))
+	for skill: ModifierData in _learned_skills_for_member(index):
+		vbox.add_child(_build_learned_skill_line(skill))
 
 	return card
+
+
+func _learned_skills_for_member(index: int) -> Array[ModifierData]:
+	var out: Array[ModifierData] = []
+	if index < 0 or index >= GameState.party.size():
+		return out
+	var member_id: StringName = GameState.party[index].id
+	for skill: ModifierData in _learned_skills:
+		if skill == null:
+			continue
+		if skill.required_party_member_id == member_id:
+			out.append(skill)
+	return out
+
+
+func _build_learned_skill_line(skill: ModifierData) -> Control:
+	var label := Label.new()
+	label.text = "스킬 습득: %s" % skill.display_name
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", Color(0.62, 1.0, 0.72, 0.95))
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	label.add_theme_constant_override("outline_size", 2)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	label.custom_minimum_size = Vector2(0, 14)
+	label.tooltip_text = skill.description
+	return label
 
 
 ## Compute the old / new / gain triplet for every stat row. Old is just

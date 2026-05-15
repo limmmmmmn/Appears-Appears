@@ -10,8 +10,8 @@ extends CanvasLayer
 ## come through EventBus.
 
 const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.tscn")
-const SKILL_TREE_PANEL_SCENE: PackedScene = preload("res://scenes/ui/skill_tree_panel.tscn")
 const LEVEL_UP_STAT_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_stat_panel.tscn")
+const LEVEL_UP_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_panel.tscn")
 
 @onready var _stage_label: Label = %StageLabel
 @onready var _gold_label: Label = %GoldLabel
@@ -23,14 +23,15 @@ var _town_countdown: Label
 ## scratch on party_changed so we never have stale indices when a recruit
 ## or wipe shifts the party array.
 var _member_boxes: Array[PartyMemberBox] = []
-var _skill_tree_panel: SkillTreePanel
 var _stat_panel: LevelUpStatPanel
+var _level_up_panel: LevelUpPanel
+var _pending_level_up_choice_rounds: int = 0
 ## Tracks the party level seen on the previous level-up emit so the stat
 ## panel can show old→new deltas for multi-level jumps.
 var _previous_party_level: int = 1
 ## Per-frame throttle: party members now level in lockstep so the level-up
 ## signal fires N times in the same frame. We only want one toast + one
-## tree popup, so we ignore repeated emits from the same frame.
+## reward flow, so we ignore repeated emits from the same frame.
 var _last_level_up_frame: int = -1
 func _ready() -> void:
 	EventBus.party_changed.connect(_rebuild_member_boxes)
@@ -42,6 +43,7 @@ func _ready() -> void:
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.stage_started.connect(_on_stage_started)
 	EventBus.difficulty_increased.connect(_on_difficulty_increased)
+	EventBus.character_recruited.connect(_on_character_recruited)
 	_build_town_countdown()
 	_build_field_bump_button()
 	_refresh_gold()
@@ -111,37 +113,6 @@ func _update_town_countdown() -> void:
 	_town_countdown.text = "다음 마을까지 %d초" % int(ceil(left))
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	# TAB toggles the skill tree panel. Pause the game while it's open so
-	# the field doesn't keep running underneath.
-	if event is InputEventKey and event.pressed and not event.echo:
-		var key := (event as InputEventKey).keycode
-		if key == KEY_TAB:
-			_toggle_skill_tree_panel()
-			get_viewport().set_input_as_handled()
-
-
-func _toggle_skill_tree_panel() -> void:
-	if is_instance_valid(_skill_tree_panel):
-		_skill_tree_panel.queue_free_and_unpause()
-		_skill_tree_panel = null
-		return
-	_open_skill_tree_panel()
-
-
-## Shared open path so both the TAB toggle and the first-level-up auto-popup
-## go through the same code — pause, attach, wire the cleanup signal.
-func _open_skill_tree_panel() -> void:
-	if is_instance_valid(_skill_tree_panel):
-		return
-	_skill_tree_panel = SKILL_TREE_PANEL_SCENE.instantiate()
-	add_child(_skill_tree_panel)
-	get_tree().paused = true
-	_skill_tree_panel.tree_exited.connect(func() -> void:
-		_skill_tree_panel = null
-	)
-
-
 # ─── Bottom row ───────────────────────────────────────────────────────
 func _rebuild_member_boxes() -> void:
 	# Fresh party — reset throttle so the first level-up of the new run
@@ -181,10 +152,9 @@ func _on_party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: in
 	_member_boxes[index].set_level(level)
 
 
-## On level-up: "레벨 업!" toast → stat-delta panel → skill tree. The toast
-## reads, the panel lets the player parse the +HP/+ATK gains for the whole
-## party, then the tree pops for SP spending. Frame-id throttle keeps the
-## synced N-member emits from triggering the whole chain N times.
+## On level-up: "레벨 업!" toast → stat-delta panel → member card picks.
+## Frame-id throttle keeps the synced N-member emits from triggering the
+## whole chain N times.
 func _on_party_member_leveled_up(_index: int, new_level: int) -> void:
 	var current_frame: int = Engine.get_process_frames()
 	if current_frame == _last_level_up_frame:
@@ -193,22 +163,23 @@ func _on_party_member_leveled_up(_index: int, new_level: int) -> void:
 	var levels_gained: int = maxi(1, new_level - _previous_party_level)
 	_previous_party_level = new_level
 	_show_level_up_toast(new_level)
-	if is_instance_valid(_skill_tree_panel) or is_instance_valid(_stat_panel):
+	if is_instance_valid(_stat_panel) or is_instance_valid(_level_up_panel):
 		return
 	# Wait for the toast to finish *and* clear the screen so the stat panel
 	# opens on a clean stage.
-	await get_tree().create_timer(1.45).timeout
+	await get_tree().create_timer(1.45, false).timeout
 	if not is_inside_tree():
 		return
-	if is_instance_valid(_skill_tree_panel) or is_instance_valid(_stat_panel):
+	if is_instance_valid(_stat_panel) or is_instance_valid(_level_up_panel):
 		return
 	_open_stat_panel(levels_gained)
 
 
 func _open_stat_panel(levels_gained: int) -> void:
+	_pending_level_up_choice_rounds = maxi(1, levels_gained)
 	_stat_panel = LEVEL_UP_STAT_PANEL_SCENE.instantiate()
+	_stat_panel.setup(levels_gained, GameState.last_level_up_auto_skills())
 	add_child(_stat_panel)
-	_stat_panel.setup(levels_gained)
 	get_tree().paused = true
 	_stat_panel.confirmed.connect(_on_stat_panel_confirmed)
 	_stat_panel.tree_exited.connect(func() -> void:
@@ -217,15 +188,35 @@ func _open_stat_panel(levels_gained: int) -> void:
 
 
 func _on_stat_panel_confirmed() -> void:
-	# Unpause briefly so the tree's own pause toggles cleanly, then open it.
-	get_tree().paused = false
-	call_deferred("_open_skill_tree_panel")
+	call_deferred("_open_level_up_offer_sequence")
+
+
+func _open_level_up_offer_sequence() -> void:
+	if _pending_level_up_choice_rounds <= 0:
+		get_tree().paused = false
+		return
+	_pending_level_up_choice_rounds -= 1
+	var offers: Array[ModifierData] = GameState.level_up_card_offers()
+	if offers.is_empty():
+		call_deferred("_open_level_up_offer_sequence")
+		return
+	_level_up_panel = LEVEL_UP_PANEL_SCENE.instantiate()
+	_level_up_panel.setup(-1, "파티", offers)
+	add_child(_level_up_panel)
+	get_tree().paused = true
+	_level_up_panel.modifier_chosen.connect(_on_level_up_modifier_chosen)
+	_level_up_panel.tree_exited.connect(func() -> void:
+		_level_up_panel = null
+	)
+
+
+func _on_level_up_modifier_chosen(member_index: int, mod: ModifierData) -> void:
+	GameState.apply_level_up_modifier(mod)
+	call_deferred("_open_level_up_offer_sequence")
 
 
 ## Centered "레벨 업! → Lv N" banner. Lands with a TRANS_BACK punch (same
-## family as the battle-window popup), holds, then fades out. Stays above
-## the field but below the skill tree so the tree's own open animation
-## reads cleanly when it follows.
+## family as the battle-window popup), holds, then fades out above the field.
 func _show_level_up_toast(new_level: int) -> void:
 	var toast := Label.new()
 	toast.text = "레벨 업!  Lv %d" % new_level
@@ -294,6 +285,86 @@ func _show_phase_toast(text: String) -> void:
 	exit_tween.tween_interval(1.2)
 	exit_tween.tween_property(toast, "modulate:a", 0.0, 0.5)
 	exit_tween.tween_callback(toast.queue_free)
+
+
+## Fires the moment add_recruit lands a new companion. Green banner +
+## ★ glyph so it reads visually distinct from the yellow level-up toast
+## and the cool blue phase toast.
+func _on_character_recruited(character: CharacterData) -> void:
+	if character == null:
+		return
+	_show_recruit_toast(character)
+	_pulse_member_box_for_character(character)
+
+
+func _show_recruit_toast(character: CharacterData) -> void:
+	var toast := VBoxContainer.new()
+	toast.alignment = BoxContainer.ALIGNMENT_CENTER
+	toast.set_anchors_preset(Control.PRESET_FULL_RECT)
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.z_index = 4096
+	toast.top_level = true
+	toast.modulate.a = 0.0
+
+	var headline := Label.new()
+	headline.text = "★ 동료 합류! ★"
+	headline.add_theme_font_size_override("font_size", 22)
+	headline.add_theme_color_override("font_color", Color(0.62, 1.0, 0.58))
+	headline.add_theme_color_override("font_outline_color", Color(0.04, 0.12, 0.04, 1.0))
+	headline.add_theme_constant_override("outline_size", 6)
+	headline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	headline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.add_child(headline)
+
+	var name_label := Label.new()
+	name_label.text = character.display_name
+	name_label.add_theme_font_size_override("font_size", 32)
+	name_label.add_theme_color_override("font_color", Color(1.0, 0.98, 0.78))
+	name_label.add_theme_color_override("font_outline_color", Color(0.05, 0.07, 0.03, 1.0))
+	name_label.add_theme_constant_override("outline_size", 7)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.add_child(name_label)
+
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	toast.pivot_offset = vp * 0.5
+	toast.scale = Vector2(0.4, 0.4)
+	add_child(toast)
+	toast.move_to_front()
+
+	# Punchy spring-in (TRANS_BACK over-shoot) to sell the recruit moment.
+	var enter_tween: Tween = toast.create_tween()
+	enter_tween.set_parallel(true)
+	enter_tween.tween_property(toast, "scale", Vector2.ONE, 0.36)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	enter_tween.tween_property(toast, "modulate:a", 1.0, 0.18)
+
+	# Gentle hold then fade — same exit curve as the level-up toast so the
+	# overall pacing of all three toasts feels consistent.
+	var exit_tween: Tween = toast.create_tween()
+	exit_tween.tween_interval(1.3)
+	exit_tween.tween_property(toast, "modulate:a", 0.0, 0.45)
+	exit_tween.tween_callback(toast.queue_free)
+
+
+## Quick bounce on the new member's HUD box so the eye knows where to look
+## after the toast clears.
+func _pulse_member_box_for_character(character: CharacterData) -> void:
+	for i in GameState.party_size():
+		if i >= _member_boxes.size():
+			return
+		if GameState.party[i] != null and GameState.party[i].id == character.id:
+			var box: PartyMemberBox = _member_boxes[i]
+			if box == null:
+				return
+			box.pivot_offset = box.size * 0.5
+			var pulse: Tween = box.create_tween()
+			pulse.tween_property(box, "scale", Vector2(1.18, 1.18), 0.16)\
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			pulse.tween_property(box, "scale", Vector2.ONE, 0.28)\
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+			return
 
 
 func _refresh_member_box(index: int) -> void:

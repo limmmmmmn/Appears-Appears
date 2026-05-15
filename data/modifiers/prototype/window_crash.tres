@@ -5,12 +5,13 @@
 [resource]
 script = ExtResource("1_script")
 id = &"window_crash"
-display_name = "창문 충돌"
+display_name = "Window Crash"
 description = "전투 창문끼리 충돌해 안의 적에게 데미지를 준다."
 cost = 20
 max_level = 1
 rarity = 1
 category = 1
+level_up_only = true
 effect_data = {
 "window_collision_damage_ratio": 0.1
 }

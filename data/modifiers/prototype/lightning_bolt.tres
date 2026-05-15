@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"lightning_bolt"
-display_name = "라이트닝볼트"
+display_name = "Lightning Bolt"
 description = "MP 4 소모. 적 1에게 전기 데미지, 25% 확률로 옆 적도 같이."
 cost = 0
 max_level = 3

@@ -6,8 +6,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"recruit_priest"
-display_name = "사제 영입"
-description = "사제가 레벨업하며 힐을 배운다. MP 4로 아군 HP를 회복."
+display_name = "Recruit Priest"
+description = "사제가 레벨업하며 Heal을 배운다. MP 4로 아군 HP를 회복."
 cost = 30
 max_level = 1
 rarity = 1

@@ -29,9 +29,15 @@ signal difficulty_increased(tier: int)
 ## GameState.party / party_hp from scratch.
 signal party_changed()
 
+## Fired specifically when a recruit event (campfire, shrine, …) lands a
+## new companion. party_changed also fires, but this one carries the
+## character so the HUD can show a toast and Field can pop the sprite.
+signal character_recruited(character: CharacterData)
+
 # ─── Battle Window Lifecycle ──────────────────────────────────────────
 signal battle_window_opened(window: Node)
 signal battle_window_closed(window: Node)
+signal battle_window_enemy_attack_started(window: Node)
 ## All battle windows have finished — there is no active combat anywhere.
 ## Used to gate stage_cleared so it doesn't fire while combat is still running.
 signal all_battles_resolved()
@@ -51,12 +57,12 @@ signal party_member_mp_changed(index: int, new_mp: int, max_mp: int)
 signal party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: int)
 signal party_member_leveled_up(index: int, new_level: int)
 
-## Skill tree state changed. SP is a shared pool; signals carry only the
-## new totals / fact-of-change so the panel can fully refresh.
+## Legacy skill-point state changed. party_skills_changed is still used by
+## the HUD chips when level-up cards add or improve skills.
 signal party_skill_points_changed(points: int)
 signal party_skills_changed()
 
-## A party member just fired a tree skill in battle. Picked up by the
+## A party member just fired a learned skill in battle. Picked up by the
 ## HUD skill chips to play a "knock!" feedback animation.
 signal party_skill_activated(member_index: int, skill_id: StringName)
 

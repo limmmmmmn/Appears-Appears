@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"hoimi"
-display_name = "호이미"
+display_name = "Hoimi"
 description = "MP 3 소모. 자신 또는 가장 다친 아군을 약하게 회복."
 cost = 0
 max_level = 3

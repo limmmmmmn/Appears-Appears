@@ -4,14 +4,14 @@
 
 [resource]
 script = ExtResource("1_script")
-id = &"bump_blessing"
-display_name = "Bump Heal"
-description = "파티가 전투 창문에 부딪힐 때 가장 다친 아군을 회복한다."
-cost = 15
-max_level = 5
+id = &"window_fusion"
+display_name = "Fusion"
+description = "When two battle windows collide, they merge into one larger window."
+cost = 20
+max_level = 1
 rarity = 1
 category = 1
 level_up_only = true
 effect_data = {
-"window_collision_heal_flat": 2
+"window_fusion": true
 }

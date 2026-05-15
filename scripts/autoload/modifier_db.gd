@@ -11,6 +11,7 @@ const OFFER_MODE_FIXED_ORDER: ModifierPoolData.OfferMode = ModifierPoolData.Offe
 const OFFER_MODE_RANDOM_UNIQUE: ModifierPoolData.OfferMode = ModifierPoolData.OfferMode.RANDOM_UNIQUE
 const LEVEL_UP_ONLY_EFFECT_KEYS: Array[String] = [
 	"atk_flat",
+	"atk_mult",
 	"hp_flat",
 	"mp_flat",
 	"def_flat",
@@ -21,6 +22,8 @@ const LEVEL_UP_ONLY_EFFECT_KEYS: Array[String] = [
 	"mage_firewall_damage_flat",
 	"priest_heal_flat",
 	"thief_steal_chance",
+	"window_shockwave_speed",
+	"window_fusion",
 ]
 
 var _all: Array[ModifierData] = []

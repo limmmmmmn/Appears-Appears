@@ -33,9 +33,12 @@ const ICON_FALLBACK_BY_ID: Dictionary = {
 	&"bump_attack": "res://assets/sprites/bump_attack.png",
 	&"window_crash": "res://assets/sprites/window_crash.png",
 	&"bump_blessing": "res://assets/sprites/bump_heal.png",
+	&"shockwave": "res://assets/sprites/window_crash.png",
+	&"window_fusion": "res://assets/sprites/window_crash.png",
 }
 const ICON_FALLBACK_BY_EFFECT: Dictionary = {
 	"atk_flat": "res://assets/sprites/slash_basic.png",
+	"atk_mult": "res://assets/sprites/slash_basic.png",
 	"hp_flat": "res://assets/sprites/holy.png",
 	"agi_flat": "res://assets/sprites/dagger.png",
 	"evade_chance": "res://assets/sprites/dagger.png",
@@ -52,6 +55,8 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"bump_attack": Color(0.98, 0.5, 0.12, 1),
 	&"window_crash": Color(0.98, 0.66, 0.16, 1),
 	&"bump_blessing": Color(0.63, 0.86, 0.68, 1),
+	&"shockwave": Color(0.42, 0.74, 0.96, 1),
+	&"window_fusion": Color(0.58, 0.52, 0.92, 1),
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
@@ -64,6 +69,7 @@ const CARD_BG_BY_ID: Dictionary = {
 }
 const CARD_BG_BY_EFFECT: Dictionary = {
 	"atk_flat": Color(0.95, 0.28, 0.31, 1),
+	"atk_mult": Color(0.95, 0.28, 0.31, 1),
 	"hp_flat": Color(0.79, 0.89, 0.55, 1),
 	"agi_flat": Color(0.53, 0.76, 0.93, 1),
 	"evade_chance": Color(0.53, 0.76, 0.93, 1),
@@ -92,7 +98,9 @@ const STAT_LABEL_BY_KEY: Dictionary = {
 const SKILL_MP_COST_BY_ID: Dictionary = {
 	&"heavy_strike": 2,
 	&"fireburst": 6,
+	&"lightning_bolt": 4,
 	&"battle_prayer": 4,
+	&"holy_strike": 4,
 	&"pilfer": 2,
 }
 
@@ -167,7 +175,7 @@ func _effect_key_for_card() -> String:
 	var stat_key: String = _stat_card_key()
 	if not stat_key.is_empty():
 		return stat_key
-	for key in ["evade_chance", "hero_damage_bonus_mult", "priest_heal_flat", "thief_steal_chance"]:
+	for key in ["atk_mult", "evade_chance", "hero_damage_bonus_mult", "priest_heal_flat", "thief_steal_chance"]:
 		if data != null and data.effect_data.has(key):
 			return key
 	return ""
@@ -309,6 +317,9 @@ func _poster_description() -> String:
 		return "\n".join(stat_lines)
 	if data.effect_data.has("move_speed_flat"):
 		return "이동 속도 +%d" % GameState.modifier_next_int_effect(data, "move_speed_flat")
+	if data.effect_data.has("atk_mult"):
+		var atk_amount: int = int(round(GameState.modifier_next_float_effect(data, "atk_mult") * 100.0))
+		return "공격력 +%d%%" % atk_amount
 	if data.effect_data.has("hero_damage_bonus_mult"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "hero_damage_bonus_mult") * 100.0))
 		return "용사 데미지 +%d%%" % amount
@@ -319,18 +330,22 @@ func _poster_description() -> String:
 		return "아군 회복 +%d" % amount
 	if data.effect_data.has("thief_steal_chance"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "thief_steal_chance") * 100.0))
-		return "훔치기 확률 %d%%" % amount
+		return "Pilfer chance %d%%" % amount
 	if data.effect_data.has("evade_chance"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "evade_chance") * 100.0))
 		return "회피 +%d%%" % amount
 	if data.effect_data.has("party_bump_damage_ratio"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "party_bump_damage_ratio") * 100.0))
-		return "범프 공격 +%d%%" % amount
+		return "Bump Attack +%d%%" % amount
 	if data.effect_data.has("window_collision_damage_ratio"):
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "window_collision_damage_ratio") * 100.0))
-		return "충돌 데미지 +%d%%" % amount
+		return "Window Crash +%d%%" % amount
 	if data.effect_data.has("window_collision_heal_flat"):
-		return "범프 회복 +%d" % GameState.modifier_next_int_effect(data, "window_collision_heal_flat")
+		return "Bump Heal +%d" % GameState.modifier_next_int_effect(data, "window_collision_heal_flat")
+	if data.effect_data.has("window_shockwave_speed"):
+		return "Space: knock windows away"
+	if data.effect_data.has("window_fusion"):
+		return "Colliding windows merge"
 	return data.description
 
 

@@ -4,14 +4,15 @@
 
 [resource]
 script = ExtResource("1_script")
-id = &"bump_blessing"
-display_name = "Bump Heal"
-description = "파티가 전투 창문에 부딪힐 때 가장 다친 아군을 회복한다."
-cost = 15
+id = &"hero_atk_10p"
+display_name = "Hero ATK +10%"
+description = "용사의 공격력이 10% 오른다."
+cost = 0
 max_level = 5
-rarity = 1
-category = 1
+rarity = 0
+category = 0
+required_party_member_id = &"hero"
 level_up_only = true
 effect_data = {
-"window_collision_heal_flat": 2
+"atk_mult": 0.1
 }

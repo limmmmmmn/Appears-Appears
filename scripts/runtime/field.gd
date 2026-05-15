@@ -49,6 +49,19 @@ const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 @export var entry_burst_bonus: int = 2
 @export var crowd_growth_per_wave: int = 1
 @export var max_crowd_pressure: int = 7
+
+## ─── Continuous time-based field intensity ──────────────────────────
+## The field gets meaner over the 30-minute target — spawn cadence
+## tightens and the simultaneous-enemy cap grows. Both knobs ride on
+## GameState.run_intensity(), so curves stay aligned with enemy stats.
+const SPAWN_INTERVAL_START: float = 2.5
+const SPAWN_INTERVAL_END: float = 1.1
+const ENEMY_CAP_TIME_BONUS_END: int = 16
+## Town tiles are disabled for the moment — the player runs straight
+## through the field for the whole 30-min stretch. Flip this true if
+## we want them back later; gating instead of deleting so the code
+## stays intact.
+const TOWN_TILE_ENABLED: bool = false
 @export var treasure_kills_required_base: int = 3
 @export var treasure_kills_required_stage_step: int = 1
 @export var treasure_gold_base: int = 45
@@ -172,9 +185,18 @@ func _process(delta: float) -> void:
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
 		return
-	_spawn_timer = spawn_interval
+	# Cadence tightens with run intensity — spawns come fast at 30 min in.
+	_spawn_timer = _current_spawn_interval()
 	_grow_crowd_pressure()
 	_refill_enemy_population(spawn_batch_size)
+
+
+## Lerp from the gentle opening interval down to the late-run pressure
+## cadence. Mirrors GameState.run_intensity() so spawn rate and enemy
+## stats grow on the same clock.
+func _current_spawn_interval() -> float:
+	var t: float = clampf(GameState.run_intensity(), 0.0, 1.0)
+	return lerpf(SPAWN_INTERVAL_START, SPAWN_INTERVAL_END, t)
 
 
 # ─── Party visuals (data-driven) ──────────────────────────────────────
@@ -198,28 +220,50 @@ func _setup_party_visuals() -> void:
 		return
 	_player = PLAYER_SCENE.instantiate()
 	_player.setup(GameState.party[0])
-	if _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2.ZERO, _field_size)
 	# Restore the hero where they were standing; fresh runs start at center.
+	# Done before add_child so the first frame renders at the right spot.
 	if cached_positions.size() > 0:
 		_player.position = cached_positions[0]
 	else:
 		_player.position = _field_size * 0.5
 	_party_root.add_child(_player)
+	# Field bounds (camera limits) MUST be applied after add_child — the
+	# Camera2D ref is @onready, so it's null until the player enters the
+	# tree. Player.tscn ships with default 640×480 limits; if we skip this
+	# the camera freezes against those defaults instead of the real field.
+	if _player.has_method("set_field_bounds"):
+		_player.set_field_bounds(Vector2.ZERO, _field_size)
 	var leader: Node2D = _player
 	for i in range(1, GameState.party_size()):
 		var comp: Companion = COMPANION_SCENE.instantiate()
 		comp.setup(GameState.party[i])
 		comp.leader = leader
-		if i < cached_positions.size():
-			# Existing companion — keep them right where they were.
-			comp.position = cached_positions[i]
-		else:
+		var is_new_recruit: bool = i >= cached_positions.size()
+		if is_new_recruit:
 			# Brand-new recruit — drop them on the current tail so they
 			# naturally trail behind the player on the very next step.
 			comp.position = leader.position
+		else:
+			# Existing companion — keep them right where they were.
+			comp.position = cached_positions[i]
 		_party_root.add_child(comp)
+		if is_new_recruit:
+			_play_recruit_pop(comp)
 		leader = comp
+
+
+## Springy scale-in for a freshly recruited companion. Mirrors the HUD
+## recruit toast (TRANS_BACK overshoot) so the field-side and HUD-side
+## reactions feel like one beat.
+func _play_recruit_pop(comp: Node2D) -> void:
+	comp.scale = Vector2(0.2, 0.2)
+	comp.modulate.a = 0.0
+	var pop: Tween = comp.create_tween()
+	pop.set_parallel(true)
+	pop.tween_property(comp, "scale", Vector2.ONE, 0.38)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	pop.tween_property(comp, "modulate:a", 1.0, 0.2)
 
 
 # ─── Enemy spawning ───────────────────────────────────────────────────
@@ -238,10 +282,13 @@ func _on_stage_started(_stage_num: int) -> void:
 	_town_tile.reset()
 	_recenter_party()
 	_scatter_decorations()
-	_spawn_timer = spawn_interval
+	_spawn_timer = _current_spawn_interval()
 	_refill_enemy_population(_desired_enemy_count())
-	# Player sees the town pop in 10 seconds in, instead of from frame one.
-	_town_respawn_timer.start(FIRST_TOWN_DELAY)
+	# Town tiles are gated by TOWN_TILE_ENABLED while we test the pure
+	# 30-min run loop. When false, the tile stays at its off-screen park
+	# position forever and the HUD countdown stays at zero.
+	if TOWN_TILE_ENABLED:
+		_town_respawn_timer.start(FIRST_TOWN_DELAY)
 	# Recruit event tiles — campfire (마법사) + shrine (사제), one of each
 	# per run, placed at random safe spots.
 	_spawn_event_tile(FIELD_CAMPFIRE_SCENE)
@@ -473,7 +520,13 @@ func debug_spawn_all_enemy_types() -> int:
 
 
 func _desired_enemy_count() -> int:
-	return _enemy_count_for_stage(GameState.effective_stage()) + _crowd_pressure
+	var base: int = _enemy_count_for_stage(GameState.effective_stage())
+	# Time-based crowd bump on top of stage/area math. At 30 min the
+	# field carries ~16 extra simultaneous enemies, so the threat is
+	# "many small things at once" rather than "one giant statline".
+	var t: float = clampf(GameState.run_intensity(), 0.0, 1.0)
+	var time_bonus: int = int(round(t * float(ENEMY_CAP_TIME_BONUS_END)))
+	return base + time_bonus + _crowd_pressure
 
 
 func _spawn_field_enemy(data: EnemyData) -> void:

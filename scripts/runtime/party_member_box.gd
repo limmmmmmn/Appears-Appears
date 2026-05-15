@@ -248,7 +248,7 @@ func _build_skill_chips_row() -> void:
 
 
 ## Re-walks active_modifiers, picks the ones tagged to this member's job
-## and flagged level_up_only (= tree-unlocked skills + synergy / risk cards),
+## and flagged level_up_only (= level-up skills + synergy / risk cards),
 ## and re-stages one chip per distinct id. Stacking is shown as brightness
 ## bumps on the same chip rather than duplicate chips so the row stays tidy.
 func refresh_skill_chips() -> void:

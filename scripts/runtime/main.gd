@@ -24,6 +24,7 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 var _town: Town2
 var _game_over: GameOver
 var _home_base: HomeBase
+var _event_layer: CanvasLayer
 var _is_manually_paused: bool = false
 
 
@@ -72,6 +73,8 @@ func _on_town_entered(_tile: Node) -> void:
 ## pops a non-combat event window with the matching dialogue, and on
 ## completion applies the recruit + frees the tile so it can't re-fire.
 func _on_event_tile_triggered(tile: Node) -> void:
+	if _event_layer != null and is_instance_valid(_event_layer):
+		return
 	var ev_id: StringName = &""
 	if tile != null and tile.has_method("event_id"):
 		ev_id = tile.event_id()
@@ -80,10 +83,12 @@ func _on_event_tile_triggered(tile: Node) -> void:
 	var tile_tex: Texture2D = _tile_texture_for_event(ev_id)
 	if dialogue.is_empty():
 		return
-	_battle_manager.abort_all_battles()
+	_set_manual_pause(false)
 	var layer := CanvasLayer.new()
 	layer.layer = 10
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(layer)
+	_event_layer = layer
 	var window: EventWindow = EVENT_WINDOW_SCENE.instantiate()
 	# IMPORTANT: setup must run before add_child. Once we add the window,
 	# its _ready fires immediately and reads recruit_data — if we set it
@@ -138,6 +143,8 @@ func _on_event_completed(_ev_id: StringName, tile: Node, recruit: CharacterData,
 		tile.consume()
 	if is_instance_valid(layer):
 		layer.queue_free()
+	if _event_layer == layer:
+		_event_layer = null
 	get_tree().paused = false
 
 
@@ -222,24 +229,12 @@ func _set_manual_pause(is_paused: bool) -> void:
 	get_tree().paused = is_paused
 
 
-func _can_toggle_manual_pause() -> bool:
-	if _town and is_instance_valid(_town):
-		return false
-	if _game_over and is_instance_valid(_game_over):
-		return false
-	if _home_base and is_instance_valid(_home_base):
-		return false
-	return true
-
-
 ## F1 = instant stage clear (skip combat to test town)
 ## F2 = stress spawn 20 battle windows
 ## F3 = spawn one of each field enemy type
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_SPACE and _can_toggle_manual_pause():
-			_set_manual_pause(not _is_manually_paused)
-			get_viewport().set_input_as_handled()
+		if get_tree().paused:
 			return
 		if _is_manually_paused:
 			return

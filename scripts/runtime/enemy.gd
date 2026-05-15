@@ -80,6 +80,11 @@ func setup(enemy_data: EnemyData) -> void:
 		_apply_data()
 
 
+func set_battle_slot_position(slot_position: Vector2) -> void:
+	position = slot_position
+	_base_position = slot_position
+
+
 func _apply_data() -> void:
 	if data == null:
 		return

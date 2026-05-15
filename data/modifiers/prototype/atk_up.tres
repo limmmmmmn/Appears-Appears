@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"atk_up"
-display_name = "공격력"
+display_name = "Attack"
 description = "공격력을 올린다. 레벨이 오를수록 비용은 늘고 효과는 줄어든다."
 cost = 6
 max_level = 5

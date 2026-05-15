@@ -21,12 +21,11 @@ var current_level: int = 1
 var current_xp: int = 0
 var party_equipment: Array[Array] = []
 var inventory: Array[ItemData] = []
-## Skill tree state. SP is a single shared pool across the entire party —
-## any member's level-up adds to the same wallet, and unlocks come out of it.
-## unlocked_tree_skills tracks every id picked from the tree so reset_skills()
-## can refund cleanly without scanning the broader active_modifiers list.
+## Legacy skill-tree counters are kept for old call sites, but the live
+## progression now goes through per-member level-up card picks.
 var party_skill_points: int = 1
 var unlocked_tree_skills: Array[StringName] = []
+var _last_level_up_auto_skills: Array[ModifierData] = []
 var _move_speed_drag_multiplier: float = 1.0
 var _move_speed_drag_until_msec: int = 0
 var _move_speed_boost_multiplier: float = 1.0
@@ -55,7 +54,7 @@ const XP_CURVE_BASE: int = 10
 const XP_CURVE_LEVEL_STEP: int = 5
 const XP_CURVE_QUADRATIC: int = 3
 ## Every stat goes up by exactly 1 per level. Class flavor is meant to
-## come from base stats + the skill tree picks instead of the level curve.
+## come from base stats + per-member level-up picks instead of the curve.
 const DEFAULT_LEVEL_GROWTH: Dictionary = {
 	"hp": 1,
 	"mp": 1,
@@ -69,6 +68,17 @@ const LEVEL_GROWTH_BY_CHARACTER_ID: Dictionary = {
 	&"priest": {"hp": 1, "mp": 1, "atk": 1, "def": 1, "agi": 1},
 	&"thief": {"hp": 1, "mp": 1, "atk": 1, "def": 1, "agi": 1},
 }
+const LEVEL_UP_OFFER_COUNT: int = 3
+const AUTO_SKILL_LEVEL_START: int = 2
+const AUTO_SKILL_LEVEL_INTERVAL: int = 5
+const AUTO_SKILL_IDS_BY_MEMBER_ID: Dictionary = {
+	&"hero": [&"heavy_strike", &"hoimi", &"taunt"],
+	&"mage": [&"fireburst", &"lightning_bolt"],
+	&"priest": [&"battle_prayer", &"holy_strike", &"revive"],
+	&"thief": [&"pilfer", &"backstep", &"speed_up"],
+}
+const BUMP_ATTACK_ID: StringName = &"bump_attack"
+const LEVEL_UP_PARTY_CARD_OFFER_IDS: Array[StringName] = [&"window_crash", &"bump_blessing", &"shockwave", &"window_fusion"]
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
 const EFFECT_STACK_MULTIPLIERS = [1.0, 0.75, 0.55, 0.4, 0.3]
@@ -79,6 +89,16 @@ const ENEMY_HP_STAGE_LINEAR: float = 0.12
 const ENEMY_HP_STAGE_QUADRATIC: float = 0.01
 const ENEMY_ATTACK_STAGE_LINEAR: float = 0.08
 const ENEMY_ATTACK_STAGE_QUADRATIC: float = 0.006
+
+## ─── Continuous run-intensity curve ─────────────────────────────────
+## A 30-minute run should ramp from "barely a threat" to "the floor is
+## lava". The old tier-based scaling jumped every 30s — flat-flat-flat
+## then sudden spike. These constants drive a *continuous* multiplier so
+## enemies grow every frame, matching the steady party power-up curve.
+const RUN_TARGET_SECONDS: float = 1800.0    ## 30 min = full intensity
+const ENEMY_HP_AT_TARGET: float = 8.0       ## enemies have 8× HP at 30 min
+const ENEMY_ATK_AT_TARGET: float = 5.0      ## enemies hit 5× harder at 30 min
+const RUN_INTENSITY_CAP: float = 1.5        ## past 45 min, stop scaling further
 const BATTLE_WINDOW_MAX_ENEMIES: int = 5
 const STAGE_ONE_ENEMY_COUNT_WEIGHTS: Array[int] = [58, 25, 11, 5, 1]
 
@@ -147,12 +167,14 @@ func effective_stage() -> int:
 	return maxi(1, current_stage) + current_difficulty_tier()
 
 
-## Debug / tuning hook: jump straight to the next difficulty tier without
-## waiting for the 30s clock. HUD wires this to the "▲" button next to the
-## field label so the player can rev up the threat curve on demand.
+## Debug / tuning hook: jump the intensity clock forward by a chunky 2-minute
+## stride. Under the continuous run_intensity() curve, a single 30s tier bump
+## is only ~1.7% intensity — too small to feel. Two minutes ≈ 6.7%, which
+## reads as a noticeable difficulty step when mashing the HUD ▲ button.
 func bump_difficulty_tier() -> void:
-	var next_tier: int = current_difficulty_tier() + 1
-	_difficulty_elapsed = float(next_tier) * DIFFICULTY_TICK_SECONDS
+	const BUMP_STRIDE_SECONDS: float = 120.0
+	_difficulty_elapsed += BUMP_STRIDE_SECONDS
+	var next_tier: int = current_difficulty_tier()
 	_difficulty_tier_announced = next_tier
 	EventBus.difficulty_increased.emit(next_tier)
 
@@ -170,10 +192,10 @@ func set_party(members: Array[CharacterData]) -> void:
 	# Shared progression resets each run.
 	current_level = 1
 	current_xp = 0
-	# Fresh shared SP wallet. Starts empty; the first level-up grants the
-	# first point and the HUD pops the tree open as a tutorial moment.
+	# Legacy SP starts empty; level-up progression is handled by card picks.
 	party_skill_points = 0
 	unlocked_tree_skills.clear()
+	_last_level_up_auto_skills.clear()
 	for m: CharacterData in party:
 		party_equipment.append(_empty_equipment_slots())
 		party_hp.append(effective_max_hp(party_hp.size()))
@@ -334,7 +356,7 @@ func _apply_resource_restore(index: int, kind: StringName, amount: int) -> void:
 # ─── Experience / Levels ──────────────────────────────────────────────
 ## Central XP / level pool. Every member shares the same counter so
 ## recruits never trail behind, and one level-up tick refreshes stats /
-## HP / MP / SP for the entire party in one pass.
+## HP / MP for the entire party in one pass.
 func add_party_xp(amount: int) -> void:
 	if amount <= 0 or party.is_empty():
 		return
@@ -352,9 +374,8 @@ func add_party_xp(amount: int) -> void:
 		current_xp = 0
 	var levels_gained: int = current_level - level_before
 	if levels_gained > 0:
+		_apply_auto_skill_gains(level_before + 1, current_level)
 		_apply_shared_level_gains(levels_gained)
-		party_skill_points += levels_gained
-		EventBus.party_skill_points_changed.emit(party_skill_points)
 		EventBus.party_hp_changed.emit()
 	_emit_party_xp_changed()
 
@@ -403,7 +424,84 @@ func _apply_shared_level_gains(levels_gained: int) -> void:
 		EventBus.party_member_leveled_up.emit(i, current_level)
 
 
-# ─── Skill tree ───────────────────────────────────────────────────────
+# ─── Level-up cards / skills ──────────────────────────────────────────
+func level_up_card_offers() -> Array[ModifierData]:
+	var offers: Array[ModifierData] = []
+	var bump_attack_unlearned: bool = modifier_level(BUMP_ATTACK_ID) <= 0
+	if bump_attack_unlearned:
+		_append_level_up_offer(offers, BUMP_ATTACK_ID)
+	var pool: Array[StringName] = []
+	if not bump_attack_unlearned:
+		for offer_id: StringName in LEVEL_UP_PARTY_CARD_OFFER_IDS:
+			pool.append(offer_id)
+	pool.shuffle()
+	for offer_id: StringName in pool:
+		if offers.size() >= LEVEL_UP_OFFER_COUNT:
+			return offers
+		_append_level_up_offer(offers, offer_id)
+	return offers
+
+
+func last_level_up_auto_skills() -> Array[ModifierData]:
+	return _last_level_up_auto_skills.duplicate()
+
+
+func apply_level_up_modifier(mod: ModifierData) -> bool:
+	if mod == null or not can_add_modifier(mod):
+		return false
+	add_modifier(mod)
+	EventBus.party_skills_changed.emit()
+	EventBus.party_hp_changed.emit()
+	return true
+
+
+func _append_level_up_offer(offers: Array[ModifierData], offer_id: StringName) -> void:
+	if offer_id == &"":
+		return
+	for existing: ModifierData in offers:
+		if existing != null and existing.id == offer_id:
+			return
+	var mod: ModifierData = ModifierDB.get_by_id(offer_id)
+	if mod != null and can_add_modifier(mod):
+		offers.append(mod)
+
+
+func _apply_auto_skill_gains(from_level: int, to_level: int) -> void:
+	_last_level_up_auto_skills.clear()
+	for level in range(from_level, to_level + 1):
+		if not _is_auto_skill_level(level):
+			continue
+		for member: CharacterData in party:
+			if member == null:
+				continue
+			var skill: ModifierData = _next_auto_skill_for_member(member.id)
+			if skill == null:
+				continue
+			add_modifier(skill)
+			_last_level_up_auto_skills.append(skill)
+	if not _last_level_up_auto_skills.is_empty():
+		EventBus.party_skills_changed.emit()
+
+
+func _is_auto_skill_level(level: int) -> bool:
+	if level == AUTO_SKILL_LEVEL_START:
+		return true
+	if level <= 0:
+		return false
+	return level % AUTO_SKILL_LEVEL_INTERVAL == 0
+
+
+func _next_auto_skill_for_member(member_id: StringName) -> ModifierData:
+	for skill_id: StringName in AUTO_SKILL_IDS_BY_MEMBER_ID.get(member_id, []):
+		if modifier_level(skill_id) > 0:
+			continue
+		var skill: ModifierData = ModifierDB.get_by_id(skill_id)
+		if skill != null and can_add_modifier(skill):
+			return skill
+	return null
+
+
+# ─── Legacy skill tree ────────────────────────────────────────────────
 ## Spend one shared SP to unlock (or level up) a tree node. The pick goes
 ## into active_modifiers exactly like a level-up card pick so existing
 ## battle-effect code keeps working untouched.
@@ -614,6 +712,10 @@ func add_recruit(character: CharacterData) -> bool:
 	party_hp.append(effective_max_hp(party.size() - 1))
 	party_mp.append(effective_max_mp(party.size() - 1))
 	EventBus.party_changed.emit()
+	# Fired AFTER party_changed so the HUD's member-box rebuild is already
+	# done by the time the toast lands — the recruit's box can pulse along
+	# with the banner instead of popping in on a stale row.
+	EventBus.character_recruited.emit(character)
 	return true
 
 
@@ -640,6 +742,7 @@ func _recruit_companion(mod: ModifierData) -> void:
 	recruited_companions.append(mod)
 	EventBus.modifier_picked.emit(mod)
 	EventBus.party_changed.emit()
+	EventBus.character_recruited.emit(recruited)
 
 
 func _available_recruits(mod: ModifierData) -> Array[CharacterData]:
@@ -834,16 +937,23 @@ func _enemy_stage_index() -> int:
 	return maxi(0, current_stage - 1) + current_difficulty_tier()
 
 
+## 0.0 at run start, 1.0 at the 30-min target, capped at 1.5 for long
+## sessions. Smooth (no tier steps) so the threat ramp matches the way
+## the party power-ups feel: every second the field's a little worse.
+func run_intensity() -> float:
+	return clampf(_difficulty_elapsed / RUN_TARGET_SECONDS, 0.0, RUN_INTENSITY_CAP)
+
+
 func _enemy_hp_multiplier(data: EnemyData) -> float:
-	var s: float = float(_enemy_stage_index())
-	var base_mult: float = 1.0 + s * ENEMY_HP_STAGE_LINEAR + s * s * ENEMY_HP_STAGE_QUADRATIC
-	return _enemy_species_multiplier(data, base_mult, 0.8, 0.85, 1.2)
+	var t: float = run_intensity()
+	var base_mult: float = 1.0 + t * (ENEMY_HP_AT_TARGET - 1.0)
+	return _enemy_species_multiplier(data, base_mult, 0.85, 0.9, 1.1)
 
 
 func _enemy_attack_multiplier(data: EnemyData) -> float:
-	var s: float = float(_enemy_stage_index())
-	var base_mult: float = 1.0 + s * ENEMY_ATTACK_STAGE_LINEAR + s * s * ENEMY_ATTACK_STAGE_QUADRATIC
-	return _enemy_species_multiplier(data, base_mult, 0.6, 0.85, 1.15)
+	var t: float = run_intensity()
+	var base_mult: float = 1.0 + t * (ENEMY_ATK_AT_TARGET - 1.0)
+	return _enemy_species_multiplier(data, base_mult, 0.8, 0.9, 1.1)
 
 
 func _enemy_species_multiplier(
@@ -961,7 +1071,9 @@ func effective_attack(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat")
+	var flat_attack: int = party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat")
+	var mult_bonus: float = _stacked_float_effect_for_character(character_id, "atk_mult", EFFECT_STACK_MULTIPLIERS)
+	return maxi(0, int(round(float(flat_attack) * (1.0 + mult_bonus))))
 
 
 func effective_defense(index: int) -> int:
@@ -1189,6 +1301,21 @@ func window_collision_heal_amount() -> int:
 	return _stacked_int_effect("window_collision_heal_flat")
 
 
+func window_shockwave_speed() -> float:
+	var speed: float = 0.0
+	for mod: ModifierData in active_modifiers:
+		if mod.effect_data.has("window_shockwave_speed"):
+			speed = maxf(speed, float(mod.effect_data.get("window_shockwave_speed", 0.0)))
+	return speed
+
+
+func window_fusion_enabled() -> bool:
+	for mod: ModifierData in active_modifiers:
+		if bool(mod.effect_data.get("window_fusion", false)):
+			return true
+	return false
+
+
 func battle_window_push_enabled() -> bool:
 	return window_collision_damage_ratio() > 0.0
 
@@ -1224,6 +1351,7 @@ func reset_run() -> void:
 	recruited_companions.clear()
 	party_skill_points = 0
 	unlocked_tree_skills.clear()
+	_last_level_up_auto_skills.clear()
 	_move_speed_drag_multiplier = 1.0
 	_move_speed_drag_until_msec = 0
 	_move_speed_boost_multiplier = 1.0

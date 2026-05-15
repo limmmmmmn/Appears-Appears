@@ -33,6 +33,7 @@ const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
 
 const BASE_WINDOW_SIZE: Vector2 = Vector2(96.0, 72.0)
+const FUSION_EXTRA_WINDOW_SIZE: Vector2 = Vector2(32.0, 24.0)
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -246,6 +247,98 @@ func claim_recovery_orb_count() -> int:
 
 func field_drop_position() -> Vector2:
 	return _field_drop_position
+
+
+func living_enemy_count() -> int:
+	return _living_enemies().size()
+
+
+func absorb_window(other: BattleWindow) -> bool:
+	if other == null or other == self or not is_instance_valid(other):
+		return false
+	var incoming_enemies: Array[Enemy] = other._detach_living_enemies_for_fusion()
+	if incoming_enemies.is_empty():
+		return false
+	_earned_gold_total += other._earned_gold_total
+	_earned_xp_total += other.claim_xp_reward()
+	_item_drops.append_array(other.claim_item_drops())
+	_earned_recovery_orbs += other.claim_recovery_orb_count()
+	for enemy: Enemy in incoming_enemies:
+		_adopt_enemy_for_fusion(enemy)
+	_rebuild_after_fusion()
+	other._finish_as_fusion_source()
+	_play_crash_flash()
+	_log_label.text = "Fusion! %d enemies" % living_enemy_count()
+	return true
+
+
+func _detach_living_enemies_for_fusion() -> Array[Enemy]:
+	_running = false
+	_turn_timer.stop()
+	var detached: Array[Enemy] = []
+	for enemy: Enemy in _living_enemies():
+		_disconnect_enemy_callbacks(enemy, self)
+		detached.append(enemy)
+	_enemies.clear()
+	return detached
+
+
+func _adopt_enemy_for_fusion(enemy: Enemy) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	enemy.reparent(_enemy_anchor)
+	enemy.hp_changed.connect(_on_enemy_hp_changed)
+	enemy.died.connect(_on_enemy_died.bind(enemy))
+	_enemies.append(enemy)
+
+
+func _disconnect_enemy_callbacks(enemy: Enemy, window: BattleWindow) -> void:
+	for connection: Dictionary in enemy.hp_changed.get_connections():
+		var hp_callable: Callable = connection["callable"]
+		if hp_callable.is_valid() and hp_callable.get_object() == window:
+			enemy.hp_changed.disconnect(hp_callable)
+	for connection: Dictionary in enemy.died.get_connections():
+		var died_callable: Callable = connection["callable"]
+		if died_callable.is_valid() and died_callable.get_object() == window:
+			enemy.died.disconnect(died_callable)
+
+
+func _rebuild_after_fusion() -> void:
+	_enemies = _living_enemies()
+	_planned_enemy_count = _enemies.size()
+	_planned_enemy_data.clear()
+	for enemy: Enemy in _enemies:
+		if enemy.data != null:
+			_planned_enemy_data.append(enemy.data)
+	if not _planned_enemy_data.is_empty():
+		enemy_data = _planned_enemy_data.front()
+	_apply_enemy_layout(_enemies.size())
+	_apply_fusion_size_bonus()
+	for i in _enemies.size():
+		var enemy: Enemy = _enemies[i]
+		if enemy != null and is_instance_valid(enemy):
+			enemy.set_battle_slot_position(_enemy_offset(i, _enemies.size()))
+	_name_label.text = _encounter_display_name()
+	_refresh_hp_label()
+	_rebuild_turn_queue()
+
+
+func _apply_fusion_size_bonus() -> void:
+	var fusion_size: Vector2 = size + FUSION_EXTRA_WINDOW_SIZE
+	custom_minimum_size = fusion_size
+	size = fusion_size
+	_enemy_anchor.position = Vector2(
+		fusion_size.x * 0.5,
+		ENEMY_AREA_TOP + (fusion_size.y - ENEMY_AREA_BOTTOM - ENEMY_AREA_TOP) * 0.5
+	)
+
+
+func _finish_as_fusion_source() -> void:
+	_running = false
+	_turn_timer.stop()
+	if _slide_tween and _slide_tween.is_valid():
+		_slide_tween.kill()
+	queue_free()
 
 
 ## When `single_target` is true the damage lands on exactly one random
@@ -667,7 +760,7 @@ func _mage_firewall_attack(attacker_index: int) -> void:
 	if target_count <= 0:
 		return
 	EventBus.party_skill_activated.emit(attacker_index, &"fireburst")
-	_log_label.text = "%s의 파이어월!" % member.display_name
+	_log_label.text = "%s's Firewall!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	var crit: Dictionary = GameState.roll_crit()
 	var damage: int = int(round(float(GameState.mage_firewall_damage(attacker_index)) * float(crit["mult"])))
@@ -692,7 +785,7 @@ func _priest_heal_spell(attacker_index: int) -> void:
 	var member: CharacterData = GameState.party[attacker_index]
 	var target: CharacterData = GameState.party[heal_target]
 	EventBus.party_skill_activated.emit(attacker_index, &"battle_prayer")
-	_log_label.text = "%s의 힐!" % member.display_name
+	_log_label.text = "%s's Heal!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	var before_hp: int = GameState.party_hp[heal_target]
 	GameState.heal_party_member(heal_target, GameState.priest_heal_amount())
@@ -713,7 +806,7 @@ func _hero_hoimi_spell(attacker_index: int) -> void:
 	var member: CharacterData = GameState.party[attacker_index]
 	var target: CharacterData = GameState.party[heal_target]
 	EventBus.party_skill_activated.emit(attacker_index, &"hoimi")
-	_log_label.text = "%s의 호이미!" % member.display_name
+	_log_label.text = "%s's Hoimi!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	var before_hp: int = GameState.party_hp[heal_target]
 	GameState.heal_party_member(heal_target, GameState.hero_hoimi_amount(attacker_index))
@@ -730,7 +823,7 @@ func _mage_lightning_attack(attacker_index: int, target_enemy: Enemy) -> void:
 		return
 	var member: CharacterData = GameState.party[attacker_index]
 	EventBus.party_skill_activated.emit(attacker_index, &"lightning_bolt")
-	_log_label.text = "%s의 라이트닝볼트!" % member.display_name
+	_log_label.text = "%s's Lightning Bolt!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	var base_damage: int = GameState.mage_lightning_damage(attacker_index)
 	var crit: Dictionary = GameState.roll_crit()
@@ -766,7 +859,7 @@ func _priest_holy_strike(attacker_index: int, target_enemy: Enemy) -> void:
 		return
 	var member: CharacterData = GameState.party[attacker_index]
 	EventBus.party_skill_activated.emit(attacker_index, &"holy_strike")
-	_log_label.text = "%s의 홀리 강타!" % member.display_name
+	_log_label.text = "%s's Holy Strike!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	var damage: int = GameState.priest_holy_damage(attacker_index)
 	var crit: Dictionary = GameState.roll_crit()
@@ -816,6 +909,7 @@ func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
 func _enemy_attack(enemy: Enemy) -> void:
 	if not is_instance_valid(enemy) or not enemy.is_alive():
 		return
+	EventBus.battle_window_enemy_attack_started.emit(self)
 	var alive_indices: Array[int] = []
 	for i in GameState.party_size():
 		if GameState.is_alive(i):
@@ -827,11 +921,13 @@ func _enemy_attack(enemy: Enemy) -> void:
 	var attacker_name: String = enemy.data.display_name if enemy.data else "Enemy"
 	_log_label.text = "%s의 공격!" % attacker_name
 	await _battle_pause(ATTACK_CALL_DURATION)
-	if not is_instance_valid(enemy) or not enemy.is_alive() or not GameState.is_alive(target_index):
+	if not _running or not is_instance_valid(enemy) or not enemy.is_alive() or not GameState.is_alive(target_index):
 		return
 	if GameState.roll_evade(target_index):
 		enemy.play_attack_lunge()
 		await _battle_pause(IMPACT_MESSAGE_DELAY)
+		if not _running:
+			return
 		_log_label.text = "%s는 몸을 피했다!" % target.display_name
 		await _battle_pause(RESULT_MESSAGE_DURATION)
 		return
@@ -839,6 +935,8 @@ func _enemy_attack(enemy: Enemy) -> void:
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
 	await _battle_pause(IMPACT_MESSAGE_DELAY)
+	if not _running:
+		return
 	_log_label.text = "%s에게 %d포인트 데미지!!" % [target.display_name, dealt]
 	await _battle_pause(RESULT_MESSAGE_DURATION)
 

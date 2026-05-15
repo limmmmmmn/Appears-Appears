@@ -6,8 +6,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"recruit_mage"
-display_name = "마법사 영입"
-description = "마법사가 레벨업하며 파이어월을 배운다. MP 6로 모든 적을 공격."
+display_name = "Recruit Mage"
+description = "마법사가 레벨업하며 Firewall을 배운다. MP 6로 모든 적을 공격."
 cost = 30
 max_level = 1
 rarity = 1

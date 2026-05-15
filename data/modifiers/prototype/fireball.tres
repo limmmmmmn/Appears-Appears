@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"fireball"
-display_name = "파이어볼"
+display_name = "Fireball"
 description = "MP 3 소모. 적 1에게 화염 데미지."
 cost = 0
 max_level = 3

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"speed_up"
-display_name = "스피드업"
+display_name = "Speed Up"
 description = "MP 3 소모. 모든 아군 민첩 +50%. 2턴."
 cost = 0
 max_level = 3

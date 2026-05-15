@@ -2,11 +2,11 @@ class_name BattleManager
 extends CanvasLayer
 
 ## Spawns BattleWindows on enemy_encountered, then lets them drift away from
-## overlapping windows or the player and settle into their new screen position.
+## overlapping windows or the player and settle into their new world position.
 ##
-## CanvasLayer base = screen-space rendering. Battle windows stay locked to
-## the viewport regardless of where the world camera is looking.
-## Windows themselves are independent — manager only decides where they live.
+## CanvasLayer base = screen-space rendering, but the manager keeps each
+## BattleWindow anchored to a world-space rect. The screen position is derived
+## from the active camera every frame, then clamped so windows never leave view.
 
 const BATTLE_WINDOW_SCENE: PackedScene = preload("res://scenes/battle_window.tscn")
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
@@ -17,7 +17,6 @@ const SPAWN_CENTER: Vector2 = Vector2(260, 56)
 const SLOT_MARGIN: float = 2.0
 const HUD_RESERVED_BOTTOM: float = 8.0
 const SPAWN_DISTANCE: float = 52.0
-const WINDOW_PUSH_PADDING: float = 10.0
 const WINDOW_PUSH_STRENGTH: float = 260.0
 const PARTY_COLLISION_SIZE: Vector2 = Vector2(18.0, 24.0)
 const PARTY_COLLISION_STRENGTH: float = 1800.0
@@ -27,10 +26,12 @@ const ORC_WINDOW_DRAG_SPEED_MULTIPLIER: float = 0.45
 const ORC_WINDOW_DRAG_DURATION: float = 0.12
 const VELOCITY_DAMPING: float = 4.6
 const MAX_WINDOW_SPEED: float = 180.0
-const SETTLE_SPEED: float = 10.0
-const SETTLE_INTERVAL: float = 0.08
 const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 1.5
 const PARTY_COLLISION_DAMAGE_COOLDOWN: float = 1.2
+const SHOCKWAVE_RADIUS: float = 150.0
+const SHOCKWAVE_COOLDOWN: float = 0.7
+const SHOCKWAVE_BOOST_DURATION: float = 0.24
+const SHOCKWAVE_MAX_WINDOW_SPEED: float = 560.0
 ## Max total HP that bump_blessing can heal from a single window's lifetime.
 ## Prevents "infinite bump-heal" sustain via repeated collisions.
 const BUMP_HEAL_PER_WINDOW_CAP: int = 8
@@ -38,33 +39,41 @@ const DROP_RING_RADIUS: float = 16.0
 const DROP_RING_RADIUS_STEP: float = 7.0
 const DROP_RING_SLOTS: int = 8
 
-var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
-var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 screen velocity.
+var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 world rect.
+var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 world velocity.
 var _collision_cooldowns: Dictionary = {}  ## window pair key -> remaining seconds.
 var _party_collision_cooldowns: Dictionary = {}  ## battle window id -> remaining seconds.
 var _bump_heal_totals: Dictionary = {}  ## battle window id -> cumulative HP healed.
-var _settle_timer: float = 0.0
+var _shockwave_boost_timers: Dictionary = {}  ## battle window id -> remaining boost seconds.
+var _shockwave_cooldown: float = 0.0
 
 
 func _ready() -> void:
 	EventBus.enemy_encountered.connect(_on_enemy_encountered)
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
+	EventBus.battle_window_enemy_attack_started.connect(_on_battle_window_enemy_attack_started)
 	EventBus.party_wiped.connect(_on_party_wiped)
 
 
 func _process(delta: float) -> void:
 	_purge_invalid_window_references()
-	if _window_rects.is_empty():
-		return
-	_settle_timer += delta
 	_tick_collision_cooldowns(delta)
 	_tick_party_collision_cooldowns(delta)
+	_tick_shockwave_state(delta)
+	if _window_rects.is_empty():
+		return
 	_apply_window_push(delta)
 
 
 func active_window_count() -> int:
 	_purge_invalid_window_references()
 	return _window_rects.size()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if (event as InputEventKey).physical_keycode == KEY_SPACE and _try_cast_shockwave():
+			get_viewport().set_input_as_handled()
 
 
 # ─── Spawning ─────────────────────────────────────────────────────────
@@ -93,11 +102,13 @@ func _spawn_window(data: EnemyData, source: Node2D = null, enemy_count: int = 0)
 	var field_drop_position: Vector2 = source.global_position if source != null and is_instance_valid(source) else Vector2.INF
 	window.setup(data, field_drop_position, enemy_count)
 	var window_size: Vector2 = window.get_expected_window_size()
-	var spawn_position: Vector2 = _spawn_position_for_encounter(window_size, source)
-	window.position = spawn_position
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var spawn_position: Vector2 = _spawn_position_for_encounter(window_size, source, viewport_size)
+	window.position = _world_to_screen_position(spawn_position, viewport_size)
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
 	add_child(window)
+	_bring_window_to_front(window)
 	_apply_window_push(0.0, true)
 
 
@@ -108,28 +119,26 @@ func _encounter_enemy_count(field_enemy: Node) -> int:
 
 
 # ─── Window drift ─────────────────────────────────────────────────────
-func _spawn_position_for_encounter(window_size: Vector2, source: Node2D) -> Vector2:
+func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, viewport_size: Vector2) -> Vector2:
 	if source == null or not is_instance_valid(source):
-		return _random_spawn_position(window_size)
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var player_position: Vector2 = _player_screen_position()
+		return _random_spawn_position(window_size, viewport_size)
+	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _clamped_position(SPAWN_CENTER, window_size, viewport_size)
-	var source_position: Vector2 = source.get_global_transform_with_canvas().origin
+		return _clamped_position(_screen_to_world_position(SPAWN_CENTER, viewport_size), window_size, viewport_size)
+	var source_position: Vector2 = source.global_position
 	var direction: Vector2 = source_position - player_position
 	if direction.length_squared() < 1.0:
-		return _random_spawn_position(window_size)
+		return _random_spawn_position(window_size, viewport_size)
 	direction = direction.normalized()
 	var half_extent: float = absf(direction.x) * window_size.x * 0.5 + absf(direction.y) * window_size.y * 0.5
 	var center: Vector2 = player_position + direction * (SPAWN_DISTANCE + half_extent)
 	return _clamped_position(center - window_size * 0.5, window_size, viewport_size)
 
 
-func _random_spawn_position(window_size: Vector2) -> Vector2:
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var player_position: Vector2 = _player_screen_position()
+func _random_spawn_position(window_size: Vector2, viewport_size: Vector2) -> Vector2:
+	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _clamped_position(SPAWN_CENTER, window_size, viewport_size)
+		return _clamped_position(_screen_to_world_position(SPAWN_CENTER, viewport_size), window_size, viewport_size)
 	var candidates: Array[Vector2] = [
 		player_position + Vector2(-window_size.x * 0.5, -SPAWN_DISTANCE - window_size.y),
 		player_position + Vector2(-window_size.x * 0.5, SPAWN_DISTANCE),
@@ -144,36 +153,54 @@ func _random_spawn_position(window_size: Vector2) -> Vector2:
 
 
 func _is_spawn_position_valid(pos: Vector2, size: Vector2, viewport_size: Vector2) -> bool:
-	var play_bottom: float = viewport_size.y - HUD_RESERVED_BOTTOM
+	var bounds: Rect2 = _camera_visible_world_rect(viewport_size)
+	var zoom: Vector2 = _camera_zoom()
+	var margin_x: float = SLOT_MARGIN * zoom.x
+	var margin_y: float = SLOT_MARGIN * zoom.y
+	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM * zoom.y
 	return (
-		pos.x >= SLOT_MARGIN
-		and pos.y >= SLOT_MARGIN
-		and pos.x + size.x <= viewport_size.x - SLOT_MARGIN
+		pos.x >= bounds.position.x + margin_x
+		and pos.y >= bounds.position.y + margin_y
+		and pos.x + size.x <= bounds.end.x - margin_x
 		and pos.y + size.y <= play_bottom
 	)
 
 
 func _apply_window_push(delta: float, burst: bool = false) -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var party_positions: Array[Vector2] = _party_screen_positions()
+	var party_positions: Array[Vector2] = _party_world_positions()
 	var window_collision_enabled: bool = GameState.battle_window_push_enabled()
+	var window_fusion_enabled: bool = GameState.window_fusion_enabled()
 	var party_collision_enabled: bool = GameState.party_window_push_enabled()
 	var windows: Array[BattleWindow] = _active_windows()
 	for window: BattleWindow in windows:
 		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
-		_window_rects[window] = Rect2(window.position, _window_rects[window].size)
+		var clamped_rect: Rect2 = _window_rects[window]
+		clamped_rect.position = _clamped_position(clamped_rect.position, clamped_rect.size, viewport_size)
+		_window_rects[window] = clamped_rect
+	for window: BattleWindow in windows:
+		if not is_instance_valid(window) or not _window_rects.has(window):
+			continue
 		var force := Vector2.ZERO
 		var rect: Rect2 = _window_rects[window]
+		var fused_this_window: bool = false
 		for other: BattleWindow in windows:
 			if window == other or not is_instance_valid(other) or not _window_rects.has(other):
 				continue
-			if window_collision_enabled:
+			if window_collision_enabled or window_fusion_enabled:
 				if window.get_instance_id() < other.get_instance_id():
-					_apply_window_collision_damage(window, rect, other, _window_rects[other])
+					if window_fusion_enabled and _apply_window_fusion(window, rect, other, _window_rects[other], viewport_size):
+						fused_this_window = true
+						break
+					if window_collision_enabled:
+						_apply_window_collision_damage(window, rect, other, _window_rects[other])
 					if not is_instance_valid(window) or not is_instance_valid(other):
 						break
-				force += _window_overlap_push(window, rect, other, _window_rects[other])
+				if window_collision_enabled and _window_rects.has(other):
+					force += _window_overlap_push(window, rect, other, _window_rects[other])
+		if fused_this_window:
+			continue
 		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
 		if party_collision_enabled:
@@ -187,23 +214,18 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 				force += _party_collision_push(rect, party_position)
 		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
-		if window_collision_enabled or party_collision_enabled:
+		if window_collision_enabled or window_fusion_enabled or party_collision_enabled:
 			force += _wall_push(rect, viewport_size)
 		force *= _window_push_multiplier(window)
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
 		var step_delta: float = 1.0 / 60.0 if burst else delta
 		velocity += force * step_delta
-		velocity = velocity.limit_length(MAX_WINDOW_SPEED)
+		velocity = velocity.limit_length(_max_speed_for_window(window))
 		velocity = velocity.move_toward(Vector2.ZERO, VELOCITY_DAMPING * velocity.length() * step_delta)
-		var next_position: Vector2 = _clamped_position(window.position + velocity * step_delta, rect.size, viewport_size)
+		var next_position: Vector2 = _clamped_position(rect.position + velocity * step_delta, rect.size, viewport_size)
 		_window_velocities[window] = velocity
 		_window_rects[window] = Rect2(next_position, rect.size)
-		if burst or velocity.length() >= SETTLE_SPEED:
-			window.push_to(next_position)
-		elif _settle_timer >= SETTLE_INTERVAL:
-			window.settle_to(next_position)
-	if _settle_timer >= SETTLE_INTERVAL:
-		_settle_timer = 0.0
+		window.push_to(_world_to_screen_position(next_position, viewport_size))
 
 
 func _active_windows() -> Array[BattleWindow]:
@@ -233,18 +255,35 @@ func _forget_window_reference(window) -> void:
 		var window_key: String = str(window.get_instance_id())
 		_party_collision_cooldowns.erase(window_key)
 		_bump_heal_totals.erase(window_key)
+		_shockwave_boost_timers.erase(window_key)
+
+
+func _on_battle_window_enemy_attack_started(window: Node) -> void:
+	var battle_window := window as BattleWindow
+	if battle_window == null or not _window_rects.has(battle_window):
+		return
+	_bring_window_to_front(battle_window)
+
+
+func _bring_window_to_front(window: BattleWindow) -> void:
+	if not is_instance_valid(window) or window.get_parent() != self:
+		return
+	for raw_window in _window_rects.keys():
+		var battle_window := raw_window as BattleWindow
+		if battle_window != null and is_instance_valid(battle_window):
+			battle_window.z_index = 0
+	window.z_index = 1
+	move_child(window, get_child_count() - 1)
 
 
 func _window_overlap_push(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> Vector2:
-	var padded := Rect2(rect.position - Vector2.ONE * WINDOW_PUSH_PADDING, rect.size + Vector2.ONE * WINDOW_PUSH_PADDING * 2.0)
-	var other_padded := Rect2(other.position - Vector2.ONE * WINDOW_PUSH_PADDING, other.size + Vector2.ONE * WINDOW_PUSH_PADDING * 2.0)
-	if not padded.intersects(other_padded):
+	if not rect.intersects(other):
 		return Vector2.ZERO
-	var delta: Vector2 = padded.get_center() - other_padded.get_center()
+	var delta: Vector2 = rect.get_center() - other.get_center()
 	if delta == Vector2.ZERO:
 		delta = _stable_separation_direction(window, other_window)
-	var overlap_x: float = minf(padded.end.x, other_padded.end.x) - maxf(padded.position.x, other_padded.position.x)
-	var overlap_y: float = minf(padded.end.y, other_padded.end.y) - maxf(padded.position.y, other_padded.position.y)
+	var overlap_x: float = minf(rect.end.x, other.end.x) - maxf(rect.position.x, other.position.x)
+	var overlap_y: float = minf(rect.end.y, other.end.y) - maxf(rect.position.y, other.position.y)
 	var push: float = maxf(0.0, minf(overlap_x, overlap_y))
 	return delta.normalized() * push * WINDOW_PUSH_STRENGTH
 
@@ -273,6 +312,23 @@ func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_win
 	dealt += other_window.apply_window_collision_damage(damage_ratio)
 	if dealt > 0:
 		_collision_cooldowns[key] = WINDOW_COLLISION_DAMAGE_COOLDOWN
+
+
+func _apply_window_fusion(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2, viewport_size: Vector2) -> bool:
+	if not rect.intersects(other):
+		return false
+	if not window.absorb_window(other_window):
+		return false
+	var merged_rect: Rect2 = rect.merge(other)
+	var next_size: Vector2 = window.size
+	var next_position: Vector2 = _clamped_position(merged_rect.get_center() - next_size * 0.5, next_size, viewport_size)
+	var merged_velocity: Vector2 = (_window_velocities.get(window, Vector2.ZERO) + _window_velocities.get(other_window, Vector2.ZERO)) * 0.5
+	_forget_window_reference(other_window)
+	_window_rects[window] = Rect2(next_position, next_size)
+	_window_velocities[window] = merged_velocity
+	window.push_to(_world_to_screen_position(next_position, viewport_size))
+	_bring_window_to_front(window)
+	return true
 
 
 func _apply_party_collision_effects(window: BattleWindow) -> void:
@@ -435,6 +491,64 @@ func _tick_party_collision_cooldowns(delta: float) -> void:
 			_party_collision_cooldowns[key] = remaining
 
 
+func _tick_shockwave_state(delta: float) -> void:
+	_shockwave_cooldown = maxf(0.0, _shockwave_cooldown - delta)
+	for key: String in _shockwave_boost_timers.keys():
+		var remaining: float = float(_shockwave_boost_timers[key]) - delta
+		if remaining <= 0.0:
+			_shockwave_boost_timers.erase(key)
+		else:
+			_shockwave_boost_timers[key] = remaining
+
+
+func _try_cast_shockwave() -> bool:
+	var shockwave_speed: float = GameState.window_shockwave_speed()
+	if shockwave_speed <= 0.0 or _shockwave_cooldown > 0.0 or _window_rects.is_empty():
+		return false
+	var origin: Vector2 = _party_world_center()
+	if origin == Vector2.INF:
+		return false
+	var hit_any: bool = false
+	for window: BattleWindow in _active_windows():
+		if not is_instance_valid(window) or not _window_rects.has(window):
+			continue
+		var rect: Rect2 = _window_rects[window]
+		var delta: Vector2 = rect.get_center() - origin
+		var distance: float = delta.length()
+		if distance > SHOCKWAVE_RADIUS:
+			continue
+		var direction: Vector2 = delta.normalized() if distance > 1.0 else _shockwave_fallback_direction(window)
+		var falloff: float = lerpf(1.0, 0.55, clampf(distance / SHOCKWAVE_RADIUS, 0.0, 1.0))
+		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
+		_window_velocities[window] = velocity + direction * shockwave_speed * falloff
+		_shockwave_boost_timers[str(window.get_instance_id())] = SHOCKWAVE_BOOST_DURATION
+		hit_any = true
+	if hit_any:
+		_shockwave_cooldown = SHOCKWAVE_COOLDOWN
+	return hit_any
+
+
+func _max_speed_for_window(window: BattleWindow) -> float:
+	if float(_shockwave_boost_timers.get(str(window.get_instance_id()), 0.0)) > 0.0:
+		return SHOCKWAVE_MAX_WINDOW_SPEED
+	return MAX_WINDOW_SPEED
+
+
+func _party_world_center() -> Vector2:
+	var positions: Array[Vector2] = _party_world_positions()
+	if positions.is_empty():
+		return Vector2.INF
+	var sum := Vector2.ZERO
+	for position: Vector2 in positions:
+		sum += position
+	return sum / float(positions.size())
+
+
+func _shockwave_fallback_direction(window: BattleWindow) -> Vector2:
+	var angle: float = float(int(window.get_instance_id()) % 360) * TAU / 360.0
+	return Vector2(cos(angle), sin(angle))
+
+
 func _stable_separation_direction(window: BattleWindow, other_window: BattleWindow) -> Vector2:
 	var pair_hash: int = int(window.get_instance_id() + other_window.get_instance_id())
 	var angle: float = float(pair_hash % 360) * TAU / 360.0
@@ -458,46 +572,83 @@ func _party_collision_push(rect: Rect2, party_position: Vector2) -> Vector2:
 
 
 func _wall_push(rect: Rect2, viewport_size: Vector2) -> Vector2:
-	var play_bottom: float = viewport_size.y - HUD_RESERVED_BOTTOM
+	var bounds: Rect2 = _camera_visible_world_rect(viewport_size)
+	var zoom: Vector2 = _camera_zoom()
+	var margin_x: float = SLOT_MARGIN * zoom.x
+	var margin_y: float = SLOT_MARGIN * zoom.y
+	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM * zoom.y
 	var force := Vector2.ZERO
-	if rect.position.x < SLOT_MARGIN:
-		force.x += (SLOT_MARGIN - rect.position.x) * WALL_PUSH_STRENGTH
-	if rect.end.x > viewport_size.x - SLOT_MARGIN:
-		force.x -= (rect.end.x - viewport_size.x + SLOT_MARGIN) * WALL_PUSH_STRENGTH
-	if rect.position.y < SLOT_MARGIN:
-		force.y += (SLOT_MARGIN - rect.position.y) * WALL_PUSH_STRENGTH
+	if rect.position.x < bounds.position.x + margin_x:
+		force.x += (bounds.position.x + margin_x - rect.position.x) * WALL_PUSH_STRENGTH
+	if rect.end.x > bounds.end.x - margin_x:
+		force.x -= (rect.end.x - bounds.end.x + margin_x) * WALL_PUSH_STRENGTH
+	if rect.position.y < bounds.position.y + margin_y:
+		force.y += (bounds.position.y + margin_y - rect.position.y) * WALL_PUSH_STRENGTH
 	if rect.end.y > play_bottom:
 		force.y -= (rect.end.y - play_bottom) * WALL_PUSH_STRENGTH
 	return force
 
 
 func _clamped_position(pos: Vector2, size: Vector2, viewport_size: Vector2) -> Vector2:
-	var play_bottom: float = viewport_size.y - HUD_RESERVED_BOTTOM
+	var bounds: Rect2 = _camera_visible_world_rect(viewport_size)
+	var zoom: Vector2 = _camera_zoom()
+	var margin_x: float = SLOT_MARGIN * zoom.x
+	var margin_y: float = SLOT_MARGIN * zoom.y
+	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM * zoom.y
 	return Vector2(
-		clampf(pos.x, SLOT_MARGIN, maxf(SLOT_MARGIN, viewport_size.x - SLOT_MARGIN - size.x)),
-		clampf(pos.y, SLOT_MARGIN, maxf(SLOT_MARGIN, play_bottom - size.y))
+		clampf(pos.x, bounds.position.x + margin_x, maxf(bounds.position.x + margin_x, bounds.end.x - margin_x - size.x)),
+		clampf(pos.y, bounds.position.y + margin_y, maxf(bounds.position.y + margin_y, play_bottom - size.y))
 	)
 
 
-func _player_screen_position() -> Vector2:
+func _player_world_position() -> Vector2:
 	var players: Array[Node] = get_tree().get_nodes_in_group("player")
 	if players.is_empty() or not players[0] is Node2D:
 		return Vector2.INF
-	return (players[0] as Node2D).get_global_transform_with_canvas().origin
+	return (players[0] as Node2D).global_position
 
 
-func _party_screen_positions() -> Array[Vector2]:
+func _party_world_positions() -> Array[Vector2]:
 	var positions: Array[Vector2] = []
 	for member: Node in get_tree().get_nodes_in_group("party_member"):
 		if member is Node2D:
-			positions.append((member as Node2D).get_global_transform_with_canvas().origin)
+			positions.append((member as Node2D).global_position)
 	return positions
+
+
+func _camera_visible_world_rect(viewport_size: Vector2) -> Rect2:
+	var camera: Camera2D = get_viewport().get_camera_2d()
+	if camera == null:
+		return Rect2(Vector2.ZERO, viewport_size)
+	var visible_size: Vector2 = viewport_size * camera.zoom
+	return Rect2(camera.get_screen_center_position() - visible_size * 0.5, visible_size)
+
+
+func _camera_zoom() -> Vector2:
+	var camera: Camera2D = get_viewport().get_camera_2d()
+	if camera == null:
+		return Vector2.ONE
+	return camera.zoom
+
+
+func _world_to_screen_position(world_position: Vector2, viewport_size: Vector2) -> Vector2:
+	var camera: Camera2D = get_viewport().get_camera_2d()
+	if camera == null:
+		return world_position
+	return (world_position - camera.get_screen_center_position()) / camera.zoom + viewport_size * 0.5
+
+
+func _screen_to_world_position(screen_position: Vector2, viewport_size: Vector2) -> Vector2:
+	var camera: Camera2D = get_viewport().get_camera_2d()
+	if camera == null:
+		return screen_position
+	return camera.get_screen_center_position() + (screen_position - viewport_size * 0.5) * camera.zoom
 
 
 func _on_battle_window_closed(window: Node) -> void:
 	if not _window_rects.has(window):
 		return
-	# Snapshot the window's screen rect *before* erasing — we need it to
+	# Snapshot the window's world rect *before* erasing — we need it to
 	# anchor drop positions at the window the player was just fighting in,
 	# not at the player's body.
 	var window_rect: Rect2 = _window_rects[window]
@@ -545,10 +696,8 @@ func _drop_slot_position(base_pos: Vector2, index: int, total_count: int) -> Vec
 	return base_pos + Vector2(cos(angle), sin(angle)) * radius
 
 
-## Translate a battle window's on-screen rect into a world coordinate so
-## the drops land *under the window the player was just fighting in*,
-## not at the player's feet. Falls back to the player's world position if
-## the camera isn't ready yet.
+## Drops land under the world-anchored window the player was just fighting in,
+## not at the player's feet.
 func _world_position_for_window_rect(window_rect: Rect2) -> Vector2:
 	var fallback_pos: Vector2 = Vector2.ZERO
 	var player := get_tree().get_first_node_in_group("player") as Node2D
@@ -556,16 +705,9 @@ func _world_position_for_window_rect(window_rect: Rect2) -> Vector2:
 		fallback_pos = player.global_position
 	if window_rect.size == Vector2.ZERO:
 		return fallback_pos
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var camera: Camera2D = get_viewport().get_camera_2d()
-	if camera == null:
-		return fallback_pos
-	# Anchor the drop slightly above the bottom of the window so loot
-	# spawns under the enemy stack rather than over the action log.
-	var screen_anchor: Vector2 = window_rect.position + Vector2(window_rect.size.x * 0.5, window_rect.size.y * 0.65)
-	var camera_world_center: Vector2 = camera.get_screen_center_position()
-	var screen_offset: Vector2 = screen_anchor - viewport_size * 0.5
-	return camera_world_center + screen_offset
+	# Anchor the drop slightly above the bottom of the window so loot spawns
+	# under the enemy stack rather than over the action log.
+	return window_rect.position + Vector2(window_rect.size.x * 0.5, window_rect.size.y * 0.65)
 
 
 # ─── Run-over cleanup ─────────────────────────────────────────────────
@@ -584,3 +726,5 @@ func abort_all_battles() -> void:
 	_collision_cooldowns.clear()
 	_party_collision_cooldowns.clear()
 	_bump_heal_totals.clear()
+	_shockwave_boost_timers.clear()
+	_shockwave_cooldown = 0.0

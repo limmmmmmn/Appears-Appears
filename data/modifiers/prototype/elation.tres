@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_script")
 id = &"elation"
-display_name = "고양"
+display_name = "Elation"
 description = "MP 4 소모. 모든 아군 공격력 +50%. 2턴."
 cost = 0
 max_level = 3
