@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"bouncy_ball"
+display_name = "Bouncy Ball"
+description = "All battle windows bounce farther when they collide."
+cost = 20
+max_level = 1
+rarity = 1
+category = 1
+level_up_only = true
+effect_data = {
+"window_bounce_mult": 1.6,
+"window_bounce_speed_mult": 1.28
+}

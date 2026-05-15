@@ -78,7 +78,7 @@ const AUTO_SKILL_IDS_BY_MEMBER_ID: Dictionary = {
 	&"thief": [&"pilfer", &"backstep", &"speed_up"],
 }
 const BUMP_ATTACK_ID: StringName = &"bump_attack"
-const LEVEL_UP_PARTY_CARD_OFFER_IDS: Array[StringName] = [&"window_crash", &"bump_blessing", &"shockwave", &"window_fusion"]
+const LEVEL_UP_PARTY_CARD_OFFER_IDS: Array[StringName] = [&"window_crash", &"bump_blessing", &"shockwave", &"window_fusion", &"window_spin", &"window_split", &"bouncy_ball", &"repulsion_wall"]
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
 const EFFECT_STACK_MULTIPLIERS = [1.0, 0.75, 0.55, 0.4, 0.3]
@@ -378,6 +378,13 @@ func add_party_xp(amount: int) -> void:
 		_apply_shared_level_gains(levels_gained)
 		EventBus.party_hp_changed.emit()
 	_emit_party_xp_changed()
+
+
+func debug_level_up_party() -> void:
+	if party.is_empty() or current_level >= MAX_CHARACTER_LEVEL:
+		return
+	var needed: int = maxi(1, _xp_required_for_level(current_level) - current_xp)
+	add_party_xp(needed)
 
 
 ## Indexed accessors — every party member reports the same shared numbers,
@@ -1314,6 +1321,58 @@ func window_fusion_enabled() -> bool:
 		if bool(mod.effect_data.get("window_fusion", false)):
 			return true
 	return false
+
+
+func window_spin_enabled() -> bool:
+	return window_spin_damage_ratio() > 0.0
+
+
+func window_spin_damage_ratio() -> float:
+	var ratio: float = 0.0
+	for mod: ModifierData in active_modifiers:
+		ratio = maxf(ratio, float(mod.effect_data.get("window_spin_damage_ratio", 0.0)))
+	return ratio
+
+
+func window_split_enabled() -> bool:
+	for mod: ModifierData in active_modifiers:
+		if bool(mod.effect_data.get("window_split", false)):
+			return true
+	return false
+
+
+func window_bounce_multiplier() -> float:
+	var multiplier: float = 1.0
+	for mod: ModifierData in active_modifiers:
+		multiplier = maxf(multiplier, float(mod.effect_data.get("window_bounce_mult", 1.0)))
+	return multiplier
+
+
+func window_bounce_speed_multiplier() -> float:
+	var multiplier: float = 1.0
+	for mod: ModifierData in active_modifiers:
+		multiplier = maxf(multiplier, float(mod.effect_data.get("window_bounce_speed_mult", 1.0)))
+	return multiplier
+
+
+func window_bounce_enabled() -> bool:
+	return window_bounce_multiplier() > 1.0 or window_bounce_speed_multiplier() > 1.0 or window_wall_bounce_restitution() > 0.0
+
+
+func window_wall_bounce_restitution() -> float:
+	var restitution: float = 0.0
+	for mod: ModifierData in active_modifiers:
+		restitution = maxf(restitution, float(mod.effect_data.get("window_wall_bounce_restitution", 0.0)))
+	if restitution <= 0.0 and (window_bounce_multiplier() > 1.0 or window_bounce_speed_multiplier() > 1.0):
+		restitution = 0.86
+	return restitution
+
+
+func window_wall_bounce_min_speed() -> float:
+	var speed: float = 0.0
+	for mod: ModifierData in active_modifiers:
+		speed = maxf(speed, float(mod.effect_data.get("window_wall_bounce_min_speed", 0.0)))
+	return speed
 
 
 func battle_window_push_enabled() -> bool:

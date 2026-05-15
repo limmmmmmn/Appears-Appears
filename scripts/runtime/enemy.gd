@@ -80,9 +80,13 @@ func setup(enemy_data: EnemyData) -> void:
 		_apply_data()
 
 
-func set_battle_slot_position(slot_position: Vector2) -> void:
+func set_battle_slot_position(slot_position: Vector2, slot_scale: float = 1.0) -> void:
 	position = slot_position
 	_base_position = slot_position
+	_base_scale = Vector2.ONE * slot_scale
+	scale = _base_scale
+	modulate = Color.WHITE
+	visible = true
 
 
 func _apply_data() -> void:

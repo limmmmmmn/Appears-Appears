@@ -34,6 +34,10 @@ const ACTOR_ENEMY: int = 1
 
 const BASE_WINDOW_SIZE: Vector2 = Vector2(96.0, 72.0)
 const FUSION_EXTRA_WINDOW_SIZE: Vector2 = Vector2(32.0, 24.0)
+const MAX_WINDOW_VIEWPORT_RATIO: Vector2 = Vector2(0.94, 0.72)
+const MIN_ENEMY_VISUAL_SCALE: float = 0.28
+const ENEMY_VISUAL_SCALE_FULL_COUNT: int = 12
+const ENEMY_VISUAL_SCALE_MIN_COUNT: int = 160
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -94,9 +98,13 @@ var _enemy_row_counts: Array[int] = [1]
 var _planned_enemy_count: int = 0
 var _planned_enemy_data: Array[EnemyData] = []
 var _forced_enemy_count: int = 0
+var _forced_enemy_data: Array[EnemyData] = []
 var _slide_tween: Tween
 var _crash_tween: Tween
+var _pin_impact_tween: Tween
 var _acting: bool = false
+var _spin_pinned: bool = false
+var _pin_visual: Control
 
 
 func _ready() -> void:
@@ -194,6 +202,14 @@ func setup(data: EnemyData, field_drop_position: Vector2 = Vector2.INF, enemy_co
 	_forced_enemy_count = clampi(enemy_count, 0, GameState.BATTLE_WINDOW_MAX_ENEMIES)
 
 
+func setup_with_enemy_list(enemy_list: Array[EnemyData], field_drop_position: Vector2 = Vector2.INF) -> void:
+	_forced_enemy_data = enemy_list.duplicate()
+	_forced_enemy_count = _forced_enemy_data.size()
+	_field_drop_position = field_drop_position
+	if not _forced_enemy_data.is_empty():
+		enemy_data = _forced_enemy_data.front()
+
+
 func get_expected_window_size() -> Vector2:
 	_ensure_enemy_count_planned()
 	return _layout_size_for_enemy_count(_planned_enemy_count)
@@ -225,6 +241,81 @@ func push_to(target: Vector2) -> void:
 	if _slide_tween and _slide_tween.is_valid():
 		_slide_tween.kill()
 	position = target
+
+
+func pin_window_spin() -> bool:
+	if _spin_pinned:
+		return false
+	_spin_pinned = true
+	_running = false
+	_acting = false
+	_turn_timer.stop()
+	_refresh_spin_pivot()
+	_ensure_pin_visual()
+	_play_pin_impact()
+	_log_label.text = "Pinned! Combat paused."
+	return true
+
+
+func is_spin_pinned() -> bool:
+	return _spin_pinned
+
+
+func set_spin_angle(angle: float) -> void:
+	_refresh_spin_pivot()
+	rotation = angle
+
+
+func _refresh_spin_pivot() -> void:
+	pivot_offset = size * 0.5
+
+
+func _ensure_pin_visual() -> void:
+	if _pin_visual != null and is_instance_valid(_pin_visual):
+		_position_pin_visual()
+		return
+	_pin_visual = Control.new()
+	_pin_visual.name = "SpinPin"
+	_pin_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pin_visual.z_index = 40
+	add_child(_pin_visual)
+	_add_pin_rect(Vector2(4.0, 18.0), Vector2(12.0, 5.0), Color(0.12, 0.1, 0.08, 1.0))
+	_add_pin_rect(Vector2(18.0, 4.0), Vector2(5.0, 12.0), Color(0.12, 0.1, 0.08, 1.0))
+	_add_pin_rect(Vector2(8.0, 8.0), Vector2(10.0, 10.0), Color(0.98, 0.9, 0.58, 1.0))
+	_position_pin_visual()
+
+
+func _add_pin_rect(rect_size: Vector2, rect_position: Vector2, color: Color) -> void:
+	var rect := ColorRect.new()
+	rect.color = color
+	rect.size = rect_size
+	rect.position = rect_position
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pin_visual.add_child(rect)
+
+
+func _position_pin_visual() -> void:
+	if _pin_visual == null or not is_instance_valid(_pin_visual):
+		return
+	_pin_visual.size = Vector2(28.0, 28.0)
+	_pin_visual.pivot_offset = _pin_visual.size * 0.5
+	_pin_visual.position = size * 0.5 - _pin_visual.size * 0.5
+
+
+func _play_pin_impact() -> void:
+	if _pin_visual == null or not is_instance_valid(_pin_visual):
+		return
+	if _pin_impact_tween and _pin_impact_tween.is_valid():
+		_pin_impact_tween.kill()
+	_pin_visual.scale = Vector2.ONE * 2.1
+	_pin_visual.modulate = Color(1.0, 0.9, 0.35, 1.0)
+	_pin_impact_tween = create_tween().set_parallel(true)
+	_pin_impact_tween.tween_property(_pin_visual, "scale", Vector2.ONE, 0.18)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	_pin_impact_tween.tween_property(_pin_visual, "modulate", Color.WHITE, 0.22)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
 
 
 func claim_xp_reward() -> int:
@@ -272,6 +363,30 @@ func absorb_window(other: BattleWindow) -> bool:
 	return true
 
 
+func split_off_for_window_split() -> Array[EnemyData]:
+	var empty: Array[EnemyData] = []
+	var living: Array[Enemy] = _living_enemies()
+	if living.size() <= 1:
+		_log_label.text = "Need 2+ enemies to split"
+		return empty
+	var keep_count: int = maxi(1, int(floor(float(living.size()) / 2.0)))
+	var split_data: Array[EnemyData] = []
+	for i in range(keep_count, living.size()):
+		var enemy: Enemy = living[i]
+		if enemy == null or not is_instance_valid(enemy) or enemy.data == null:
+			continue
+		split_data.append(enemy.data)
+		_disconnect_enemy_callbacks(enemy, self)
+		_enemies.erase(enemy)
+		enemy.queue_free()
+	if split_data.is_empty():
+		return []
+	_rebuild_after_split()
+	_play_crash_flash()
+	_log_label.text = "Split! %d / %d" % [living_enemy_count(), split_data.size()]
+	return split_data
+
+
 func _detach_living_enemies_for_fusion() -> Array[Enemy]:
 	_running = false
 	_turn_timer.stop()
@@ -317,16 +432,39 @@ func _rebuild_after_fusion() -> void:
 	for i in _enemies.size():
 		var enemy: Enemy = _enemies[i]
 		if enemy != null and is_instance_valid(enemy):
-			enemy.set_battle_slot_position(_enemy_offset(i, _enemies.size()))
+			enemy.set_battle_slot_position(_enemy_offset(i, _enemies.size()), _enemy_visual_scale(_enemies.size()))
 	_name_label.text = _encounter_display_name()
 	_refresh_hp_label()
 	_rebuild_turn_queue()
 
 
+func _rebuild_after_split() -> void:
+	_enemies = _living_enemies()
+	_planned_enemy_count = _enemies.size()
+	_planned_enemy_data.clear()
+	for enemy: Enemy in _enemies:
+		if enemy.data != null:
+			_planned_enemy_data.append(enemy.data)
+	if not _planned_enemy_data.is_empty():
+		enemy_data = _planned_enemy_data.front()
+	_apply_enemy_layout(_enemies.size())
+	for i in _enemies.size():
+		var enemy: Enemy = _enemies[i]
+		if enemy != null and is_instance_valid(enemy):
+			enemy.set_battle_slot_position(_enemy_offset(i, _enemies.size()), _enemy_visual_scale(_enemies.size()))
+	_name_label.text = _encounter_display_name()
+	_refresh_hp_label()
+	_rebuild_turn_queue()
+	if _running:
+		_turn_timer.start()
+
+
 func _apply_fusion_size_bonus() -> void:
-	var fusion_size: Vector2 = size + FUSION_EXTRA_WINDOW_SIZE
+	var fusion_size: Vector2 = _cap_window_size(size + FUSION_EXTRA_WINDOW_SIZE)
 	custom_minimum_size = fusion_size
 	size = fusion_size
+	_refresh_spin_pivot()
+	_position_pin_visual()
 	_enemy_anchor.position = Vector2(
 		fusion_size.x * 0.5,
 		ENEMY_AREA_TOP + (fusion_size.y - ENEMY_AREA_BOTTOM - ENEMY_AREA_TOP) * 0.5
@@ -511,7 +649,7 @@ func _spawn_enemy() -> void:
 	for i in enemy_count:
 		var enemy: Enemy = ENEMY_SCENE.instantiate()
 		enemy.setup(_planned_enemy_data[i])
-		enemy.position = _enemy_offset(i, enemy_count)
+		enemy.set_battle_slot_position(_enemy_offset(i, enemy_count), _enemy_visual_scale(enemy_count))
 		_enemy_anchor.add_child(enemy)
 		enemy.hp_changed.connect(_on_enemy_hp_changed)
 		enemy.died.connect(_on_enemy_died.bind(enemy))
@@ -533,6 +671,12 @@ func _play_intro_then_start() -> void:
 
 func _ensure_enemy_plan() -> void:
 	if _planned_enemy_count > 0:
+		return
+	if not _forced_enemy_data.is_empty():
+		_planned_enemy_data = _forced_enemy_data.duplicate()
+		_planned_enemy_count = _planned_enemy_data.size()
+		if enemy_data == null:
+			enemy_data = _planned_enemy_data.front()
 		return
 	_planned_enemy_count = _roll_enemy_count_for_window()
 	_planned_enemy_data = _plan_enemy_mix(_planned_enemy_count)
@@ -762,6 +906,8 @@ func _mage_firewall_attack(attacker_index: int) -> void:
 	EventBus.party_skill_activated.emit(attacker_index, &"fireburst")
 	_log_label.text = "%s's Firewall!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
+	if not _running:
+		return
 	var crit: Dictionary = GameState.roll_crit()
 	var damage: int = int(round(float(GameState.mage_firewall_damage(attacker_index)) * float(crit["mult"])))
 	var total_dealt: int = 0
@@ -787,6 +933,8 @@ func _priest_heal_spell(attacker_index: int) -> void:
 	EventBus.party_skill_activated.emit(attacker_index, &"battle_prayer")
 	_log_label.text = "%s's Heal!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
+	if not _running:
+		return
 	var before_hp: int = GameState.party_hp[heal_target]
 	GameState.heal_party_member(heal_target, GameState.priest_heal_amount())
 	var healed: int = GameState.party_hp[heal_target] - before_hp
@@ -808,6 +956,8 @@ func _hero_hoimi_spell(attacker_index: int) -> void:
 	EventBus.party_skill_activated.emit(attacker_index, &"hoimi")
 	_log_label.text = "%s's Hoimi!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
+	if not _running:
+		return
 	var before_hp: int = GameState.party_hp[heal_target]
 	GameState.heal_party_member(heal_target, GameState.hero_hoimi_amount(attacker_index))
 	var healed: int = GameState.party_hp[heal_target] - before_hp
@@ -825,6 +975,8 @@ func _mage_lightning_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	EventBus.party_skill_activated.emit(attacker_index, &"lightning_bolt")
 	_log_label.text = "%s's Lightning Bolt!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
+	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
+		return
 	var base_damage: int = GameState.mage_lightning_damage(attacker_index)
 	var crit: Dictionary = GameState.roll_crit()
 	var primary_damage: int = int(round(float(base_damage) * float(crit["mult"])))
@@ -861,6 +1013,8 @@ func _priest_holy_strike(attacker_index: int, target_enemy: Enemy) -> void:
 	EventBus.party_skill_activated.emit(attacker_index, &"holy_strike")
 	_log_label.text = "%s's Holy Strike!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
+	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
+		return
 	var damage: int = GameState.priest_holy_damage(attacker_index)
 	var crit: Dictionary = GameState.roll_crit()
 	var final_damage: int = int(round(float(damage) * float(crit["mult"])))
@@ -884,6 +1038,8 @@ func _priest_holy_strike(attacker_index: int, target_enemy: Enemy) -> void:
 
 func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	var dealt: int = await _basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
+	if not _running:
+		return
 	var heal_target: int = _lowest_wounded_party_index()
 	if heal_target == -1:
 		return
@@ -962,6 +1118,9 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	_running = false
 	_turn_timer.stop()
 	_log_label.text = "몬스터를 모두 쓰러뜨렸다! +%dG" % _earned_gold_total
+	if _spin_pinned:
+		_log_label.text = "Pinned window keeps spinning!"
+		return
 	await get_tree().create_timer(close_delay).timeout
 	EventBus.battle_window_closed.emit(self)
 	queue_free()
@@ -1100,13 +1259,15 @@ func _layout_size_for_rows(row_counts: Array[int]) -> Vector2:
 	var widest_row: int = 1
 	for row_count: int in row_counts:
 		widest_row = maxi(widest_row, row_count)
-	var spacing: Vector2 = _enemy_spacing_for_count(_row_enemy_count(row_counts))
-	var grid_width: float = ENEMY_SPRITE_SIZE.x + float(widest_row - 1) * spacing.x
+	var total: int = _row_enemy_count(row_counts)
+	var visual_size: Vector2 = ENEMY_SPRITE_SIZE * _enemy_visual_scale(total)
+	var spacing: Vector2 = _enemy_spacing_for_count(total) * _enemy_visual_scale(total)
+	var grid_width: float = visual_size.x + float(widest_row - 1) * spacing.x
 	var content_size := Vector2(
 		maxf(BASE_WINDOW_SIZE.x, grid_width + ENEMY_SIDE_PADDING * 2.0),
-		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(rows, spacing.y) + ENEMY_AREA_BOTTOM)
+		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(rows, spacing.y, visual_size.y) + ENEMY_AREA_BOTTOM)
 	)
-	return _fit_to_target_ratio(content_size)
+	return _cap_window_size(_fit_to_target_ratio(content_size))
 
 
 func _fit_to_target_ratio(content_size: Vector2) -> Vector2:
@@ -1187,16 +1348,18 @@ func _compare_diamond_fraction(a: Dictionary, b: Dictionary) -> bool:
 	return fraction_a > fraction_b
 
 
-func _diamond_content_height(rows: int, row_height: float) -> float:
-	return ENEMY_SPRITE_SIZE.y + float(rows - 1) * row_height
+func _diamond_content_height(rows: int, row_height: float, enemy_height: float = ENEMY_SPRITE_SIZE.y) -> float:
+	return enemy_height + float(rows - 1) * row_height
 
 
 func _raw_layout_size_for_rows(row_counts: Array[int]) -> Vector2:
 	var widest_row: int = _widest_row_count(row_counts)
-	var spacing: Vector2 = _enemy_spacing_for_count(_row_enemy_count(row_counts))
+	var total: int = _row_enemy_count(row_counts)
+	var visual_size: Vector2 = ENEMY_SPRITE_SIZE * _enemy_visual_scale(total)
+	var spacing: Vector2 = _enemy_spacing_for_count(total) * _enemy_visual_scale(total)
 	return Vector2(
-		maxf(BASE_WINDOW_SIZE.x, ENEMY_SPRITE_SIZE.x + float(widest_row - 1) * spacing.x + ENEMY_SIDE_PADDING * 2.0),
-		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(row_counts.size(), spacing.y) + ENEMY_AREA_BOTTOM)
+		maxf(BASE_WINDOW_SIZE.x, visual_size.x + float(widest_row - 1) * spacing.x + ENEMY_SIDE_PADDING * 2.0),
+		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(row_counts.size(), spacing.y, visual_size.y) + ENEMY_AREA_BOTTOM)
 	)
 
 
@@ -1222,10 +1385,54 @@ func _enemy_spacing_for_count(total: int) -> Vector2:
 	)
 
 
+func _enemy_visual_scale(total: int) -> float:
+	var crowding: float = clampf(
+		float(maxi(0, total - ENEMY_VISUAL_SCALE_FULL_COUNT)) / float(ENEMY_VISUAL_SCALE_MIN_COUNT - ENEMY_VISUAL_SCALE_FULL_COUNT),
+		0.0,
+		1.0
+	)
+	return lerpf(1.0, MIN_ENEMY_VISUAL_SCALE, crowding)
+
+
+func _enemy_spacing_for_layout(row_counts: Array[int], window_size: Vector2) -> Vector2:
+	var total: int = _row_enemy_count(row_counts)
+	var rows: int = row_counts.size()
+	var widest_row: int = _widest_row_count(row_counts)
+	var scale_factor: float = _enemy_visual_scale(total)
+	var desired: Vector2 = _enemy_spacing_for_count(total) * scale_factor
+	var visual_size: Vector2 = ENEMY_SPRITE_SIZE * scale_factor
+	var usable_width: float = maxf(visual_size.x, window_size.x - ENEMY_SIDE_PADDING * 2.0)
+	var usable_height: float = maxf(visual_size.y, window_size.y - ENEMY_AREA_TOP - ENEMY_AREA_BOTTOM)
+	var fit_x: float = desired.x if widest_row <= 1 else maxf(0.0, (usable_width - visual_size.x) / float(widest_row - 1))
+	var fit_y: float = desired.y if rows <= 1 else maxf(0.0, (usable_height - visual_size.y) / float(rows - 1))
+	return Vector2(minf(desired.x, fit_x), minf(desired.y, fit_y))
+
+
+func _cap_window_size(window_size: Vector2) -> Vector2:
+	var max_size: Vector2 = _max_window_size()
+	return Vector2(
+		clampf(window_size.x, BASE_WINDOW_SIZE.x, max_size.x),
+		clampf(window_size.y, BASE_WINDOW_SIZE.y, max_size.y)
+	)
+
+
+func _max_window_size() -> Vector2:
+	var viewport_size := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
+	)
+	if is_inside_tree():
+		viewport_size = get_viewport().get_visible_rect().size
+	return Vector2(
+		maxf(BASE_WINDOW_SIZE.x, viewport_size.x * MAX_WINDOW_VIEWPORT_RATIO.x),
+		maxf(BASE_WINDOW_SIZE.y, viewport_size.y * MAX_WINDOW_VIEWPORT_RATIO.y)
+	)
+
+
 func _enemy_offset(index: int, total: int) -> Vector2:
 	if total <= 1:
 		return Vector2.ZERO
-	var spacing: Vector2 = _enemy_spacing_for_count(total)
+	var spacing: Vector2 = _enemy_spacing_for_layout(_enemy_row_counts, size)
 	var rows: int = _enemy_row_counts.size()
 	var row: int = 0
 	var row_start: int = 0

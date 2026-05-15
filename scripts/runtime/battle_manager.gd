@@ -32,6 +32,21 @@ const SHOCKWAVE_RADIUS: float = 150.0
 const SHOCKWAVE_COOLDOWN: float = 0.7
 const SHOCKWAVE_BOOST_DURATION: float = 0.24
 const SHOCKWAVE_MAX_WINDOW_SPEED: float = 560.0
+const WINDOW_SPLIT_RADIUS: float = 74.0
+const WINDOW_SPLIT_GAP: float = 12.0
+const WINDOW_SPLIT_PUSH_SPEED: float = 95.0
+const WINDOW_SPIN_PIN_RADIUS: float = 72.0
+const WINDOW_SPIN_INITIAL_SPEED: float = 0.22
+const WINDOW_SPIN_PARTY_IMPULSE: float = 0.78
+const WINDOW_SPIN_WINDOW_IMPULSE: float = 0.62
+const WINDOW_SPIN_EDGE_TRANSFER: float = 0.18
+const WINDOW_SPIN_DAMPING: float = 0.46
+const WINDOW_SPIN_GEAR_COUPLING: float = 0.18
+const WINDOW_SPIN_CONTACT_MARGIN: float = 6.0
+const WINDOW_SPIN_DAMAGE_MIN_SPEED: float = 2.35
+const WINDOW_SPIN_DAMAGE_COOLDOWN: float = 0.48
+const WINDOW_SPIN_MAX_ANGULAR_SPEED: float = 9.5
+const PARTY_VELOCITY_MAX: float = 440.0
 ## Max total HP that bump_blessing can heal from a single window's lifetime.
 ## Prevents "infinite bump-heal" sustain via repeated collisions.
 const BUMP_HEAL_PER_WINDOW_CAP: int = 8
@@ -46,6 +61,12 @@ var _party_collision_cooldowns: Dictionary = {}  ## battle window id -> remainin
 var _bump_heal_totals: Dictionary = {}  ## battle window id -> cumulative HP healed.
 var _shockwave_boost_timers: Dictionary = {}  ## battle window id -> remaining boost seconds.
 var _shockwave_cooldown: float = 0.0
+var _spin_angular_velocities: Dictionary = {}  ## BattleWindow -> radians per second.
+var _spin_collision_cooldowns: Dictionary = {}  ## window pair key -> remaining seconds.
+var _spin_rewarded_windows: Dictionary = {}  ## battle window id -> rewards already paid while pinned.
+var _party_previous_positions: Dictionary = {}  ## party member id -> previous world position.
+var _party_velocities: Dictionary = {}  ## party member id -> smoothed world velocity.
+var _all_battles_resolved_sent: bool = true
 
 
 func _ready() -> void:
@@ -60,9 +81,14 @@ func _process(delta: float) -> void:
 	_tick_collision_cooldowns(delta)
 	_tick_party_collision_cooldowns(delta)
 	_tick_shockwave_state(delta)
+	_tick_window_spin_cooldowns(delta)
+	_update_party_velocities(delta)
 	if _window_rects.is_empty():
 		return
 	_apply_window_push(delta)
+	_tick_window_spin(delta)
+	_claim_finished_spin_windows()
+	_emit_all_battles_resolved_if_no_live_fights()
 
 
 func active_window_count() -> int:
@@ -72,8 +98,9 @@ func active_window_count() -> int:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if (event as InputEventKey).physical_keycode == KEY_SPACE and _try_cast_shockwave():
-			get_viewport().set_input_as_handled()
+		if (event as InputEventKey).physical_keycode == KEY_SPACE:
+			if _try_cast_window_split() or _try_pin_window_spin() or _try_cast_shockwave():
+				get_viewport().set_input_as_handled()
 
 
 # ─── Spawning ─────────────────────────────────────────────────────────
@@ -107,6 +134,7 @@ func _spawn_window(data: EnemyData, source: Node2D = null, enemy_count: int = 0)
 	window.position = _world_to_screen_position(spawn_position, viewport_size)
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
+	_all_battles_resolved_sent = false
 	add_child(window)
 	_bring_window_to_front(window)
 	_apply_window_push(0.0, true)
@@ -168,16 +196,18 @@ func _is_spawn_position_valid(pos: Vector2, size: Vector2, viewport_size: Vector
 
 func _apply_window_push(delta: float, burst: bool = false) -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var party_positions: Array[Vector2] = _party_world_positions()
+	var party_bodies: Array[Dictionary] = _party_collision_bodies()
 	var window_collision_enabled: bool = GameState.battle_window_push_enabled()
 	var window_fusion_enabled: bool = GameState.window_fusion_enabled()
+	var window_spin_active: bool = GameState.window_spin_enabled() or not _spin_angular_velocities.is_empty()
 	var party_collision_enabled: bool = GameState.party_window_push_enabled()
 	var windows: Array[BattleWindow] = _active_windows()
 	for window: BattleWindow in windows:
 		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
 		var clamped_rect: Rect2 = _window_rects[window]
-		clamped_rect.position = _clamped_position(clamped_rect.position, clamped_rect.size, viewport_size)
+		if not _is_spin_pinned(window):
+			clamped_rect.position = _clamped_position(clamped_rect.position, clamped_rect.size, viewport_size)
 		_window_rects[window] = clamped_rect
 	for window: BattleWindow in windows:
 		if not is_instance_valid(window) or not _window_rects.has(window):
@@ -188,13 +218,17 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 		for other: BattleWindow in windows:
 			if window == other or not is_instance_valid(other) or not _window_rects.has(other):
 				continue
-			if window_collision_enabled or window_fusion_enabled:
+			if window_collision_enabled or window_fusion_enabled or window_spin_active:
 				if window.get_instance_id() < other.get_instance_id():
 					if window_fusion_enabled and _apply_window_fusion(window, rect, other, _window_rects[other], viewport_size):
 						fused_this_window = true
 						break
 					if window_collision_enabled:
 						_apply_window_collision_damage(window, rect, other, _window_rects[other])
+					if window_spin_active:
+						if _window_spin_contacting(rect, _window_rects[other]):
+							_apply_window_spin_contact_impulse(window, rect, other, _window_rects[other])
+						_apply_window_spin_collision_damage(window, rect, other, _window_rects[other])
 					if not is_instance_valid(window) or not is_instance_valid(other):
 						break
 				if window_collision_enabled and _window_rects.has(other):
@@ -203,26 +237,41 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 			continue
 		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
-		if party_collision_enabled:
-			for party_position: Vector2 in party_positions:
+		if party_collision_enabled or window_spin_active:
+			for party_body: Dictionary in party_bodies:
+				var party_position: Vector2 = party_body.get("position", Vector2.ZERO)
+				var party_velocity: Vector2 = party_body.get("velocity", Vector2.ZERO)
 				var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
 				if rect.intersects(party_rect):
-					_apply_party_collision_effects(window)
+					if party_collision_enabled:
+						_apply_party_collision_effects(window)
+					_apply_window_spin_party_impulse(window, rect, party_position, party_velocity)
 					if not is_instance_valid(window) or not _window_rects.has(window):
 						break
 					_apply_party_drag_effects(window)
-				force += _party_collision_push(rect, party_position)
+				if party_collision_enabled and not _is_spin_pinned(window):
+					force += _party_collision_push(rect, party_position)
 		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
-		if window_collision_enabled or window_fusion_enabled or party_collision_enabled:
+		var bounce_enabled: bool = GameState.window_bounce_enabled()
+		if not _is_spin_pinned(window) and (window_collision_enabled or window_fusion_enabled or party_collision_enabled or bounce_enabled):
 			force += _wall_push(rect, viewport_size)
-		force *= _window_push_multiplier(window)
+		var bounce_multiplier: float = GameState.window_bounce_multiplier()
+		force *= _window_push_multiplier(window) * bounce_multiplier
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
 		var step_delta: float = 1.0 / 60.0 if burst else delta
+		if _is_spin_pinned(window):
+			_window_velocities[window] = Vector2.ZERO
+			_window_rects[window] = Rect2(rect.position, rect.size)
+			window.push_to(_world_to_screen_position(rect.position, viewport_size))
+			continue
 		velocity += force * step_delta
 		velocity = velocity.limit_length(_max_speed_for_window(window))
 		velocity = velocity.move_toward(Vector2.ZERO, VELOCITY_DAMPING * velocity.length() * step_delta)
-		var next_position: Vector2 = _clamped_position(rect.position + velocity * step_delta, rect.size, viewport_size)
+		var raw_next_position: Vector2 = rect.position + velocity * step_delta
+		var next_position: Vector2 = _clamped_position(raw_next_position, rect.size, viewport_size)
+		if bounce_enabled:
+			velocity = _bounce_velocity_off_walls(velocity, raw_next_position, next_position)
 		_window_velocities[window] = velocity
 		_window_rects[window] = Rect2(next_position, rect.size)
 		window.push_to(_world_to_screen_position(next_position, viewport_size))
@@ -251,11 +300,14 @@ func _purge_invalid_window_references() -> void:
 func _forget_window_reference(window) -> void:
 	_window_rects.erase(window)
 	_window_velocities.erase(window)
+	_spin_angular_velocities.erase(window)
 	if is_instance_valid(window):
 		var window_key: String = str(window.get_instance_id())
 		_party_collision_cooldowns.erase(window_key)
 		_bump_heal_totals.erase(window_key)
 		_shockwave_boost_timers.erase(window_key)
+		_spin_rewarded_windows.erase(window_key)
+		_erase_pair_cooldowns_for_window(window_key)
 
 
 func _on_battle_window_enemy_attack_started(window: Node) -> void:
@@ -308,14 +360,19 @@ func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_win
 	var key: String = _collision_pair_key(window, other_window)
 	if float(_collision_cooldowns.get(key, 0.0)) > 0.0:
 		return
-	var dealt: int = window.apply_window_collision_damage(damage_ratio)
-	dealt += other_window.apply_window_collision_damage(damage_ratio)
+	var dealt: int = 0
+	if not _is_spin_pinned(window):
+		dealt += window.apply_window_collision_damage(damage_ratio)
+	if not _is_spin_pinned(other_window):
+		dealt += other_window.apply_window_collision_damage(damage_ratio)
 	if dealt > 0:
 		_collision_cooldowns[key] = WINDOW_COLLISION_DAMAGE_COOLDOWN
 
 
 func _apply_window_fusion(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2, viewport_size: Vector2) -> bool:
 	if not rect.intersects(other):
+		return false
+	if _is_spin_pinned(window) or _is_spin_pinned(other_window):
 		return false
 	if not window.absorb_window(other_window):
 		return false
@@ -501,6 +558,302 @@ func _tick_shockwave_state(delta: float) -> void:
 			_shockwave_boost_timers[key] = remaining
 
 
+func _tick_window_spin_cooldowns(delta: float) -> void:
+	for key: String in _spin_collision_cooldowns.keys():
+		var remaining: float = float(_spin_collision_cooldowns[key]) - delta
+		if remaining <= 0.0:
+			_spin_collision_cooldowns.erase(key)
+		else:
+			_spin_collision_cooldowns[key] = remaining
+
+
+func _tick_window_spin(delta: float) -> void:
+	for window: BattleWindow in _active_windows():
+		if not _is_spin_pinned(window):
+			continue
+		var angular_velocity: float = float(_spin_angular_velocities.get(window, 0.0))
+		if absf(angular_velocity) > 0.01:
+			window.set_spin_angle(window.rotation + angular_velocity * delta)
+			angular_velocity = lerpf(angular_velocity, 0.0, clampf(WINDOW_SPIN_DAMPING * delta, 0.0, 1.0))
+			_spin_angular_velocities[window] = angular_velocity
+
+
+func _try_cast_window_split() -> bool:
+	if not GameState.window_split_enabled() or _window_rects.is_empty():
+		return false
+	var origin: Vector2 = _party_world_center()
+	if origin == Vector2.INF:
+		return false
+	var target: BattleWindow = null
+	var best_distance: float = INF
+	for window: BattleWindow in _active_windows():
+		if not is_instance_valid(window) or not _window_rects.has(window) or _is_spin_pinned(window):
+			continue
+		if window.living_enemy_count() <= 0:
+			continue
+		var distance: float = _distance_to_rect(origin, _window_rects[window])
+		if distance <= WINDOW_SPLIT_RADIUS and distance < best_distance:
+			target = window
+			best_distance = distance
+	if target == null:
+		return false
+	var split_data: Array[EnemyData] = target.split_off_for_window_split()
+	if split_data.is_empty():
+		return false
+	_spawn_split_window(target, split_data)
+	return true
+
+
+func _spawn_split_window(source: BattleWindow, split_data: Array[EnemyData]) -> void:
+	if not is_instance_valid(source) or not _window_rects.has(source):
+		return
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var old_rect: Rect2 = _window_rects[source]
+	var source_size: Vector2 = source.size
+	var source_position: Vector2 = _clamped_position(old_rect.get_center() - source_size * 0.5, source_size, viewport_size)
+	_window_rects[source] = Rect2(source_position, source_size)
+	source.push_to(_world_to_screen_position(source_position, viewport_size))
+
+	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
+	window.setup_with_enemy_list(split_data, source.field_drop_position())
+	var window_size: Vector2 = window.get_expected_window_size()
+	var split_direction: Vector2 = _split_spawn_direction(old_rect)
+	var new_position: Vector2 = _split_window_position(source_position, source_size, window_size, split_direction, viewport_size)
+	window.position = _world_to_screen_position(new_position, viewport_size)
+	_window_rects[window] = Rect2(new_position, window_size)
+	_window_velocities[window] = split_direction * WINDOW_SPLIT_PUSH_SPEED
+	_window_velocities[source] = -split_direction * WINDOW_SPLIT_PUSH_SPEED * 0.5
+	_all_battles_resolved_sent = false
+	add_child(window)
+	_bring_window_to_front(window)
+
+
+func _split_spawn_direction(source_rect: Rect2) -> Vector2:
+	var origin: Vector2 = _party_world_center()
+	if origin != Vector2.INF:
+		var away: Vector2 = source_rect.get_center() - origin
+		if away.length_squared() > 1.0:
+			return away.normalized()
+	var angle: float = float(int(source_rect.position.x + source_rect.position.y) % 360) * TAU / 360.0
+	return Vector2(cos(angle), sin(angle))
+
+
+func _split_window_position(source_position: Vector2, source_size: Vector2, window_size: Vector2, direction: Vector2, viewport_size: Vector2) -> Vector2:
+	if direction == Vector2.ZERO:
+		direction = Vector2.RIGHT
+	var primary_offset: Vector2 = direction.normalized() * (source_size.length() * 0.25 + window_size.length() * 0.25 + WINDOW_SPLIT_GAP)
+	var candidates: Array[Vector2] = [
+		source_position + primary_offset,
+		source_position - primary_offset,
+		source_position + Vector2(source_size.x + WINDOW_SPLIT_GAP, 0.0),
+		source_position - Vector2(window_size.x + WINDOW_SPLIT_GAP, 0.0),
+		source_position + Vector2(0.0, source_size.y + WINDOW_SPLIT_GAP),
+		source_position - Vector2(0.0, window_size.y + WINDOW_SPLIT_GAP),
+	]
+	for candidate: Vector2 in candidates:
+		var clamped: Vector2 = _clamped_position(candidate, window_size, viewport_size)
+		if not Rect2(clamped, window_size).intersects(Rect2(source_position, source_size)):
+			return clamped
+	return _clamped_position(candidates.front(), window_size, viewport_size)
+
+
+func _try_pin_window_spin() -> bool:
+	if not GameState.window_spin_enabled() or _window_rects.is_empty():
+		return false
+	var origin: Vector2 = _party_world_center()
+	if origin == Vector2.INF:
+		return false
+	var best_window: BattleWindow = null
+	var best_distance: float = INF
+	for window: BattleWindow in _active_windows():
+		if not is_instance_valid(window) or not _window_rects.has(window) or _is_spin_pinned(window):
+			continue
+		var distance: float = _distance_to_rect(origin, _window_rects[window])
+		if distance <= WINDOW_SPIN_PIN_RADIUS and distance < best_distance:
+			best_window = window
+			best_distance = distance
+	if best_window == null:
+		return false
+	if not best_window.pin_window_spin():
+		return false
+	_spin_angular_velocities[best_window] = _pin_initial_spin(best_window)
+	_spin_rewarded_windows.erase(str(best_window.get_instance_id()))
+	_bring_window_to_front(best_window)
+	return true
+
+
+func _pin_initial_spin(window: BattleWindow) -> float:
+	var origin: Vector2 = _party_world_center()
+	if origin == Vector2.INF or not _window_rects.has(window):
+		return 0.0
+	var rect: Rect2 = _window_rects[window]
+	var radius: Vector2 = _closest_point_on_rect(origin, rect) - rect.get_center()
+	if radius.length_squared() < 1.0:
+		radius = origin - rect.get_center()
+	var tangent_speed: float = 0.0
+	if radius.length_squared() > 1.0:
+		var tangent: Vector2 = Vector2(-radius.y, radius.x).normalized()
+		var bodies: Array[Dictionary] = _party_collision_bodies()
+		for body: Dictionary in bodies:
+			var velocity: Vector2 = body.get("velocity", Vector2.ZERO)
+			tangent_speed += velocity.dot(tangent)
+		tangent_speed /= maxf(1.0, float(bodies.size()))
+	var natural_spin: float = tangent_speed / maxf(24.0, rect.size.length() * 0.5) * 0.35
+	if absf(natural_spin) >= WINDOW_SPIN_INITIAL_SPEED:
+		return clampf(natural_spin, -WINDOW_SPIN_MAX_ANGULAR_SPEED, WINDOW_SPIN_MAX_ANGULAR_SPEED)
+	var sign: float = -1.0 if int(window.get_instance_id()) % 2 == 0 else 1.0
+	return sign * WINDOW_SPIN_INITIAL_SPEED
+
+
+func _distance_to_rect(point: Vector2, rect: Rect2) -> float:
+	var closest: Vector2 = _closest_point_on_rect(point, rect)
+	return point.distance_to(closest)
+
+
+func _closest_point_on_rect(point: Vector2, rect: Rect2) -> Vector2:
+	return Vector2(
+		clampf(point.x, rect.position.x, rect.end.x),
+		clampf(point.y, rect.position.y, rect.end.y)
+	)
+
+
+func _rect_contact_point(rect: Rect2, other: Rect2) -> Vector2:
+	var on_rect: Vector2 = _closest_point_on_rect(other.get_center(), rect)
+	var on_other: Vector2 = _closest_point_on_rect(rect.get_center(), other)
+	return (on_rect + on_other) * 0.5
+
+
+func _spin_inertia_for_rect(rect: Rect2) -> float:
+	var radius: float = maxf(12.0, rect.size.length() * 0.5)
+	return radius * radius
+
+
+func _is_spin_pinned(window: BattleWindow) -> bool:
+	return window != null and is_instance_valid(window) and window.is_spin_pinned()
+
+
+func _apply_window_spin_party_impulse(window: BattleWindow, rect: Rect2, party_position: Vector2, party_velocity: Vector2) -> void:
+	if not _is_spin_pinned(window):
+		return
+	if party_velocity.length_squared() < 1.0:
+		return
+	var contact_point: Vector2 = _closest_point_on_rect(party_position, rect)
+	var radius: Vector2 = contact_point - rect.get_center()
+	if radius.length_squared() < 1.0:
+		radius = party_position - rect.get_center()
+	if radius.length_squared() < 1.0:
+		return
+	var normal: Vector2 = (party_position - contact_point).normalized()
+	if normal == Vector2.ZERO:
+		normal = (party_position - rect.get_center()).normalized()
+	var tangent: Vector2 = Vector2(-radius.y, radius.x).normalized()
+	var approach_speed: float = maxf(0.0, party_velocity.dot(-normal))
+	var tangent_speed: float = party_velocity.dot(tangent)
+	var contact_strength: float = clampf((approach_speed + absf(tangent_speed) * 0.45) / 150.0, 0.0, 1.25)
+	if contact_strength <= 0.02:
+		return
+	var inertia: float = _spin_inertia_for_rect(rect)
+	var torque: float = radius.cross(party_velocity) / inertia
+	_add_window_spin_impulse(window, torque * WINDOW_SPIN_PARTY_IMPULSE * contact_strength)
+
+
+func _apply_window_spin_contact_impulse(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> void:
+	if _is_spin_pinned(window) and _is_spin_pinned(other_window):
+		_apply_spin_gear_contact(window, rect, other_window, other)
+		return
+	if _is_spin_pinned(window):
+		_apply_single_spin_window_contact(window, rect, other_window, other)
+	if _is_spin_pinned(other_window):
+		_apply_single_spin_window_contact(other_window, other, window, rect)
+
+
+func _apply_spin_gear_contact(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> void:
+	if not _window_spin_contacting(rect, other):
+		return
+	var contact_point: Vector2 = _rect_contact_point(rect, other)
+	var radius_a: float = maxf(8.0, (contact_point - rect.get_center()).length())
+	var radius_b: float = maxf(8.0, (contact_point - other.get_center()).length())
+	var omega_a: float = float(_spin_angular_velocities.get(window, 0.0))
+	var omega_b: float = float(_spin_angular_velocities.get(other_window, 0.0))
+	var target_a: float = -omega_b * radius_b / radius_a
+	var target_b: float = -omega_a * radius_a / radius_b
+	var coupled_a: float = lerpf(omega_a, target_a, WINDOW_SPIN_GEAR_COUPLING)
+	var coupled_b: float = lerpf(omega_b, target_b, WINDOW_SPIN_GEAR_COUPLING)
+	_spin_angular_velocities[window] = clampf(coupled_a, -WINDOW_SPIN_MAX_ANGULAR_SPEED, WINDOW_SPIN_MAX_ANGULAR_SPEED)
+	_spin_angular_velocities[other_window] = clampf(coupled_b, -WINDOW_SPIN_MAX_ANGULAR_SPEED, WINDOW_SPIN_MAX_ANGULAR_SPEED)
+
+
+func _apply_single_spin_window_contact(spinning_window: BattleWindow, spinning_rect: Rect2, other_window: BattleWindow, other_rect: Rect2) -> void:
+	if not _window_spin_contacting(spinning_rect, other_rect):
+		return
+	var contact_point: Vector2 = _rect_contact_point(spinning_rect, other_rect)
+	var radius: Vector2 = contact_point - spinning_rect.get_center()
+	if radius.length_squared() < 1.0:
+		radius = other_rect.get_center() - spinning_rect.get_center()
+	if radius.length_squared() < 1.0:
+		return
+	var tangent: Vector2 = Vector2(-radius.y, radius.x).normalized()
+	var angular_velocity: float = float(_spin_angular_velocities.get(spinning_window, 0.0))
+	var edge_velocity: Vector2 = tangent * angular_velocity * radius.length()
+	var other_velocity: Vector2 = _window_velocities.get(other_window, Vector2.ZERO)
+	var inertia: float = _spin_inertia_for_rect(spinning_rect)
+	var incoming_torque: float = radius.cross(other_velocity) / inertia
+	_add_window_spin_impulse(spinning_window, incoming_torque * WINDOW_SPIN_WINDOW_IMPULSE)
+	if _is_spin_pinned(other_window):
+		return
+	var normal: Vector2 = (other_rect.get_center() - spinning_rect.get_center()).normalized()
+	if normal == Vector2.ZERO:
+		normal = tangent
+	var separation_speed: float = maxf(0.0, edge_velocity.dot(normal))
+	var bounce_multiplier: float = GameState.window_bounce_multiplier()
+	var scrape_velocity: Vector2 = edge_velocity * WINDOW_SPIN_EDGE_TRANSFER * bounce_multiplier
+	var shove_velocity: Vector2 = normal * separation_speed * 0.22 * bounce_multiplier
+	_window_velocities[other_window] = (other_velocity + scrape_velocity + shove_velocity).limit_length(_max_speed_for_window(other_window))
+
+
+func _add_window_spin_impulse(window: BattleWindow, impulse: float) -> void:
+	if not _is_spin_pinned(window):
+		return
+	var current: float = float(_spin_angular_velocities.get(window, 0.0))
+	_spin_angular_velocities[window] = clampf(current + impulse, -WINDOW_SPIN_MAX_ANGULAR_SPEED, WINDOW_SPIN_MAX_ANGULAR_SPEED)
+
+
+func _apply_window_spin_collision_damage(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> bool:
+	if not _window_spin_contacting(rect, other):
+		return false
+	if _is_spin_pinned(window) and _is_spin_pinned(other_window):
+		return false
+	var key: String = _collision_pair_key(window, other_window) + ":spin"
+	if float(_spin_collision_cooldowns.get(key, 0.0)) > 0.0:
+		return false
+	var damage_ratio: float = GameState.window_spin_damage_ratio()
+	if damage_ratio <= 0.0:
+		return false
+	var dealt: int = 0
+	if _spin_is_damaging(window):
+		dealt += other_window.apply_window_collision_damage(_spin_damage_ratio_for_window(window, damage_ratio), "Window Spin")
+	if _spin_is_damaging(other_window):
+		dealt += window.apply_window_collision_damage(_spin_damage_ratio_for_window(other_window, damage_ratio), "Window Spin")
+	if dealt > 0:
+		_spin_collision_cooldowns[key] = WINDOW_SPIN_DAMAGE_COOLDOWN
+		return true
+	return false
+
+
+func _window_spin_contacting(rect: Rect2, other: Rect2) -> bool:
+	return rect.grow(WINDOW_SPIN_CONTACT_MARGIN).intersects(other)
+
+
+func _spin_is_damaging(window: BattleWindow) -> bool:
+	return _is_spin_pinned(window) and absf(float(_spin_angular_velocities.get(window, 0.0))) >= WINDOW_SPIN_DAMAGE_MIN_SPEED
+
+
+func _spin_damage_ratio_for_window(window: BattleWindow, base_ratio: float) -> float:
+	var speed: float = absf(float(_spin_angular_velocities.get(window, 0.0)))
+	var speed_bonus: float = clampf(speed / WINDOW_SPIN_DAMAGE_MIN_SPEED, 1.0, 2.4)
+	return base_ratio * speed_bonus
+
+
 func _try_cast_shockwave() -> bool:
 	var shockwave_speed: float = GameState.window_shockwave_speed()
 	if shockwave_speed <= 0.0 or _shockwave_cooldown > 0.0 or _window_rects.is_empty():
@@ -529,9 +882,25 @@ func _try_cast_shockwave() -> bool:
 
 
 func _max_speed_for_window(window: BattleWindow) -> float:
+	var speed: float = MAX_WINDOW_SPEED * GameState.window_bounce_speed_multiplier()
 	if float(_shockwave_boost_timers.get(str(window.get_instance_id()), 0.0)) > 0.0:
-		return SHOCKWAVE_MAX_WINDOW_SPEED
-	return MAX_WINDOW_SPEED
+		return maxf(speed, SHOCKWAVE_MAX_WINDOW_SPEED)
+	return speed
+
+
+func _bounce_velocity_off_walls(velocity: Vector2, raw_position: Vector2, clamped_position: Vector2) -> Vector2:
+	var restitution: float = GameState.window_wall_bounce_restitution()
+	if restitution <= 0.0:
+		return velocity
+	var min_speed: float = GameState.window_wall_bounce_min_speed()
+	var bounced: Vector2 = velocity
+	if not is_equal_approx(raw_position.x, clamped_position.x):
+		var direction_x: float = 1.0 if raw_position.x < clamped_position.x else -1.0
+		bounced.x = direction_x * maxf(absf(bounced.x) * restitution, min_speed)
+	if not is_equal_approx(raw_position.y, clamped_position.y):
+		var direction_y: float = 1.0 if raw_position.y < clamped_position.y else -1.0
+		bounced.y = direction_y * maxf(absf(bounced.y) * restitution, min_speed)
+	return bounced
 
 
 func _party_world_center() -> Vector2:
@@ -616,6 +985,40 @@ func _party_world_positions() -> Array[Vector2]:
 	return positions
 
 
+func _party_collision_bodies() -> Array[Dictionary]:
+	var bodies: Array[Dictionary] = []
+	for member: Node in get_tree().get_nodes_in_group("party_member"):
+		if not member is Node2D:
+			continue
+		var key: String = str(member.get_instance_id())
+		bodies.append({
+			"position": (member as Node2D).global_position,
+			"velocity": _party_velocities.get(key, Vector2.ZERO),
+		})
+	return bodies
+
+
+func _update_party_velocities(delta: float) -> void:
+	var live_keys: Dictionary = {}
+	for member: Node in get_tree().get_nodes_in_group("party_member"):
+		if not member is Node2D:
+			continue
+		var key: String = str(member.get_instance_id())
+		var position: Vector2 = (member as Node2D).global_position
+		var previous: Vector2 = _party_previous_positions.get(key, position)
+		var velocity := Vector2.ZERO
+		if delta > 0.0001:
+			velocity = ((position - previous) / delta).limit_length(PARTY_VELOCITY_MAX)
+		var old_velocity: Vector2 = _party_velocities.get(key, velocity)
+		_party_velocities[key] = old_velocity.lerp(velocity, 0.42).limit_length(PARTY_VELOCITY_MAX)
+		_party_previous_positions[key] = position
+		live_keys[key] = true
+	for key: String in _party_previous_positions.keys():
+		if not live_keys.has(key):
+			_party_previous_positions.erase(key)
+			_party_velocities.erase(key)
+
+
 func _camera_visible_world_rect(viewport_size: Vector2) -> Rect2:
 	var camera: Camera2D = get_viewport().get_camera_2d()
 	if camera == null:
@@ -652,8 +1055,7 @@ func _on_battle_window_closed(window: Node) -> void:
 	# anchor drop positions at the window the player was just fighting in,
 	# not at the player's body.
 	var window_rect: Rect2 = _window_rects[window]
-	_window_rects.erase(window)
-	_window_velocities.erase(window)
+	_forget_window_reference(window)
 	var battle_window := window as BattleWindow
 	if battle_window:
 		var xp_reward: int = battle_window.claim_xp_reward()
@@ -663,8 +1065,36 @@ func _on_battle_window_closed(window: Node) -> void:
 	# Tell anyone who cares (Field, etc.) when the last fight ends. This is
 	# the gate Field uses before declaring stage_cleared — Echo Strike means
 	# the *first* window closing is rarely the last one.
-	if _window_rects.is_empty():
-		EventBus.all_battles_resolved.emit()
+	_emit_all_battles_resolved_if_no_live_fights()
+
+
+func _claim_finished_spin_windows() -> void:
+	for window: BattleWindow in _active_windows():
+		if not _is_spin_pinned(window):
+			continue
+		if window.living_enemy_count() > 0:
+			continue
+		var key: String = str(window.get_instance_id())
+		if bool(_spin_rewarded_windows.get(key, false)):
+			continue
+		var window_rect: Rect2 = _window_rects.get(window, Rect2())
+		var xp_reward: int = window.claim_xp_reward()
+		if xp_reward > 0:
+			GameState.add_party_xp(xp_reward)
+		_drop_rewards_from_window(window, window_rect)
+		_spin_rewarded_windows[key] = true
+
+
+func _emit_all_battles_resolved_if_no_live_fights() -> void:
+	if _all_battles_resolved_sent:
+		return
+	for window: BattleWindow in _active_windows():
+		if _is_spin_pinned(window):
+			continue
+		if window.living_enemy_count() > 0:
+			return
+	_all_battles_resolved_sent = true
+	EventBus.all_battles_resolved.emit()
 
 
 func _drop_rewards_from_window(window: BattleWindow, window_rect: Rect2) -> void:
@@ -727,4 +1157,19 @@ func abort_all_battles() -> void:
 	_party_collision_cooldowns.clear()
 	_bump_heal_totals.clear()
 	_shockwave_boost_timers.clear()
+	_spin_angular_velocities.clear()
+	_spin_collision_cooldowns.clear()
+	_spin_rewarded_windows.clear()
+	_party_previous_positions.clear()
+	_party_velocities.clear()
 	_shockwave_cooldown = 0.0
+	_all_battles_resolved_sent = true
+
+
+func _erase_pair_cooldowns_for_window(window_key: String) -> void:
+	for key: String in _collision_cooldowns.keys():
+		if key.begins_with(window_key + ":") or key.contains(":" + window_key):
+			_collision_cooldowns.erase(key)
+	for key: String in _spin_collision_cooldowns.keys():
+		if key.begins_with(window_key + ":") or key.contains(":" + window_key + ":"):
+			_spin_collision_cooldowns.erase(key)

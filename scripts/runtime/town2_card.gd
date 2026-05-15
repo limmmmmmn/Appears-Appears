@@ -35,6 +35,10 @@ const ICON_FALLBACK_BY_ID: Dictionary = {
 	&"bump_blessing": "res://assets/sprites/bump_heal.png",
 	&"shockwave": "res://assets/sprites/window_crash.png",
 	&"window_fusion": "res://assets/sprites/window_crash.png",
+	&"window_spin": "res://assets/sprites/window_crash.png",
+	&"window_split": "res://assets/sprites/slash_basic.png",
+	&"bouncy_ball": "res://assets/sprites/window_crash.png",
+	&"repulsion_wall": "res://assets/sprites/window_crash.png",
 }
 const ICON_FALLBACK_BY_EFFECT: Dictionary = {
 	"atk_flat": "res://assets/sprites/slash_basic.png",
@@ -57,6 +61,10 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"bump_blessing": Color(0.63, 0.86, 0.68, 1),
 	&"shockwave": Color(0.42, 0.74, 0.96, 1),
 	&"window_fusion": Color(0.58, 0.52, 0.92, 1),
+	&"window_spin": Color(0.96, 0.58, 0.22, 1),
+	&"window_split": Color(0.95, 0.32, 0.46, 1),
+	&"bouncy_ball": Color(0.28, 0.82, 0.62, 1),
+	&"repulsion_wall": Color(0.22, 0.92, 0.86, 1),
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
@@ -346,6 +354,16 @@ func _poster_description() -> String:
 		return "Space: knock windows away"
 	if data.effect_data.has("window_fusion"):
 		return "Colliding windows merge"
+	if data.effect_data.has("window_spin_damage_ratio"):
+		var amount: int = int(round(GameState.modifier_next_float_effect(data, "window_spin_damage_ratio") * 100.0))
+		return "Space: pin and spin +%d%%" % amount
+	if data.effect_data.has("window_split"):
+		return "Space: split 2+ enemies"
+	if data.effect_data.has("window_bounce_mult"):
+		var amount: int = int(round((GameState.modifier_next_float_effect(data, "window_bounce_mult") - 1.0) * 100.0))
+		return "Windows bounce +%d%%" % amount
+	if data.effect_data.has("window_wall_bounce_min_speed"):
+		return "Walls launch windows"
 	return data.description
 
 

@@ -46,6 +46,7 @@ func _ready() -> void:
 	EventBus.character_recruited.connect(_on_character_recruited)
 	_build_town_countdown()
 	_build_field_bump_button()
+	_build_debug_level_button()
 	_refresh_gold()
 	_refresh_stage()
 	_rebuild_member_boxes()
@@ -80,6 +81,27 @@ func _build_field_bump_button() -> void:
 
 func _on_field_bump_pressed() -> void:
 	GameState.bump_difficulty_tier()
+
+
+func _build_debug_level_button() -> void:
+	if not is_instance_valid(_stage_label):
+		return
+	var parent: Node = _stage_label.get_parent()
+	if parent == null:
+		return
+	var btn := Button.new()
+	btn.text = "LV+"
+	btn.tooltip_text = "테스트 레벨업"
+	btn.add_theme_font_size_override("font_size", 9)
+	btn.custom_minimum_size = Vector2(28, 14)
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.pressed.connect(_on_debug_level_pressed)
+	parent.add_child(btn)
+	parent.move_child(btn, mini(_stage_label.get_index() + 2, parent.get_child_count() - 1))
+
+
+func _on_debug_level_pressed() -> void:
+	GameState.debug_level_up_party()
 
 
 func _build_town_countdown() -> void:
@@ -152,7 +174,7 @@ func _on_party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: in
 	_member_boxes[index].set_level(level)
 
 
-## On level-up: "레벨 업!" toast → stat-delta panel → member card picks.
+## On level-up: stat-delta panel immediately → member card picks.
 ## Frame-id throttle keeps the synced N-member emits from triggering the
 ## whole chain N times.
 func _on_party_member_leveled_up(_index: int, new_level: int) -> void:
@@ -162,14 +184,6 @@ func _on_party_member_leveled_up(_index: int, new_level: int) -> void:
 	_last_level_up_frame = current_frame
 	var levels_gained: int = maxi(1, new_level - _previous_party_level)
 	_previous_party_level = new_level
-	_show_level_up_toast(new_level)
-	if is_instance_valid(_stat_panel) or is_instance_valid(_level_up_panel):
-		return
-	# Wait for the toast to finish *and* clear the screen so the stat panel
-	# opens on a clean stage.
-	await get_tree().create_timer(1.45, false).timeout
-	if not is_inside_tree():
-		return
 	if is_instance_valid(_stat_panel) or is_instance_valid(_level_up_panel):
 		return
 	_open_stat_panel(levels_gained)

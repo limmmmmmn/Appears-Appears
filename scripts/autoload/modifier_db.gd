@@ -24,6 +24,12 @@ const LEVEL_UP_ONLY_EFFECT_KEYS: Array[String] = [
 	"thief_steal_chance",
 	"window_shockwave_speed",
 	"window_fusion",
+	"window_spin_damage_ratio",
+	"window_split",
+	"window_bounce_mult",
+	"window_bounce_speed_mult",
+	"window_wall_bounce_restitution",
+	"window_wall_bounce_min_speed",
 ]
 
 var _all: Array[ModifierData] = []
