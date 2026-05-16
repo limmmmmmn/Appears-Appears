@@ -24,6 +24,14 @@ const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.p
 ## Fixed world-map size for every field.
 const FIELD_SIZE: Vector2 = Vector2(720, 405)
 const TILE_SIZE: int = 16
+
+## Field unfolds from a tight DQ1-style frame (stage 1) out to a sprawl
+## (~stage 9), matching the rest of the run-intensity curve. Step matches
+## STAGE_DURATION_STEP rhythm: every stage grows in lockstep with the
+## duration bump until both cap out.
+const FIELD_SIZE_START: Vector2 = Vector2(480, 270)
+const FIELD_SIZE_END: Vector2 = Vector2(1200, 675)
+const FIELD_SIZE_STAGE_STEP: Vector2 = Vector2(90, 50.625)
 const SPAWN_MARGIN: float = 48.0
 ## Don't drop slimes within this radius of the player on stage start.
 const PARTY_SAFE_RADIUS: float = 80.0
@@ -198,8 +206,6 @@ func _process(delta: float) -> void:
 	if GameState.current_stage <= 0 or GameState.is_party_wiped():
 		return
 	if _stage_complete:
-		return
-	if GameState.is_field_combat_locked():
 		return
 	_stage_time_left = maxf(0.0, _stage_time_left - delta)
 	if _stage_time_left <= 0.0:
@@ -732,12 +738,18 @@ func _random_position() -> Vector2:
 	)
 
 
-func _apply_stage_field_size(_stage_num: int) -> void:
-	_field_size = FIELD_SIZE
+func _apply_stage_field_size(stage_num: int) -> void:
+	_field_size = _field_size_for_stage(stage_num)
 	_background.size = _field_size
 	_town_tile.position = _hidden_town_tile_position()
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
+
+
+func _field_size_for_stage(stage_num: int) -> Vector2:
+	var stage_index: int = maxi(0, stage_num - 1)
+	var size: Vector2 = FIELD_SIZE_START + FIELD_SIZE_STAGE_STEP * float(stage_index)
+	return Vector2(minf(size.x, FIELD_SIZE_END.x), minf(size.y, FIELD_SIZE_END.y))
 
 
 func _place_start_town_tile() -> void:
