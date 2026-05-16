@@ -17,7 +17,8 @@ const LEVEL_UP_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_pane
 @onready var _gold_label: Label = %GoldLabel
 @onready var _member_row: HBoxContainer = %MemberRow
 ## Built dynamically so it sits on whatever HUD scene variant is active.
-var _town_countdown: Label
+var _stage_timer_label: Label
+var _cheat_button_row: HBoxContainer
 
 ## Live member box references, parallel to GameState.party. Rebuilt from
 ## scratch on party_changed so we never have stale indices when a recruit
@@ -44,7 +45,7 @@ func _ready() -> void:
 	EventBus.stage_started.connect(_on_stage_started)
 	EventBus.difficulty_increased.connect(_on_difficulty_increased)
 	EventBus.character_recruited.connect(_on_character_recruited)
-	_build_town_countdown()
+	_build_stage_timer_label()
 	_build_field_bump_button()
 	_build_debug_level_button()
 	_refresh_gold()
@@ -52,21 +53,16 @@ func _ready() -> void:
 	_rebuild_member_boxes()
 
 
-## Town respawn countdown updates every frame. Pulls state from the
-## field_root group so the HUD doesn't need a direct reference.
+## Wave timer updates every frame. Pulls state from the field_root group so
+## the HUD doesn't need a direct reference.
 func _process(_delta: float) -> void:
-	_update_town_countdown()
+	_update_stage_timer()
 
 
-## Debug knob next to the Field N label. Each click jumps the time-based
-## difficulty tier forward by one, so playtesters can dial up the threat
-## curve without waiting on the 30s clock.
+## Debug knobs live in the bottom-right corner so the top bar can stay
+## readable during timed waves.
 func _build_field_bump_button() -> void:
-	if not is_instance_valid(_stage_label):
-		return
-	var parent: Node = _stage_label.get_parent()
-	if parent == null:
-		return
+	var parent: HBoxContainer = _ensure_cheat_button_row()
 	var btn := Button.new()
 	btn.text = "▲"
 	btn.tooltip_text = "필드 레벨 +1"
@@ -75,8 +71,6 @@ func _build_field_bump_button() -> void:
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.pressed.connect(_on_field_bump_pressed)
 	parent.add_child(btn)
-	# Park it directly after the stage label so the HBox keeps them paired.
-	parent.move_child(btn, _stage_label.get_index() + 1)
 
 
 func _on_field_bump_pressed() -> void:
@@ -84,11 +78,7 @@ func _on_field_bump_pressed() -> void:
 
 
 func _build_debug_level_button() -> void:
-	if not is_instance_valid(_stage_label):
-		return
-	var parent: Node = _stage_label.get_parent()
-	if parent == null:
-		return
+	var parent: HBoxContainer = _ensure_cheat_button_row()
 	var btn := Button.new()
 	btn.text = "LV+"
 	btn.tooltip_text = "테스트 레벨업"
@@ -97,42 +87,64 @@ func _build_debug_level_button() -> void:
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.pressed.connect(_on_debug_level_pressed)
 	parent.add_child(btn)
-	parent.move_child(btn, mini(_stage_label.get_index() + 2, parent.get_child_count() - 1))
 
 
 func _on_debug_level_pressed() -> void:
 	GameState.debug_level_up_party()
 
 
-func _build_town_countdown() -> void:
-	_town_countdown = Label.new()
-	_town_countdown.add_theme_font_size_override("font_size", 9)
-	_town_countdown.add_theme_color_override("font_color", Color(0.96, 0.86, 0.42))
-	_town_countdown.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
-	_town_countdown.add_theme_constant_override("outline_size", 3)
-	# Top-left, tucked just under the Field N label so HUD reads as one
-	# stacked widget: Field N / 다음 마을까지 N초.
-	_town_countdown.position = Vector2(18, 38)
-	_town_countdown.size = Vector2(160, 12)
-	_town_countdown.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_town_countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_town_countdown.visible = false
-	add_child(_town_countdown)
+func _ensure_cheat_button_row() -> HBoxContainer:
+	if is_instance_valid(_cheat_button_row):
+		return _cheat_button_row
+	_cheat_button_row = HBoxContainer.new()
+	_cheat_button_row.name = "CheatButtons"
+	_cheat_button_row.anchor_left = 1.0
+	_cheat_button_row.anchor_top = 1.0
+	_cheat_button_row.anchor_right = 1.0
+	_cheat_button_row.anchor_bottom = 1.0
+	_cheat_button_row.offset_left = -92.0
+	_cheat_button_row.offset_top = -38.0
+	_cheat_button_row.offset_right = -12.0
+	_cheat_button_row.offset_bottom = -10.0
+	_cheat_button_row.alignment = BoxContainer.ALIGNMENT_END
+	_cheat_button_row.add_theme_constant_override("separation", 5)
+	add_child(_cheat_button_row)
+	return _cheat_button_row
 
 
-func _update_town_countdown() -> void:
-	if not is_instance_valid(_town_countdown):
+func _build_stage_timer_label() -> void:
+	_stage_timer_label = Label.new()
+	_stage_timer_label.name = "StageTimerLabel"
+	_stage_timer_label.anchor_left = 0.5
+	_stage_timer_label.anchor_top = 0.0
+	_stage_timer_label.anchor_right = 0.5
+	_stage_timer_label.anchor_bottom = 0.0
+	_stage_timer_label.offset_left = -80.0
+	_stage_timer_label.offset_top = 10.0
+	_stage_timer_label.offset_right = 80.0
+	_stage_timer_label.offset_bottom = 36.0
+	_stage_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stage_timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if is_instance_valid(_stage_label) and _stage_label.label_settings != null:
+		_stage_timer_label.label_settings = _stage_label.label_settings
+	else:
+		_stage_timer_label.add_theme_font_size_override("font_size", 18)
+		_stage_timer_label.add_theme_color_override("font_color", Color.WHITE)
+		_stage_timer_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.92))
+		_stage_timer_label.add_theme_constant_override("outline_size", 3)
+	add_child(_stage_timer_label)
+
+
+func _update_stage_timer() -> void:
+	if not is_instance_valid(_stage_timer_label):
 		return
 	var field: Node = get_tree().get_first_node_in_group("field_root")
-	if field == null or not field.has_method("town_respawn_seconds_left"):
-		_town_countdown.visible = false
+	if field == null or not field.has_method("stage_time_left"):
+		_stage_timer_label.visible = false
 		return
-	var left: float = field.town_respawn_seconds_left()
-	if left <= 0.0:
-		_town_countdown.visible = false
-		return
-	_town_countdown.visible = true
-	_town_countdown.text = "다음 마을까지 %d초" % int(ceil(left))
+	var seconds_left: int = maxi(0, int(ceil(float(field.stage_time_left()))))
+	_stage_timer_label.visible = true
+	_stage_timer_label.text = "%02d:%02d" % [int(seconds_left / 60), seconds_left % 60]
 
 
 # ─── Bottom row ───────────────────────────────────────────────────────
@@ -415,18 +427,12 @@ func _on_stage_started(stage_num: int) -> void:
 ## auto-rolls to the new Field number; the toast announces it.
 func _on_difficulty_increased(_tier: int) -> void:
 	_refresh_stage()
-	var field_num: int = maxi(GameState.current_stage, 1) + GameState.current_difficulty_tier()
-	_show_phase_toast("Field %d  ⚠" % field_num)
+	_show_phase_toast("Threat %d" % GameState.current_difficulty_tier())
 
 
 func _refresh_gold() -> void:
 	_gold_label.text = "Gold %d" % GameState.gold
 
 
-## Field number doubles as the threat tier — every 30s of run time the
-## difficulty climbs by one and the displayed Field N goes up to match.
-## current_stage is mostly static now (one field per run), so the value
-## you see in the corner is "how dangerous things have gotten."
 func _refresh_stage() -> void:
-	var field_num: int = maxi(GameState.current_stage, 1) + GameState.current_difficulty_tier()
-	_stage_label.text = "Field %d" % field_num
+	_stage_label.text = "Field %d" % maxi(GameState.current_stage, 1)

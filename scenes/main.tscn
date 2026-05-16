@@ -22,7 +22,7 @@ script = ExtResource("3_mgr")
 
 [node name="HUD" parent="." unique_id=1507021759 instance=ExtResource("4_hud")]
 
-[node name="LowHealthOverlay" parent="." instance=ExtResource("5_low_hp")]
+[node name="LowHealthOverlay" parent="." unique_id=1701488067 instance=ExtResource("5_low_hp")]
 
 [node name="PauseOverlay" type="CanvasLayer" parent="." unique_id=777628969]
 layer = 20

@@ -19,6 +19,7 @@ var party_mp: Array[int] = []
 ## existing call sites; they all return the same number now.
 var current_level: int = 1
 var current_xp: int = 0
+var _defer_party_level_settlement: bool = true
 var party_equipment: Array[Array] = []
 var inventory: Array[ItemData] = []
 ## Legacy skill-tree counters are kept for old call sites, but the live
@@ -365,8 +366,33 @@ func add_party_xp(amount: int) -> void:
 			current_xp = 0
 			_emit_party_xp_changed()
 		return
+	if _defer_party_level_settlement:
+		current_xp += amount
+		_emit_party_xp_changed()
+		return
+	_settle_party_xp(amount, true)
+
+
+func settle_deferred_party_level_ups(emit_level_up_signals: bool = true) -> int:
+	if party.is_empty() or current_level >= MAX_CHARACTER_LEVEL:
+		return 0
+	return _settle_party_xp(0, emit_level_up_signals)
+
+
+func pending_party_level_up_count() -> int:
+	if party.is_empty() or current_level >= MAX_CHARACTER_LEVEL:
+		return 0
+	var simulated_level: int = current_level
+	var simulated_xp: int = current_xp
+	while simulated_level < MAX_CHARACTER_LEVEL and simulated_xp >= _xp_required_for_level(simulated_level):
+		simulated_xp -= _xp_required_for_level(simulated_level)
+		simulated_level += 1
+	return simulated_level - current_level
+
+
+func _settle_party_xp(extra_amount: int = 0, emit_level_up_signals: bool = true) -> int:
 	var level_before: int = current_level
-	current_xp += amount
+	current_xp += maxi(0, extra_amount)
 	while current_level < MAX_CHARACTER_LEVEL and current_xp >= _xp_required_for_level(current_level):
 		current_xp -= _xp_required_for_level(current_level)
 		current_level += 1
@@ -375,9 +401,10 @@ func add_party_xp(amount: int) -> void:
 	var levels_gained: int = current_level - level_before
 	if levels_gained > 0:
 		_apply_auto_skill_gains(level_before + 1, current_level)
-		_apply_shared_level_gains(levels_gained)
+		_apply_shared_level_gains(levels_gained, emit_level_up_signals)
 		EventBus.party_hp_changed.emit()
 	_emit_party_xp_changed()
+	return levels_gained
 
 
 func debug_level_up_party() -> void:
@@ -412,7 +439,7 @@ func party_xp_ratio(_index: int = 0) -> float:
 ## Bumps every member's HP/MP cap by their per-level growth × levels_gained,
 ## tops them off (if alive) by the gain, and emits all the per-member
 ## signals the HUD listens to.
-func _apply_shared_level_gains(levels_gained: int) -> void:
+func _apply_shared_level_gains(levels_gained: int, emit_level_up_signals: bool = true) -> void:
 	if levels_gained <= 0:
 		return
 	for i in party.size():
@@ -428,7 +455,8 @@ func _apply_shared_level_gains(levels_gained: int) -> void:
 			party_mp[i] = mini(new_max_mp, party_mp[i] + maxi(0, mp_gain))
 		EventBus.party_member_hp_changed.emit(i, party_hp[i], new_max_hp)
 		EventBus.party_member_mp_changed.emit(i, party_mp[i], new_max_mp)
-		EventBus.party_member_leveled_up.emit(i, current_level)
+		if emit_level_up_signals:
+			EventBus.party_member_leveled_up.emit(i, current_level)
 
 
 # ─── Level-up cards / skills ──────────────────────────────────────────
@@ -897,6 +925,33 @@ func can_equip_item(item: ItemData) -> bool:
 
 func inventory_items() -> Array[ItemData]:
 	return inventory.duplicate()
+
+
+func inventory_sell_value() -> int:
+	var total: int = 0
+	for item: ItemData in inventory:
+		total += item_sell_value(item)
+	return total
+
+
+func item_sell_value(item: ItemData) -> int:
+	if item == null:
+		return 0
+	var stat_total: int = maxi(0, item.attack_bonus)
+	stat_total += maxi(0, item.defense_bonus)
+	stat_total += maxi(0, item.agility_bonus)
+	stat_total += ceili(float(maxi(0, item.max_hp_bonus)) * 0.25)
+	stat_total += ceili(float(maxi(0, item.max_mp_bonus)) * 0.35)
+	return maxi(4, 4 + stat_total * 2)
+
+
+func sell_inventory_items() -> int:
+	var value: int = inventory_sell_value()
+	if value <= 0:
+		return 0
+	inventory.clear()
+	EventBus.inventory_changed.emit()
+	return value
 
 
 func equipment_for_member(index: int) -> Array:

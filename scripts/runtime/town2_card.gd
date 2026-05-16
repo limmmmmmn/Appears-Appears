@@ -358,7 +358,7 @@ func _poster_description() -> String:
 		var amount: int = int(round(GameState.modifier_next_float_effect(data, "window_spin_damage_ratio") * 100.0))
 		return "Space: pin and spin +%d%%" % amount
 	if data.effect_data.has("window_split"):
-		return "Space: split 2+ enemies"
+		return "Push edge dots: stretch & split"
 	if data.effect_data.has("window_bounce_mult"):
 		var amount: int = int(round((GameState.modifier_next_float_effect(data, "window_bounce_mult") - 1.0) * 100.0))
 		return "Windows bounce +%d%%" % amount

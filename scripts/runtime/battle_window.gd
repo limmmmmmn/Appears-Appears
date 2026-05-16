@@ -71,6 +71,17 @@ const RESULT_MESSAGE_DURATION: float = 0.42
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
 const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1.0)
 const DEFAULT_WINDOW_BG: Color = Color(0.95, 0.78, 0.14, 1.0)
+const SPLIT_HANDLE_SIZE: Vector2 = Vector2(8.0, 8.0)
+const SPLIT_HANDLE_COLOR: Color = Color(1.0, 0.9, 0.2, 1.0)
+const SPLIT_HANDLE_OUTLINE_COLOR: Color = Color(0.12, 0.1, 0.08, 1.0)
+const SPLIT_PRESS_LONG_SCALE: float = 1.08
+const SPLIT_PRESS_SHORT_SCALE: float = 0.68
+const SPLIT_STRETCH_LONG_SCALE: float = 1.58
+const SPLIT_STRETCH_SHORT_SCALE: float = 0.68
+const SPLIT_PRESS_DURATION: float = 0.16
+const SPLIT_PRESS_HOLD_DURATION: float = 0.08
+const SPLIT_STRETCH_DURATION: float = 0.46
+const SPLIT_STRETCH_BACK_DURATION: float = 0.14
 const WINDOW_BG_BY_ENEMY_ID: Dictionary = {
 	&"slime": Color(0.1, 0.55, 0.43, 1.0),
 	&"slime_chaser": Color(0.2, 0.68, 0.35, 1.0),
@@ -102,9 +113,12 @@ var _forced_enemy_data: Array[EnemyData] = []
 var _slide_tween: Tween
 var _crash_tween: Tween
 var _pin_impact_tween: Tween
+var _split_stretch_tween: Tween
 var _acting: bool = false
 var _spin_pinned: bool = false
 var _pin_visual: Control
+var _split_handle_nodes: Array[Control] = []
+var _split_handles_visible: bool = false
 
 
 func _ready() -> void:
@@ -266,6 +280,55 @@ func set_spin_angle(angle: float) -> void:
 	rotation = angle
 
 
+func set_split_handles_visible(visible: bool) -> void:
+	_split_handles_visible = visible
+	if visible:
+		_ensure_split_handle_visuals()
+	for node: Control in _split_handle_nodes:
+		if node != null and is_instance_valid(node):
+			node.visible = visible
+	if visible:
+		_position_split_handle_visuals()
+
+
+func play_window_split_stretch(axis: Vector2) -> void:
+	_refresh_spin_pivot()
+	set_split_handles_visible(false)
+	if _split_stretch_tween and _split_stretch_tween.is_valid():
+		_split_stretch_tween.kill()
+	var press_scale: Vector2 = _split_axis_scale(axis, SPLIT_PRESS_LONG_SCALE, SPLIT_PRESS_SHORT_SCALE)
+	var stretch_scale: Vector2 = _split_axis_scale(axis, SPLIT_STRETCH_LONG_SCALE, SPLIT_STRETCH_SHORT_SCALE)
+	_split_stretch_tween = create_tween()
+	_split_stretch_tween.tween_property(self, "scale", press_scale, SPLIT_PRESS_DURATION)\
+		.set_trans(Tween.TRANS_CUBIC)\
+		.set_ease(Tween.EASE_OUT)
+	_split_stretch_tween.tween_interval(SPLIT_PRESS_HOLD_DURATION)
+	_split_stretch_tween.tween_property(self, "scale", stretch_scale, SPLIT_STRETCH_DURATION)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+
+
+func cancel_window_split_stretch() -> void:
+	if _split_stretch_tween and _split_stretch_tween.is_valid():
+		_split_stretch_tween.kill()
+	_split_stretch_tween = create_tween()
+	_split_stretch_tween.tween_property(self, "scale", Vector2.ONE, SPLIT_STRETCH_BACK_DURATION)\
+		.set_trans(Tween.TRANS_CUBIC)\
+		.set_ease(Tween.EASE_OUT)
+
+
+func finish_window_split_stretch() -> void:
+	if _split_stretch_tween and _split_stretch_tween.is_valid():
+		_split_stretch_tween.kill()
+	scale = Vector2.ONE
+
+
+func _split_axis_scale(axis: Vector2, long_scale: float, short_scale: float) -> Vector2:
+	if absf(axis.y) > absf(axis.x):
+		return Vector2(short_scale, long_scale)
+	return Vector2(long_scale, short_scale)
+
+
 func _refresh_spin_pivot() -> void:
 	pivot_offset = size * 0.5
 
@@ -300,6 +363,49 @@ func _position_pin_visual() -> void:
 	_pin_visual.size = Vector2(28.0, 28.0)
 	_pin_visual.pivot_offset = _pin_visual.size * 0.5
 	_pin_visual.position = size * 0.5 - _pin_visual.size * 0.5
+
+
+func _ensure_split_handle_visuals() -> void:
+	if _split_handle_nodes.size() == 4:
+		return
+	_split_handle_nodes.clear()
+	for i in range(4):
+		var holder := Control.new()
+		holder.name = "SplitHandle%d" % i
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.z_index = 42
+		holder.size = SPLIT_HANDLE_SIZE + Vector2.ONE * 4.0
+		holder.pivot_offset = holder.size * 0.5
+		var outline := ColorRect.new()
+		outline.color = SPLIT_HANDLE_OUTLINE_COLOR
+		outline.size = holder.size
+		outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(outline)
+		var core := ColorRect.new()
+		core.color = SPLIT_HANDLE_COLOR
+		core.size = SPLIT_HANDLE_SIZE
+		core.position = Vector2.ONE * 2.0
+		core.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(core)
+		add_child(holder)
+		_split_handle_nodes.append(holder)
+	_position_split_handle_visuals()
+
+
+func _position_split_handle_visuals() -> void:
+	if _split_handle_nodes.size() != 4:
+		return
+	var positions: Array[Vector2] = [
+		Vector2(size.x * 0.5, 0.0),
+		Vector2(size.x * 0.5, size.y),
+		Vector2(0.0, size.y * 0.5),
+		Vector2(size.x, size.y * 0.5),
+	]
+	for i in _split_handle_nodes.size():
+		var node: Control = _split_handle_nodes[i]
+		if node != null and is_instance_valid(node):
+			node.position = positions[i] - node.size * 0.5
+			node.visible = _split_handles_visible
 
 
 func _play_pin_impact() -> void:
@@ -380,7 +486,7 @@ func split_off_for_window_split() -> Array[EnemyData]:
 		_enemies.erase(enemy)
 		enemy.queue_free()
 	if split_data.is_empty():
-		return []
+		return empty
 	_rebuild_after_split()
 	_play_crash_flash()
 	_log_label.text = "Split! %d / %d" % [living_enemy_count(), split_data.size()]
@@ -469,6 +575,7 @@ func _apply_fusion_size_bonus() -> void:
 		fusion_size.x * 0.5,
 		ENEMY_AREA_TOP + (fusion_size.y - ENEMY_AREA_BOTTOM - ENEMY_AREA_TOP) * 0.5
 	)
+	_position_split_handle_visuals()
 
 
 func _finish_as_fusion_source() -> void:
@@ -476,25 +583,28 @@ func _finish_as_fusion_source() -> void:
 	_turn_timer.stop()
 	if _slide_tween and _slide_tween.is_valid():
 		_slide_tween.kill()
+	if _split_stretch_tween and _split_stretch_tween.is_valid():
+		_split_stretch_tween.kill()
+	set_split_handles_visible(false)
 	queue_free()
 
 
-## When `single_target` is true the damage lands on exactly one random
-## living enemy inside the window instead of splashing across the whole
-## roster. Used by bump_attack so player→window collisions feel more like
-## a poke than a screen-clear, while window→window crashes (window_crash)
-## keep their original "everyone in the room takes a hit" splash.
-func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash", single_target: bool = false) -> int:
+## When `spread_evenly` is true, the same bump damage budget is divided
+## across every living enemy in the window. Window-on-window crashes and
+## spin hits still apply their full ratio to each target.
+func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash", spread_evenly: bool = false) -> int:
 	var total_dealt: int = 0
 	var effective_ratio: float = ratio * _window_collision_damage_multiplier(log_prefix)
 	var living: Array[Enemy] = _living_enemies()
-	if single_target:
+	if spread_evenly:
 		if living.is_empty():
 			return 0
-		var pick: Enemy = living[randi() % living.size()]
-		if pick != null and pick.data != null:
-			var damage: int = ceili(float(pick.max_hp) * effective_ratio) + pick.defense
-			total_dealt = pick.take_damage(damage, false, null, false)
+		var split_ratio: float = effective_ratio / float(living.size())
+		for enemy: Enemy in living:
+			if enemy.data == null:
+				continue
+			var damage: int = ceili(float(enemy.max_hp) * split_ratio) + enemy.defense
+			total_dealt += enemy.take_damage(damage, false, null, false)
 	else:
 		for enemy: Enemy in living:
 			if enemy.data == null:
@@ -1248,6 +1358,7 @@ func _apply_enemy_layout(total: int) -> void:
 		next_size.x * 0.5,
 		ENEMY_AREA_TOP + (next_size.y - ENEMY_AREA_BOTTOM - ENEMY_AREA_TOP) * 0.5
 	)
+	_position_split_handle_visuals()
 
 
 func _layout_size_for_enemy_count(total: int) -> Vector2:

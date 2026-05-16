@@ -6,7 +6,7 @@ extends CanvasLayer
 ##
 ## CanvasLayer base = screen-space rendering, but the manager keeps each
 ## BattleWindow anchored to a world-space rect. The screen position is derived
-## from the active camera every frame, then clamped so windows never leave view.
+## from the active camera every frame, while physics stays in field space.
 
 const BATTLE_WINDOW_SCENE: PackedScene = preload("res://scenes/battle_window.tscn")
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
@@ -32,7 +32,11 @@ const SHOCKWAVE_RADIUS: float = 150.0
 const SHOCKWAVE_COOLDOWN: float = 0.7
 const SHOCKWAVE_BOOST_DURATION: float = 0.24
 const SHOCKWAVE_MAX_WINDOW_SPEED: float = 560.0
-const WINDOW_SPLIT_RADIUS: float = 74.0
+const WINDOW_SPLIT_HANDLE_REVEAL_RADIUS: float = 62.0
+const WINDOW_SPLIT_HANDLE_RADIUS: float = 12.0
+const WINDOW_SPLIT_HANDLE_PUSH_SPEED: float = 18.0
+const WINDOW_SPLIT_HANDLE_COOLDOWN: float = 0.45
+const WINDOW_SPLIT_HOLD_DURATION: float = 0.70
 const WINDOW_SPLIT_GAP: float = 12.0
 const WINDOW_SPLIT_PUSH_SPEED: float = 95.0
 const WINDOW_SPIN_PIN_RADIUS: float = 72.0
@@ -64,6 +68,8 @@ var _shockwave_cooldown: float = 0.0
 var _spin_angular_velocities: Dictionary = {}  ## BattleWindow -> radians per second.
 var _spin_collision_cooldowns: Dictionary = {}  ## window pair key -> remaining seconds.
 var _spin_rewarded_windows: Dictionary = {}  ## battle window id -> rewards already paid while pinned.
+var _split_handle_cooldowns: Dictionary = {}  ## battle window id -> remaining seconds.
+var _split_pending_windows: Dictionary = {}  ## battle window id -> held split data.
 var _party_previous_positions: Dictionary = {}  ## party member id -> previous world position.
 var _party_velocities: Dictionary = {}  ## party member id -> smoothed world velocity.
 var _all_battles_resolved_sent: bool = true
@@ -82,6 +88,7 @@ func _process(delta: float) -> void:
 	_tick_party_collision_cooldowns(delta)
 	_tick_shockwave_state(delta)
 	_tick_window_spin_cooldowns(delta)
+	_tick_split_handle_cooldowns(delta)
 	_update_party_velocities(delta)
 	if _window_rects.is_empty():
 		return
@@ -99,7 +106,7 @@ func active_window_count() -> int:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if (event as InputEventKey).physical_keycode == KEY_SPACE:
-			if _try_cast_window_split() or _try_pin_window_spin() or _try_cast_shockwave():
+			if _try_pin_window_spin() or _try_cast_shockwave():
 				get_viewport().set_input_as_handled()
 
 
@@ -181,11 +188,10 @@ func _random_spawn_position(window_size: Vector2, viewport_size: Vector2) -> Vec
 
 
 func _is_spawn_position_valid(pos: Vector2, size: Vector2, viewport_size: Vector2) -> bool:
-	var bounds: Rect2 = _camera_visible_world_rect(viewport_size)
-	var zoom: Vector2 = _camera_zoom()
-	var margin_x: float = SLOT_MARGIN * zoom.x
-	var margin_y: float = SLOT_MARGIN * zoom.y
-	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM * zoom.y
+	var bounds: Rect2 = _field_window_bounds(viewport_size)
+	var margin_x: float = SLOT_MARGIN
+	var margin_y: float = SLOT_MARGIN
+	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM
 	return (
 		pos.x >= bounds.position.x + margin_x
 		and pos.y >= bounds.position.y + margin_y
@@ -209,6 +215,7 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 		if not _is_spin_pinned(window):
 			clamped_rect.position = _clamped_position(clamped_rect.position, clamped_rect.size, viewport_size)
 		_window_rects[window] = clamped_rect
+	_update_window_split_handles(windows, party_bodies, 0.0 if burst else delta)
 	for window: BattleWindow in windows:
 		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
@@ -303,10 +310,14 @@ func _forget_window_reference(window) -> void:
 	_spin_angular_velocities.erase(window)
 	if is_instance_valid(window):
 		var window_key: String = str(window.get_instance_id())
+		if window.has_method("set_split_handles_visible"):
+			window.set_split_handles_visible(false)
 		_party_collision_cooldowns.erase(window_key)
 		_bump_heal_totals.erase(window_key)
 		_shockwave_boost_timers.erase(window_key)
 		_spin_rewarded_windows.erase(window_key)
+		_split_handle_cooldowns.erase(window_key)
+		_split_pending_windows.erase(window_key)
 		_erase_pair_cooldowns_for_window(window_key)
 
 
@@ -400,8 +411,8 @@ func _apply_party_collision_effects(window: BattleWindow) -> void:
 	var counter_damage_ratio: float = 0.0
 	if damage_ratio > 0.0:
 		counter_damage_ratio = window.party_bump_counter_damage_ratio()
-		# Bump attack hits one random enemy in the window — a poke, not a sweep.
-		# Window-on-window crashes (window_crash) still splash everyone.
+		# Bump attack spreads its damage budget evenly across enemies in
+		# the window. Window-on-window crashes still hit each target fully.
 		dealt = window.apply_window_collision_damage(damage_ratio, "Bump attack", true)
 	var healed: int = 0
 	if heal_amount > 0:
@@ -567,6 +578,15 @@ func _tick_window_spin_cooldowns(delta: float) -> void:
 			_spin_collision_cooldowns[key] = remaining
 
 
+func _tick_split_handle_cooldowns(delta: float) -> void:
+	for key: String in _split_handle_cooldowns.keys():
+		var remaining: float = float(_split_handle_cooldowns[key]) - delta
+		if remaining <= 0.0:
+			_split_handle_cooldowns.erase(key)
+		else:
+			_split_handle_cooldowns[key] = remaining
+
+
 func _tick_window_spin(delta: float) -> void:
 	for window: BattleWindow in _active_windows():
 		if not _is_spin_pinned(window):
@@ -578,33 +598,173 @@ func _tick_window_spin(delta: float) -> void:
 			_spin_angular_velocities[window] = angular_velocity
 
 
-func _try_cast_window_split() -> bool:
-	if not GameState.window_split_enabled() or _window_rects.is_empty():
-		return false
-	var origin: Vector2 = _party_world_center()
-	if origin == Vector2.INF:
-		return false
-	var target: BattleWindow = null
-	var best_distance: float = INF
-	for window: BattleWindow in _active_windows():
-		if not is_instance_valid(window) or not _window_rects.has(window) or _is_spin_pinned(window):
+func _update_window_split_handles(windows: Array[BattleWindow], party_bodies: Array[Dictionary], delta: float) -> void:
+	if not GameState.window_split_enabled() or party_bodies.is_empty():
+		_cancel_all_pending_window_splits()
+		for window: BattleWindow in windows:
+			if is_instance_valid(window):
+				window.set_split_handles_visible(false)
+		return
+	for window: BattleWindow in windows:
+		if not is_instance_valid(window) or not _window_rects.has(window):
 			continue
-		if window.living_enemy_count() <= 0:
+		var key: String = str(window.get_instance_id())
+		var rect: Rect2 = _window_rects[window]
+		if _split_pending_windows.has(key):
+			window.set_split_handles_visible(false)
+			_update_pending_window_split(window, rect, party_bodies, delta)
 			continue
-		var distance: float = _distance_to_rect(origin, _window_rects[window])
-		if distance <= WINDOW_SPLIT_RADIUS and distance < best_distance:
-			target = window
-			best_distance = distance
-	if target == null:
+		if not _is_window_split_candidate(window):
+			window.set_split_handles_visible(false)
+			continue
+		var near: bool = _party_near_split_handles(rect, party_bodies)
+		window.set_split_handles_visible(near)
+		if near:
+			_try_split_window_from_handles(window, rect, party_bodies)
+
+
+func _is_window_split_candidate(window: BattleWindow) -> bool:
+	if not is_instance_valid(window) or not _window_rects.has(window) or _is_spin_pinned(window):
 		return false
-	var split_data: Array[EnemyData] = target.split_off_for_window_split()
-	if split_data.is_empty():
+	if window.living_enemy_count() <= 1:
 		return false
-	_spawn_split_window(target, split_data)
+	var key: String = str(window.get_instance_id())
+	if bool(_split_pending_windows.get(key, false)):
+		return false
+	return float(_split_handle_cooldowns.get(key, 0.0)) <= 0.0
+
+
+func _party_near_split_handles(rect: Rect2, party_bodies: Array[Dictionary]) -> bool:
+	for party_body: Dictionary in party_bodies:
+		var party_position: Vector2 = party_body.get("position", Vector2.ZERO)
+		if _distance_to_rect(party_position, rect) <= WINDOW_SPLIT_HANDLE_REVEAL_RADIUS:
+			return true
+	return false
+
+
+func _try_split_window_from_handles(window: BattleWindow, rect: Rect2, party_bodies: Array[Dictionary]) -> bool:
+	for handle: Dictionary in _split_handles_for_rect(rect):
+		var handle_position: Vector2 = handle["position"]
+		var normal: Vector2 = handle["normal"]
+		var handle_rect := Rect2(
+			handle_position - Vector2.ONE * WINDOW_SPLIT_HANDLE_RADIUS,
+			Vector2.ONE * WINDOW_SPLIT_HANDLE_RADIUS * 2.0
+		)
+		for party_body: Dictionary in party_bodies:
+			var party_position: Vector2 = party_body.get("position", Vector2.ZERO)
+			var party_velocity: Vector2 = party_body.get("velocity", Vector2.ZERO)
+			var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
+			if not party_rect.intersects(handle_rect):
+				continue
+			if party_velocity.dot(-normal) < WINDOW_SPLIT_HANDLE_PUSH_SPEED:
+				continue
+			return _start_window_split_hold(window, normal)
+	return false
+
+
+func _split_handles_for_rect(rect: Rect2) -> Array[Dictionary]:
+	return [
+		{"position": rect.position + Vector2(rect.size.x * 0.5, 0.0), "normal": Vector2.UP},
+		{"position": rect.position + Vector2(rect.size.x * 0.5, rect.size.y), "normal": Vector2.DOWN},
+		{"position": rect.position + Vector2(0.0, rect.size.y * 0.5), "normal": Vector2.LEFT},
+		{"position": rect.position + Vector2(rect.size.x, rect.size.y * 0.5), "normal": Vector2.RIGHT},
+	]
+
+
+func _split_axis_for_handle_normal(normal: Vector2) -> Vector2:
+	if absf(normal.y) > absf(normal.x):
+		return Vector2.RIGHT
+	return Vector2.DOWN
+
+
+func _start_window_split_hold(window: BattleWindow, handle_normal: Vector2) -> bool:
+	if not _is_window_split_candidate(window):
+		return false
+	var key: String = str(window.get_instance_id())
+	var split_direction: Vector2 = _split_axis_for_handle_normal(handle_normal)
+	_split_pending_windows[key] = {
+		"window": window,
+		"normal": handle_normal,
+		"direction": split_direction,
+		"elapsed": 0.0,
+	}
+	_split_handle_cooldowns[key] = WINDOW_SPLIT_HANDLE_COOLDOWN
+	window.set_split_handles_visible(false)
+	window.play_window_split_stretch(split_direction)
 	return true
 
 
-func _spawn_split_window(source: BattleWindow, split_data: Array[EnemyData]) -> void:
+func _update_pending_window_split(window: BattleWindow, rect: Rect2, party_bodies: Array[Dictionary], delta: float) -> void:
+	var key: String = str(window.get_instance_id())
+	var pending: Dictionary = _split_pending_windows.get(key, {})
+	var handle_normal: Vector2 = pending.get("normal", Vector2.ZERO)
+	if not _is_split_handle_still_pressed(rect, handle_normal, party_bodies):
+		_cancel_pending_window_split(window, key)
+		return
+	var elapsed: float = float(pending.get("elapsed", 0.0)) + maxf(delta, 0.0)
+	pending["elapsed"] = elapsed
+	_split_pending_windows[key] = pending
+	if elapsed < WINDOW_SPLIT_HOLD_DURATION:
+		return
+	var split_direction: Vector2 = pending.get("direction", _split_axis_for_handle_normal(handle_normal))
+	_finish_window_split_hold(window, split_direction, key)
+
+
+func _is_split_handle_still_pressed(rect: Rect2, handle_normal: Vector2, party_bodies: Array[Dictionary]) -> bool:
+	var handle_rect: Rect2 = _split_handle_rect(rect, handle_normal)
+	for party_body: Dictionary in party_bodies:
+		var party_position: Vector2 = party_body.get("position", Vector2.ZERO)
+		var party_rect := Rect2(party_position - PARTY_COLLISION_SIZE * 0.5, PARTY_COLLISION_SIZE)
+		if party_rect.intersects(handle_rect):
+			return true
+	return false
+
+
+func _split_handle_rect(rect: Rect2, handle_normal: Vector2) -> Rect2:
+	var handle_position: Vector2 = rect.get_center()
+	if handle_normal == Vector2.UP:
+		handle_position = rect.position + Vector2(rect.size.x * 0.5, 0.0)
+	elif handle_normal == Vector2.DOWN:
+		handle_position = rect.position + Vector2(rect.size.x * 0.5, rect.size.y)
+	elif handle_normal == Vector2.LEFT:
+		handle_position = rect.position + Vector2(0.0, rect.size.y * 0.5)
+	elif handle_normal == Vector2.RIGHT:
+		handle_position = rect.position + Vector2(rect.size.x, rect.size.y * 0.5)
+	return Rect2(
+		handle_position - Vector2.ONE * WINDOW_SPLIT_HANDLE_RADIUS,
+		Vector2.ONE * WINDOW_SPLIT_HANDLE_RADIUS * 2.0
+	)
+
+
+func _cancel_pending_window_split(window: BattleWindow, key: String) -> void:
+	_split_pending_windows.erase(key)
+	if is_instance_valid(window):
+		window.cancel_window_split_stretch()
+	_split_handle_cooldowns[key] = 0.12
+
+
+func _cancel_all_pending_window_splits() -> void:
+	for key: String in _split_pending_windows.keys():
+		var pending: Dictionary = _split_pending_windows.get(key, {})
+		var window := pending.get("window", null) as BattleWindow
+		if window != null and is_instance_valid(window):
+			window.cancel_window_split_stretch()
+	_split_pending_windows.clear()
+
+
+func _finish_window_split_hold(window: BattleWindow, split_direction: Vector2, key: String) -> void:
+	if not is_instance_valid(window) or not _window_rects.has(window):
+		_split_pending_windows.erase(key)
+		return
+	window.finish_window_split_stretch()
+	var split_data: Array[EnemyData] = window.split_off_for_window_split()
+	_split_pending_windows.erase(key)
+	if split_data.is_empty():
+		return
+	_spawn_split_window(window, split_data, split_direction)
+
+
+func _spawn_split_window(source: BattleWindow, split_data: Array[EnemyData], preferred_direction: Vector2 = Vector2.ZERO) -> void:
 	if not is_instance_valid(source) or not _window_rects.has(source):
 		return
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
@@ -617,12 +777,13 @@ func _spawn_split_window(source: BattleWindow, split_data: Array[EnemyData]) -> 
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
 	window.setup_with_enemy_list(split_data, source.field_drop_position())
 	var window_size: Vector2 = window.get_expected_window_size()
-	var split_direction: Vector2 = _split_spawn_direction(old_rect)
+	var split_direction: Vector2 = preferred_direction.normalized() if preferred_direction != Vector2.ZERO else _split_spawn_direction(old_rect)
 	var new_position: Vector2 = _split_window_position(source_position, source_size, window_size, split_direction, viewport_size)
 	window.position = _world_to_screen_position(new_position, viewport_size)
 	_window_rects[window] = Rect2(new_position, window_size)
 	_window_velocities[window] = split_direction * WINDOW_SPLIT_PUSH_SPEED
 	_window_velocities[source] = -split_direction * WINDOW_SPLIT_PUSH_SPEED * 0.5
+	_split_handle_cooldowns[str(window.get_instance_id())] = WINDOW_SPLIT_HANDLE_COOLDOWN
 	_all_battles_resolved_sent = false
 	add_child(window)
 	_bring_window_to_front(window)
@@ -941,11 +1102,10 @@ func _party_collision_push(rect: Rect2, party_position: Vector2) -> Vector2:
 
 
 func _wall_push(rect: Rect2, viewport_size: Vector2) -> Vector2:
-	var bounds: Rect2 = _camera_visible_world_rect(viewport_size)
-	var zoom: Vector2 = _camera_zoom()
-	var margin_x: float = SLOT_MARGIN * zoom.x
-	var margin_y: float = SLOT_MARGIN * zoom.y
-	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM * zoom.y
+	var bounds: Rect2 = _field_window_bounds(viewport_size)
+	var margin_x: float = SLOT_MARGIN
+	var margin_y: float = SLOT_MARGIN
+	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM
 	var force := Vector2.ZERO
 	if rect.position.x < bounds.position.x + margin_x:
 		force.x += (bounds.position.x + margin_x - rect.position.x) * WALL_PUSH_STRENGTH
@@ -959,15 +1119,23 @@ func _wall_push(rect: Rect2, viewport_size: Vector2) -> Vector2:
 
 
 func _clamped_position(pos: Vector2, size: Vector2, viewport_size: Vector2) -> Vector2:
-	var bounds: Rect2 = _camera_visible_world_rect(viewport_size)
-	var zoom: Vector2 = _camera_zoom()
-	var margin_x: float = SLOT_MARGIN * zoom.x
-	var margin_y: float = SLOT_MARGIN * zoom.y
-	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM * zoom.y
+	var bounds: Rect2 = _field_window_bounds(viewport_size)
+	var margin_x: float = SLOT_MARGIN
+	var margin_y: float = SLOT_MARGIN
+	var play_bottom: float = bounds.end.y - HUD_RESERVED_BOTTOM
 	return Vector2(
 		clampf(pos.x, bounds.position.x + margin_x, maxf(bounds.position.x + margin_x, bounds.end.x - margin_x - size.x)),
 		clampf(pos.y, bounds.position.y + margin_y, maxf(bounds.position.y + margin_y, play_bottom - size.y))
 	)
+
+
+func _field_window_bounds(viewport_size: Vector2) -> Rect2:
+	var field: Node = get_tree().get_first_node_in_group("field_root")
+	if field != null and field.has_method("field_world_bounds"):
+		var bounds = field.call("field_world_bounds")
+		if bounds is Rect2:
+			return bounds
+	return _camera_visible_world_rect(viewport_size)
 
 
 func _player_world_position() -> Vector2:
@@ -1160,6 +1328,8 @@ func abort_all_battles() -> void:
 	_spin_angular_velocities.clear()
 	_spin_collision_cooldowns.clear()
 	_spin_rewarded_windows.clear()
+	_split_handle_cooldowns.clear()
+	_split_pending_windows.clear()
 	_party_previous_positions.clear()
 	_party_velocities.clear()
 	_shockwave_cooldown = 0.0

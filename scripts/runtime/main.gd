@@ -164,9 +164,8 @@ func _on_town_closed() -> void:
 	_town = null
 	get_tree().paused = false
 	_set_run_layers_visible(true)
-	# No stage advance — the player keeps their position, enemies stay,
-	# and the field consumes the used town tile + schedules the next one.
 	EventBus.town_closed.emit()
+	GameState.advance_stage()
 
 
 func _set_run_layers_visible(should_show: bool) -> void:

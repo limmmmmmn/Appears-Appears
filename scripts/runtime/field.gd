@@ -33,7 +33,7 @@ const TOWN_TILE_INSET: Vector2 = Vector2(96, 72)
 const FOREST_START_STAGE: int = 3
 const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 
-@export var peaceful_start_enemies: int = 3
+@export var peaceful_start_enemies: int = 6
 @export var enemies_added_per_field_area: float = 1.4
 @export var small_forest_cluster_count_min: int = 3
 @export var small_forest_cluster_count_max: int = 5
@@ -45,22 +45,23 @@ const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 @export var large_forest_max_trees: int = 200
 @export var scattered_tree_count: int = 8
 @export var spawn_interval: float = 2.5
-@export var spawn_batch_size: int = 3
-@export var entry_burst_bonus: int = 2
-@export var crowd_growth_per_wave: int = 1
-@export var max_crowd_pressure: int = 7
+@export var spawn_batch_size: int = 5
+@export var entry_burst_bonus: int = 5
+@export var crowd_growth_per_wave: int = 2
+@export var max_crowd_pressure: int = 18
 
 ## ─── Continuous time-based field intensity ──────────────────────────
 ## The field gets meaner over the 30-minute target — spawn cadence
 ## tightens and the simultaneous-enemy cap grows. Both knobs ride on
 ## GameState.run_intensity(), so curves stay aligned with enemy stats.
-const SPAWN_INTERVAL_START: float = 2.5
-const SPAWN_INTERVAL_END: float = 1.1
-const ENEMY_CAP_TIME_BONUS_END: int = 16
-## Town tiles are disabled for the moment — the player runs straight
-## through the field for the whole 30-min stretch. Flip this true if
-## we want them back later; gating instead of deleting so the code
-## stays intact.
+const SPAWN_INTERVAL_START: float = 1.65
+const SPAWN_INTERVAL_END: float = 0.65
+const ENEMY_CAP_TIME_BONUS_END: int = 30
+const STAGE_DURATION_START: float = 20.0
+const STAGE_DURATION_END: float = 60.0
+const STAGE_DURATION_STEP: float = 5.0
+## Town tiles are disabled while the Brotato-style wave timer drives town
+## visits. Flip this true if we want walk-in town tiles back later.
 const TOWN_TILE_ENABLED: bool = false
 @export var treasure_kills_required_base: int = 3
 @export var treasure_kills_required_stage_step: int = 1
@@ -79,6 +80,8 @@ var _player: Player
 var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
+var _stage_duration: float = STAGE_DURATION_START
+var _stage_time_left: float = STAGE_DURATION_START
 var _crowd_pressure: int = 0
 var _field_size: Vector2 = FIELD_SIZE
 var _town_revealed: bool = false
@@ -98,8 +101,8 @@ func _ready() -> void:
 	# distance readout) can find it without poking through the scene tree.
 	if is_instance_valid(_town_tile):
 		_town_tile.add_to_group("town_tile")
-	# HUD reads `town_respawn_seconds_left()` off this group for its
-	# countdown label.
+	# HUD reads timer/bounds helpers off this group without poking through
+	# the scene tree.
 	add_to_group("field_root")
 	# Town respawn cycle — once the party leaves a town, the tile vanishes
 	# and a new one fades in elsewhere 30s later.
@@ -107,6 +110,18 @@ func _ready() -> void:
 	_build_town_respawn_timer()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
+
+
+func field_world_bounds() -> Rect2:
+	return Rect2(global_position, _field_size)
+
+
+func stage_time_left() -> float:
+	return maxf(_stage_time_left, 0.0)
+
+
+func stage_duration() -> float:
+	return _stage_duration
 
 
 ## Town respawn: when the party walks out of town, hide the current tile
@@ -129,6 +144,8 @@ func _build_town_respawn_timer() -> void:
 
 
 func _on_town_closed() -> void:
+	if not TOWN_TILE_ENABLED:
+		return
 	if not is_instance_valid(_town_tile):
 		return
 	# Consume the used tile: hide + clear its trigger flag so the next
@@ -182,6 +199,10 @@ func _process(delta: float) -> void:
 		return
 	if _stage_complete:
 		return
+	_stage_time_left = maxf(0.0, _stage_time_left - delta)
+	if _stage_time_left <= 0.0:
+		_complete_stage_by_timer()
+		return
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
 		return
@@ -197,6 +218,14 @@ func _process(delta: float) -> void:
 func _current_spawn_interval() -> float:
 	var t: float = clampf(GameState.run_intensity(), 0.0, 1.0)
 	return lerpf(SPAWN_INTERVAL_START, SPAWN_INTERVAL_END, t)
+
+
+func _complete_stage_by_timer() -> void:
+	if _stage_complete:
+		return
+	_stage_complete = true
+	_spawn_timer = 0.0
+	EventBus.stage_cleared.emit(GameState.current_stage)
 
 
 # ─── Party visuals (data-driven) ──────────────────────────────────────
@@ -270,6 +299,8 @@ func _play_recruit_pop(comp: Node2D) -> void:
 func _on_stage_started(_stage_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_stage_field_size(_stage_num)
+	_stage_duration = _stage_duration_for(_stage_num)
+	_stage_time_left = _stage_duration
 	_treasure_kills = 0
 	_treasure_spawned = false
 	_stage_complete = false
@@ -293,6 +324,11 @@ func _on_stage_started(_stage_num: int) -> void:
 	# per run, placed at random safe spots.
 	_spawn_event_tile(FIELD_CAMPFIRE_SCENE)
 	_spawn_event_tile(FIELD_SHRINE_SCENE)
+
+
+func _stage_duration_for(stage_num: int) -> float:
+	var stage_index: int = maxi(0, stage_num - 1)
+	return minf(STAGE_DURATION_END, STAGE_DURATION_START + float(stage_index) * STAGE_DURATION_STEP)
 
 
 ## Picks a sensible spawn slot for an event tile (campfire, shrine, …) —
