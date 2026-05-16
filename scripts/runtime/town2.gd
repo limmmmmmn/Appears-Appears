@@ -165,6 +165,7 @@ func _build_top_cards() -> void:
 func _refresh_offers() -> void:
 	var pool: Array[ModifierData] = _offerable_pool()
 	pool.shuffle()
+	_prioritize_field_movement_offer(pool)
 	for i in CARD_SLOTS:
 		_cards[i].setup(pool[i] if i < pool.size() else null)
 
@@ -197,6 +198,17 @@ func _offerable_pool() -> Array[ModifierData]:
 		if ModifierDB.is_shop_offer(mod) and GameState.can_add_modifier(mod):
 			out.append(mod)
 	return out
+
+
+func _prioritize_field_movement_offer(pool: Array[ModifierData]) -> void:
+	var field_move: ModifierData = ModifierDB.get_by_id(GameState.FIELD_MOVEMENT_ID)
+	if field_move == null or not GameState.can_add_modifier(field_move):
+		return
+	for i in pool.size():
+		if pool[i] != null and pool[i].id == GameState.FIELD_MOVEMENT_ID:
+			pool.remove_at(i)
+			break
+	pool.push_front(field_move)
 
 
 # ─── Purchase flow ────────────────────────────────────────────────────

@@ -79,6 +79,7 @@ const AUTO_SKILL_IDS_BY_MEMBER_ID: Dictionary = {
 	&"thief": [&"pilfer", &"backstep", &"speed_up"],
 }
 const BUMP_ATTACK_ID: StringName = &"bump_attack"
+const FIELD_MOVEMENT_ID: StringName = &"field_movement"
 const LEVEL_UP_PARTY_CARD_OFFER_IDS: Array[StringName] = [&"window_crash", &"bump_blessing", &"shockwave", &"window_fusion", &"window_spin", &"window_split", &"bouncy_ball", &"repulsion_wall"]
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
@@ -101,7 +102,6 @@ const ENEMY_HP_AT_TARGET: float = 8.0       ## enemies have 8× HP at 30 min
 const ENEMY_ATK_AT_TARGET: float = 5.0      ## enemies hit 5× harder at 30 min
 const RUN_INTENSITY_CAP: float = 1.5        ## past 45 min, stop scaling further
 const BATTLE_WINDOW_MAX_ENEMIES: int = 5
-const STAGE_ONE_ENEMY_COUNT_WEIGHTS: Array[int] = [58, 25, 11, 5, 1]
 
 
 # ─── Run statistics (for the game-over summary) ───────────────────────
@@ -120,12 +120,15 @@ const RECOVERY_ORB_MP: StringName = &"mp"
 const DIFFICULTY_TICK_SECONDS: float = 30.0
 var _difficulty_elapsed: float = 0.0
 var _difficulty_tier_announced: int = 0
+var _active_battle_window_count: int = 0
 
 func _ready() -> void:
 	# Listen to bus events to keep counters fresh without coupling combat code.
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
 	EventBus.damage_dealt.connect(_on_damage_dealt)
 	EventBus.modifier_purchase_requested.connect(_on_modifier_purchase_requested)
+	EventBus.battle_window_opened.connect(_on_battle_window_opened)
+	EventBus.battle_window_closed.connect(_on_battle_window_closed)
 
 
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
@@ -664,6 +667,8 @@ func modifier_last_float_effect(mod: ModifierData, key: String) -> float:
 func can_add_modifier(mod: ModifierData) -> bool:
 	if mod == null:
 		return false
+	if mod.id == FIELD_MOVEMENT_ID and current_stage < 1:
+		return false
 	if mod.required_party_member_id != &"" and not has_party_member(mod.required_party_member_id):
 		return false
 	if mod.required_modifier_id != &"" and modifier_level(mod.required_modifier_id) < 1:
@@ -730,6 +735,22 @@ func add_modifier(mod: ModifierData) -> void:
 				new_max_mp = maxi(0, new_max_mp)
 				party_mp[i] = clampi(party_mp[i], 0, new_max_mp)
 			EventBus.party_member_mp_changed.emit(i, party_mp[i], new_max_mp)
+
+
+func field_combat_movement_enabled() -> bool:
+	return modifier_level(FIELD_MOVEMENT_ID) > 0 or _stacked_bool_effect("field_combat_movement")
+
+
+func is_field_combat_locked() -> bool:
+	return _active_battle_window_count > 0 and not field_combat_movement_enabled()
+
+
+func _on_battle_window_opened(_window: Node) -> void:
+	_active_battle_window_count += 1
+
+
+func _on_battle_window_closed(_window: Node) -> void:
+	_active_battle_window_count = maxi(0, _active_battle_window_count - 1)
 
 
 ## Direct character recruit — used by field events (campfire etc.) where
@@ -864,24 +885,7 @@ func scaled_enemy_xp_reward(data: EnemyData) -> int:
 
 
 func roll_battle_window_enemy_count() -> int:
-	if current_stage <= 1:
-		return _weighted_enemy_count(STAGE_ONE_ENEMY_COUNT_WEIGHTS)
-	return randi_range(1, BATTLE_WINDOW_MAX_ENEMIES)
-
-
-func _weighted_enemy_count(weights: Array[int]) -> int:
-	var total_weight: int = 0
-	for weight: int in weights:
-		total_weight += maxi(0, weight)
-	if total_weight <= 0:
-		return 1
-	var roll: int = randi_range(1, total_weight)
-	var running: int = 0
-	for i in weights.size():
-		running += maxi(0, weights[i])
-		if roll <= running:
-			return i + 1
-	return weights.size()
+	return 1
 
 
 # ─── Equipment ────────────────────────────────────────────────────────
@@ -1101,6 +1105,13 @@ func _stacked_int_effect(key: String) -> int:
 		stacks_by_id[mod.id] = stack_index + 1
 		bonus += _int_effect_value_for_stack(mod, key, stack_index)
 	return bonus
+
+
+func _stacked_bool_effect(key: String) -> bool:
+	for mod: ModifierData in active_modifiers:
+		if bool(mod.effect_data.get(key, false)):
+			return true
+	return false
 
 
 func _stacked_float_effect(key: String, multipliers: Array) -> float:
@@ -1470,6 +1481,7 @@ func reset_run() -> void:
 	_move_speed_drag_until_msec = 0
 	_move_speed_boost_multiplier = 1.0
 	_move_speed_boost_until_msec = 0
+	_active_battle_window_count = 0
 	current_stage = 0
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).

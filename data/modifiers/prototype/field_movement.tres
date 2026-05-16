@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"field_movement"
+display_name = "Field Movement"
+description = "전투 중에도 필드에서 이동할 수 있다."
+cost = 0
+max_level = 1
+rarity = 0
+category = 1
+effect_data = {
+"field_combat_movement": true
+}

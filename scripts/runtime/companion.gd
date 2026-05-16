@@ -38,6 +38,10 @@ func setup(data: CharacterData) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if GameState.is_field_combat_locked():
+		_visual.set_velocity(Vector2.ZERO)
+		_last_position = global_position
+		return
 	if leader == null:
 		_visual.set_velocity(Vector2.ZERO)
 		_leader_trail.clear()

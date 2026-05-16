@@ -125,6 +125,9 @@ func _fit_shadow_to_sprite() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if GameState.is_field_combat_locked():
+		_recover_sprite_scale(delta)
+		return
 	if _triggered or _spawning or _despawning:
 		return
 	_charge_cooldown_timer = maxf(0.0, _charge_cooldown_timer - delta)

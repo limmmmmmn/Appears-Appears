@@ -39,6 +39,7 @@ const ICON_FALLBACK_BY_ID: Dictionary = {
 	&"window_split": "res://assets/sprites/slash_basic.png",
 	&"bouncy_ball": "res://assets/sprites/window_crash.png",
 	&"repulsion_wall": "res://assets/sprites/window_crash.png",
+	&"field_movement": "res://assets/sprites/dagger.png",
 }
 const ICON_FALLBACK_BY_EFFECT: Dictionary = {
 	"atk_flat": "res://assets/sprites/slash_basic.png",
@@ -65,6 +66,7 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"window_split": Color(0.95, 0.32, 0.46, 1),
 	&"bouncy_ball": Color(0.28, 0.82, 0.62, 1),
 	&"repulsion_wall": Color(0.22, 0.92, 0.86, 1),
+	&"field_movement": Color(0.37, 0.72, 0.42, 1),
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
@@ -325,6 +327,8 @@ func _poster_description() -> String:
 		return "\n".join(stat_lines)
 	if data.effect_data.has("move_speed_flat"):
 		return "이동 속도 +%d" % GameState.modifier_next_int_effect(data, "move_speed_flat")
+	if data.effect_data.has("field_combat_movement"):
+		return "전투 중 필드 이동 가능"
 	if data.effect_data.has("atk_mult"):
 		var atk_amount: int = int(round(GameState.modifier_next_float_effect(data, "atk_mult") * 100.0))
 		return "공격력 +%d%%" % atk_amount

@@ -155,6 +155,8 @@ func _encounter_enemy_count(field_enemy: Node) -> int:
 
 # ─── Window drift ─────────────────────────────────────────────────────
 func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, viewport_size: Vector2) -> Vector2:
+	if not GameState.field_combat_movement_enabled():
+		return _center_spawn_position(window_size, viewport_size)
 	if source == null or not is_instance_valid(source):
 		return _random_spawn_position(window_size, viewport_size)
 	var player_position: Vector2 = _player_world_position()
@@ -168,6 +170,11 @@ func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, viewpor
 	var half_extent: float = absf(direction.x) * window_size.x * 0.5 + absf(direction.y) * window_size.y * 0.5
 	var center: Vector2 = player_position + direction * (SPAWN_DISTANCE + half_extent)
 	return _clamped_position(center - window_size * 0.5, window_size, viewport_size)
+
+
+func _center_spawn_position(window_size: Vector2, viewport_size: Vector2) -> Vector2:
+	var screen_top_left: Vector2 = (viewport_size - window_size) * 0.5
+	return _clamped_position(_screen_to_world_position(screen_top_left, viewport_size), window_size, viewport_size)
 
 
 func _random_spawn_position(window_size: Vector2, viewport_size: Vector2) -> Vector2:

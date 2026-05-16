@@ -33,7 +33,7 @@ const TOWN_TILE_INSET: Vector2 = Vector2(96, 72)
 const FOREST_START_STAGE: int = 3
 const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 
-@export var peaceful_start_enemies: int = 6
+@export var peaceful_start_enemies: int = 3
 @export var enemies_added_per_field_area: float = 1.4
 @export var small_forest_cluster_count_min: int = 3
 @export var small_forest_cluster_count_max: int = 5
@@ -199,9 +199,13 @@ func _process(delta: float) -> void:
 		return
 	if _stage_complete:
 		return
+	if GameState.is_field_combat_locked():
+		return
 	_stage_time_left = maxf(0.0, _stage_time_left - delta)
 	if _stage_time_left <= 0.0:
 		_complete_stage_by_timer()
+		return
+	if GameState.current_stage <= 1:
 		return
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
@@ -528,6 +532,9 @@ func _max_grid_y() -> int:
 
 
 func _grow_crowd_pressure() -> void:
+	if GameState.current_stage <= 1:
+		_crowd_pressure = 0
+		return
 	if _enemies_root.get_child_count() <= 0:
 		_crowd_pressure = 0
 		return
@@ -556,6 +563,8 @@ func debug_spawn_all_enemy_types() -> int:
 
 
 func _desired_enemy_count() -> int:
+	if GameState.current_stage <= 1:
+		return peaceful_start_enemies
 	var base: int = _enemy_count_for_stage(GameState.effective_stage())
 	# Time-based crowd bump on top of stage/area math. At 30 min the
 	# field carries ~16 extra simultaneous enemies, so the threat is
@@ -568,7 +577,7 @@ func _desired_enemy_count() -> int:
 func _spawn_field_enemy(data: EnemyData) -> void:
 	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
 	var fe: FieldEnemy = FIELD_ENEMY_SCENE.instantiate()
-	fe.setup(data)
+	fe.setup(data, 1)
 	fe.wander_bounds_min = Vector2.ONE * 16.0
 	fe.wander_bounds_max = _field_size - Vector2.ONE * 16.0
 	fe.position = _random_spawn_position_for_enemy(data, safe_origin)
@@ -765,6 +774,8 @@ func _hidden_town_tile_position() -> Vector2:
 ## and combine with the field-empty check.
 func _check_stage_clear() -> void:
 	if _stage_complete:
+		return
+	if GameState.current_stage <= 1:
 		return
 	if not _town_revealed and _enemies_root.get_child_count() == 0:
 		_refill_enemy_population(spawn_batch_size)
