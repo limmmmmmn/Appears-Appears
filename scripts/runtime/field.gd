@@ -199,12 +199,10 @@ func _spawn_town_tile_elsewhere() -> void:
 func _process(delta: float) -> void:
 	if GameState.current_stage <= 0 or GameState.is_party_wiped():
 		return
-	if _stage_complete:
-		return
-	_stage_time_left = maxf(0.0, _stage_time_left - delta)
-	if _stage_time_left <= 0.0:
-		_complete_stage_by_timer()
-		return
+	# Field run end is now driven solely by GameState.field_run_ended (the
+	# 20s-and-growing timer + party wipe). Field's old internal stage
+	# timer + auto-clear is intentionally removed so the only way out of
+	# a run is the field_run_ended funnel.
 	if GameState.current_stage <= 1:
 		return
 	_spawn_timer -= delta

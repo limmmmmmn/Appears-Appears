@@ -1,11 +1,11 @@
-class_name Town2Card
+class_name TownCard
 extends Button
 
-## Upgrade box for the town2 grid. Every offer renders like a small poster:
+## Upgrade box for the town grid. Every offer renders like a small poster:
 ## bold flat color, big centered pixel icon, short title, short copy.
 ## A "▶" arrow appears on focus, Zelda 2 style.
 
-signal purchase_requested(card: Town2Card, mod: ModifierData)
+signal purchase_requested(card: TownCard, mod: ModifierData)
 
 @onready var _name_label: Label = %CardName
 @onready var _desc_label: Label = %CardDesc

@@ -7,7 +7,9 @@ const BOX_CENTER: Vector2 = Vector2(320.0, 190.0)
 const BOX_SIZE: Vector2 = Vector2(420.0, 104.0)
 const WALL_THICKNESS: float = 10.0
 const ITEM_BODY_SIZE: Vector2 = Vector2(18.0, 18.0)
-const DROP_ORIGIN: Vector2 = Vector2(320.0, 66.0)
+const DROP_Y: float = 112.0
+const DROP_INTERVAL: float = 0.055
+const DROP_SETTLE_DELAY: float = 0.55
 const SELL_TICK_SECONDS: float = 0.022
 const SELL_MAX_TICKS: int = 42
 
@@ -29,7 +31,9 @@ func setup(items: Array[ItemData], sell_value: int) -> void:
 
 
 func _ready() -> void:
-	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_physics_root.process_mode = Node.PROCESS_MODE_ALWAYS
+	_box_root.process_mode = Node.PROCESS_MODE_ALWAYS
 	_box_panel.position = BOX_CENTER - BOX_SIZE * 0.5
 	_box_panel.size = BOX_SIZE
 	_box_root.position = BOX_CENTER
@@ -39,11 +43,6 @@ func _ready() -> void:
 	_sell_button.pressed.connect(_on_sell_pressed)
 	_build_physics_box()
 	call_deferred("_drop_items")
-	var timer := get_tree().create_timer(0.85, true)
-	timer.timeout.connect(func() -> void:
-		if is_instance_valid(_sell_button):
-			_sell_button.disabled = false
-	)
 
 
 func _build_physics_box() -> void:
@@ -54,7 +53,7 @@ func _build_physics_box() -> void:
 
 func _add_wall(local_position: Vector2, size: Vector2) -> void:
 	var body := StaticBody2D.new()
-	body.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	body.process_mode = Node.PROCESS_MODE_ALWAYS
 	body.position = local_position
 	body.collision_layer = 1
 	body.collision_mask = 1
@@ -69,30 +68,41 @@ func _add_wall(local_position: Vector2, size: Vector2) -> void:
 
 func _drop_items() -> void:
 	for i in _items.size():
-		var item: ItemData = _items[i]
-		var body := RigidBody2D.new()
-		body.name = "LootItem"
-		body.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-		body.collision_layer = 1
-		body.collision_mask = 1
-		body.gravity_scale = randf_range(1.15, 1.55)
-		body.position = DROP_ORIGIN + Vector2(randf_range(-170.0, 170.0), -float(i) * 10.0)
-		body.rotation = randf_range(-0.9, 0.9)
-		body.linear_velocity = Vector2(randf_range(-95.0, 95.0), randf_range(-20.0, 35.0))
-		body.angular_velocity = randf_range(-8.0, 8.0)
-		var mat := PhysicsMaterial.new()
-		mat.bounce = 0.38
-		mat.friction = 0.78
-		body.physics_material_override = mat
-		_physics_root.add_child(body)
+		_spawn_item_body(_items[i], i)
+		await get_tree().create_timer(DROP_INTERVAL, true, false, true).timeout
+	await get_tree().create_timer(DROP_SETTLE_DELAY, true, false, true).timeout
+	if is_instance_valid(_sell_button):
+		_sell_button.disabled = false
 
-		var shape := RectangleShape2D.new()
-		shape.size = ITEM_BODY_SIZE
-		var collision := CollisionShape2D.new()
-		collision.shape = shape
-		body.add_child(collision)
-		_add_item_visual(body, item)
-		_item_bodies.append(body)
+
+func _spawn_item_body(item: ItemData, index: int) -> void:
+	var body := RigidBody2D.new()
+	body.name = "LootItem"
+	body.process_mode = Node.PROCESS_MODE_ALWAYS
+	body.collision_layer = 1
+	body.collision_mask = 1
+	body.gravity_scale = randf_range(2.4, 3.2)
+	body.continuous_cd = RigidBody2D.CCD_MODE_CAST_SHAPE
+	body.can_sleep = false
+	var left: float = BOX_CENTER.x - BOX_SIZE.x * 0.5 + 34.0
+	var right: float = BOX_CENTER.x + BOX_SIZE.x * 0.5 - 34.0
+	body.position = Vector2(randf_range(left, right), DROP_Y - float(index % 3) * 14.0)
+	body.rotation = randf_range(-1.2, 1.2)
+	body.linear_velocity = Vector2(randf_range(-75.0, 75.0), randf_range(155.0, 245.0))
+	body.angular_velocity = randf_range(-12.0, 12.0)
+	var mat := PhysicsMaterial.new()
+	mat.bounce = 0.46
+	mat.friction = 0.82
+	body.physics_material_override = mat
+	_physics_root.add_child(body)
+
+	var shape := RectangleShape2D.new()
+	shape.size = ITEM_BODY_SIZE
+	var collision := CollisionShape2D.new()
+	collision.shape = shape
+	body.add_child(collision)
+	_add_item_visual(body, item)
+	_item_bodies.append(body)
 
 
 func _add_item_visual(body: RigidBody2D, item: ItemData) -> void:

@@ -1,6 +1,6 @@
 [gd_scene load_steps=7 format=3]
 
-[ext_resource type="Script" path="res://scripts/runtime/town2_slot.gd" id="1_slot"]
+[ext_resource type="Script" path="res://scripts/runtime/town_slot.gd" id="1_slot"]
 [ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
@@ -18,7 +18,7 @@ font_color = Color(0.82, 0.74, 0.58, 1)
 font_size = 8
 font_color = Color(0.92, 0.82, 0.58, 1)
 
-[node name="Town2Slot" type="Panel"]
+[node name="TownSlot" type="Panel"]
 custom_minimum_size = Vector2(0, 22)
 mouse_filter = 2
 theme = ExtResource("2_theme")

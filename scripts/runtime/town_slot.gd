@@ -1,4 +1,4 @@
-class_name Town2Slot
+class_name TownSlot
 extends Panel
 
 ## Bottom-zone feed row: a single horizontal line per party slot showing

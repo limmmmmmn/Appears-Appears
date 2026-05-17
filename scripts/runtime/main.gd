@@ -4,26 +4,37 @@ extends Node2D
 ## Sets up the party and drives Field -> Town -> Field stage progression.
 ## Battle window spawning lives in BattleManager.
 
-const TOWN_SCENE: PackedScene = preload("res://scenes/town2.tscn")
-const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
+const TOWN_SCENE: PackedScene = preload("res://scenes/town.tscn")
 const HOME_BASE_SCENE: PackedScene = preload("res://scenes/home_base.tscn")
+const RESULTS_PANEL_SCENE: PackedScene = preload("res://scenes/results_panel.tscn")
+const NODE_TREE_PANEL_SCENE: PackedScene = preload("res://scenes/node_tree_panel.tscn")
 const EVENT_WINDOW_SCENE: PackedScene = preload("res://scenes/event_window.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
 ## The run starts with the leader alone. Companions are recruited via
-## town cards from the active prototype modifier pool.
+## town cards from the active prototype modifier pool — or, once their
+## skill-tree node is unlocked, auto-joined here at deploy.
 const DEFAULT_PARTY_PATHS: PackedStringArray = [
 	"res://data/characters/hero.tres",
 ]
+
+## Maps a node's effect_data["recruit_character_id"] value to a CharacterData
+## resource path. Add an entry here when a new recruit node lands.
+const RECRUIT_NODE_CHARACTER_PATHS: Dictionary = {
+	&"mage": "res://data/characters/mage.tres",
+	&"priest": "res://data/characters/priest.tres",
+	&"thief": "res://data/characters/thief.tres",
+}
 
 @onready var _field: Field = $Field
 @onready var _battle_manager: BattleManager = $BattleManager
 @onready var _hud: HUD = $HUD
 @onready var _pause_overlay: CanvasLayer = $PauseOverlay
 
-var _town: Town2
-var _game_over: GameOver
+var _town: Town
 var _home_base: HomeBase
+var _results_panel: ResultsPanel
+var _node_tree_panel: NodeTreePanel
 var _event_layer: CanvasLayer
 var _is_manually_paused: bool = false
 
@@ -37,35 +48,107 @@ func _ready() -> void:
 		ProjectSettings.get_setting("display/window/size/viewport_height"),
 	])
 	_setup_default_party()
-	EventBus.party_wiped.connect(_on_party_wiped)
-	EventBus.stage_cleared.connect(_on_stage_cleared)
-	EventBus.town_entered.connect(_on_town_entered)
+	# Field run lifecycle: party_wipe and timer expiry both funnel through
+	# GameState.field_run_ended → results panel. The old home_base-on-wipe
+	# path is retained as a defensive fallback.
+	GameState.field_run_ended.connect(_on_field_run_ended)
 	EventBus.event_tile_triggered.connect(_on_event_tile_triggered)
-	# Kick off the first stage. Field listens to stage_started and spawns enemies.
+	# Kick off the first field. Field listens to stage_started for enemy
+	# spawns; GameState.start_field_run arms the run-end timer.
 	GameState.advance_stage()
+	GameState.start_field_run()
 
 
 func _setup_default_party() -> void:
 	var members: Array[CharacterData] = []
+	var seen_ids: Dictionary = {}
 	for path in DEFAULT_PARTY_PATHS:
-		var data: CharacterData = load(path)
-		if data:
-			members.append(data)
+		_append_unique_member(members, seen_ids, load(path) as CharacterData)
+	# Each unlocked recruit node auto-joins its character at deploy. Doing
+	# this here (instead of via add_recruit at unlock time) keeps the party
+	# fresh after reset_run() wipes party state.
+	for node: NodeData in SkillTreeDB.get_all():
+		if not GameState.has_node_unlocked(node.id):
+			continue
+		var recruit_id: StringName = node.effect_data.get("recruit_character_id", &"")
+		if recruit_id == &"":
+			continue
+		var character_path: String = RECRUIT_NODE_CHARACTER_PATHS.get(recruit_id, "")
+		if character_path == "":
+			continue
+		_append_unique_member(members, seen_ids, load(character_path) as CharacterData)
 	GameState.set_party(members)
 	print("[main] party loaded: %d members" % GameState.party_size())
 
 
-# ─── Stage flow ───────────────────────────────────────────────────────
-func _on_stage_cleared(stage_num: int) -> void:
-	print("[main] field cleared: %d (gold=%d)" % [stage_num, GameState.gold])
-	_battle_manager.abort_all_battles()
-	_show_town("Field %d Cleared" % stage_num)
+func _append_unique_member(members: Array[CharacterData], seen_ids: Dictionary, data: CharacterData) -> void:
+	if data == null or seen_ids.has(data.id):
+		return
+	seen_ids[data.id] = true
+	members.append(data)
 
 
-func _on_town_entered(_tile: Node) -> void:
-	print("[main] town tile entered — aborting active battles with no rewards")
+# ─── Field run lifecycle ──────────────────────────────────────────────
+## Single funnel for "field is over": timer expiry, party wipe, or debug.
+## Aborts in-flight battles so reward popups don't fire over the results
+## screen, then shows ResultsPanel.
+func _on_field_run_ended(reason: StringName) -> void:
+	print("[main] field run ended (%s) — gold=%d, completed=%d" % [
+		reason, GameState.gold, GameState.field_runs_completed,
+	])
 	_battle_manager.abort_all_battles()
-	_show_town("Town")
+	_show_results_panel()
+
+
+func _show_results_panel() -> void:
+	if _results_panel and is_instance_valid(_results_panel):
+		return
+	_set_manual_pause(false)
+	_results_panel = RESULTS_PANEL_SCENE.instantiate()
+	_results_panel.upgrade_pressed.connect(_on_results_upgrade_pressed)
+	_results_panel.continue_pressed.connect(_on_results_continue_pressed)
+	add_child(_results_panel)
+	# Field/HUD stay visible behind the dimmed overlay so the player still
+	# sees their party — only the field is frozen by pausing.
+	get_tree().paused = true
+
+
+## [업그레이드] swaps the results panel for the node tree panel. The tree
+## panel's own [계속] funnels back to _on_tree_continue_pressed.
+func _on_results_upgrade_pressed() -> void:
+	if _results_panel and is_instance_valid(_results_panel):
+		_results_panel.queue_free()
+	_results_panel = null
+	if _node_tree_panel and is_instance_valid(_node_tree_panel):
+		return
+	_node_tree_panel = NODE_TREE_PANEL_SCENE.instantiate()
+	_node_tree_panel.continue_pressed.connect(_on_tree_continue_pressed)
+	add_child(_node_tree_panel)
+
+
+## [계속] on results — straight back to the field, skipping the tree.
+func _on_results_continue_pressed() -> void:
+	if _results_panel and is_instance_valid(_results_panel):
+		_results_panel.queue_free()
+	_results_panel = null
+	_start_next_field()
+
+
+## [계속] on the tree — same path back to field, just one panel deeper.
+func _on_tree_continue_pressed() -> void:
+	if _node_tree_panel and is_instance_valid(_node_tree_panel):
+		_node_tree_panel.queue_free()
+	_node_tree_panel = null
+	_start_next_field()
+
+
+func _start_next_field() -> void:
+	get_tree().paused = false
+	# Stage stays where it is — node tree drives all progression now.
+	# prepare_next_field heals the party + re-emits stage_started so Field
+	# clears and respawns enemies for a fresh round.
+	GameState.prepare_next_field()
+	GameState.start_field_run()
 
 
 # ─── Field events ─────────────────────────────────────────────────────
@@ -148,26 +231,6 @@ func _on_event_completed(_ev_id: StringName, tile: Node, recruit: CharacterData,
 	get_tree().paused = false
 
 
-func _show_town(title: String = "") -> void:
-	if _town and is_instance_valid(_town):
-		return
-	_set_manual_pause(false)
-	_town = TOWN_SCENE.instantiate()
-	_town.setup(title)
-	_town.closed.connect(_on_town_closed)
-	add_child(_town)
-	_set_run_layers_visible(false)
-	get_tree().paused = true
-
-
-func _on_town_closed() -> void:
-	_town = null
-	get_tree().paused = false
-	_set_run_layers_visible(true)
-	EventBus.town_closed.emit()
-	GameState.advance_stage()
-
-
 func _set_run_layers_visible(should_show: bool) -> void:
 	_field.visible = should_show
 	_battle_manager.visible = should_show
@@ -180,47 +243,6 @@ func _set_run_layers_process_mode(mode: ProcessMode) -> void:
 	_hud.process_mode = mode
 
 
-func _on_party_wiped() -> void:
-	print("[main] PARTY WIPED — gold: %d | modifiers: %d | companions: %d | party: %d" % [
-		GameState.gold,
-		GameState.active_modifiers.size(),
-		GameState.recruited_companions.size(),
-		GameState.party_size(),
-	])
-	_show_home_base()
-
-
-# ─── Home base (post-wipe Suikoden hub) ───────────────────────────────
-func _show_home_base() -> void:
-	if _home_base and is_instance_valid(_home_base):
-		return
-	_set_manual_pause(false)
-	# Close town if it happens to be up (defensive — shouldn't be).
-	if _town and is_instance_valid(_town):
-		_town.queue_free()
-		_town = null
-	# Hide the run layers so only the base shows. We keep the party intact
-	# here so the base can render its current roster; reset happens on deploy.
-	_set_run_layers_visible(false)
-	get_tree().paused = false
-	_home_base = HOME_BASE_SCENE.instantiate()
-	_home_base.deploy_pressed.connect(_on_deploy_pressed)
-	add_child(_home_base)
-
-
-func _on_deploy_pressed() -> void:
-	_set_manual_pause(false)
-	if _home_base and is_instance_valid(_home_base):
-		_home_base.queue_free()
-	_home_base = null
-	_set_run_layers_visible(true)
-	GameState.reset_run()
-	_setup_default_party()
-	# Field listens for stage_started to clear/respawn enemies + recenter the
-	# party. set_party (above) already triggered party_changed → fresh visuals.
-	GameState.advance_stage()
-
-
 # ─── Debug ────────────────────────────────────────────────────────────
 func _set_manual_pause(is_paused: bool) -> void:
 	_is_manually_paused = is_paused
@@ -228,20 +250,28 @@ func _set_manual_pause(is_paused: bool) -> void:
 	get_tree().paused = is_paused
 
 
-## F1 = instant stage clear (skip combat to test town)
+## F1 = instant stage_cleared signal (legacy debug)
 ## F2 = stress spawn 20 battle windows
+## F4 = +100 meta gold (for tuning the skill-tree economy)
+## F5 = force-end field run → results panel (no need to die or wait)
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if get_tree().paused:
-			return
 		if _is_manually_paused:
 			return
 		match event.physical_keycode:
 			KEY_F1:
+				if get_tree().paused: return
 				print("[main] DEBUG: forcing stage_cleared")
 				EventBus.stage_cleared.emit(GameState.current_stage)
 			KEY_F2:
+				if get_tree().paused: return
 				_debug_stress_spawn(20)
+			KEY_F4:
+				GameState.add_gold(100)
+				print("[main] DEBUG: +100 gold (now %d)" % GameState.gold)
+			KEY_F5:
+				print("[main] DEBUG: forcing field_run_ended")
+				GameState.end_field_run(&"debug")
 
 
 func _debug_stress_spawn(count: int) -> void:

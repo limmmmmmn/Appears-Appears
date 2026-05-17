@@ -19,10 +19,20 @@ const WANDER_RETARGET_MIN: float = 1.4
 const WANDER_RETARGET_MAX: float = 3.6
 const ARRIVAL_RADIUS: float = 3.0
 
+const TREE_PANEL_WIDTH: float = 184.0
+const TREE_PANEL_BG: Color = Color(0.10, 0.08, 0.06, 0.92)
+const TREE_PANEL_BORDER: Color = Color(0.32, 0.24, 0.14, 1.0)
+const NODE_ROW_HEIGHT: float = 44.0
+const NODE_ROW_GAP: float = 6.0
+const NODE_LOCKED_COLOR: Color = Color(0.55, 0.5, 0.45)
+const NODE_UNLOCKED_COLOR: Color = Color(0.6, 0.95, 0.55)
+
 ## One entry per visible roster member: { visual, target, timer }.
 var _walkers: Array[Dictionary] = []
 var _plaza_origin: Vector2
 var _viewport_size: Vector2
+var _gold_label: Label
+var _node_rows: Array[Dictionary] = []  ## { node, name_label, status_label, button }
 
 
 func _ready() -> void:
@@ -33,7 +43,11 @@ func _ready() -> void:
 	_build_background()
 	_build_plaza()
 	_build_chrome()
+	_build_skill_tree_panel()
 	_spawn_roster()
+	EventBus.gold_changed.connect(_on_gold_changed)
+	SkillTreeDB.node_unlocked.connect(_on_node_unlocked)
+	_refresh_skill_tree_panel()
 
 
 # ─── Camera (fixed) ────────────────────────────────────────────────────
@@ -112,6 +126,140 @@ func _build_chrome() -> void:
 	deploy.pressed.connect(_on_deploy_pressed)
 	hud.add_child(deploy)
 	deploy.grab_focus()
+
+
+# ─── Skill tree panel ──────────────────────────────────────────────────
+## Right-side panel listing every NodeData with a BUY button. The first
+## pass is intentionally a flat list — once the tree has more than ~8
+## nodes we'll lay it out by NodeData.grid_position into a real graph.
+func _build_skill_tree_panel() -> void:
+	print("[HomeBase] _build_skill_tree_panel start | viewport=%s | nodes=%d" % [_viewport_size, SkillTreeDB.get_all().size()])
+	var hud := CanvasLayer.new()
+	hud.layer = 6
+	add_child(hud)
+
+	var panel_origin: Vector2 = Vector2(_viewport_size.x - TREE_PANEL_WIDTH - 8.0, 8.0)
+	var panel_height: float = _viewport_size.y - 16.0
+	print("[HomeBase] panel_origin=%s size=(%d,%d)" % [panel_origin, int(TREE_PANEL_WIDTH), int(panel_height)])
+
+	var border := ColorRect.new()
+	border.color = TREE_PANEL_BORDER
+	border.position = panel_origin - Vector2(2.0, 2.0)
+	border.size = Vector2(TREE_PANEL_WIDTH + 4.0, panel_height + 4.0)
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(border)
+
+	var bg := ColorRect.new()
+	bg.color = TREE_PANEL_BG
+	bg.position = panel_origin
+	bg.size = Vector2(TREE_PANEL_WIDTH, panel_height)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	hud.add_child(bg)
+
+	var header := Label.new()
+	header.text = "스킬 노드"
+	header.add_theme_font_size_override("font_size", 12)
+	header.add_theme_color_override("font_color", Color(1.0, 0.92, 0.42))
+	header.position = panel_origin + Vector2(8.0, 6.0)
+	hud.add_child(header)
+
+	_gold_label = Label.new()
+	_gold_label.add_theme_font_size_override("font_size", 10)
+	_gold_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7))
+	_gold_label.position = panel_origin + Vector2(8.0, 22.0)
+	hud.add_child(_gold_label)
+	_update_gold_label()
+
+	var rows_origin: Vector2 = panel_origin + Vector2(8.0, 40.0)
+	var y: float = 0.0
+	for node: NodeData in SkillTreeDB.get_all():
+		_build_node_row(hud, node, rows_origin + Vector2(0.0, y))
+		y += NODE_ROW_HEIGHT + NODE_ROW_GAP
+	print("[HomeBase] _build_skill_tree_panel done | rows=%d" % _node_rows.size())
+
+
+func _build_node_row(parent: CanvasLayer, node: NodeData, origin: Vector2) -> void:
+	var name_label := Label.new()
+	name_label.text = node.display_name
+	name_label.add_theme_font_size_override("font_size", 10)
+	name_label.position = origin
+	parent.add_child(name_label)
+
+	var status_label := Label.new()
+	status_label.add_theme_font_size_override("font_size", 8)
+	status_label.add_theme_color_override("font_color", Color(0.78, 0.78, 0.78))
+	status_label.position = origin + Vector2(0.0, 14.0)
+	status_label.size = Vector2(TREE_PANEL_WIDTH - 16.0, 14.0)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(status_label)
+
+	var button := Button.new()
+	button.add_theme_font_size_override("font_size", 9)
+	button.position = origin + Vector2(0.0, 28.0)
+	button.size = Vector2(TREE_PANEL_WIDTH - 16.0, 14.0)
+	button.pressed.connect(_on_node_buy_pressed.bind(node))
+	parent.add_child(button)
+
+	_node_rows.append({
+		"node": node,
+		"name_label": name_label,
+		"status_label": status_label,
+		"button": button,
+	})
+
+
+func _refresh_skill_tree_panel() -> void:
+	_update_gold_label()
+	for row: Dictionary in _node_rows:
+		var node: NodeData = row.node
+		var button: Button = row.button
+		var name_label: Label = row.name_label
+		var status_label: Label = row.status_label
+		var unlocked: bool = SkillTreeDB.is_unlocked(node.id)
+		var prereq_ok: bool = SkillTreeDB.prereqs_satisfied(node)
+		var affordable: bool = GameState.gold >= node.cost
+		if unlocked:
+			name_label.add_theme_color_override("font_color", NODE_UNLOCKED_COLOR)
+			button.text = "보유 중"
+			button.disabled = true
+			status_label.text = node.description
+		elif not prereq_ok:
+			name_label.add_theme_color_override("font_color", NODE_LOCKED_COLOR)
+			button.text = "🔒 잠김"
+			button.disabled = true
+			status_label.text = "선행: %s" % _prereq_summary(node)
+		else:
+			name_label.add_theme_color_override("font_color", Color.WHITE)
+			button.text = "구매 (%d g)" % node.cost
+			button.disabled = not affordable
+			status_label.text = node.description
+
+
+func _prereq_summary(node: NodeData) -> String:
+	if node.prereq_ids.is_empty():
+		return "-"
+	var names: Array[String] = []
+	for prereq_id: StringName in node.prereq_ids:
+		var prereq: NodeData = SkillTreeDB.get_by_id(prereq_id)
+		names.append(prereq.display_name if prereq != null else String(prereq_id))
+	return ", ".join(names)
+
+
+func _update_gold_label() -> void:
+	if _gold_label != null and is_instance_valid(_gold_label):
+		_gold_label.text = "골드: %d g" % GameState.gold
+
+
+func _on_gold_changed(_new_gold: int) -> void:
+	_refresh_skill_tree_panel()
+
+
+func _on_node_unlocked(_node: NodeData) -> void:
+	_refresh_skill_tree_panel()
+
+
+func _on_node_buy_pressed(node: NodeData) -> void:
+	SkillTreeDB.try_purchase(node)
 
 
 # ─── Roster wandering ──────────────────────────────────────────────────

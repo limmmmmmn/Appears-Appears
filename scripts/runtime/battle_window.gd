@@ -46,7 +46,6 @@ const DIAMOND_EDGE_WEIGHT: float = 0.5
 const CRASH_FLASH_COLOR: Color = Color(1.0, 0.48, 0.12, 1.0)
 const WINDOW_FLASH_HOLD_DURATION: float = 0.16
 const WINDOW_FLASH_FADE_DURATION: float = 0.42
-const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const HERO_HEAVY_STRIKE_MP_COST: int = 2
 const HERO_HOIMI_MP_COST: int = 3
 const MAGE_FIREBURST_MP_COST: int = 6
@@ -77,10 +76,6 @@ const SPLIT_STRETCH_DURATION: float = 0.46
 const SPLIT_STRETCH_BACK_DURATION: float = 0.14
 const WINDOW_BG_BY_ENEMY_ID: Dictionary = {
 	&"slime": Color(0.1, 0.55, 0.43, 1.0),
-	&"slime_chaser": Color(0.2, 0.68, 0.35, 1.0),
-	&"bat": Color(0.18, 0.46, 0.72, 1.0),
-	&"orc": Color(0.98, 0.66, 0.16, 1.0),
-	&"blade_bug": Color(0.72, 0.22, 0.2, 1.0),
 }
 var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
@@ -603,9 +598,7 @@ func apply_window_collision_damage(ratio: float, log_prefix: String = "Window cr
 	return total_dealt
 
 
-func _window_collision_damage_multiplier(log_prefix: String) -> float:
-	if log_prefix.to_lower().contains("bump") and has_living_enemy_id(&"orc"):
-		return ORC_BUMP_DAMAGE_MULTIPLIER
+func _window_collision_damage_multiplier(_log_prefix: String) -> float:
 	return 1.0
 
 
@@ -928,13 +921,14 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
 		return 0
 	var member: CharacterData = GameState.party[attacker_index]
+	var atk: int = GameState.effective_attack(attacker_index)
+	var base_damage: int = maxi(1, int(round(float(atk) * damage_mult)))
 	_log_label.text = "%s의 공격!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
 		return 0
-	var atk: int = GameState.effective_attack(attacker_index)
-	var crit: Dictionary = GameState.roll_crit()
-	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"])))
+	var crit: Dictionary = GameState.roll_crit(attacker_index)
+	var damage: int = int(round(float(GameState.roll_damage(base_damage)) * float(crit["mult"])))
 	# Plain attacks (damage_mult == 1.0) land with no FX — just a thud. Only
 	# the heavy_strike multiplier promotes the swing into a full slash effect.
 	var fx: Texture2D = member.attack_effect if damage_mult > 1.0 else null
@@ -958,12 +952,13 @@ func _mage_firewall_attack(attacker_index: int) -> void:
 	if target_count <= 0:
 		return
 	EventBus.party_skill_activated.emit(attacker_index, &"fireburst")
+	var base_damage: int = GameState.mage_firewall_damage(attacker_index)
 	_log_label.text = "%s's Firewall!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running:
 		return
-	var crit: Dictionary = GameState.roll_crit()
-	var damage: int = int(round(float(GameState.mage_firewall_damage(attacker_index)) * float(crit["mult"])))
+	var crit: Dictionary = GameState.roll_crit(attacker_index)
+	var damage: int = int(round(float(GameState.roll_damage(base_damage)) * float(crit["mult"])))
 	var total_dealt: int = 0
 	for i in target_count:
 		if is_instance_valid(targets[i]) and targets[i].is_alive():
@@ -1027,13 +1022,13 @@ func _mage_lightning_attack(attacker_index: int, target_enemy: Enemy) -> void:
 		return
 	var member: CharacterData = GameState.party[attacker_index]
 	EventBus.party_skill_activated.emit(attacker_index, &"lightning_bolt")
+	var base_damage: int = GameState.mage_lightning_damage(attacker_index)
 	_log_label.text = "%s's Lightning Bolt!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
 		return
-	var base_damage: int = GameState.mage_lightning_damage(attacker_index)
-	var crit: Dictionary = GameState.roll_crit()
-	var primary_damage: int = int(round(float(base_damage) * float(crit["mult"])))
+	var crit: Dictionary = GameState.roll_crit(attacker_index)
+	var primary_damage: int = int(round(float(GameState.roll_damage(base_damage)) * float(crit["mult"])))
 	var total_dealt: int = target_enemy.take_damage(primary_damage, crit["is_crit"], member.attack_effect)
 	var primary_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
 	# Chain to one adjacent living enemy at half damage.
@@ -1065,13 +1060,13 @@ func _priest_holy_strike(attacker_index: int, target_enemy: Enemy) -> void:
 		return
 	var member: CharacterData = GameState.party[attacker_index]
 	EventBus.party_skill_activated.emit(attacker_index, &"holy_strike")
+	var damage: int = GameState.priest_holy_damage(attacker_index)
 	_log_label.text = "%s's Holy Strike!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
 		return
-	var damage: int = GameState.priest_holy_damage(attacker_index)
-	var crit: Dictionary = GameState.roll_crit()
-	var final_damage: int = int(round(float(damage) * float(crit["mult"])))
+	var crit: Dictionary = GameState.roll_crit(attacker_index)
+	var final_damage: int = int(round(float(GameState.roll_damage(damage)) * float(crit["mult"])))
 	var dealt: int = target_enemy.take_damage(final_damage, crit["is_crit"], member.attack_effect)
 	var target_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
 	# Self-heal rider — does nothing if priest is already at full HP.
@@ -1129,6 +1124,7 @@ func _enemy_attack(enemy: Enemy) -> void:
 	var target_index: int = alive_indices.pick_random()
 	var target: CharacterData = GameState.party[target_index]
 	var attacker_name: String = enemy.data.display_name if enemy.data else "Enemy"
+	var base_damage: int = max(1, enemy.attack - GameState.effective_defense(target_index))
 	_log_label.text = "%s의 공격!" % attacker_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running or not is_instance_valid(enemy) or not enemy.is_alive() or not GameState.is_alive(target_index):
@@ -1141,7 +1137,7 @@ func _enemy_attack(enemy: Enemy) -> void:
 		_log_label.text = "%s는 몸을 피했다!" % target.display_name
 		await _battle_pause(RESULT_MESSAGE_DURATION)
 		return
-	var dealt: int = max(1, enemy.attack - GameState.effective_defense(target_index))
+	var dealt: int = GameState.roll_damage(base_damage)
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
 	await _battle_pause(IMPACT_MESSAGE_DELAY)

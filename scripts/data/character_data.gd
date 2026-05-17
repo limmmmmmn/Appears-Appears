@@ -31,3 +31,5 @@ enum Direction { DOWN, LEFT, RIGHT, UP }
 @export var attack: int = 5
 @export var defense: int = 1
 @export var agility: int = 5
+@export_range(0.0, 1.0, 0.01) var crit_chance: float = 0.05
+@export_range(1.0, 4.0, 0.05) var crit_damage_mult: float = 1.5

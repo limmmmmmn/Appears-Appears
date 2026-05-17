@@ -1,4 +1,4 @@
-class_name Town2
+class_name Town
 extends CanvasLayer
 
 ## Streamlined between-stage town. Three zones, in descending size:
@@ -11,7 +11,7 @@ extends CanvasLayer
 
 signal closed
 
-const CARD_SCENE: PackedScene = preload("res://scenes/ui/town2_card.tscn")
+const CARD_SCENE: PackedScene = preload("res://scenes/ui/town_card.tscn")
 const LEVEL_UP_STAT_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_stat_panel.tscn")
 const LEVEL_UP_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_panel.tscn")
 const LOOT_BOX_SCENE: PackedScene = preload("res://scenes/ui/loot_box.tscn")
@@ -36,15 +36,15 @@ const SILENT_STAT_IDS: Dictionary = {
 @onready var _top_zone: HBoxContainer = %TopZone
 @onready var _reroll_button: Button = %RerollButton
 @onready var _continue_button: Button = %ContinueButton
-@onready var _slot_party: Town2Slot = %SlotParty
-@onready var _slot_hero: Town2Slot = %SlotHero
-@onready var _slot_mage: Town2Slot = %SlotMage
-@onready var _slot_priest: Town2Slot = %SlotPriest
-@onready var _slot_thief: Town2Slot = %SlotThief
+@onready var _slot_party: TownSlot = %SlotParty
+@onready var _slot_hero: TownSlot = %SlotHero
+@onready var _slot_mage: TownSlot = %SlotMage
+@onready var _slot_priest: TownSlot = %SlotPriest
+@onready var _slot_thief: TownSlot = %SlotThief
 
-var _cards: Array[Town2Card] = []
-var _hero_slots_by_id: Dictionary = {}  # StringName -> Town2Slot (per-member)
-var _all_slots: Array[Town2Slot] = []
+var _cards: Array[TownCard] = []
+var _hero_slots_by_id: Dictionary = {}  # StringName -> TownSlot (per-member)
+var _all_slots: Array[TownSlot] = []
 var _title_override: String = ""
 var _stat_panel: LevelUpStatPanel
 var _level_up_panel: LevelUpPanel
@@ -121,7 +121,7 @@ func _route_to_slot(mod: ModifierData) -> void:
 	if owner_id == &"":
 		_slot_party.add_upgrade(mod)
 		return
-	var slot: Town2Slot = _hero_slots_by_id.get(owner_id, null)
+	var slot: TownSlot = _hero_slots_by_id.get(owner_id, null)
 	if slot:
 		slot.add_upgrade(mod)
 
@@ -152,7 +152,7 @@ func _build_top_cards() -> void:
 	_cards.clear()
 	# Top zone is now cards-only — reroll lives in the bottom bar.
 	for i in CARD_SLOTS:
-		var card: Town2Card = CARD_SCENE.instantiate()
+		var card: TownCard = CARD_SCENE.instantiate()
 		card.purchase_requested.connect(_on_card_purchase_requested)
 		_top_zone.add_child(card)
 		_cards.append(card)
@@ -176,14 +176,14 @@ func _redraw_card(card_index: int) -> void:
 	for i in CARD_SLOTS:
 		if i == card_index:
 			continue
-		var c: Town2Card = _cards[i]
+		var c: TownCard = _cards[i]
 		if c.data:
 			displayed[c.data.id] = true
 	var candidates: Array[ModifierData] = []
 	for mod: ModifierData in _offerable_pool():
 		if not displayed.has(mod.id):
 			candidates.append(mod)
-	var slot: Town2Card = _cards[card_index]
+	var slot: TownCard = _cards[card_index]
 	if candidates.is_empty():
 		slot.setup(null)
 	else:
@@ -210,12 +210,12 @@ func _prioritize_field_movement_offer(pool: Array[ModifierData]) -> void:
 
 
 # ─── Purchase flow ────────────────────────────────────────────────────
-func _on_card_purchase_requested(_card: Town2Card, mod: ModifierData) -> void:
+func _on_card_purchase_requested(_card: TownCard, mod: ModifierData) -> void:
 	EventBus.modifier_purchase_requested.emit(mod, _card)
 
 
 func _on_modifier_purchase_succeeded(mod: ModifierData, source: Node) -> void:
-	var card := source as Town2Card
+	var card := source as TownCard
 	if card == null or not is_instance_valid(card):
 		return
 	_route_to_slot(mod)
@@ -227,7 +227,7 @@ func _on_modifier_purchase_succeeded(mod: ModifierData, source: Node) -> void:
 
 
 func _on_modifier_purchase_failed(_mod: ModifierData, source: Node) -> void:
-	var card := source as Town2Card
+	var card := source as TownCard
 	if card == null or not is_instance_valid(card):
 		return
 	card.mark_unaffordable_flash()
@@ -346,7 +346,7 @@ func _focus_first_available_card() -> void:
 
 
 func _focus_after_purchase(card_index: int) -> void:
-	var same: Town2Card = _cards[card_index]
+	var same: TownCard = _cards[card_index]
 	if not same.disabled:
 		same.grab_focus()
 		return

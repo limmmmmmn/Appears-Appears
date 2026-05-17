@@ -1,7 +1,7 @@
 [gd_scene load_steps=15 format=3]
 
-[ext_resource type="Script" path="res://scripts/runtime/town2.gd" id="1_town2"]
-[ext_resource type="PackedScene" path="res://scenes/ui/town2_slot.tscn" id="2_slot"]
+[ext_resource type="Script" path="res://scripts/runtime/town.gd" id="1_town"]
+[ext_resource type="PackedScene" path="res://scenes/ui/town_slot.tscn" id="2_slot"]
 [ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="3_theme"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_bg"]
@@ -69,9 +69,9 @@ font_color = Color(0.1, 0.22, 0.32, 1)
 font_size = 14
 font_color = Color(0.7, 0.42, 0.06, 1)
 
-[node name="Town2" type="CanvasLayer"]
+[node name="Town" type="CanvasLayer"]
 layer = 10
-script = ExtResource("1_town2")
+script = ExtResource("1_town")
 
 [node name="Background" type="Panel" parent="."]
 anchors_preset = 15

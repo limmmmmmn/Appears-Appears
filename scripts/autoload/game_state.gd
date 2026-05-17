@@ -22,10 +22,6 @@ var current_xp: int = 0
 var _defer_party_level_settlement: bool = true
 var party_equipment: Array[Array] = []
 var inventory: Array[ItemData] = []
-## Legacy skill-tree counters are kept for old call sites, but the live
-## progression now goes through per-member level-up card picks.
-var party_skill_points: int = 1
-var unlocked_tree_skills: Array[StringName] = []
 var _last_level_up_auto_skills: Array[ModifierData] = []
 var _move_speed_drag_multiplier: float = 1.0
 var _move_speed_drag_until_msec: int = 0
@@ -33,9 +29,18 @@ var _move_speed_boost_multiplier: float = 1.0
 var _move_speed_boost_until_msec: int = 0
 
 # ─── Economy ──────────────────────────────────────────────────────────
+## Gold is meta currency: it persists past wipes and across runs so it can
+## fund permanent skill-tree node unlocks. STARTING_GOLD only seeds the
+## very first session — reset_run() leaves gold alone.
 const STARTING_GOLD: int = 30
 
 var gold: int = STARTING_GOLD
+
+# ─── Meta Progression (Skill Tree) ────────────────────────────────────
+## Permanent skill-tree unlocks. Survives reset_run(). Read by SkillTreeDB
+## for purchase gating and by main.gd to seed the starting party.
+var unlocked_node_ids: Array[StringName] = []
+
 ## Stat-affecting modifiers picked this run.
 var active_modifiers: Array[ModifierData] = []
 ## Recruit cards that successfully added a member to `party` this run.
@@ -80,7 +85,7 @@ const AUTO_SKILL_IDS_BY_MEMBER_ID: Dictionary = {
 }
 const BUMP_ATTACK_ID: StringName = &"bump_attack"
 const FIELD_MOVEMENT_ID: StringName = &"field_movement"
-const LEVEL_UP_PARTY_CARD_OFFER_IDS: Array[StringName] = [&"window_crash", &"bump_blessing", &"shockwave", &"window_fusion", &"window_spin", &"window_split", &"bouncy_ball", &"repulsion_wall"]
+const LEVEL_UP_PARTY_CARD_OFFER_IDS: Array[StringName] = [&"crit_up", &"crit_damage_up", &"window_crash", &"bump_blessing", &"shockwave", &"window_fusion", &"window_spin", &"window_split", &"bouncy_ball", &"repulsion_wall"]
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
 const EFFECT_STACK_MULTIPLIERS = [1.0, 0.75, 0.55, 0.4, 0.3]
@@ -102,6 +107,8 @@ const ENEMY_HP_AT_TARGET: float = 8.0       ## enemies have 8× HP at 30 min
 const ENEMY_ATK_AT_TARGET: float = 5.0      ## enemies hit 5× harder at 30 min
 const RUN_INTENSITY_CAP: float = 1.5        ## past 45 min, stop scaling further
 const BATTLE_WINDOW_MAX_ENEMIES: int = 5
+const DAMAGE_VARIANCE: float = 0.15
+const CRIT_CHANCE_CAP: float = 0.75
 
 
 # ─── Run statistics (for the game-over summary) ───────────────────────
@@ -122,6 +129,39 @@ var _difficulty_elapsed: float = 0.0
 var _difficulty_tier_announced: int = 0
 var _active_battle_window_count: int = 0
 
+# ─── Field-run lifecycle ──────────────────────────────────────────────
+## Each field run is a fixed-duration session. When the timer expires (or
+## the party wipes early) field_run_ended fires and main.gd routes to the
+## results panel. Duration grows via skill-tree nodes from 20s → ~60s.
+const FIELD_RUN_DURATION_BASE: float = 20.0
+const FIELD_RUN_DURATION_CAP: float = 60.0
+signal field_run_ended(reason: StringName)
+signal field_run_started()
+var _field_run_elapsed: float = 0.0
+var _field_run_active: bool = false
+var field_runs_completed: int = 0
+## Snapshot of party level at start of the current field — used by
+## ResultsPanel to show "이번 필드에서 +N 레벨" without storing it on the UI.
+var level_at_field_start: int = 1
+var gold_at_field_start: int = 0
+
+# ─── Boss progress / location flavor ──────────────────────────────────
+## Pure flavor: total_gold_earned drives a tier label so the run-end screen
+## can show "당신의 위치: X — 마왕까지 N g" without owning any extra state.
+## Order matters: thresholds must be ascending.
+const LOCATION_TIERS: Array = [
+	{"gold": 0, "label": "소꿉친구의 집 앞"},
+	{"gold": 50, "label": "마을 어귀"},
+	{"gold": 150, "label": "옆 마을 시장"},
+	{"gold": 400, "label": "왕도 외곽"},
+	{"gold": 900, "label": "왕궁 앞"},
+	{"gold": 2000, "label": "북쪽 산길"},
+	{"gold": 4500, "label": "마왕성 입구"},
+	{"gold": 10000, "label": "마왕성 알현실"},
+	{"gold": 25000, "label": "마왕 처치!"},
+]
+
+
 func _ready() -> void:
 	# Listen to bus events to keep counters fresh without coupling combat code.
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
@@ -129,6 +169,110 @@ func _ready() -> void:
 	EventBus.modifier_purchase_requested.connect(_on_modifier_purchase_requested)
 	EventBus.battle_window_opened.connect(_on_battle_window_opened)
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
+	EventBus.party_wiped.connect(_on_party_wiped_for_field_end)
+
+
+# ─── Field-run helpers ────────────────────────────────────────────────
+## Called when a fresh field session begins. Resets the timer + arms the
+## end-of-run dispatcher. Safe to call twice; second call just restarts
+## the timer.
+func start_field_run() -> void:
+	_field_run_elapsed = 0.0
+	_field_run_active = true
+	level_at_field_start = current_level
+	gold_at_field_start = gold
+	field_run_started.emit()
+
+
+## Current field-run duration in seconds. Grows with skill-tree nodes
+## carrying { "field_duration_delta": N } in effect_data.
+func field_run_duration() -> float:
+	var bonus: float = 0.0
+	for node_id: StringName in unlocked_node_ids:
+		var node: NodeData = SkillTreeDB.get_by_id(node_id) if Engine.has_singleton("SkillTreeDB") else null
+		if node == null:
+			continue
+		bonus += float(node.effect_data.get("field_duration_delta", 0.0))
+	return clampf(FIELD_RUN_DURATION_BASE + bonus, FIELD_RUN_DURATION_BASE, FIELD_RUN_DURATION_CAP)
+
+
+func field_run_elapsed() -> float:
+	return _field_run_elapsed
+
+
+func field_run_remaining() -> float:
+	return maxf(0.0, field_run_duration() - _field_run_elapsed)
+
+
+func is_field_run_active() -> bool:
+	return _field_run_active
+
+
+## Force-end the current field run. main.gd reacts to field_run_ended by
+## opening the results screen. Settles any pending XP so the results
+## panel shows the correct post-field level.
+func end_field_run(reason: StringName) -> void:
+	if not _field_run_active:
+		return
+	_field_run_active = false
+	field_runs_completed += 1
+	if not party.is_empty():
+		settle_deferred_party_level_ups(true)
+	field_run_ended.emit(reason)
+
+
+func _on_party_wiped_for_field_end() -> void:
+	end_field_run(&"wipe")
+
+
+## Used by the results→next-field button. Rehydrates the party for a fresh
+## field instance without touching meta state (gold, unlocked nodes, party
+## level/xp, active modifiers, equipment).
+##
+## Stage no longer auto-increments — the stage counter stays where it is,
+## and progression is driven entirely by skill-tree nodes (enemy roster,
+## encounter size, field changes). We still emit stage_started so Field
+## clears enemies/items/decor and respawns from a clean slate.
+func prepare_next_field() -> void:
+	for i in party.size():
+		if i < party_hp.size():
+			party_hp[i] = effective_max_hp(i)
+		if i < party_mp.size():
+			party_mp[i] = effective_max_mp(i)
+		EventBus.party_member_hp_changed.emit(i, party_hp[i], effective_max_hp(i))
+		EventBus.party_member_mp_changed.emit(i, party_mp[i], effective_max_mp(i))
+	EventBus.party_hp_changed.emit()
+	_difficulty_elapsed = 0.0
+	_difficulty_tier_announced = 0
+	_active_battle_window_count = 0
+	run_started_at_ms = Time.get_ticks_msec()
+	EventBus.stage_started.emit(maxi(1, current_stage))
+
+
+# ─── Location / boss-progress flavor ──────────────────────────────────
+func current_location_label() -> String:
+	var label: String = LOCATION_TIERS[0].label
+	for tier: Dictionary in LOCATION_TIERS:
+		if total_gold_earned >= int(tier.gold):
+			label = String(tier.label)
+		else:
+			break
+	return label
+
+
+## Gold required to reach the next location tier. 0 when at the final tier.
+func gold_to_next_location() -> int:
+	for tier: Dictionary in LOCATION_TIERS:
+		if total_gold_earned < int(tier.gold):
+			return int(tier.gold) - total_gold_earned
+	return 0
+
+
+func next_location_label() -> String:
+	for tier: Dictionary in LOCATION_TIERS:
+		if total_gold_earned < int(tier.gold):
+			return String(tier.label)
+	return ""
 
 
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
@@ -158,6 +302,10 @@ func _process(delta: float) -> void:
 	if tier > _difficulty_tier_announced:
 		_difficulty_tier_announced = tier
 		EventBus.difficulty_increased.emit(tier)
+	if _field_run_active:
+		_field_run_elapsed += delta
+		if _field_run_elapsed >= field_run_duration():
+			end_field_run(&"timer")
 
 
 func current_difficulty_tier() -> int:
@@ -196,9 +344,6 @@ func set_party(members: Array[CharacterData]) -> void:
 	# Shared progression resets each run.
 	current_level = 1
 	current_xp = 0
-	# Legacy SP starts empty; level-up progression is handled by card picks.
-	party_skill_points = 0
-	unlocked_tree_skills.clear()
 	_last_level_up_auto_skills.clear()
 	for m: CharacterData in party:
 		party_equipment.append(_empty_equipment_slots())
@@ -539,51 +684,6 @@ func _next_auto_skill_for_member(member_id: StringName) -> ModifierData:
 	return null
 
 
-# ─── Legacy skill tree ────────────────────────────────────────────────
-## Spend one shared SP to unlock (or level up) a tree node. The pick goes
-## into active_modifiers exactly like a level-up card pick so existing
-## battle-effect code keeps working untouched.
-func unlock_skill(mod: ModifierData) -> bool:
-	if mod == null:
-		return false
-	if party_skill_points <= 0:
-		return false
-	if not can_add_modifier(mod):
-		return false
-	party_skill_points -= 1
-	unlocked_tree_skills.append(mod.id)
-	add_modifier(mod)
-	EventBus.party_skill_points_changed.emit(party_skill_points)
-	EventBus.party_skills_changed.emit()
-	return true
-
-
-## Refund every tree node the party has spent SP on, removing the matching
-## modifiers from active_modifiers so stats / abilities revert immediately.
-func reset_skills() -> void:
-	var refund: int = unlocked_tree_skills.size()
-	if refund <= 0:
-		return
-	var skill_ids: Dictionary = {}
-	for id: StringName in unlocked_tree_skills:
-		skill_ids[id] = true
-	var kept: Array[ModifierData] = []
-	for mod: ModifierData in active_modifiers:
-		if skill_ids.has(mod.id):
-			continue
-		kept.append(mod)
-	active_modifiers = kept
-	unlocked_tree_skills.clear()
-	party_skill_points += refund
-	EventBus.party_skill_points_changed.emit(party_skill_points)
-	EventBus.party_skills_changed.emit()
-	EventBus.party_hp_changed.emit()
-
-
-func skill_points() -> int:
-	return party_skill_points
-
-
 func _emit_party_xp_changed() -> void:
 	var to_next: int = _xp_required_for_level(current_level) if current_level < MAX_CHARACTER_LEVEL else 1
 	for i in party.size():
@@ -852,19 +952,13 @@ func scaled_enemy_attack(data: EnemyData) -> int:
 func scaled_enemy_defense(data: EnemyData) -> int:
 	if data == null:
 		return 0
-	var bonus: int = 0
-	if data.id == &"orc":
-		bonus = int(floor(float(_enemy_stage_index()) / 5.0))
-	return maxi(0, data.defense + bonus)
+	return maxi(0, data.defense)
 
 
 func scaled_enemy_agility(data: EnemyData) -> int:
 	if data == null:
 		return 0
-	var bonus: int = 0
-	if data.id == &"bat":
-		bonus = int(floor(float(_enemy_stage_index()) / 3.0))
-	return maxi(0, data.agility + bonus)
+	return maxi(0, data.agility)
 
 
 func scaled_enemy_gold_reward(data: EnemyData) -> int:
@@ -946,6 +1040,8 @@ func item_sell_value(item: ItemData) -> int:
 	stat_total += maxi(0, item.agility_bonus)
 	stat_total += ceili(float(maxi(0, item.max_hp_bonus)) * 0.25)
 	stat_total += ceili(float(maxi(0, item.max_mp_bonus)) * 0.35)
+	stat_total += ceili(maxf(0.0, item.crit_chance_bonus) * 100.0)
+	stat_total += ceili(maxf(0.0, item.crit_damage_bonus) * 20.0)
 	return maxi(4, 4 + stat_total * 2)
 
 
@@ -1010,33 +1106,16 @@ func run_intensity() -> float:
 	return clampf(_difficulty_elapsed / RUN_TARGET_SECONDS, 0.0, RUN_INTENSITY_CAP)
 
 
-func _enemy_hp_multiplier(data: EnemyData) -> float:
+func _enemy_hp_multiplier(_data: EnemyData) -> float:
 	var t: float = run_intensity()
 	var base_mult: float = 1.0 + t * (ENEMY_HP_AT_TARGET - 1.0)
-	return _enemy_species_multiplier(data, base_mult, 0.85, 0.9, 1.1)
+	return 1.0 + (base_mult - 1.0) * 0.85
 
 
-func _enemy_attack_multiplier(data: EnemyData) -> float:
+func _enemy_attack_multiplier(_data: EnemyData) -> float:
 	var t: float = run_intensity()
 	var base_mult: float = 1.0 + t * (ENEMY_ATK_AT_TARGET - 1.0)
-	return _enemy_species_multiplier(data, base_mult, 0.8, 0.9, 1.1)
-
-
-func _enemy_species_multiplier(
-	data: EnemyData,
-	base_mult: float,
-	slime_growth: float,
-	bat_growth: float,
-	orc_growth: float
-) -> float:
-	var growth: float = 1.0
-	if data.id == &"slime":
-		growth = slime_growth
-	elif data.id == &"bat":
-		growth = bat_growth
-	elif data.id == &"orc":
-		growth = orc_growth
-	return 1.0 + (base_mult - 1.0) * growth
+	return 1.0 + (base_mult - 1.0) * 0.8
 
 
 # ─── Modifier-aware stat helpers ──────────────────────────────────────
@@ -1057,7 +1136,7 @@ func _effect_multiplier_for_stack(stack_index: int, multipliers: Array) -> float
 
 
 func _multipliers_for_float_key(key: String) -> Array:
-	if key == "hero_damage_bonus_mult":
+	if key == "hero_damage_bonus_mult" or key == "crit_damage_bonus":
 		return DAMAGE_BONUS_STACK_MULTIPLIERS
 	return EFFECT_STACK_MULTIPLIERS
 
@@ -1161,6 +1240,26 @@ func effective_agility(index: int) -> int:
 		return 0
 	var character_id: StringName = party[index].id
 	return party[index].agility + _level_bonus(index, "agi") + _equipment_bonus(index, "agility_bonus") + _stacked_int_effect_for_character(character_id, "agi_flat")
+
+
+func effective_crit_chance(index: int) -> float:
+	if index < 0 or index >= party.size():
+		return 0.0
+	var character_id: StringName = party[index].id
+	var chance: float = party[index].crit_chance
+	chance += _equipment_float_bonus(index, "crit_chance_bonus")
+	chance += _stacked_float_effect_for_character(character_id, "crit_chance", EFFECT_STACK_MULTIPLIERS)
+	return clampf(chance, 0.0, CRIT_CHANCE_CAP)
+
+
+func effective_crit_damage_mult(index: int) -> float:
+	if index < 0 or index >= party.size():
+		return 1.0
+	var character_id: StringName = party[index].id
+	var mult: float = party[index].crit_damage_mult
+	mult += _equipment_float_bonus(index, "crit_damage_bonus")
+	mult += _stacked_float_effect_for_character(character_id, "crit_damage_bonus", DAMAGE_BONUS_STACK_MULTIPLIERS)
+	return maxf(1.0, mult)
 
 
 func effective_move_speed(base_speed: float) -> float:
@@ -1326,20 +1425,51 @@ func _equipment_bonus(index: int, property_name: StringName) -> int:
 	return total
 
 
-## Roll a crit. Returns { is_crit: bool, mult: float }.
-## Multiple crit modifiers stack their chances (capped at 1.0); the largest
-## multiplier wins.
-func roll_crit() -> Dictionary:
+func _equipment_float_bonus(index: int, property_name: StringName) -> float:
+	if index < 0 or index >= party_equipment.size():
+		return 0.0
+	var total: float = 0.0
+	for item in party_equipment[index]:
+		if item is ItemData:
+			total += float((item as ItemData).get(property_name))
+	return total
+
+
+func damage_range(base_damage: int) -> Vector2i:
+	var base: int = maxi(1, base_damage)
+	var low: int = maxi(1, int(floor(float(base) * (1.0 - DAMAGE_VARIANCE))))
+	var high: int = maxi(low, int(ceil(float(base) * (1.0 + DAMAGE_VARIANCE))))
+	return Vector2i(low, high)
+
+
+func roll_damage(base_damage: int) -> int:
+	var range := damage_range(base_damage)
+	return randi_range(range.x, range.y)
+
+
+func damage_range_text(base_damage: int) -> String:
+	var range := damage_range(base_damage)
+	return "%d-%d" % [range.x, range.y]
+
+
+## Roll a crit. Returns { is_crit: bool, mult: float, chance: float }.
+func roll_crit(attacker_index: int = -1) -> Dictionary:
 	var total_chance: float = 0.0
-	var max_mult: float = 1.0
-	for mod: ModifierData in active_modifiers:
-		total_chance += float(mod.effect_data.get("crit_chance", 0.0))
-		var m: float = float(mod.effect_data.get("crit_mult", 1.0))
-		if m > max_mult:
-			max_mult = m
-	total_chance = min(total_chance, 1.0)
+	var crit_mult: float = 1.5
+	if attacker_index >= 0 and attacker_index < party.size():
+		total_chance = effective_crit_chance(attacker_index)
+		crit_mult = effective_crit_damage_mult(attacker_index)
+	else:
+		for mod: ModifierData in active_modifiers:
+			total_chance += float(mod.effect_data.get("crit_chance", 0.0))
+			crit_mult = maxf(crit_mult, 1.0 + float(mod.effect_data.get("crit_damage_bonus", 0.0)))
+	total_chance = clampf(total_chance, 0.0, CRIT_CHANCE_CAP)
 	var rolled: bool = randf() < total_chance
-	return { "is_crit": rolled, "mult": (max_mult if rolled else 1.0) }
+	return {
+		"is_crit": rolled,
+		"mult": (crit_mult if rolled else 1.0),
+		"chance": total_chance,
+	}
 
 
 ## Roll Echo Strike-style modifiers. Returns the number of *extra* windows
@@ -1459,7 +1589,25 @@ func modify_gold_reward(base: int) -> int:
 	return int(round(base * mult)) + flat
 
 
+# ─── Meta Progression helpers ─────────────────────────────────────────
+func has_node_unlocked(node_id: StringName) -> bool:
+	return unlocked_node_ids.has(node_id)
+
+
+## SkillTreeDB calls this after charging gold. Keeps the persistence
+## bookkeeping in one place so any other system unlocking a node (cheats,
+## tutorials) goes through the same accessor. UI listens to
+## SkillTreeDB.node_unlocked rather than a GameState-level signal.
+func unlock_node(node_id: StringName) -> void:
+	if node_id == &"" or unlocked_node_ids.has(node_id):
+		return
+	unlocked_node_ids.append(node_id)
+
+
 # ─── Reset ────────────────────────────────────────────────────────────
+## Wipes run-only state. Meta progression (gold, unlocked_node_ids,
+## total_gold_earned) is intentionally preserved so the player keeps
+## everything they've banked across deaths.
 func reset_run() -> void:
 	party.clear()
 	party_hp.clear()
@@ -1468,14 +1616,10 @@ func reset_run() -> void:
 	current_xp = 0
 	party_equipment.clear()
 	inventory.clear()
-	gold = STARTING_GOLD
-	total_gold_earned = 0
 	enemies_killed = 0
 	biggest_hit = 0
 	active_modifiers.clear()
 	recruited_companions.clear()
-	party_skill_points = 0
-	unlocked_tree_skills.clear()
 	_last_level_up_auto_skills.clear()
 	_move_speed_drag_multiplier = 1.0
 	_move_speed_drag_until_msec = 0
@@ -1483,6 +1627,8 @@ func reset_run() -> void:
 	_move_speed_boost_until_msec = 0
 	_active_battle_window_count = 0
 	current_stage = 0
+	_difficulty_elapsed = 0.0
+	_difficulty_tier_announced = 0
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).
 	EventBus.gold_changed.emit(gold)

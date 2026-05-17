@@ -19,6 +19,7 @@ const OLD_VALUE_COLOR: Color = Color(0.6, 0.62, 0.72)
 const NEW_VALUE_COLOR: Color = Color(0.95, 0.96, 1.0)
 const GAIN_COLOR: Color = Color(0.45, 0.92, 0.5)
 const ZERO_GAIN_COLOR: Color = Color(0.55, 0.55, 0.6)
+const CURRENT_STAT_COLOR: Color = Color(0.92, 0.78, 0.46)
 
 const STAT_KEYS: Array = [
 	{"label": "HP",  "growth": "hp",  "effective": "max_hp"},
@@ -172,6 +173,7 @@ func _build_member_card(index: int) -> Control:
 	# Stat deltas
 	for entry: Dictionary in _stat_entries(index):
 		vbox.add_child(_build_stat_line(entry))
+	vbox.add_child(_build_current_stat_line(_combat_stat_text(index)))
 	for skill: ModifierData in _learned_skills_for_member(index):
 		vbox.add_child(_build_learned_skill_line(skill))
 
@@ -278,6 +280,27 @@ func _build_stat_line(entry: Dictionary) -> Control:
 	row.add_child(lbl_gain)
 
 	return row
+
+
+func _combat_stat_text(index: int) -> String:
+	return "DMG %s  CRIT %d%%  CDMG %d%%" % [
+		GameState.damage_range_text(GameState.effective_attack(index)),
+		int(round(GameState.effective_crit_chance(index) * 100.0)),
+		int(round(GameState.effective_crit_damage_mult(index) * 100.0)),
+	]
+
+
+func _build_current_stat_line(text: String) -> Control:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 8)
+	label.add_theme_color_override("font_color", CURRENT_STAT_COLOR)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	label.add_theme_constant_override("outline_size", 2)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	label.custom_minimum_size = Vector2(0, 16)
+	return label
 
 
 func _confirm() -> void:

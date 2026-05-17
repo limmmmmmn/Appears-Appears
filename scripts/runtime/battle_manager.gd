@@ -21,9 +21,6 @@ const WINDOW_PUSH_STRENGTH: float = 260.0
 const PARTY_COLLISION_SIZE: Vector2 = Vector2(18.0, 24.0)
 const PARTY_COLLISION_STRENGTH: float = 1800.0
 const WALL_PUSH_STRENGTH: float = 900.0
-const ORC_WINDOW_PUSH_MULTIPLIER: float = 0.35
-const ORC_WINDOW_DRAG_SPEED_MULTIPLIER: float = 0.45
-const ORC_WINDOW_DRAG_DURATION: float = 0.12
 const VELOCITY_DAMPING: float = 4.6
 const MAX_WINDOW_SPEED: float = 180.0
 const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 1.5
@@ -262,7 +259,6 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 					_apply_window_spin_party_impulse(window, rect, party_position, party_velocity)
 					if not is_instance_valid(window) or not _window_rects.has(window):
 						break
-					_apply_party_drag_effects(window)
 				if party_collision_enabled and not _is_spin_pinned(window):
 					force += _party_collision_push(rect, party_position)
 		if not is_instance_valid(window) or not _window_rects.has(window):
@@ -271,7 +267,7 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 		if not _is_spin_pinned(window) and (window_collision_enabled or window_fusion_enabled or party_collision_enabled or bounce_enabled):
 			force += _wall_push(rect, viewport_size)
 		var bounce_multiplier: float = GameState.window_bounce_multiplier()
-		force *= _window_push_multiplier(window) * bounce_multiplier
+		force *= bounce_multiplier
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
 		var step_delta: float = 1.0 / 60.0 if burst else delta
 		if _is_spin_pinned(window):
@@ -356,17 +352,6 @@ func _window_overlap_push(window: BattleWindow, rect: Rect2, other_window: Battl
 	var overlap_y: float = minf(rect.end.y, other.end.y) - maxf(rect.position.y, other.position.y)
 	var push: float = maxf(0.0, minf(overlap_x, overlap_y))
 	return delta.normalized() * push * WINDOW_PUSH_STRENGTH
-
-
-func _window_push_multiplier(window: BattleWindow) -> float:
-	if window.has_living_enemy_id(&"orc"):
-		return ORC_WINDOW_PUSH_MULTIPLIER
-	return 1.0
-
-
-func _apply_party_drag_effects(window: BattleWindow) -> void:
-	if window.has_living_enemy_id(&"orc"):
-		GameState.apply_move_speed_drag(ORC_WINDOW_DRAG_SPEED_MULTIPLIER, ORC_WINDOW_DRAG_DURATION)
 
 
 func _apply_window_collision_damage(window: BattleWindow, rect: Rect2, other_window: BattleWindow, other: Rect2) -> void:

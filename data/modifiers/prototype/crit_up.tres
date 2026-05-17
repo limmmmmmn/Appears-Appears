@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"crit_up"
+display_name = "Keen Eye"
+description = "치명타율 +5%. 작은 숫자가 전투 로그를 번쩍이게 만든다."
+cost = 0
+max_level = 5
+rarity = 1
+category = 1
+level_up_only = true
+effect_data = {
+"crit_chance": 0.05
+}

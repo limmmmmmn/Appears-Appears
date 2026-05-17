@@ -18,3 +18,5 @@ enum Slot { WEAPON, SHIELD, HELMET, ARMOR, ACCESSORY }
 @export var agility_bonus: int = 0
 @export var max_hp_bonus: int = 0
 @export var max_mp_bonus: int = 0
+@export_range(0.0, 1.0, 0.01) var crit_chance_bonus: float = 0.0
+@export_range(0.0, 3.0, 0.05) var crit_damage_bonus: float = 0.0

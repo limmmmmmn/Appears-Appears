@@ -21,8 +21,7 @@ const LEVEL_UP_MARK_SIZE: Vector2 = Vector2(20, 20)
 const LEVEL_UP_MARK_Y: float = -18.0
 
 ## Skill chip row sits just above the box, color-matched to the job, one
-## chip per unlocked skill modifier owned by this member. Same palette as
-## the skill-tree panel so the two readouts feel unified.
+## chip per unlocked skill modifier owned by this member.
 const SKILL_CHIP_SIZE: Vector2 = Vector2(8, 8)
 const SKILL_CHIP_GAP: int = 2
 const SKILL_CHIPS_OFFSET: Vector2 = Vector2(2, -11)

@@ -16,6 +16,8 @@ const LEVEL_UP_ONLY_EFFECT_KEYS: Array[String] = [
 	"mp_flat",
 	"def_flat",
 	"agi_flat",
+	"crit_chance",
+	"crit_damage_bonus",
 	"evade_chance",
 	"hero_damage_bonus_mult",
 	"mage_splash_extra_targets",

@@ -50,4 +50,8 @@ func _build_tooltip(item: ItemData) -> String:
 		lines.append("최대 HP +%d" % item.max_hp_bonus)
 	if item.max_mp_bonus != 0:
 		lines.append("최대 MP +%d" % item.max_mp_bonus)
+	if item.crit_chance_bonus != 0.0:
+		lines.append("치명타율 +%d%%" % int(round(item.crit_chance_bonus * 100.0)))
+	if item.crit_damage_bonus != 0.0:
+		lines.append("치명타 피해 +%d%%" % int(round(item.crit_damage_bonus * 100.0)))
 	return "\n".join(lines)

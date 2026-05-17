@@ -12,3 +12,4 @@ icon = ExtResource("2_icon")
 allowed_character_id = &"thief"
 attack_bonus = 2
 agility_bonus = 1
+crit_chance_bonus = 0.05

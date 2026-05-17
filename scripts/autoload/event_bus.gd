@@ -57,9 +57,7 @@ signal party_member_mp_changed(index: int, new_mp: int, max_mp: int)
 signal party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: int)
 signal party_member_leveled_up(index: int, new_level: int)
 
-## Legacy skill-point state changed. party_skills_changed is still used by
-## the HUD chips when level-up cards add or improve skills.
-signal party_skill_points_changed(points: int)
+## Used by HUD chips when level-up cards add or improve skills.
 signal party_skills_changed()
 
 ## A party member just fired a learned skill in battle. Picked up by the
