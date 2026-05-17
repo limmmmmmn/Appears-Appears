@@ -9,7 +9,6 @@ extends CanvasLayer
 ## from the active camera every frame, while physics stays in field space.
 
 const BATTLE_WINDOW_SCENE: PackedScene = preload("res://scenes/battle_window.tscn")
-const MANUAL_BATTLE_SCENE: PackedScene = preload("res://scenes/manual_battle.tscn")
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
 
 ## Fallback if no valid player-relative spawn point exists.
@@ -74,7 +73,6 @@ var _split_pending_windows: Dictionary = {}  ## battle window id -> held split d
 var _party_previous_positions: Dictionary = {}  ## party member id -> previous world position.
 var _party_velocities: Dictionary = {}  ## party member id -> smoothed world velocity.
 var _all_battles_resolved_sent: bool = true
-var _manual_battle: ManualBattle = null
 
 
 func _ready() -> void:
@@ -119,9 +117,6 @@ func _on_enemy_encountered(field_enemy: Node) -> void:
 	var data: EnemyData = field_enemy.data
 	if data == null:
 		return
-	if GameState.is_manual_battle_mode():
-		_open_manual_battle(data)
-		return
 	var source := field_enemy as Node2D
 	var enemy_count: int = _encounter_enemy_count(field_enemy)
 	spawn_battle(data, source, enemy_count)
@@ -129,27 +124,6 @@ func _on_enemy_encountered(field_enemy: Node) -> void:
 	var extras: int = GameState.roll_window_duplicates()
 	for i in extras:
 		spawn_battle(data, source, enemy_count)
-
-
-## Manual DQ1-style command screen. While open, GameState registers it
-## so is_field_combat_locked() returns true — player/companions/field
-## enemies freeze, but the field's _process keeps running so the stage
-## timer and spawner still tick. Tree is NOT paused: the player should
-## feel pressure during a slow manual fight.
-## tree_exited handles both victory (battle_finished → queue_free) and
-## defeat (party_wiped path also frees the window).
-func _open_manual_battle(data: EnemyData) -> void:
-	if _manual_battle != null and is_instance_valid(_manual_battle):
-		return
-	var window: ManualBattle = MANUAL_BATTLE_SCENE.instantiate()
-	window.setup(data)
-	window.tree_exited.connect(_on_manual_battle_closed)
-	add_child(window)
-	_manual_battle = window
-
-
-func _on_manual_battle_closed() -> void:
-	_manual_battle = null
 
 
 ## Public API. Used by enemy_encountered handler and debug helpers.

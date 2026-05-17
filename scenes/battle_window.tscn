@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/battle_window.gd" id="1_window"]
 
@@ -25,19 +25,6 @@ font_color = Color(0, 0, 0, 1)
 [sub_resource type="LabelSettings" id="LabelSettings_log"]
 font_size = 7
 font_color = Color(0, 0, 0, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_command"]
-bg_color = Color(0, 0, 0, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(1, 1, 1, 1)
-anti_aliasing = false
-
-[sub_resource type="LabelSettings" id="LabelSettings_command"]
-font_size = 8
-font_color = Color(1, 1, 1, 1)
 
 [node name="BattleWindow" type="Control"]
 custom_minimum_size = Vector2(120, 80)
@@ -122,92 +109,6 @@ vertical_alignment = 1
 autowrap_mode = 1
 clip_text = true
 max_lines_visible = 1
-
-[node name="CommandPanel" type="Panel" parent="."]
-unique_name_in_owner = true
-z_index = 30
-layout_mode = 0
-offset_left = 4.0
-offset_top = -36.0
-offset_right = 116.0
-offset_bottom = -2.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_command")
-
-[node name="CommandCursor" type="ColorRect" parent="CommandPanel"]
-unique_name_in_owner = true
-visible = false
-layout_mode = 0
-offset_left = 6.0
-offset_top = 8.0
-offset_right = 47.0
-offset_bottom = 19.0
-mouse_filter = 2
-color = Color(1, 1, 1, 1)
-
-[node name="CommandTitle" type="Label" parent="CommandPanel"]
-unique_name_in_owner = true
-z_index = 1
-layout_mode = 0
-offset_top = -6.0
-offset_right = 112.0
-offset_bottom = 4.0
-mouse_filter = 2
-text = "COMMAND"
-label_settings = SubResource("LabelSettings_command")
-horizontal_alignment = 1
-
-[node name="CommandFight" type="Label" parent="CommandPanel"]
-unique_name_in_owner = true
-z_index = 1
-layout_mode = 0
-offset_left = 8.0
-offset_top = 7.0
-offset_right = 50.0
-offset_bottom = 18.0
-mouse_filter = 2
-text = "FIGHT"
-label_settings = SubResource("LabelSettings_command")
-vertical_alignment = 1
-
-[node name="CommandSpell" type="Label" parent="CommandPanel"]
-unique_name_in_owner = true
-z_index = 1
-layout_mode = 0
-offset_left = 62.0
-offset_top = 7.0
-offset_right = 104.0
-offset_bottom = 18.0
-mouse_filter = 2
-text = "SPELL"
-label_settings = SubResource("LabelSettings_command")
-vertical_alignment = 1
-
-[node name="CommandRun" type="Label" parent="CommandPanel"]
-unique_name_in_owner = true
-z_index = 1
-layout_mode = 0
-offset_left = 8.0
-offset_top = 20.0
-offset_right = 50.0
-offset_bottom = 31.0
-mouse_filter = 2
-text = "RUN"
-label_settings = SubResource("LabelSettings_command")
-vertical_alignment = 1
-
-[node name="CommandItem" type="Label" parent="CommandPanel"]
-unique_name_in_owner = true
-z_index = 1
-layout_mode = 0
-offset_left = 62.0
-offset_top = 20.0
-offset_right = 104.0
-offset_bottom = 31.0
-mouse_filter = 2
-text = "ITEM"
-label_settings = SubResource("LabelSettings_command")
-vertical_alignment = 1
 
 [node name="TurnTimer" type="Timer" parent="."]
 wait_time = 0.5

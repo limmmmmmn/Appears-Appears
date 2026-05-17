@@ -1,0 +1,122 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/loot_box.gd" id="1_loot"]
+[ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_overlay"]
+bg_color = Color(0.06, 0.08, 0.1, 0.36)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_box"]
+bg_color = Color(0.91, 0.78, 0.46, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.14, 0.09, 0.04, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_button"]
+bg_color = Color(0.13, 0.1, 0.07, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_button_hover"]
+bg_color = Color(0.24, 0.17, 0.09, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_title"]
+font_size = 16
+font_color = Color(0.12, 0.08, 0.04, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_summary"]
+font_size = 11
+font_color = Color(0.2, 0.12, 0.05, 1)
+
+[node name="LootBox" type="Control"]
+process_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+theme = ExtResource("2_theme")
+script = ExtResource("1_loot")
+
+[node name="Overlay" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBox_overlay")
+
+[node name="TitleLabel" type="Label" parent="."]
+z_index = 10
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -180.0
+offset_top = 38.0
+offset_right = 180.0
+offset_bottom = 64.0
+text = "ITEM BOX"
+label_settings = SubResource("LabelSettings_title")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SummaryLabel" type="Label" parent="."]
+unique_name_in_owner = true
+z_index = 10
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -180.0
+offset_top = 64.0
+offset_right = 180.0
+offset_bottom = 84.0
+text = "아이템 0개 / +0 G"
+label_settings = SubResource("LabelSettings_summary")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BoxPanel" type="Panel" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 110.0
+offset_top = 138.0
+offset_right = 530.0
+offset_bottom = 242.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_box")
+
+[node name="PhysicsRoot" type="Node2D" parent="."]
+unique_name_in_owner = true
+z_index = 5
+
+[node name="BoxRoot" type="Node2D" parent="PhysicsRoot"]
+unique_name_in_owner = true
+position = Vector2(320, 190)
+
+[node name="SellButton" type="Button" parent="."]
+unique_name_in_owner = true
+z_index = 20
+layout_mode = 0
+offset_left = 246.0
+offset_top = 260.0
+offset_right = 394.0
+offset_bottom = 286.0
+theme_override_styles/normal = SubResource("StyleBox_button")
+theme_override_styles/hover = SubResource("StyleBox_button_hover")
+theme_override_styles/pressed = SubResource("StyleBox_button_hover")
+theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
+theme_override_colors/font_hover_color = Color(1, 0.93, 0.78, 1)
+theme_override_colors/font_disabled_color = Color(0.55, 0.48, 0.4, 1)
+theme_override_font_sizes/font_size = 11
+text = "전부 팔기"

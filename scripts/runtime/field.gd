@@ -15,23 +15,18 @@ const FIELD_SHRINE_SCENE: PackedScene = preload("res://scenes/objects/field_shri
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const COMPANION_SCENE: PackedScene = preload("res://scenes/companion.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
-const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tres")
-const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
-const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
-const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.png")
 
 ## Fixed world-map size for every field.
 const FIELD_SIZE: Vector2 = Vector2(720, 405)
 const TILE_SIZE: int = 16
 
-## Field unfolds from a tight DQ1-style frame (stage 1) out to a sprawl
-## (~stage 9), matching the rest of the run-intensity curve. Step matches
-## STAGE_DURATION_STEP rhythm: every stage grows in lockstep with the
-## duration bump until both cap out.
+## Field unfolds from a tight opening frame into a sprawl gradually.
+## Keep the per-stage step small so stage 2 feels like a nudge, not a genre
+## change.
 const FIELD_SIZE_START: Vector2 = Vector2(480, 270)
 const FIELD_SIZE_END: Vector2 = Vector2(1200, 675)
-const FIELD_SIZE_STAGE_STEP: Vector2 = Vector2(90, 50.625)
+const FIELD_SIZE_STAGE_STEP: Vector2 = Vector2(45, 25.3125)
 const SPAWN_MARGIN: float = 48.0
 ## Don't drop slimes within this radius of the player on stage start.
 const PARTY_SAFE_RADIUS: float = 80.0
@@ -53,20 +48,19 @@ const BASE_FIELD_AREA: float = FIELD_SIZE.x * FIELD_SIZE.y
 @export var large_forest_max_trees: int = 200
 @export var scattered_tree_count: int = 8
 @export var spawn_interval: float = 2.5
-@export var spawn_batch_size: int = 5
-@export var entry_burst_bonus: int = 5
-@export var crowd_growth_per_wave: int = 2
-@export var max_crowd_pressure: int = 18
+@export var spawn_batch_size: int = 1
+@export var entry_burst_bonus: int = 0
+@export var crowd_growth_per_wave: int = 1
+@export var max_crowd_pressure: int = 4
 
 ## ─── Continuous time-based field intensity ──────────────────────────
-## The field gets meaner over the 30-minute target — spawn cadence
-## tightens and the simultaneous-enemy cap grows. Both knobs ride on
-## GameState.run_intensity(), so curves stay aligned with enemy stats.
-const SPAWN_INTERVAL_START: float = 1.65
-const SPAWN_INTERVAL_END: float = 0.65
-const ENEMY_CAP_TIME_BONUS_END: int = 30
-const STAGE_DURATION_START: float = 20.0
-const STAGE_DURATION_END: float = 60.0
+## The field gets meaner over the 30-minute target, but early stages should
+## climb in small, readable steps.
+const SPAWN_INTERVAL_START: float = 3.2
+const SPAWN_INTERVAL_END: float = 1.25
+const ENEMY_CAP_TIME_BONUS_END: int = 12
+const STAGE_DURATION_START: float = 25.0
+const STAGE_DURATION_END: float = 75.0
 const STAGE_DURATION_STEP: float = 5.0
 ## Town tiles are disabled while the Brotato-style wave timer drives town
 ## visits. Flip this true if we want walk-in town tiles back later.
@@ -555,26 +549,12 @@ func _refill_enemy_population(max_to_spawn: int) -> void:
 		_spawn_field_enemy(_enemy_data_for_stage(GameState.effective_stage()))
 
 
-func debug_spawn_all_enemy_types() -> int:
-	var enemy_types: Array[EnemyData] = [
-		SLIME_DATA,
-		SLIME_CHASER_DATA,
-		BAT_DATA,
-		ORC_DATA,
-		BLADE_BUG_DATA,
-	]
-	for data: EnemyData in enemy_types:
-		_spawn_field_enemy(data)
-	return enemy_types.size()
-
-
 func _desired_enemy_count() -> int:
 	if GameState.current_stage <= 1:
 		return peaceful_start_enemies
 	var base: int = _enemy_count_for_stage(GameState.effective_stage())
 	# Time-based crowd bump on top of stage/area math. At 30 min the
-	# field carries ~16 extra simultaneous enemies, so the threat is
-	# "many small things at once" rather than "one giant statline".
+	# field carries a controlled extra crowd without spiking stage 2.
 	var t: float = clampf(GameState.run_intensity(), 0.0, 1.0)
 	var time_bonus: int = int(round(t * float(ENEMY_CAP_TIME_BONUS_END)))
 	return base + time_bonus + _crowd_pressure
@@ -593,39 +573,17 @@ func _spawn_field_enemy(data: EnemyData) -> void:
 func _enemy_count_for_stage(_stage: int) -> int:
 	var field_area: float = _field_size.x * _field_size.y
 	var area_ratio: float = field_area / BASE_FIELD_AREA
-	var area_bonus: int = int(round((area_ratio - 1.0) * enemies_added_per_field_area))
-	return peaceful_start_enemies + area_bonus
+	var area_bonus: int = maxi(0, int(round((area_ratio - 1.0) * enemies_added_per_field_area)))
+	var stage_bonus: int = int(floor(float(maxi(0, _stage - 1)) / 3.0))
+	return peaceful_start_enemies + area_bonus + stage_bonus
 
 
-func _enemy_data_for_stage(stage: int) -> EnemyData:
-	var roll: float = randf()
-	if stage >= 5:
-		if roll < 0.16:
-			return BLADE_BUG_DATA
-		if roll < 0.32:
-			return ORC_DATA
-		if roll < 0.52:
-			return BAT_DATA
-		if roll < 0.76:
-			return SLIME_CHASER_DATA
-		return SLIME_DATA
-	if stage >= 3:
-		if roll < 0.30:
-			return BAT_DATA
-		if roll < 0.55:
-			return SLIME_CHASER_DATA
-		return SLIME_DATA
-	if stage >= 2:
-		if roll < 0.4:
-			return SLIME_CHASER_DATA
-		return SLIME_DATA
+func _enemy_data_for_stage(_stage: int) -> EnemyData:
 	return SLIME_DATA
 
 
 func _random_spawn_position_for_enemy(data: EnemyData, avoid: Vector2) -> Vector2:
-	if data == BAT_DATA:
-		return _random_forest_position(avoid)
-	if data == SLIME_DATA or data == SLIME_CHASER_DATA:
+	if data == SLIME_DATA:
 		return _random_grassland_position(avoid)
 	return _random_safe_position(avoid)
 

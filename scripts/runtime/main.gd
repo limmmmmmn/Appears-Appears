@@ -230,8 +230,6 @@ func _set_manual_pause(is_paused: bool) -> void:
 
 ## F1 = instant stage clear (skip combat to test town)
 ## F2 = stress spawn 20 battle windows
-## F3 = spawn one of each field enemy type
-## F4 = toggle auto_battle skill (manual DQ1 mode vs auto windows)
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if get_tree().paused:
@@ -244,10 +242,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				EventBus.stage_cleared.emit(GameState.current_stage)
 			KEY_F2:
 				_debug_stress_spawn(20)
-			KEY_F3:
-				_debug_spawn_all_enemy_types()
-			KEY_F4:
-				_debug_toggle_auto_battle()
 
 
 func _debug_stress_spawn(count: int) -> void:
@@ -257,29 +251,3 @@ func _debug_stress_spawn(count: int) -> void:
 	for i in count:
 		mgr.spawn_battle(SLIME_DATA)
 	print("[main] DEBUG: spawned %d battle windows (active=%d)" % [count, mgr.active_window_count()])
-
-
-func _debug_spawn_all_enemy_types() -> void:
-	var spawned_count: int = _field.debug_spawn_all_enemy_types()
-	print("[main] DEBUG: spawned %d field enemy types" % spawned_count)
-
-
-## Flip the auto_battle skill on/off so we can sanity-check both encounter
-## paths in one sitting. The skill is a single-level on/off card — adding it
-## once is enough to leave manual mode; stripping the entry from
-## active_modifiers puts the player back in DQ1 land.
-func _debug_toggle_auto_battle() -> void:
-	if GameState.is_manual_battle_mode():
-		var mod: ModifierData = ModifierDB.get_by_id(GameState.AUTO_BATTLE_ID)
-		if mod == null:
-			push_warning("[main] DEBUG: auto_battle modifier missing from DB")
-			return
-		GameState.add_modifier(mod)
-		print("[main] DEBUG: auto_battle ON — encounters now use battle windows")
-		return
-	var kept: Array[ModifierData] = []
-	for entry: ModifierData in GameState.active_modifiers:
-		if entry.id != GameState.AUTO_BATTLE_ID:
-			kept.append(entry)
-	GameState.active_modifiers = kept
-	print("[main] DEBUG: auto_battle OFF — encounters now open the manual screen")

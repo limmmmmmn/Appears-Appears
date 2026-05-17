@@ -6,11 +6,6 @@ extends Control
 
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/enemy.tscn")
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
-const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
-const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tres")
-const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
-const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
-const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 
 @export var enemy_data: EnemyData
 @export var turn_interval: float = 0.5
@@ -28,20 +23,9 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 @onready var _turn_timer: Timer = $TurnTimer
 @onready var _background: Panel = $Background
 @onready var _log_panel: Panel = $LogPanel
-@onready var _command_panel: Panel = %CommandPanel
-@onready var _command_cursor: ColorRect = %CommandCursor
-@onready var _command_title: Label = %CommandTitle
-@onready var _command_fight: Label = %CommandFight
-@onready var _command_spell: Label = %CommandSpell
-@onready var _command_run: Label = %CommandRun
-@onready var _command_item: Label = %CommandItem
 
 const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
-const COMMAND_FIGHT: StringName = &"fight"
-const COMMAND_SPELL: StringName = &"spell"
-const COMMAND_RUN: StringName = &"run"
-const COMMAND_ITEM: StringName = &"item"
 
 const BASE_WINDOW_SIZE: Vector2 = Vector2(96.0, 72.0)
 const FUSION_EXTRA_WINDOW_SIZE: Vector2 = Vector2(32.0, 24.0)
@@ -62,8 +46,6 @@ const DIAMOND_EDGE_WEIGHT: float = 0.5
 const CRASH_FLASH_COLOR: Color = Color(1.0, 0.48, 0.12, 1.0)
 const WINDOW_FLASH_HOLD_DURATION: float = 0.16
 const WINDOW_FLASH_FADE_DURATION: float = 0.42
-const BASE_ENEMY_REPEAT_CHANCE: float = 0.68
-const STRONGER_SUPPORT_CHANCE: float = 0.06
 const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const HERO_HEAVY_STRIKE_MP_COST: int = 2
 const HERO_HOIMI_MP_COST: int = 3
@@ -81,16 +63,6 @@ const IMPACT_MESSAGE_DELAY: float = 0.16
 const RESULT_MESSAGE_DURATION: float = 0.42
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
 const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1.0)
-const COMMAND_TEXT_COLOR: Color = Color(1, 1, 1, 1)
-const COMMAND_ACTIVE_TEXT_COLOR: Color = Color(0, 0, 0, 1)
-const COMMAND_PANEL_HEIGHT: float = 34.0
-const COMMAND_PANEL_GAP: float = 2.0
-const COMMAND_PANEL_MIN_WIDTH: float = 112.0
-const COMMAND_PANEL_MAX_WIDTH: float = 168.0
-const COMMAND_PANEL_SIDE_PADDING: float = 8.0
-const COMMAND_PANEL_TOP_PADDING: float = 7.0
-const COMMAND_ROW_HEIGHT: float = 12.0
-const COMMAND_PRESS_SECONDS: float = 0.18
 const DEFAULT_WINDOW_BG: Color = Color(0.95, 0.78, 0.14, 1.0)
 const SPLIT_HANDLE_SIZE: Vector2 = Vector2(8.0, 8.0)
 const SPLIT_HANDLE_COLOR: Color = Color(1.0, 0.9, 0.2, 1.0)
@@ -110,14 +82,6 @@ const WINDOW_BG_BY_ENEMY_ID: Dictionary = {
 	&"orc": Color(0.98, 0.66, 0.16, 1.0),
 	&"blade_bug": Color(0.72, 0.22, 0.2, 1.0),
 }
-const ENEMY_TIER_BY_ID: Dictionary = {
-	&"slime": 0,
-	&"slime_chaser": 1,
-	&"bat": 2,
-	&"orc": 3,
-	&"blade_bug": 3,
-}
-
 var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
 var _running: bool = false
@@ -140,16 +104,12 @@ var _spin_pinned: bool = false
 var _pin_visual: Control
 var _split_handle_nodes: Array[Control] = []
 var _split_handles_visible: bool = false
-var _command_labels: Dictionary = {}
-var _command_press_tween: Tween
-var _active_command_label: Label
 
 
 func _ready() -> void:
 	_name_label.hide()
 	_hp_label.hide()
 	_configure_log_label()
-	_configure_command_panel()
 	_apply_card_color_chrome()
 	_turn_timer.wait_time = turn_interval
 	_turn_timer.timeout.connect(_on_turn_tick)
@@ -259,7 +219,6 @@ func get_expected_window_size() -> Vector2:
 func slide_to(target: Vector2) -> void:
 	if _slide_tween and _slide_tween.is_valid():
 		_slide_tween.kill()
-	_layout_command_panel()
 	var tween: Tween = create_tween()
 	_slide_tween = tween
 	tween.tween_interval(slide_delay)
@@ -271,7 +230,6 @@ func slide_to(target: Vector2) -> void:
 func settle_to(target: Vector2, duration: float = 0.22) -> void:
 	if _slide_tween and _slide_tween.is_valid():
 		_slide_tween.kill()
-	_layout_command_panel()
 	_slide_tween = create_tween()
 	_slide_tween.tween_property(self, "position", target, duration)\
 		.set_trans(Tween.TRANS_SINE)\
@@ -282,7 +240,6 @@ func push_to(target: Vector2) -> void:
 	if _slide_tween and _slide_tween.is_valid():
 		_slide_tween.kill()
 	position = target
-	_layout_command_panel()
 
 
 func pin_window_spin() -> bool:
@@ -597,7 +554,6 @@ func _apply_fusion_size_bonus() -> void:
 	var fusion_size: Vector2 = _cap_window_size(size + FUSION_EXTRA_WINDOW_SIZE)
 	custom_minimum_size = fusion_size
 	size = fusion_size
-	_layout_command_panel()
 	_refresh_spin_pivot()
 	_position_pin_visual()
 	_enemy_anchor.position = Vector2(
@@ -754,83 +710,6 @@ func _configure_log_label() -> void:
 	_log_label.label_settings = settings
 
 
-func _configure_command_panel() -> void:
-	_command_labels = {
-		COMMAND_FIGHT: _command_fight,
-		COMMAND_SPELL: _command_spell,
-		COMMAND_RUN: _command_run,
-		COMMAND_ITEM: _command_item,
-	}
-	for label in [_command_title, _command_fight, _command_spell, _command_run, _command_item]:
-		_apply_label_color(label as Label, COMMAND_TEXT_COLOR)
-	_command_cursor.visible = false
-	_command_cursor.color = Color.WHITE
-	_layout_command_panel()
-
-
-func _layout_command_panel() -> void:
-	if _command_panel == null or not is_instance_valid(_command_panel):
-		return
-	var panel_width: float = clampf(size.x + 28.0, COMMAND_PANEL_MIN_WIDTH, COMMAND_PANEL_MAX_WIDTH)
-	_command_panel.size = Vector2(panel_width, COMMAND_PANEL_HEIGHT)
-	var panel_y: float = -COMMAND_PANEL_HEIGHT - COMMAND_PANEL_GAP
-	# When the battle window hugs the top of the screen, tuck the COMMAND
-	# box into the window instead of letting it disappear off-screen.
-	if position.y + panel_y < 2.0:
-		panel_y = 2.0
-	_command_panel.position = Vector2(floor((size.x - panel_width) * 0.5), panel_y)
-
-	_command_title.position = Vector2.ZERO + Vector2(0.0, -6.0)
-	_command_title.size = Vector2(panel_width, 10.0)
-
-	var col_width: float = (panel_width - COMMAND_PANEL_SIDE_PADDING * 2.0) * 0.5
-	var right_x: float = COMMAND_PANEL_SIDE_PADDING + col_width
-	_set_command_label_rect(_command_fight, Vector2(COMMAND_PANEL_SIDE_PADDING, COMMAND_PANEL_TOP_PADDING), Vector2(col_width, COMMAND_ROW_HEIGHT))
-	_set_command_label_rect(_command_spell, Vector2(right_x, COMMAND_PANEL_TOP_PADDING), Vector2(col_width, COMMAND_ROW_HEIGHT))
-	_set_command_label_rect(_command_run, Vector2(COMMAND_PANEL_SIDE_PADDING, COMMAND_PANEL_TOP_PADDING + COMMAND_ROW_HEIGHT), Vector2(col_width, COMMAND_ROW_HEIGHT))
-	_set_command_label_rect(_command_item, Vector2(right_x, COMMAND_PANEL_TOP_PADDING + COMMAND_ROW_HEIGHT), Vector2(col_width, COMMAND_ROW_HEIGHT))
-
-
-func _set_command_label_rect(label: Label, label_position: Vector2, label_size: Vector2) -> void:
-	if label == null:
-		return
-	label.position = label_position
-	label.size = label_size
-
-
-func _press_command(command: StringName) -> void:
-	if _command_panel == null or not is_instance_valid(_command_panel):
-		return
-	var label := _command_labels.get(command, null) as Label
-	if label == null or not is_instance_valid(label):
-		return
-	if _command_press_tween and _command_press_tween.is_valid():
-		_command_press_tween.kill()
-	_clear_command_press()
-	_active_command_label = label
-	_command_cursor.visible = true
-	_command_cursor.position = label.position + Vector2(1.0, 1.0)
-	_command_cursor.size = Vector2(maxf(1.0, label.size.x - 3.0), maxf(1.0, label.size.y - 2.0))
-	_command_cursor.pivot_offset = _command_cursor.size * 0.5
-	_command_cursor.scale = Vector2(0.9, 0.86)
-	_command_cursor.modulate.a = 1.0
-	_apply_label_color(label, COMMAND_ACTIVE_TEXT_COLOR)
-	_command_press_tween = create_tween()
-	_command_press_tween.tween_property(_command_cursor, "scale", Vector2.ONE, 0.05)\
-		.set_trans(Tween.TRANS_BACK)\
-		.set_ease(Tween.EASE_OUT)
-	_command_press_tween.tween_interval(COMMAND_PRESS_SECONDS)
-	_command_press_tween.tween_callback(_clear_command_press)
-
-
-func _clear_command_press() -> void:
-	if _active_command_label != null and is_instance_valid(_active_command_label):
-		_apply_label_color(_active_command_label, COMMAND_TEXT_COLOR)
-	_active_command_label = null
-	if _command_cursor != null and is_instance_valid(_command_cursor):
-		_command_cursor.visible = false
-
-
 func _window_bg_color() -> Color:
 	if enemy_data == null:
 		return DEFAULT_WINDOW_BG
@@ -915,50 +794,9 @@ func _roll_enemy_count_for_window() -> int:
 func _plan_enemy_mix(total: int) -> Array[EnemyData]:
 	var planned: Array[EnemyData] = []
 	for i in total:
-		if i == 0 or randf() < BASE_ENEMY_REPEAT_CHANCE:
-			planned.append(enemy_data)
-		else:
-			planned.append(_pick_support_enemy())
+		planned.append(enemy_data)
 	planned.shuffle()
 	return planned
-
-
-func _pick_support_enemy() -> EnemyData:
-	var pool: Array[EnemyData] = _support_enemy_pool()
-	return enemy_data if pool.is_empty() else pool.pick_random()
-
-
-func _support_enemy_pool() -> Array[EnemyData]:
-	var pool: Array[EnemyData] = []
-	var base_tier: int = _enemy_tier(enemy_data)
-	for candidate: EnemyData in _available_support_enemies():
-		if candidate == enemy_data:
-			continue
-		var candidate_tier: int = _enemy_tier(candidate)
-		if candidate_tier <= base_tier or randf() < STRONGER_SUPPORT_CHANCE:
-			pool.append(candidate)
-	return pool
-
-
-func _available_support_enemies() -> Array[EnemyData]:
-	# Drive the support pool off the *effective* stage so the time-based
-	# difficulty bumps also unlock new species in battle window mixes.
-	var stage: int = GameState.effective_stage()
-	var out: Array[EnemyData] = [SLIME_DATA]
-	if stage >= 2:
-		out.append(SLIME_CHASER_DATA)
-	if stage >= 3:
-		out.append(BAT_DATA)
-	if stage >= 5:
-		out.append(BLADE_BUG_DATA)
-		out.append(ORC_DATA)
-	return out
-
-
-func _enemy_tier(data: EnemyData) -> int:
-	if data == null:
-		return 0
-	return int(ENEMY_TIER_BY_ID.get(data.id, 0))
 
 
 func _encounter_display_name() -> String:
@@ -1090,7 +928,6 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
 		return 0
 	var member: CharacterData = GameState.party[attacker_index]
-	_press_command(COMMAND_FIGHT)
 	_log_label.text = "%s의 공격!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
@@ -1121,7 +958,6 @@ func _mage_firewall_attack(attacker_index: int) -> void:
 	if target_count <= 0:
 		return
 	EventBus.party_skill_activated.emit(attacker_index, &"fireburst")
-	_press_command(COMMAND_SPELL)
 	_log_label.text = "%s's Firewall!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running:
@@ -1149,7 +985,6 @@ func _priest_heal_spell(attacker_index: int) -> void:
 	var member: CharacterData = GameState.party[attacker_index]
 	var target: CharacterData = GameState.party[heal_target]
 	EventBus.party_skill_activated.emit(attacker_index, &"battle_prayer")
-	_press_command(COMMAND_SPELL)
 	_log_label.text = "%s's Heal!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running:
@@ -1173,7 +1008,6 @@ func _hero_hoimi_spell(attacker_index: int) -> void:
 	var member: CharacterData = GameState.party[attacker_index]
 	var target: CharacterData = GameState.party[heal_target]
 	EventBus.party_skill_activated.emit(attacker_index, &"hoimi")
-	_press_command(COMMAND_SPELL)
 	_log_label.text = "%s's Hoimi!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running:
@@ -1193,7 +1027,6 @@ func _mage_lightning_attack(attacker_index: int, target_enemy: Enemy) -> void:
 		return
 	var member: CharacterData = GameState.party[attacker_index]
 	EventBus.party_skill_activated.emit(attacker_index, &"lightning_bolt")
-	_press_command(COMMAND_SPELL)
 	_log_label.text = "%s's Lightning Bolt!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
@@ -1232,7 +1065,6 @@ func _priest_holy_strike(attacker_index: int, target_enemy: Enemy) -> void:
 		return
 	var member: CharacterData = GameState.party[attacker_index]
 	EventBus.party_skill_activated.emit(attacker_index, &"holy_strike")
-	_press_command(COMMAND_SPELL)
 	_log_label.text = "%s's Holy Strike!" % member.display_name
 	await _battle_pause(ATTACK_CALL_DURATION)
 	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
@@ -1280,7 +1112,6 @@ func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	if stolen <= 0:
 		return
 	GameState.add_gold(stolen)
-	_press_command(COMMAND_ITEM)
 	_log_label.text = "%s는 %dG를 훔쳤다!" % [GameState.party[attacker_index].display_name, stolen]
 	await _battle_pause(RESULT_MESSAGE_DURATION)
 
@@ -1467,7 +1298,6 @@ func _apply_enemy_layout(total: int) -> void:
 	var next_size := _layout_size_for_enemy_count(total)
 	custom_minimum_size = next_size
 	size = next_size
-	_layout_command_panel()
 	_enemy_anchor.position = Vector2(
 		next_size.x * 0.5,
 		ENEMY_AREA_TOP + (next_size.y - ENEMY_AREA_BOTTOM - ENEMY_AREA_TOP) * 0.5

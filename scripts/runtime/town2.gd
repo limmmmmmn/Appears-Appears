@@ -14,17 +14,9 @@ signal closed
 const CARD_SCENE: PackedScene = preload("res://scenes/ui/town2_card.tscn")
 const LEVEL_UP_STAT_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_stat_panel.tscn")
 const LEVEL_UP_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_panel.tscn")
+const LOOT_BOX_SCENE: PackedScene = preload("res://scenes/ui/loot_box.tscn")
 const CARD_SLOTS: int = 4
 const REROLL_COST: int = 5
-const LOOT_BIN_POSITION: Vector2 = Vector2(320.0, 312.0)
-const LOOT_BIN_SIZE: Vector2 = Vector2(172.0, 28.0)
-const LOOT_DROP_START: Vector2 = Vector2(320.0, 248.0)
-const LOOT_BODY_SIZE: Vector2 = Vector2(18.0, 18.0)
-const LOOT_GRAVITY: float = 920.0
-const LOOT_BOUNCE: float = 0.34
-const LOOT_FRICTION: float = 0.82
-const LOOT_SELL_TICK_SECONDS: float = 0.025
-const LOOT_SELL_MAX_TICKS: int = 34
 
 ## Stat-card ids that don't get a Trello row — the owner's stat panel already
 ## shows the buff (ATK number going up), so an extra "ATK ×3" line would be
@@ -56,14 +48,9 @@ var _all_slots: Array[Town2Slot] = []
 var _title_override: String = ""
 var _stat_panel: LevelUpStatPanel
 var _level_up_panel: LevelUpPanel
+var _loot_box: LootBox
 var _pending_level_up_choice_rounds: int = 0
 var _settled_levels_gained: int = 0
-var _loot_bin_layer: Node2D
-var _loot_box_root: Node2D
-var _loot_physics_bodies: Array[Dictionary] = []
-var _sell_loot_button: Button
-var _loot_sell_value: int = 0
-var _loot_sale_running: bool = false
 
 
 func setup(title_override: String = "") -> void:
@@ -81,25 +68,20 @@ func _ready() -> void:
 	_refresh_gold_label()
 	_register_slots()
 	_seed_slots_from_active_modifiers()
-	_build_top_cards()
-	_refresh_offers()
 	_continue_button.pressed.connect(_on_continue_pressed)
 	_reroll_button.pressed.connect(_on_reroll_pressed)
 	_reroll_button.text = "Reroll  %d G" % REROLL_COST
-	_build_loot_bin()
+	_set_shop_visible(false)
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.party_changed.connect(_on_party_changed)
 	EventBus.party_member_hp_changed.connect(_on_party_member_hp_changed)
 	EventBus.party_member_mp_changed.connect(_on_party_member_mp_changed)
 	EventBus.modifier_purchase_succeeded.connect(_on_modifier_purchase_succeeded)
 	EventBus.modifier_purchase_failed.connect(_on_modifier_purchase_failed)
-	_focus_first_available_card()
 	if _settled_levels_gained > 0:
 		call_deferred("_open_town_level_up_settlement")
-
-
-func _physics_process(delta: float) -> void:
-	_tick_loot_physics(delta)
+	else:
+		call_deferred("_open_loot_box_sequence")
 
 
 # ─── Slot wiring ──────────────────────────────────────────────────────
@@ -150,7 +132,23 @@ func _refresh_all_slots() -> void:
 
 
 # ─── Card row ─────────────────────────────────────────────────────────
+func _open_shop() -> void:
+	if _cards.is_empty():
+		_build_top_cards()
+	_set_shop_visible(true)
+	_refresh_offers()
+	_focus_first_available_card()
+
+
+func _set_shop_visible(is_visible: bool) -> void:
+	_top_zone.visible = is_visible
+	_reroll_button.visible = is_visible
+	_continue_button.visible = is_visible
+
+
 func _build_top_cards() -> void:
+	if not _cards.is_empty():
+		return
 	_cards.clear()
 	# Top zone is now cards-only — reroll lives in the bottom bar.
 	for i in CARD_SLOTS:
@@ -257,8 +255,7 @@ func _open_town_level_up_offer_sequence() -> void:
 	if _pending_level_up_choice_rounds <= 0:
 		_seed_slots_from_active_modifiers()
 		_refresh_all_slots()
-		_refresh_offers()
-		_focus_first_available_card()
+		call_deferred("_open_loot_box_sequence")
 		return
 	_pending_level_up_choice_rounds -= 1
 	var offers: Array[ModifierData] = GameState.level_up_card_offers()
@@ -281,220 +278,23 @@ func _on_town_level_up_modifier_chosen(_member_index: int, mod: ModifierData) ->
 	call_deferred("_open_town_level_up_offer_sequence")
 
 
-# ─── Loot Bin ─────────────────────────────────────────────────────────
-func _build_loot_bin() -> void:
+# ─── Loot Box ─────────────────────────────────────────────────────────
+func _open_loot_box_sequence() -> void:
 	var items: Array[ItemData] = GameState.inventory_items()
 	if items.is_empty():
+		_open_shop()
 		return
-	_loot_sell_value = GameState.inventory_sell_value()
-	_loot_bin_layer = Node2D.new()
-	_loot_bin_layer.name = "LootBinPhysics"
-	_loot_bin_layer.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-	add_child(_loot_bin_layer)
-	_build_open_loot_box()
-	_drop_loot_items(items)
-	_build_sell_loot_button(items.size())
-
-
-func _build_open_loot_box() -> void:
-	var box_root := Node2D.new()
-	_loot_box_root = box_root
-	box_root.name = "OpenLootBox"
-	box_root.position = LOOT_BIN_POSITION
-	box_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-	_loot_bin_layer.add_child(box_root)
-	_add_loot_box_wall(box_root, Vector2(0.0, LOOT_BIN_SIZE.y * 0.5), Vector2(LOOT_BIN_SIZE.x, 7.0), Color(0.44, 0.26, 0.12))
-	_add_loot_box_wall(box_root, Vector2(-LOOT_BIN_SIZE.x * 0.5, 3.0), Vector2(7.0, LOOT_BIN_SIZE.y), Color(0.52, 0.31, 0.15))
-	_add_loot_box_wall(box_root, Vector2(LOOT_BIN_SIZE.x * 0.5, 3.0), Vector2(7.0, LOOT_BIN_SIZE.y), Color(0.36, 0.2, 0.1))
-	_add_loot_box_floor_visual(box_root)
-
-
-func _add_loot_box_wall(parent: Node2D, local_position: Vector2, size: Vector2, color: Color) -> void:
-	var body := StaticBody2D.new()
-	body.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-	body.position = local_position
-	parent.add_child(body)
-	var shape := RectangleShape2D.new()
-	shape.size = size
-	var collision := CollisionShape2D.new()
-	collision.shape = shape
-	body.add_child(collision)
-	var visual := ColorRect.new()
-	visual.color = color
-	visual.size = size
-	visual.position = -size * 0.5
-	visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.add_child(visual)
-
-
-func _add_loot_box_floor_visual(parent: Node2D) -> void:
-	var back := Polygon2D.new()
-	back.color = Color(0.68, 0.43, 0.2, 0.8)
-	back.polygon = PackedVector2Array([
-		Vector2(-LOOT_BIN_SIZE.x * 0.5, -LOOT_BIN_SIZE.y * 0.5),
-		Vector2(LOOT_BIN_SIZE.x * 0.5, -LOOT_BIN_SIZE.y * 0.5),
-		Vector2(LOOT_BIN_SIZE.x * 0.5 - 8.0, LOOT_BIN_SIZE.y * 0.5),
-		Vector2(-LOOT_BIN_SIZE.x * 0.5 + 8.0, LOOT_BIN_SIZE.y * 0.5),
-	])
-	back.z_index = -1
-	parent.add_child(back)
-
-
-func _drop_loot_items(items: Array[ItemData]) -> void:
-	_loot_physics_bodies.clear()
-	for i in items.size():
-		var item: ItemData = items[i]
-		var body := RigidBody2D.new()
-		body.name = "LootItem"
-		body.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
-		body.freeze = true
-		body.collision_layer = 0
-		body.collision_mask = 0
-		body.position = LOOT_DROP_START + Vector2(randf_range(-64.0, 64.0), -float(i) * 7.0)
-		body.rotation = randf_range(-0.7, 0.7)
-		var velocity := Vector2(randf_range(-45.0, 45.0), randf_range(-10.0, 12.0))
-		var spin: float = randf_range(-6.0, 6.0)
-		_loot_bin_layer.add_child(body)
-		var shape := RectangleShape2D.new()
-		shape.size = LOOT_BODY_SIZE
-		var collision := CollisionShape2D.new()
-		collision.shape = shape
-		body.add_child(collision)
-		if item != null and item.icon != null:
-			var sprite := Sprite2D.new()
-			sprite.texture = item.icon
-			sprite.scale = _loot_icon_scale(item.icon)
-			body.add_child(sprite)
-		else:
-			var fallback := ColorRect.new()
-			fallback.color = Color(0.95, 0.85, 0.35)
-			fallback.size = LOOT_BODY_SIZE
-			fallback.position = -LOOT_BODY_SIZE * 0.5
-			fallback.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			body.add_child(fallback)
-		_loot_physics_bodies.append({
-			"body": body,
-			"velocity": velocity,
-			"spin": spin,
-			"settled": false,
-		})
-
-
-func _tick_loot_physics(delta: float) -> void:
-	if _loot_sale_running or _loot_physics_bodies.is_empty() or not is_instance_valid(_loot_box_root):
-		return
-	var half_size: Vector2 = LOOT_BODY_SIZE * 0.5
-	var left: float = -LOOT_BIN_SIZE.x * 0.5 + half_size.x + 4.0
-	var right: float = LOOT_BIN_SIZE.x * 0.5 - half_size.x - 4.0
-	var bottom: float = LOOT_BIN_SIZE.y * 0.5 - half_size.y - 4.0
-	for i in _loot_physics_bodies.size():
-		var entry: Dictionary = _loot_physics_bodies[i]
-		var body := entry.get("body", null) as Node2D
-		if body == null or not is_instance_valid(body):
-			continue
-		var velocity: Vector2 = entry.get("velocity", Vector2.ZERO)
-		var spin: float = float(entry.get("spin", 0.0))
-		velocity.y += LOOT_GRAVITY * delta
-		body.position += velocity * delta
-		body.rotation += spin * delta
-
-		var local: Vector2 = _loot_box_root.to_local(body.position)
-		if local.y >= bottom:
-			local.y = bottom
-			body.position = _loot_box_root.to_global(local)
-			velocity.y = -absf(velocity.y) * LOOT_BOUNCE
-			velocity.x *= LOOT_FRICTION
-			spin *= 0.72
-			if absf(velocity.y) < 18.0:
-				velocity.y = 0.0
-		if local.y > -LOOT_BIN_SIZE.y * 0.5:
-			if local.x < left:
-				local.x = left
-				body.position = _loot_box_root.to_global(local)
-				velocity.x = absf(velocity.x) * LOOT_BOUNCE
-				spin *= -0.55
-			elif local.x > right:
-				local.x = right
-				body.position = _loot_box_root.to_global(local)
-				velocity.x = -absf(velocity.x) * LOOT_BOUNCE
-				spin *= -0.55
-		if local.y >= bottom and absf(velocity.y) < 1.0:
-			velocity.x = move_toward(velocity.x, 0.0, 80.0 * delta)
-			spin = move_toward(spin, 0.0, 6.0 * delta)
-		entry["velocity"] = velocity
-		entry["spin"] = spin
-		_loot_physics_bodies[i] = entry
-
-
-func _loot_icon_scale(texture: Texture2D) -> Vector2:
-	var texture_size: Vector2 = texture.get_size()
-	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
-		return Vector2.ONE
-	var longest: float = maxf(texture_size.x, texture_size.y)
-	return Vector2.ONE * (18.0 / longest)
-
-
-func _build_sell_loot_button(item_count: int) -> void:
-	_sell_loot_button = Button.new()
-	_sell_loot_button.name = "SellLootButton"
-	_sell_loot_button.text = "Sell Loot  +%d G" % _loot_sell_value
-	_sell_loot_button.tooltip_text = "장착하지 않은 아이템 %d개 판매" % item_count
-	_sell_loot_button.add_theme_font_size_override("font_size", 10)
-	_sell_loot_button.size = Vector2(118.0, 24.0)
-	_sell_loot_button.position = Vector2(406.0, 298.0)
-	_sell_loot_button.disabled = true
-	_sell_loot_button.pressed.connect(_on_sell_loot_pressed)
-	add_child(_sell_loot_button)
-	var tween: Tween = create_tween()
-	tween.tween_interval(0.85)
-	tween.tween_callback(func() -> void:
-		if is_instance_valid(_sell_loot_button):
-			_sell_loot_button.disabled = false
+	_loot_box = LOOT_BOX_SCENE.instantiate()
+	_loot_box.setup(items, GameState.inventory_sell_value())
+	add_child(_loot_box)
+	_loot_box.closed.connect(_on_loot_box_closed)
+	_loot_box.tree_exited.connect(func() -> void:
+		_loot_box = null
 	)
 
 
-func _on_sell_loot_pressed() -> void:
-	if _loot_sale_running or _loot_sell_value <= 0:
-		return
-	var sale_value: int = GameState.sell_inventory_items()
-	if sale_value <= 0:
-		return
-	_loot_sale_running = true
-	_sell_loot_button.disabled = true
-	_sell_loot_button.text = "Sold!"
-	_fade_loot_bodies()
-	_roll_gold_gain(sale_value)
-
-
-func _fade_loot_bodies() -> void:
-	if not is_instance_valid(_loot_bin_layer):
-		return
-	_loot_physics_bodies.clear()
-	for child: Node in _loot_bin_layer.get_children():
-		if child is RigidBody2D:
-			var body := child as RigidBody2D
-			body.freeze = true
-			var tween: Tween = body.create_tween().set_parallel(true)
-			tween.tween_property(body, "modulate:a", 0.0, 0.35)
-			tween.tween_property(body, "scale", Vector2(1.35, 0.55), 0.35)\
-				.set_trans(Tween.TRANS_BACK)\
-				.set_ease(Tween.EASE_IN)
-			tween.chain().tween_callback(body.queue_free)
-
-
-func _roll_gold_gain(amount: int) -> void:
-	var ticks: int = mini(LOOT_SELL_MAX_TICKS, maxi(1, amount))
-	var base: int = int(floor(float(amount) / float(ticks)))
-	var remainder: int = amount - base * ticks
-	for i in ticks:
-		var gain: int = base + (1 if i < remainder else 0)
-		if gain > 0:
-			GameState.add_gold(gain)
-		await get_tree().create_timer(LOOT_SELL_TICK_SECONDS).timeout
-	if is_instance_valid(_sell_loot_button):
-		_sell_loot_button.queue_free()
-	_sell_loot_button = null
-	_loot_sale_running = false
+func _on_loot_box_closed() -> void:
+	_open_shop()
 
 
 # ─── Reroll / Recovery ────────────────────────────────────────────────

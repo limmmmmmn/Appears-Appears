@@ -80,10 +80,6 @@ const AUTO_SKILL_IDS_BY_MEMBER_ID: Dictionary = {
 }
 const BUMP_ATTACK_ID: StringName = &"bump_attack"
 const FIELD_MOVEMENT_ID: StringName = &"field_movement"
-## When this skill is owned, encounters skip the manual DQ1-style battle
-## screen and use the regular auto battle windows. Default-unlearned → the
-## entire opening of the game is a slow command-driven tutorial.
-const AUTO_BATTLE_ID: StringName = &"auto_battle"
 const LEVEL_UP_PARTY_CARD_OFFER_IDS: Array[StringName] = [&"window_crash", &"bump_blessing", &"shockwave", &"window_fusion", &"window_spin", &"window_split", &"bouncy_ball", &"repulsion_wall"]
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
@@ -125,11 +121,6 @@ const DIFFICULTY_TICK_SECONDS: float = 30.0
 var _difficulty_elapsed: float = 0.0
 var _difficulty_tier_announced: int = 0
 var _active_battle_window_count: int = 0
-## Manual battle window is open. While true, field actors (player,
-## companions, field enemies) freeze in place via is_field_combat_locked,
-## but the stage timer / enemy spawner keep ticking so the run clock
-## still pressures the player even during a slow DQ1 fight.
-var _active_manual_battle_count: int = 0
 
 func _ready() -> void:
 	# Listen to bus events to keep counters fresh without coupling combat code.
@@ -474,17 +465,11 @@ func _apply_shared_level_gains(levels_gained: int, emit_level_up_signals: bool =
 # ─── Level-up cards / skills ──────────────────────────────────────────
 func level_up_card_offers() -> Array[ModifierData]:
 	var offers: Array[ModifierData] = []
-	# Auto-battle is the very first skill — until learned, every level-up
-	# offers it. It's the "unfolding" beat that turns the game from manual
-	# DQ1 fights into multi-window auto combat.
-	var auto_battle_unlearned: bool = modifier_level(AUTO_BATTLE_ID) <= 0
-	if auto_battle_unlearned:
-		_append_level_up_offer(offers, AUTO_BATTLE_ID)
 	var bump_attack_unlearned: bool = modifier_level(BUMP_ATTACK_ID) <= 0
-	if bump_attack_unlearned and not auto_battle_unlearned:
+	if bump_attack_unlearned:
 		_append_level_up_offer(offers, BUMP_ATTACK_ID)
 	var pool: Array[StringName] = []
-	if not auto_battle_unlearned and not bump_attack_unlearned:
+	if not bump_attack_unlearned:
 		for offer_id: StringName in LEVEL_UP_PARTY_CARD_OFFER_IDS:
 			pool.append(offer_id)
 	pool.shuffle()
@@ -756,26 +741,8 @@ func field_combat_movement_enabled() -> bool:
 	return modifier_level(FIELD_MOVEMENT_ID) > 0 or _stacked_bool_effect("field_combat_movement")
 
 
-## True until the player learns the auto_battle skill. While true, every
-## enemy encounter opens the manual DQ1-style command screen instead of
-## spawning a regular battle window. The skill unlock IS the unfolding beat
-## that turns the game from one-fight-at-a-time into the multi-window swarm.
-func is_manual_battle_mode() -> bool:
-	return modifier_level(AUTO_BATTLE_ID) <= 0
-
-
 func is_field_combat_locked() -> bool:
-	if _active_manual_battle_count > 0:
-		return true
 	return _active_battle_window_count > 0 and not field_combat_movement_enabled()
-
-
-func register_manual_battle() -> void:
-	_active_manual_battle_count += 1
-
-
-func unregister_manual_battle() -> void:
-	_active_manual_battle_count = maxi(0, _active_manual_battle_count - 1)
 
 
 func _on_battle_window_opened(_window: Node) -> void:
