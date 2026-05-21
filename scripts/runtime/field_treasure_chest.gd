@@ -17,6 +17,7 @@ var _tween: Tween
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
+	_collision_shape.scale = Vector2.ONE * GameState.pickup_range_multiplier()
 
 
 func reveal_with_pop() -> void:
@@ -53,9 +54,9 @@ func _on_body_entered(body: Node) -> void:
 	_collected = true
 	GameState.add_gold(gold_amount)
 	_spawn_gold_popup()
-	set_deferred("monitoring", false)
-	set_deferred("monitorable", false)
-	_collision_shape.set_deferred("disabled", true)
+	monitoring = false
+	monitorable = false
+	_collision_shape.disabled = true
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween().set_parallel(true)

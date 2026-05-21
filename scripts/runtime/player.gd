@@ -51,9 +51,9 @@ func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	if GameState.is_field_combat_locked():
+	if GameState.is_field_battle_paused():
 		velocity = Vector2.ZERO
-		_visual.set_velocity(Vector2.ZERO)
+		_visual.set_velocity(velocity)
 		return
 	var dir: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	velocity = dir * GameState.effective_move_speed(speed)

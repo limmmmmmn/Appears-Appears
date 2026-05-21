@@ -5,14 +5,13 @@
 [resource]
 script = ExtResource("1_script")
 id = &"battle_prayer"
-display_name = "Heal"
-description = "MP 4 소모. 다친 아군 하나의 HP를 회복한다."
+display_name = "Battle Prayer"
+description = "Priest deals 35% damage and heals the most wounded ally. Later levels give a smaller heal boost."
 cost = 20
-max_level = 3
 rarity = 1
 category = 1
 required_party_member_id = &"priest"
-level_up_only = true
 effect_data = {
+"priest_attack_mult": 0.35,
 "priest_heal_flat": 6
 }

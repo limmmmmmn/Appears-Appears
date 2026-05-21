@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"hero_blade"
-display_name = "용사의 칼날"
-description = "용사 공격력 +5. 누적 가능."
+display_name = "Sharper Blade"
+description = "+5 ATK to Hero. Stacks."
 cost = 6
 rarity = 0
 category = 0

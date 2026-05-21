@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"priest_blade"
-display_name = "사제의 메이스"
-description = "사제 공격력 +5. 누적 가능."
+display_name = "Sharper Blade"
+description = "+5 ATK to Priest. Stacks."
 cost = 6
 rarity = 0
 category = 0

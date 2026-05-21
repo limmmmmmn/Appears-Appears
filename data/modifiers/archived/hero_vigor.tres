@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"hero_vigor"
-display_name = "용사의 강철"
-description = "용사 최대 HP +10, 그만큼 회복."
+display_name = "Iron Body"
+description = "+10 max HP to Hero, and heal that much."
 cost = 6
 rarity = 0
 category = 0

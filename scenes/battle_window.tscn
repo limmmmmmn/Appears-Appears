@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/battle_window.gd" id="1_window"]
 
@@ -20,10 +20,6 @@ border_color = Color(0, 0, 0, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_text"]
 font_size = 8
-font_color = Color(0, 0, 0, 1)
-
-[sub_resource type="LabelSettings" id="LabelSettings_log"]
-font_size = 7
 font_color = Color(0, 0, 0, 1)
 
 [node name="BattleWindow" type="Control"]
@@ -88,7 +84,6 @@ offset_top = -24.0
 offset_right = -4.0
 offset_bottom = -4.0
 mouse_filter = 2
-clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
 [node name="LogLabel" type="Label" parent="LogPanel"]
@@ -98,17 +93,14 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 2.0
-offset_top = 2.0
+offset_top = 1.0
 offset_right = -2.0
-offset_bottom = -2.0
+offset_bottom = -1.0
 mouse_filter = 2
 text = ""
-label_settings = SubResource("LabelSettings_log")
+label_settings = SubResource("LabelSettings_text")
 horizontal_alignment = 1
 vertical_alignment = 1
-autowrap_mode = 1
-clip_text = true
-max_lines_visible = 1
 
 [node name="TurnTimer" type="Timer" parent="."]
 wait_time = 0.5

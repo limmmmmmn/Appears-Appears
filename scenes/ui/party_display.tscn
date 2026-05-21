@@ -1,0 +1,36 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/party_display.gd" id="1_party_display"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hero_box.tscn" id="2_hero_box"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_back"]
+bg_color = Color(0.03, 0.03, 0.04, 0.32)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0, 0, 0.55)
+
+[node name="PartyDisplay" type="Panel"]
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_back")
+script = ExtResource("1_party_display")
+hero_box_scene = ExtResource("2_hero_box")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 5.0
+offset_right = -6.0
+offset_bottom = -5.0
+mouse_filter = 2
+
+[node name="HeroBoxes" type="HBoxContainer" parent="Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+alignment = 1

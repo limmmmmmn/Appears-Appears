@@ -10,4 +10,3 @@ display_name = "Ring"
 slot = 4
 icon = ExtResource("2_icon")
 agility_bonus = 1
-crit_damage_bonus = 0.1

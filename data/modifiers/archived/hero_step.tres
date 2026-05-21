@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"hero_step"
-display_name = "용사의 보법"
-description = "용사가 적 공격을 15% 확률로 회피."
+display_name = "Quick Step"
+description = "+15% chance for Hero to dodge enemy attacks."
 cost = 12
 rarity = 1
 category = 1

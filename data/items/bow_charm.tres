@@ -10,4 +10,3 @@ display_name = "Bow Charm"
 slot = 4
 icon = ExtResource("2_icon")
 attack_bonus = 1
-crit_chance_bonus = 0.04

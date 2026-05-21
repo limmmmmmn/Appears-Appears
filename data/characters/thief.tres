@@ -13,5 +13,4 @@ attack_effect = ExtResource("3_effect")
 max_hp = 26
 max_mp = 8
 attack = 7
-defense = 1
 agility = 8

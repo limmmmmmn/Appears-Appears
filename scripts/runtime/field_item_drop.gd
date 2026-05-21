@@ -7,22 +7,20 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 
 @export var item: ItemData
 
-@onready var _shadow: Polygon2D = $Shadow
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _collision_shape: CollisionShape2D = $CollisionShape2D
 
 var _collected: bool = false
 var _base_y: float = 0.0
-var _shadow_base_y: float = 0.0
 var _bob_time: float = 0.0
 var _tween: Tween
 
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
+	_collision_shape.scale = Vector2.ONE * GameState.pickup_range_multiplier()
 	_apply_item()
 	_base_y = position.y
-	_shadow_base_y = _shadow.position.y
 
 
 func setup(drop_item: ItemData) -> void:
@@ -54,9 +52,7 @@ func _process(delta: float) -> void:
 	if _collected:
 		return
 	_bob_time += delta
-	var bob: float = sin(_bob_time * 5.0) * 1.5
-	position.y = _base_y + bob
-	_shadow.position.y = _shadow_base_y - bob
+	position.y = _base_y + sin(_bob_time * 5.0) * 1.5
 
 
 func _apply_item() -> void:
@@ -78,9 +74,9 @@ func _on_body_entered(body: Node) -> void:
 		return
 	_collected = true
 	_spawn_pickup_popup(equipped)
-	set_deferred("monitoring", false)
-	set_deferred("monitorable", false)
-	_collision_shape.set_deferred("disabled", true)
+	monitoring = false
+	monitorable = false
+	_collision_shape.disabled = true
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween().set_parallel(true)

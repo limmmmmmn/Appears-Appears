@@ -1,7 +1,6 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/field_item_drop.gd" id="1_drop"]
-[ext_resource type="Script" path="res://scripts/runtime/field_shadow.gd" id="2_shadow"]
 
 [sub_resource type="RectangleShape2D" id="RectShape_item"]
 size = Vector2(14, 14)
@@ -10,13 +9,6 @@ size = Vector2(14, 14)
 collision_layer = 0
 collision_mask = 1
 script = ExtResource("1_drop")
-
-[node name="Shadow" type="Polygon2D" parent="."]
-position = Vector2(0, 6)
-z_index = -1
-script = ExtResource("2_shadow")
-shadow_size = Vector2(12, 4)
-shadow_alpha = 0.32
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 centered = true

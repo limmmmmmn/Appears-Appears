@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"mage_blade"
-display_name = "마법사의 지팡이"
-description = "마법사 공격력 +5. 누적 가능."
+display_name = "Sharper Blade"
+description = "+5 ATK to Mage. Stacks."
 cost = 6
 rarity = 0
 category = 0

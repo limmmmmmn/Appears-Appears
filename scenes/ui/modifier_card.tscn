@@ -1,0 +1,155 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/modifier_card.gd" id="1_card"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_border"]
+bg_color = Color(0.12, 0.12, 0.16, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.75, 0.75, 0.78, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_portrait_bg"]
+bg_color = Color(0.05, 0.05, 0.08, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.3, 0.34, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_effect_bg"]
+bg_color = Color(0.18, 0.13, 0.05, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.55, 0.4, 0.15, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_title"]
+font_size = 9
+font_color = Color(1, 1, 1, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_body"]
+font_size = 7
+font_color = Color(0.85, 0.85, 0.9, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_plus"]
+font_size = 12
+font_color = Color(1, 0.92, 0.55, 1)
+
+[node name="ModifierCard" type="Button"]
+custom_minimum_size = Vector2(118, 142)
+focus_mode = 0
+flat = true
+script = ExtResource("1_card")
+
+[node name="CardBorder" type="Panel" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_border")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="ClassHeader" type="HBoxContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="PortraitFrame" type="Panel" parent="VBox/ClassHeader"]
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_portrait_bg")
+
+[node name="Portrait" type="TextureRect" parent="VBox/ClassHeader/PortraitFrame"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 2.0
+offset_top = 2.0
+offset_right = -2.0
+offset_bottom = -2.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="PlusLabel" type="Label" parent="VBox/ClassHeader"]
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+text = "+"
+label_settings = SubResource("LabelSettings_plus")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="EffectFrame" type="Panel" parent="VBox/ClassHeader"]
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_effect_bg")
+
+[node name="Effect" type="TextureRect" parent="VBox/ClassHeader/EffectFrame"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="CardName" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "—"
+label_settings = SubResource("LabelSettings_title")
+horizontal_alignment = 1
+
+[node name="CardDesc" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+text = ""
+label_settings = SubResource("LabelSettings_body")
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="CardCost" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "0 G"
+label_settings = SubResource("LabelSettings_title")
+horizontal_alignment = 1

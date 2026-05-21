@@ -6,13 +6,11 @@
 script = ExtResource("1_script")
 id = &"heavy_strike"
 display_name = "Heavy Strike"
-description = "MP 2 소모. 적 하나에게 통상 공격의 1.75배 데미지를 준다."
+description = "Hero basic attacks hit harder. Later levels give a smaller boost."
 cost = 20
-max_level = 3
 rarity = 1
 category = 1
 required_party_member_id = &"hero"
-level_up_only = true
 effect_data = {
-"hero_damage_bonus_mult": 0.75
+"hero_damage_bonus_mult": 0.5
 }

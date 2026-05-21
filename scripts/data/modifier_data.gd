@@ -30,11 +30,3 @@ enum Category { QUANTITY, CONDITIONAL, TRANSFORM, COMPANION }
 ## For random recruit cards: available companions. If empty, companion_data is
 ## used as the single recruit target.
 @export var companion_pool: Array[CharacterData] = []
-
-## When true, this card never appears in shop offers — only via level-up panel.
-## Used for synergy / risk-reward cards that don't make sense as pure purchases.
-@export var level_up_only: bool = false
-
-## Synergy gate: this card only becomes offerable when the player already owns
-## the referenced modifier (any level ≥ 1). Empty = no gate.
-@export var required_modifier_id: StringName = &""

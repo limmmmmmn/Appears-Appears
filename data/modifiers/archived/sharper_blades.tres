@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"sharper_blades"
-display_name = "예리한 날"
-description = "모든 파티원 공격력 +5."
+display_name = "Sharper Blades"
+description = "+5 ATK to every party member."
 cost = 10
 rarity = 0
 category = 0

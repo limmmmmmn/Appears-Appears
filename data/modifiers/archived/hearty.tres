@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"hearty"
-display_name = "강건함"
-description = "모든 파티원 최대 HP +10, 그만큼 즉시 회복."
+display_name = "Hearty"
+description = "+10 max HP to every party member, and heal that much."
 cost = 10
 rarity = 0
 category = 0

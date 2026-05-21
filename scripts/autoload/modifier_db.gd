@@ -5,33 +5,20 @@ extends Node
 ## as archived resources, but are intentionally excluded from shop offers.
 ## Query by id / rarity / category, or pull random offerings for the shop.
 
-const ACTIVE_POOL: ModifierPoolData = preload("res://data/modifiers/prototype_pool.tres")
+const ACTIVE_POOL: Resource = preload("res://data/modifiers/prototype_pool.tres")
 const FALLBACK_POOL_DIR: String = "res://data/modifiers/prototype"
-const OFFER_MODE_FIXED_ORDER: ModifierPoolData.OfferMode = ModifierPoolData.OfferMode.FIXED_ORDER
-const OFFER_MODE_RANDOM_UNIQUE: ModifierPoolData.OfferMode = ModifierPoolData.OfferMode.RANDOM_UNIQUE
+const OFFER_MODE_FIXED_ORDER: int = 0
+const OFFER_MODE_RANDOM_UNIQUE: int = 1
 const LEVEL_UP_ONLY_EFFECT_KEYS: Array[String] = [
 	"atk_flat",
-	"atk_mult",
 	"hp_flat",
-	"mp_flat",
 	"def_flat",
 	"agi_flat",
-	"crit_chance",
-	"crit_damage_bonus",
 	"evade_chance",
 	"hero_damage_bonus_mult",
 	"mage_splash_extra_targets",
-	"mage_firewall_damage_flat",
 	"priest_heal_flat",
 	"thief_steal_chance",
-	"window_shockwave_speed",
-	"window_fusion",
-	"window_spin_damage_ratio",
-	"window_split",
-	"window_bounce_mult",
-	"window_bounce_speed_mult",
-	"window_wall_bounce_restitution",
-	"window_wall_bounce_min_speed",
 ]
 
 var _all: Array[ModifierData] = []
@@ -95,8 +82,6 @@ func get_all() -> Array[ModifierData]:
 func is_shop_offer(mod: ModifierData) -> bool:
 	if mod == null:
 		return false
-	if mod.level_up_only:
-		return false
 	for key: String in LEVEL_UP_ONLY_EFFECT_KEYS:
 		if mod.effect_data.has(key):
 			return false
@@ -111,13 +96,13 @@ func get_random_modifiers(n: int) -> Array[ModifierData]:
 
 func get_shop_offers(n: int) -> Array[ModifierData]:
 	var out: Array[ModifierData] = []
-	if ACTIVE_POOL.offer_mode == OFFER_MODE_FIXED_ORDER:
+	if int(ACTIVE_POOL.offer_mode) == OFFER_MODE_FIXED_ORDER:
 		for i in mini(n, _active_offer_paths.size()):
 			var fixed_mod := get_by_path(_active_offer_paths[i])
 			if fixed_mod and GameState.can_add_modifier(fixed_mod):
 				out.append(fixed_mod)
 		return out
-	if ACTIVE_POOL.offer_mode == OFFER_MODE_RANDOM_UNIQUE:
+	if int(ACTIVE_POOL.offer_mode) == OFFER_MODE_RANDOM_UNIQUE:
 		var pool: Array[ModifierData] = _offerable_modifiers()
 		pool.shuffle()
 		for i in mini(n, pool.size()):
@@ -162,7 +147,7 @@ func _resolve_offer_paths() -> PackedStringArray:
 		paths.append(path)
 	if not paths.is_empty():
 		return paths
-	print("[ModifierDB] prototype_pool has no offer_paths; scanning %s" % FALLBACK_POOL_DIR)
+	push_warning("[ModifierDB] prototype_pool has no offer_paths; scanning %s" % FALLBACK_POOL_DIR)
 	var dir := DirAccess.open(FALLBACK_POOL_DIR)
 	if dir == null:
 		push_warning("[ModifierDB] fallback pool dir not found: %s" % FALLBACK_POOL_DIR)

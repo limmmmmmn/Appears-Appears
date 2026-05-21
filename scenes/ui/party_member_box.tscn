@@ -26,7 +26,7 @@ shadow_color = Color(0, 0, 0, 0.7)
 shadow_offset = Vector2(1, 1)
 
 [node name="PartyMemberBox" type="Panel"]
-custom_minimum_size = Vector2(92, 42)
+custom_minimum_size = Vector2(92, 32)
 size_flags_horizontal = 0
 size_flags_vertical = 8
 mouse_filter = 2
@@ -73,21 +73,14 @@ theme_override_constants/separation = 1
 
 [node name="HPBar" parent="HBox/RightCol" instance=ExtResource("4_stat_bar")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 9)
+custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 fill_color = Color(0.84, 0.22, 0.22, 1)
 label_alignment = 0
 
-[node name="MPBar" parent="HBox/RightCol" instance=ExtResource("4_stat_bar")]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 8)
-layout_mode = 2
-fill_color = Color(0.2, 0.38, 0.95, 1)
-label_alignment = 0
-
 [node name="ExpBar" parent="HBox/RightCol" instance=ExtResource("4_stat_bar")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 7)
+custom_minimum_size = Vector2(0, 8)
 layout_mode = 2
 fill_color = Color(0.28, 0.58, 0.95, 1)
 label_alignment = 1

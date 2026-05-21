@@ -6,10 +6,15 @@ extends Control
 
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/enemy.tscn")
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
+const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
+const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tres")
+const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
+const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
+const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 
 @export var enemy_data: EnemyData
 @export var turn_interval: float = 0.5
-@export var close_delay: float = 0.85
+@export var close_delay: float = 0.4
 @export_range(0.0, 1.0, 0.05) var item_drop_chance: float = 0.5
 
 ## How long to linger at spawn center before sliding to the assigned slot.
@@ -28,11 +33,6 @@ const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
 
 const BASE_WINDOW_SIZE: Vector2 = Vector2(96.0, 72.0)
-const FUSION_EXTRA_WINDOW_SIZE: Vector2 = Vector2(32.0, 24.0)
-const MAX_WINDOW_VIEWPORT_RATIO: Vector2 = Vector2(0.94, 0.72)
-const MIN_ENEMY_VISUAL_SCALE: float = 0.28
-const ENEMY_VISUAL_SCALE_FULL_COUNT: int = 12
-const ENEMY_VISUAL_SCALE_MIN_COUNT: int = 160
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -46,162 +46,60 @@ const DIAMOND_EDGE_WEIGHT: float = 0.5
 const CRASH_FLASH_COLOR: Color = Color(1.0, 0.48, 0.12, 1.0)
 const WINDOW_FLASH_HOLD_DURATION: float = 0.16
 const WINDOW_FLASH_FADE_DURATION: float = 0.42
-const HERO_HEAVY_STRIKE_MP_COST: int = 2
-const HERO_HOIMI_MP_COST: int = 3
-const MAGE_FIREBURST_MP_COST: int = 6
-const MAGE_LIGHTNING_MP_COST: int = 4
-const PRIEST_PRAYER_MP_COST: int = 4
-const PRIEST_HOLY_STRIKE_MP_COST: int = 4
-const THIEF_PILFER_MP_COST: int = 2
-## Priest only auto-casts Heal when an ally drops below this HP ratio.
-## Stops the priest from healing chip damage every turn.
-const PRIEST_HEAL_HP_RATIO_THRESHOLD: float = 0.6
-const INTRO_MESSAGE_DURATION: float = 0.72
-const ATTACK_CALL_DURATION: float = 0.34
-const IMPACT_MESSAGE_DELAY: float = 0.16
-const RESULT_MESSAGE_DURATION: float = 0.42
+const BASE_ENEMY_REPEAT_CHANCE: float = 0.68
+const STRONGER_SUPPORT_CHANCE: float = 0.06
+const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
 const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1.0)
 const DEFAULT_WINDOW_BG: Color = Color(0.95, 0.78, 0.14, 1.0)
-const SPLIT_HANDLE_SIZE: Vector2 = Vector2(8.0, 8.0)
-const SPLIT_HANDLE_COLOR: Color = Color(1.0, 0.9, 0.2, 1.0)
-const SPLIT_HANDLE_OUTLINE_COLOR: Color = Color(0.12, 0.1, 0.08, 1.0)
-const SPLIT_PRESS_LONG_SCALE: float = 1.08
-const SPLIT_PRESS_SHORT_SCALE: float = 0.68
-const SPLIT_STRETCH_LONG_SCALE: float = 1.58
-const SPLIT_STRETCH_SHORT_SCALE: float = 0.68
-const SPLIT_PRESS_DURATION: float = 0.16
-const SPLIT_PRESS_HOLD_DURATION: float = 0.08
-const SPLIT_STRETCH_DURATION: float = 0.46
-const SPLIT_STRETCH_BACK_DURATION: float = 0.14
 const WINDOW_BG_BY_ENEMY_ID: Dictionary = {
 	&"slime": Color(0.1, 0.55, 0.43, 1.0),
+	&"slime_chaser": Color(0.2, 0.68, 0.35, 1.0),
+	&"bat": Color(0.18, 0.46, 0.72, 1.0),
+	&"orc": Color(0.98, 0.66, 0.16, 1.0),
+	&"blade_bug": Color(0.72, 0.22, 0.2, 1.0),
 }
+const ENEMY_TIER_BY_ID: Dictionary = {
+	&"slime": 0,
+	&"slime_chaser": 1,
+	&"bat": 2,
+	&"orc": 3,
+	&"blade_bug": 3,
+}
+
 var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
 var _running: bool = false
 var _earned_gold_total: int = 0
 var _earned_xp_total: int = 0
-var _earned_recovery_orbs: int = 0
 var _field_drop_position: Vector2 = Vector2.INF
 var _item_drops: Array[ItemData] = []
 var _enemy_row_counts: Array[int] = [1]
 var _planned_enemy_count: int = 0
 var _planned_enemy_data: Array[EnemyData] = []
-var _forced_enemy_count: int = 0
-var _forced_enemy_data: Array[EnemyData] = []
+var _window_size_multiplier: float = 1.0
 var _slide_tween: Tween
 var _crash_tween: Tween
-var _pin_impact_tween: Tween
-var _split_stretch_tween: Tween
-var _acting: bool = false
-var _spin_pinned: bool = false
-var _pin_visual: Control
-var _split_handle_nodes: Array[Control] = []
-var _split_handles_visible: bool = false
 
 
 func _ready() -> void:
 	_name_label.hide()
 	_hp_label.hide()
-	_configure_log_label()
 	_apply_card_color_chrome()
-	_turn_timer.wait_time = turn_interval
+	_turn_timer.wait_time = turn_interval * GameState.battle_turn_interval_multiplier()
 	_turn_timer.timeout.connect(_on_turn_tick)
 	_spawn_enemy()
 	_rebuild_turn_queue()
 	EventBus.battle_window_opened.emit(self)
 	_running = true
-	_play_open_animation()
-	# Intro text runs in parallel with the window so the "~가 나타났다!"
-	# message rides inside the pop-in. Enemies pop after a tiny breath so
-	# the second beat reads as a separate "그리고… 뿅뿅" punch.
-	_play_intro_then_start()
-	_stagger_enemy_entrance()
-
-
-## Modern popup entry: window snaps in from a smaller size, overshoots
-## past full size, then settles back. Classic Slay-the-Spire / Hades
-## "wham!" feel — short, punchy, easy to read. No rotation, no mask.
-## Two beats: (1) 와앙 팍 window-with-text, (2) 뿅뿅 enemies.
-const OPEN_ANIMATION_DURATION: float = 0.32
-const OPEN_ANIMATION_START_SCALE: float = 0.3
-## Tiny pause after the window starts to settle before enemies arrive — just
-## enough that "window first, enemies second" reads, without ever dragging.
-const ENEMY_ENTRANCE_DELAY: float = 0.3
-## Gap between consecutive enemy pops — readable as "뿅… 뿅… 뿅" rather than
-## a single mob crowd appearing all at once.
-const ENEMY_STAGGER: float = 0.13
-const ENEMY_POP_DURATION: float = 0.25
-const ENEMY_START_SCALE: float = 0.15
-
-func _play_open_animation() -> void:
-	# Center pivot so the scale punch radiates from the middle.
-	pivot_offset = get_expected_window_size() * 0.5
-	scale = Vector2.ONE * OPEN_ANIMATION_START_SCALE
-	modulate.a = 0.0
-	var tween: Tween = create_tween().set_parallel(true)
-	# TRANS_BACK + EASE_OUT lands past 1.0 then snaps back — the "탁!" beat.
-	tween.tween_property(self, "scale", Vector2.ONE, OPEN_ANIMATION_DURATION)\
-		.set_trans(Tween.TRANS_BACK)\
-		.set_ease(Tween.EASE_OUT)
-	# Fade in finishes well before scale settles so it never looks washed out.
-	tween.tween_property(self, "modulate:a", 1.0, OPEN_ANIMATION_DURATION * 0.45)
-
-
-## Pop each enemy in one at a time. Runs in parallel with intro text and
-## also acts as the final gate on the turn timer — once enemies have
-## visually landed we re-start the timer so the first action never lands
-## before the player can see who's attacking.
-func _stagger_enemy_entrance() -> void:
-	# Park each enemy as a tiny, transparent dot before the wait kicks in.
-	# Done synchronously so the very first frame never shows full-size enemies.
-	for enemy: Enemy in _enemies:
-		if not is_instance_valid(enemy):
-			continue
-		enemy.modulate.a = 0.0
-		enemy.scale = Vector2.ONE * ENEMY_START_SCALE
-	await get_tree().create_timer(ENEMY_ENTRANCE_DELAY).timeout
-	for enemy: Enemy in _enemies:
-		if not _running or not is_inside_tree():
-			return
-		if not is_instance_valid(enemy):
-			continue
-		_pop_in_enemy(enemy)
-		await get_tree().create_timer(ENEMY_STAGGER).timeout
-	# Wait for the last enemy's overshoot to settle, then re-prime the turn
-	# timer. _play_intro_then_start also starts the timer when its messages
-	# finish — whichever fires last wins, which is exactly what we want.
-	await get_tree().create_timer(ENEMY_POP_DURATION).timeout
-	if _running and is_inside_tree():
-		_turn_timer.start()
-
-
-func _pop_in_enemy(enemy: Enemy) -> void:
-	if not is_instance_valid(enemy):
-		return
-	# Attach the tween to the enemy so it auto-dies if the enemy is freed
-	# mid-pop (e.g. instant kill from a passive trigger before turns start).
-	var tween: Tween = enemy.create_tween().set_parallel(true)
-	tween.tween_property(enemy, "scale", Vector2.ONE, ENEMY_POP_DURATION)\
-		.set_trans(Tween.TRANS_BACK)\
-		.set_ease(Tween.EASE_OUT)
-	tween.tween_property(enemy, "modulate:a", 1.0, ENEMY_POP_DURATION * 0.5)
+	_turn_timer.start()
 
 
 ## Allow spawner to inject data before _ready completes.
-func setup(data: EnemyData, field_drop_position: Vector2 = Vector2.INF, enemy_count: int = 0) -> void:
+func setup(data: EnemyData, field_drop_position: Vector2 = Vector2.INF, window_size_multiplier: float = 1.0) -> void:
 	enemy_data = data
 	_field_drop_position = field_drop_position
-	_forced_enemy_count = clampi(enemy_count, 0, GameState.BATTLE_WINDOW_MAX_ENEMIES)
-
-
-func setup_with_enemy_list(enemy_list: Array[EnemyData], field_drop_position: Vector2 = Vector2.INF) -> void:
-	_forced_enemy_data = enemy_list.duplicate()
-	_forced_enemy_count = _forced_enemy_data.size()
-	_field_drop_position = field_drop_position
-	if not _forced_enemy_data.is_empty():
-		enemy_data = _forced_enemy_data.front()
+	_window_size_multiplier = maxf(1.0, window_size_multiplier)
 
 
 func get_expected_window_size() -> Vector2:
@@ -237,173 +135,6 @@ func push_to(target: Vector2) -> void:
 	position = target
 
 
-func pin_window_spin() -> bool:
-	if _spin_pinned:
-		return false
-	_spin_pinned = true
-	_running = false
-	_acting = false
-	_turn_timer.stop()
-	_refresh_spin_pivot()
-	_ensure_pin_visual()
-	_play_pin_impact()
-	_log_label.text = "Pinned! Combat paused."
-	return true
-
-
-func is_spin_pinned() -> bool:
-	return _spin_pinned
-
-
-func set_spin_angle(angle: float) -> void:
-	_refresh_spin_pivot()
-	rotation = angle
-
-
-func set_split_handles_visible(visible: bool) -> void:
-	_split_handles_visible = visible
-	if visible:
-		_ensure_split_handle_visuals()
-	for node: Control in _split_handle_nodes:
-		if node != null and is_instance_valid(node):
-			node.visible = visible
-	if visible:
-		_position_split_handle_visuals()
-
-
-func play_window_split_stretch(axis: Vector2) -> void:
-	_refresh_spin_pivot()
-	set_split_handles_visible(false)
-	if _split_stretch_tween and _split_stretch_tween.is_valid():
-		_split_stretch_tween.kill()
-	var press_scale: Vector2 = _split_axis_scale(axis, SPLIT_PRESS_LONG_SCALE, SPLIT_PRESS_SHORT_SCALE)
-	var stretch_scale: Vector2 = _split_axis_scale(axis, SPLIT_STRETCH_LONG_SCALE, SPLIT_STRETCH_SHORT_SCALE)
-	_split_stretch_tween = create_tween()
-	_split_stretch_tween.tween_property(self, "scale", press_scale, SPLIT_PRESS_DURATION)\
-		.set_trans(Tween.TRANS_CUBIC)\
-		.set_ease(Tween.EASE_OUT)
-	_split_stretch_tween.tween_interval(SPLIT_PRESS_HOLD_DURATION)
-	_split_stretch_tween.tween_property(self, "scale", stretch_scale, SPLIT_STRETCH_DURATION)\
-		.set_trans(Tween.TRANS_BACK)\
-		.set_ease(Tween.EASE_OUT)
-
-
-func cancel_window_split_stretch() -> void:
-	if _split_stretch_tween and _split_stretch_tween.is_valid():
-		_split_stretch_tween.kill()
-	_split_stretch_tween = create_tween()
-	_split_stretch_tween.tween_property(self, "scale", Vector2.ONE, SPLIT_STRETCH_BACK_DURATION)\
-		.set_trans(Tween.TRANS_CUBIC)\
-		.set_ease(Tween.EASE_OUT)
-
-
-func finish_window_split_stretch() -> void:
-	if _split_stretch_tween and _split_stretch_tween.is_valid():
-		_split_stretch_tween.kill()
-	scale = Vector2.ONE
-
-
-func _split_axis_scale(axis: Vector2, long_scale: float, short_scale: float) -> Vector2:
-	if absf(axis.y) > absf(axis.x):
-		return Vector2(short_scale, long_scale)
-	return Vector2(long_scale, short_scale)
-
-
-func _refresh_spin_pivot() -> void:
-	pivot_offset = size * 0.5
-
-
-func _ensure_pin_visual() -> void:
-	if _pin_visual != null and is_instance_valid(_pin_visual):
-		_position_pin_visual()
-		return
-	_pin_visual = Control.new()
-	_pin_visual.name = "SpinPin"
-	_pin_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pin_visual.z_index = 40
-	add_child(_pin_visual)
-	_add_pin_rect(Vector2(4.0, 18.0), Vector2(12.0, 5.0), Color(0.12, 0.1, 0.08, 1.0))
-	_add_pin_rect(Vector2(18.0, 4.0), Vector2(5.0, 12.0), Color(0.12, 0.1, 0.08, 1.0))
-	_add_pin_rect(Vector2(8.0, 8.0), Vector2(10.0, 10.0), Color(0.98, 0.9, 0.58, 1.0))
-	_position_pin_visual()
-
-
-func _add_pin_rect(rect_size: Vector2, rect_position: Vector2, color: Color) -> void:
-	var rect := ColorRect.new()
-	rect.color = color
-	rect.size = rect_size
-	rect.position = rect_position
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pin_visual.add_child(rect)
-
-
-func _position_pin_visual() -> void:
-	if _pin_visual == null or not is_instance_valid(_pin_visual):
-		return
-	_pin_visual.size = Vector2(28.0, 28.0)
-	_pin_visual.pivot_offset = _pin_visual.size * 0.5
-	_pin_visual.position = size * 0.5 - _pin_visual.size * 0.5
-
-
-func _ensure_split_handle_visuals() -> void:
-	if _split_handle_nodes.size() == 4:
-		return
-	_split_handle_nodes.clear()
-	for i in range(4):
-		var holder := Control.new()
-		holder.name = "SplitHandle%d" % i
-		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.z_index = 42
-		holder.size = SPLIT_HANDLE_SIZE + Vector2.ONE * 4.0
-		holder.pivot_offset = holder.size * 0.5
-		var outline := ColorRect.new()
-		outline.color = SPLIT_HANDLE_OUTLINE_COLOR
-		outline.size = holder.size
-		outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(outline)
-		var core := ColorRect.new()
-		core.color = SPLIT_HANDLE_COLOR
-		core.size = SPLIT_HANDLE_SIZE
-		core.position = Vector2.ONE * 2.0
-		core.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(core)
-		add_child(holder)
-		_split_handle_nodes.append(holder)
-	_position_split_handle_visuals()
-
-
-func _position_split_handle_visuals() -> void:
-	if _split_handle_nodes.size() != 4:
-		return
-	var positions: Array[Vector2] = [
-		Vector2(size.x * 0.5, 0.0),
-		Vector2(size.x * 0.5, size.y),
-		Vector2(0.0, size.y * 0.5),
-		Vector2(size.x, size.y * 0.5),
-	]
-	for i in _split_handle_nodes.size():
-		var node: Control = _split_handle_nodes[i]
-		if node != null and is_instance_valid(node):
-			node.position = positions[i] - node.size * 0.5
-			node.visible = _split_handles_visible
-
-
-func _play_pin_impact() -> void:
-	if _pin_visual == null or not is_instance_valid(_pin_visual):
-		return
-	if _pin_impact_tween and _pin_impact_tween.is_valid():
-		_pin_impact_tween.kill()
-	_pin_visual.scale = Vector2.ONE * 2.1
-	_pin_visual.modulate = Color(1.0, 0.9, 0.35, 1.0)
-	_pin_impact_tween = create_tween().set_parallel(true)
-	_pin_impact_tween.tween_property(_pin_visual, "scale", Vector2.ONE, 0.18)\
-		.set_trans(Tween.TRANS_BACK)\
-		.set_ease(Tween.EASE_OUT)
-	_pin_impact_tween.tween_property(_pin_visual, "modulate", Color.WHITE, 0.22)\
-		.set_trans(Tween.TRANS_QUAD)\
-		.set_ease(Tween.EASE_OUT)
-
-
 func claim_xp_reward() -> int:
 	var xp: int = _earned_xp_total
 	_earned_xp_total = 0
@@ -416,181 +147,18 @@ func claim_item_drops() -> Array[ItemData]:
 	return drops
 
 
-func claim_recovery_orb_count() -> int:
-	var count: int = _earned_recovery_orbs
-	_earned_recovery_orbs = 0
-	return count
-
-
 func field_drop_position() -> Vector2:
 	return _field_drop_position
 
 
-func living_enemy_count() -> int:
-	return _living_enemies().size()
-
-
-func absorb_window(other: BattleWindow) -> bool:
-	if other == null or other == self or not is_instance_valid(other):
-		return false
-	var incoming_enemies: Array[Enemy] = other._detach_living_enemies_for_fusion()
-	if incoming_enemies.is_empty():
-		return false
-	_earned_gold_total += other._earned_gold_total
-	_earned_xp_total += other.claim_xp_reward()
-	_item_drops.append_array(other.claim_item_drops())
-	_earned_recovery_orbs += other.claim_recovery_orb_count()
-	for enemy: Enemy in incoming_enemies:
-		_adopt_enemy_for_fusion(enemy)
-	_rebuild_after_fusion()
-	other._finish_as_fusion_source()
-	_play_crash_flash()
-	_log_label.text = "Fusion! %d enemies" % living_enemy_count()
-	return true
-
-
-func split_off_for_window_split() -> Array[EnemyData]:
-	var empty: Array[EnemyData] = []
-	var living: Array[Enemy] = _living_enemies()
-	if living.size() <= 1:
-		_log_label.text = "Need 2+ enemies to split"
-		return empty
-	var keep_count: int = maxi(1, int(floor(float(living.size()) / 2.0)))
-	var split_data: Array[EnemyData] = []
-	for i in range(keep_count, living.size()):
-		var enemy: Enemy = living[i]
-		if enemy == null or not is_instance_valid(enemy) or enemy.data == null:
-			continue
-		split_data.append(enemy.data)
-		_disconnect_enemy_callbacks(enemy, self)
-		_enemies.erase(enemy)
-		enemy.queue_free()
-	if split_data.is_empty():
-		return empty
-	_rebuild_after_split()
-	_play_crash_flash()
-	_log_label.text = "Split! %d / %d" % [living_enemy_count(), split_data.size()]
-	return split_data
-
-
-func _detach_living_enemies_for_fusion() -> Array[Enemy]:
-	_running = false
-	_turn_timer.stop()
-	var detached: Array[Enemy] = []
-	for enemy: Enemy in _living_enemies():
-		_disconnect_enemy_callbacks(enemy, self)
-		detached.append(enemy)
-	_enemies.clear()
-	return detached
-
-
-func _adopt_enemy_for_fusion(enemy: Enemy) -> void:
-	if enemy == null or not is_instance_valid(enemy):
-		return
-	enemy.reparent(_enemy_anchor)
-	enemy.hp_changed.connect(_on_enemy_hp_changed)
-	enemy.died.connect(_on_enemy_died.bind(enemy))
-	_enemies.append(enemy)
-
-
-func _disconnect_enemy_callbacks(enemy: Enemy, window: BattleWindow) -> void:
-	for connection: Dictionary in enemy.hp_changed.get_connections():
-		var hp_callable: Callable = connection["callable"]
-		if hp_callable.is_valid() and hp_callable.get_object() == window:
-			enemy.hp_changed.disconnect(hp_callable)
-	for connection: Dictionary in enemy.died.get_connections():
-		var died_callable: Callable = connection["callable"]
-		if died_callable.is_valid() and died_callable.get_object() == window:
-			enemy.died.disconnect(died_callable)
-
-
-func _rebuild_after_fusion() -> void:
-	_enemies = _living_enemies()
-	_planned_enemy_count = _enemies.size()
-	_planned_enemy_data.clear()
-	for enemy: Enemy in _enemies:
-		if enemy.data != null:
-			_planned_enemy_data.append(enemy.data)
-	if not _planned_enemy_data.is_empty():
-		enemy_data = _planned_enemy_data.front()
-	_apply_enemy_layout(_enemies.size())
-	_apply_fusion_size_bonus()
-	for i in _enemies.size():
-		var enemy: Enemy = _enemies[i]
-		if enemy != null and is_instance_valid(enemy):
-			enemy.set_battle_slot_position(_enemy_offset(i, _enemies.size()), _enemy_visual_scale(_enemies.size()))
-	_name_label.text = _encounter_display_name()
-	_refresh_hp_label()
-	_rebuild_turn_queue()
-
-
-func _rebuild_after_split() -> void:
-	_enemies = _living_enemies()
-	_planned_enemy_count = _enemies.size()
-	_planned_enemy_data.clear()
-	for enemy: Enemy in _enemies:
-		if enemy.data != null:
-			_planned_enemy_data.append(enemy.data)
-	if not _planned_enemy_data.is_empty():
-		enemy_data = _planned_enemy_data.front()
-	_apply_enemy_layout(_enemies.size())
-	for i in _enemies.size():
-		var enemy: Enemy = _enemies[i]
-		if enemy != null and is_instance_valid(enemy):
-			enemy.set_battle_slot_position(_enemy_offset(i, _enemies.size()), _enemy_visual_scale(_enemies.size()))
-	_name_label.text = _encounter_display_name()
-	_refresh_hp_label()
-	_rebuild_turn_queue()
-	if _running:
-		_turn_timer.start()
-
-
-func _apply_fusion_size_bonus() -> void:
-	var fusion_size: Vector2 = _cap_window_size(size + FUSION_EXTRA_WINDOW_SIZE)
-	custom_minimum_size = fusion_size
-	size = fusion_size
-	_refresh_spin_pivot()
-	_position_pin_visual()
-	_enemy_anchor.position = Vector2(
-		fusion_size.x * 0.5,
-		ENEMY_AREA_TOP + (fusion_size.y - ENEMY_AREA_BOTTOM - ENEMY_AREA_TOP) * 0.5
-	)
-	_position_split_handle_visuals()
-
-
-func _finish_as_fusion_source() -> void:
-	_running = false
-	_turn_timer.stop()
-	if _slide_tween and _slide_tween.is_valid():
-		_slide_tween.kill()
-	if _split_stretch_tween and _split_stretch_tween.is_valid():
-		_split_stretch_tween.kill()
-	set_split_handles_visible(false)
-	queue_free()
-
-
-## When `spread_evenly` is true, the same bump damage budget is divided
-## across every living enemy in the window. Window-on-window crashes and
-## spin hits still apply their full ratio to each target.
-func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash", spread_evenly: bool = false) -> int:
+func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash") -> int:
 	var total_dealt: int = 0
 	var effective_ratio: float = ratio * _window_collision_damage_multiplier(log_prefix)
-	var living: Array[Enemy] = _living_enemies()
-	if spread_evenly:
-		if living.is_empty():
-			return 0
-		var split_ratio: float = effective_ratio / float(living.size())
-		for enemy: Enemy in living:
-			if enemy.data == null:
-				continue
-			var damage: int = ceili(float(enemy.max_hp) * split_ratio) + enemy.defense
-			total_dealt += enemy.take_damage(damage, false, null, false)
-	else:
-		for enemy: Enemy in living:
-			if enemy.data == null:
-				continue
-			var damage: int = ceili(float(enemy.max_hp) * effective_ratio) + enemy.defense
-			total_dealt += enemy.take_damage(damage, false, null, false)
+	for enemy: Enemy in _living_enemies():
+		if enemy.data == null:
+			continue
+		var damage: int = ceili(float(enemy.max_hp) * effective_ratio) + enemy.defense
+		total_dealt += enemy.take_damage(damage, false, null, false)
 	if total_dealt > 0:
 		_play_crash_flash()
 		_spawn_window_damage_number(total_dealt, _window_damage_label(log_prefix))
@@ -598,7 +166,9 @@ func apply_window_collision_damage(ratio: float, log_prefix: String = "Window cr
 	return total_dealt
 
 
-func _window_collision_damage_multiplier(_log_prefix: String) -> float:
+func _window_collision_damage_multiplier(log_prefix: String) -> float:
+	if log_prefix.to_lower().contains("bump") and has_living_enemy_id(&"orc"):
+		return ORC_BUMP_DAMAGE_MULTIPLIER
 	return 1.0
 
 
@@ -694,15 +264,6 @@ func _apply_label_color(label: Label, color: Color) -> void:
 	label.label_settings = settings
 
 
-func _configure_log_label() -> void:
-	_log_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	_log_label.clip_text = true
-	_log_label.max_lines_visible = 1
-	var settings: LabelSettings = _log_label.label_settings.duplicate()
-	settings.font_size = 7
-	_log_label.label_settings = settings
-
-
 func _window_bg_color() -> Color:
 	if enemy_data == null:
 		return DEFAULT_WINDOW_BG
@@ -737,36 +298,20 @@ func _spawn_enemy() -> void:
 	for i in enemy_count:
 		var enemy: Enemy = ENEMY_SCENE.instantiate()
 		enemy.setup(_planned_enemy_data[i])
-		enemy.set_battle_slot_position(_enemy_offset(i, enemy_count), _enemy_visual_scale(enemy_count))
+		enemy.position = _enemy_offset(i, enemy_count)
 		_enemy_anchor.add_child(enemy)
 		enemy.hp_changed.connect(_on_enemy_hp_changed)
 		enemy.died.connect(_on_enemy_died.bind(enemy))
 		_enemies.append(enemy)
 	_name_label.text = _encounter_display_name()
 	_refresh_hp_label()
-
-
-func _play_intro_then_start() -> void:
-	_turn_timer.stop()
-	for message: String in _encounter_intro_messages():
-		if not _running or not is_inside_tree():
-			return
-		_log_label.text = message
-		await _battle_pause(INTRO_MESSAGE_DURATION)
-	if _running and is_inside_tree():
-		_turn_timer.start()
+	_log_label.text = "%s appears!" % _name_label.text
 
 
 func _ensure_enemy_plan() -> void:
 	if _planned_enemy_count > 0:
 		return
-	if not _forced_enemy_data.is_empty():
-		_planned_enemy_data = _forced_enemy_data.duplicate()
-		_planned_enemy_count = _planned_enemy_data.size()
-		if enemy_data == null:
-			enemy_data = _planned_enemy_data.front()
-		return
-	_planned_enemy_count = _roll_enemy_count_for_window()
+	_planned_enemy_count = randi_range(1, _max_enemies_per_window())
 	_planned_enemy_data = _plan_enemy_mix(_planned_enemy_count)
 
 
@@ -775,21 +320,48 @@ func _ensure_enemy_count_planned() -> void:
 
 
 func _max_enemies_per_window() -> int:
-	return GameState.BATTLE_WINDOW_MAX_ENEMIES
-
-
-func _roll_enemy_count_for_window() -> int:
-	if _forced_enemy_count > 0:
-		return _forced_enemy_count
-	return GameState.roll_battle_window_enemy_count()
+	return maxi(1, 1 + GameState.enemies_per_window_bonus())
 
 
 func _plan_enemy_mix(total: int) -> Array[EnemyData]:
 	var planned: Array[EnemyData] = []
 	for i in total:
-		planned.append(enemy_data)
+		if i == 0 or randf() < BASE_ENEMY_REPEAT_CHANCE:
+			planned.append(enemy_data)
+		else:
+			planned.append(_pick_support_enemy())
 	planned.shuffle()
 	return planned
+
+
+func _pick_support_enemy() -> EnemyData:
+	var pool: Array[EnemyData] = _support_enemy_pool()
+	return enemy_data if pool.is_empty() else pool.pick_random()
+
+
+func _support_enemy_pool() -> Array[EnemyData]:
+	var pool: Array[EnemyData] = []
+	var base_tier: int = _enemy_tier(enemy_data)
+	for candidate: EnemyData in _available_support_enemies():
+		if candidate == enemy_data:
+			continue
+		var candidate_tier: int = _enemy_tier(candidate)
+		if candidate_tier <= base_tier or randf() < STRONGER_SUPPORT_CHANCE:
+			pool.append(candidate)
+	return pool
+
+
+func _available_support_enemies() -> Array[EnemyData]:
+	var out: Array[EnemyData] = [SLIME_DATA]
+	if GameState.chaser_enemies_enabled():
+		out.append(SLIME_CHASER_DATA)
+	return out
+
+
+func _enemy_tier(data: EnemyData) -> int:
+	if data == null:
+		return 0
+	return int(ENEMY_TIER_BY_ID.get(data.id, 0))
 
 
 func _encounter_display_name() -> String:
@@ -813,67 +385,19 @@ func _encounter_display_name() -> String:
 	return " / ".join(parts)
 
 
-func _encounter_intro_messages() -> Array[String]:
-	var counts: Dictionary = {}
-	var names: Dictionary = {}
-	for data: EnemyData in _planned_enemy_data:
-		if data == null:
-			continue
-		counts[data.id] = int(counts.get(data.id, 0)) + 1
-		names[data.id] = data.display_name
-	var messages: Array[String] = []
-	var ordered_ids: Array = counts.keys()
-	ordered_ids.sort()
-	if enemy_data and counts.has(enemy_data.id):
-		ordered_ids.erase(enemy_data.id)
-		ordered_ids.push_front(enemy_data.id)
-	for id in ordered_ids:
-		var count: int = int(counts[id])
-		var name: String = str(names[id])
-		var label: String = name if count == 1 else "%s x%d" % [name, count]
-		messages.append("%s%s 나타났다!" % [label, _subject_particle(label)])
-	return messages
-
-
-func _battle_pause(duration: float) -> void:
-	if duration <= 0.0:
-		return
-	await get_tree().create_timer(duration).timeout
-
-
-func _subject_particle(text: String) -> String:
-	if text.is_empty():
-		return "가"
-	var last_code: int = text.unicode_at(text.length() - 1)
-	if last_code < 0xAC00 or last_code > 0xD7A3:
-		return "가"
-	return "이" if (last_code - 0xAC00) % 28 > 0 else "가"
-
-
-func _object_particle(text: String) -> String:
-	if text.is_empty():
-		return "를"
-	var last_code: int = text.unicode_at(text.length() - 1)
-	if last_code < 0xAC00 or last_code > 0xD7A3:
-		return "를"
-	return "을" if (last_code - 0xAC00) % 28 > 0 else "를"
-
-
 # ─── Turn loop ────────────────────────────────────────────────────────
 func _on_turn_tick() -> void:
-	if not _running or _acting:
+	if not _running:
 		return
 	if _living_enemies().is_empty() or GameState.is_party_wiped():
 		return
 	var actor: Dictionary = _next_actor()
 	if actor.is_empty():
 		return
-	_acting = true
 	if int(actor["type"]) == ACTOR_PARTY:
-		await _party_attack(int(actor["party_index"]))
+		_party_attack(int(actor["party_index"]))
 	else:
-		await _enemy_attack(actor["enemy"])
-	_acting = false
+		_enemy_attack(actor["enemy"])
 
 
 func _party_attack(attacker_index: int) -> void:
@@ -883,212 +407,53 @@ func _party_attack(attacker_index: int) -> void:
 	var member: CharacterData = GameState.party[attacker_index]
 	match member.id:
 		&"hero":
-			# Priority: heal a wounded ally with Hoimi > Heavy Strike > basic attack.
-			if GameState.hero_hoimi_amount(attacker_index) > 0 and _heal_target_index() != -1 and GameState.spend_mp(attacker_index, HERO_HOIMI_MP_COST):
-				await _hero_hoimi_spell(attacker_index)
-			else:
-				var damage_mult: float = GameState.hero_attack_multiplier()
-				if damage_mult > 1.0 and not GameState.spend_mp(attacker_index, HERO_HEAVY_STRIKE_MP_COST):
-					damage_mult = 1.0
-				await _basic_party_attack(attacker_index, target_enemy, damage_mult)
+			_basic_party_attack(attacker_index, target_enemy, GameState.hero_attack_multiplier())
 		&"mage":
-			# Lightning Bolt (single + chain) takes priority over the broader
-			# Firewall when both are learned, since it's the cheaper option.
-			if GameState.mage_lightning_damage(attacker_index) > 0 and GameState.spend_mp(attacker_index, MAGE_LIGHTNING_MP_COST):
-				await _mage_lightning_attack(attacker_index, target_enemy)
-			elif GameState.mage_firewall_unlocked(attacker_index) and GameState.spend_mp(attacker_index, MAGE_FIREBURST_MP_COST):
-				await _mage_firewall_attack(attacker_index)
+			if GameState.mage_splash_extra_targets() > 0:
+				_mage_splash_attack(attacker_index)
 			else:
-				await _basic_party_attack(attacker_index, target_enemy)
+				_basic_party_attack(attacker_index, target_enemy)
 		&"priest":
-			if GameState.priest_heal_amount() > 0 and _heal_target_index() != -1 and GameState.spend_mp(attacker_index, PRIEST_PRAYER_MP_COST):
-				await _priest_heal_spell(attacker_index)
-			elif GameState.priest_holy_damage(attacker_index) > 0 and GameState.spend_mp(attacker_index, PRIEST_HOLY_STRIKE_MP_COST):
-				await _priest_holy_strike(attacker_index, target_enemy)
+			if GameState.priest_heal_amount() > 0:
+				_priest_heal_attack(attacker_index, target_enemy)
 			else:
-				await _basic_party_attack(attacker_index, target_enemy)
+				_basic_party_attack(attacker_index, target_enemy)
 		&"thief":
-			var can_pilfer: bool = GameState.thief_steal_chance() > 0.0 and GameState.spend_mp(attacker_index, THIEF_PILFER_MP_COST)
-			if can_pilfer:
-				await _thief_attack(attacker_index, target_enemy)
-			else:
-				await _basic_party_attack(attacker_index, target_enemy)
+			_thief_attack(attacker_index, target_enemy)
 		_:
-			await _basic_party_attack(attacker_index, target_enemy)
+			_basic_party_attack(attacker_index, target_enemy)
 
 
-func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: float = 1.0):
-	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
-		return 0
+func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: float = 1.0) -> int:
 	var member: CharacterData = GameState.party[attacker_index]
 	var atk: int = GameState.effective_attack(attacker_index)
-	var base_damage: int = maxi(1, int(round(float(atk) * damage_mult)))
-	_log_label.text = "%s의 공격!" % member.display_name
-	await _battle_pause(ATTACK_CALL_DURATION)
-	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
-		return 0
-	var crit: Dictionary = GameState.roll_crit(attacker_index)
-	var damage: int = int(round(float(GameState.roll_damage(base_damage)) * float(crit["mult"])))
-	# Plain attacks (damage_mult == 1.0) land with no FX — just a thud. Only
-	# the heavy_strike multiplier promotes the swing into a full slash effect.
-	var fx: Texture2D = member.attack_effect if damage_mult > 1.0 else null
-	if damage_mult > 1.0:
-		EventBus.party_skill_activated.emit(attacker_index, &"heavy_strike")
-	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], fx)
+	var crit: Dictionary = GameState.roll_crit()
+	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"])))
+	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], member.attack_effect)
 	var target_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
-	await _battle_pause(IMPACT_MESSAGE_DELAY)
-	var tag: String = "%s에게 %d포인트 데미지!!" % [target_name, dealt]
+	var tag: String = "%s hits %s -%d" % [member.display_name, target_name, dealt]
 	if crit["is_crit"]:
-		tag = "회심의 일격! " + tag
+		tag += "!"
 	_log_label.text = tag
-	await _battle_pause(RESULT_MESSAGE_DURATION)
 	return dealt
 
 
-func _mage_firewall_attack(attacker_index: int) -> void:
+func _mage_splash_attack(attacker_index: int) -> void:
 	var member: CharacterData = GameState.party[attacker_index]
 	var targets: Array[Enemy] = _living_enemies()
-	var target_count: int = targets.size()
-	if target_count <= 0:
-		return
-	EventBus.party_skill_activated.emit(attacker_index, &"fireburst")
-	var base_damage: int = GameState.mage_firewall_damage(attacker_index)
-	_log_label.text = "%s's Firewall!" % member.display_name
-	await _battle_pause(ATTACK_CALL_DURATION)
-	if not _running:
-		return
-	var crit: Dictionary = GameState.roll_crit(attacker_index)
-	var damage: int = int(round(float(GameState.roll_damage(base_damage)) * float(crit["mult"])))
+	var target_count: int = mini(targets.size(), 1 + GameState.mage_splash_extra_targets())
+	var atk: int = GameState.effective_attack(attacker_index)
+	var crit: Dictionary = GameState.roll_crit()
+	var damage: int = int(round(float(atk) * GameState.mage_splash_damage_multiplier() * float(crit["mult"])))
 	var total_dealt: int = 0
 	for i in target_count:
-		if is_instance_valid(targets[i]) and targets[i].is_alive():
-			total_dealt += targets[i].take_damage(damage, crit["is_crit"], member.attack_effect)
-	await _battle_pause(IMPACT_MESSAGE_DELAY)
-	var tag: String = "%d마리에게 %d포인트 데미지!!" % [target_count, total_dealt]
-	if crit["is_crit"]:
-		tag = "회심의 일격! " + tag
-	_log_label.text = tag
-	await _battle_pause(RESULT_MESSAGE_DURATION)
-
-
-func _priest_heal_spell(attacker_index: int) -> void:
-	var heal_target: int = _heal_target_index()
-	if heal_target == -1:
-		heal_target = _lowest_wounded_party_index()
-	if heal_target == -1:
-		return
-	var member: CharacterData = GameState.party[attacker_index]
-	var target: CharacterData = GameState.party[heal_target]
-	EventBus.party_skill_activated.emit(attacker_index, &"battle_prayer")
-	_log_label.text = "%s's Heal!" % member.display_name
-	await _battle_pause(ATTACK_CALL_DURATION)
-	if not _running:
-		return
-	var before_hp: int = GameState.party_hp[heal_target]
-	GameState.heal_party_member(heal_target, GameState.priest_heal_amount())
-	var healed: int = GameState.party_hp[heal_target] - before_hp
-	_log_label.text = "%s의 HP가 %d 회복됐다!" % [target.display_name, healed]
-	await _battle_pause(RESULT_MESSAGE_DURATION)
-
-
-## Hero's Hoimi: small targeted heal on the most wounded ally. Mirrors the
-## priest heal pipeline but draws from a separate effect key so the two
-## can stack without conflict.
-func _hero_hoimi_spell(attacker_index: int) -> void:
-	var heal_target: int = _heal_target_index()
-	if heal_target == -1:
-		heal_target = _lowest_wounded_party_index()
-	if heal_target == -1:
-		return
-	var member: CharacterData = GameState.party[attacker_index]
-	var target: CharacterData = GameState.party[heal_target]
-	EventBus.party_skill_activated.emit(attacker_index, &"hoimi")
-	_log_label.text = "%s's Hoimi!" % member.display_name
-	await _battle_pause(ATTACK_CALL_DURATION)
-	if not _running:
-		return
-	var before_hp: int = GameState.party_hp[heal_target]
-	GameState.heal_party_member(heal_target, GameState.hero_hoimi_amount(attacker_index))
-	var healed: int = GameState.party_hp[heal_target] - before_hp
-	_log_label.text = "%s의 HP가 %d 회복됐다!" % [target.display_name, healed]
-	await _battle_pause(RESULT_MESSAGE_DURATION)
-
-
-## Mage's Lightning Bolt: deal full damage to the primary target, then with
-## chain_chance roll, hit one extra living enemy for half damage. Uses the
-## fire FX for now since it's the closest existing texture.
-func _mage_lightning_attack(attacker_index: int, target_enemy: Enemy) -> void:
-	if not is_instance_valid(target_enemy) or not target_enemy.is_alive():
-		return
-	var member: CharacterData = GameState.party[attacker_index]
-	EventBus.party_skill_activated.emit(attacker_index, &"lightning_bolt")
-	var base_damage: int = GameState.mage_lightning_damage(attacker_index)
-	_log_label.text = "%s's Lightning Bolt!" % member.display_name
-	await _battle_pause(ATTACK_CALL_DURATION)
-	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
-		return
-	var crit: Dictionary = GameState.roll_crit(attacker_index)
-	var primary_damage: int = int(round(float(GameState.roll_damage(base_damage)) * float(crit["mult"])))
-	var total_dealt: int = target_enemy.take_damage(primary_damage, crit["is_crit"], member.attack_effect)
-	var primary_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
-	# Chain to one adjacent living enemy at half damage.
-	var chained_to: Enemy = null
-	if GameState.mage_lightning_chain_chance(attacker_index) > 0.0 and randf() < GameState.mage_lightning_chain_chance(attacker_index):
-		for other: Enemy in _living_enemies():
-			if other == target_enemy or not is_instance_valid(other) or not other.is_alive():
-				continue
-			chained_to = other
-			break
-	if chained_to != null:
-		var chain_damage: int = maxi(1, int(round(float(primary_damage) * 0.5)))
-		total_dealt += chained_to.take_damage(chain_damage, false, member.attack_effect)
-	await _battle_pause(IMPACT_MESSAGE_DELAY)
-	var tag: String = "%s에게 %d포인트 데미지!!" % [primary_name, total_dealt]
-	if chained_to != null:
-		tag = "체인! " + tag
-	if crit["is_crit"]:
-		tag = "회심의 일격! " + tag
-	_log_label.text = tag
-	await _battle_pause(RESULT_MESSAGE_DURATION)
-
-
-## Priest's Holy Strike: chip damage to one enemy that also tops the
-## priest up for a smaller amount. The dual nature lets it pull double
-## duty as both attack and emergency heal when the main Heal is overkill.
-func _priest_holy_strike(attacker_index: int, target_enemy: Enemy) -> void:
-	if not is_instance_valid(target_enemy) or not target_enemy.is_alive():
-		return
-	var member: CharacterData = GameState.party[attacker_index]
-	EventBus.party_skill_activated.emit(attacker_index, &"holy_strike")
-	var damage: int = GameState.priest_holy_damage(attacker_index)
-	_log_label.text = "%s's Holy Strike!" % member.display_name
-	await _battle_pause(ATTACK_CALL_DURATION)
-	if not _running or not is_instance_valid(target_enemy) or not target_enemy.is_alive():
-		return
-	var crit: Dictionary = GameState.roll_crit(attacker_index)
-	var final_damage: int = int(round(float(GameState.roll_damage(damage)) * float(crit["mult"])))
-	var dealt: int = target_enemy.take_damage(final_damage, crit["is_crit"], member.attack_effect)
-	var target_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
-	# Self-heal rider — does nothing if priest is already at full HP.
-	var heal_amount: int = GameState.priest_holy_self_heal(attacker_index)
-	var before_hp: int = GameState.party_hp[attacker_index]
-	if heal_amount > 0:
-		GameState.heal_party_member(attacker_index, heal_amount)
-	var healed: int = GameState.party_hp[attacker_index] - before_hp
-	await _battle_pause(IMPACT_MESSAGE_DELAY)
-	var tag: String = "%s에게 %d데미지!" % [target_name, dealt]
-	if healed > 0:
-		tag += " (%s HP +%d)" % [member.display_name, healed]
-	if crit["is_crit"]:
-		tag = "회심의 일격! " + tag
-	_log_label.text = tag
-	await _battle_pause(RESULT_MESSAGE_DURATION)
+		total_dealt += targets[i].take_damage(damage, crit["is_crit"], member.attack_effect)
+	var suffix := "!" if crit["is_crit"] else ""
+	_log_label.text = "%s scorches x%d -%d%s" % [member.display_name, target_count, total_dealt, suffix]
 
 
 func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
-	var dealt: int = await _basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
-	if not _running:
-		return
+	var dealt: int = _basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
 	var heal_target: int = _lowest_wounded_party_index()
 	if heal_target == -1:
 		return
@@ -1096,25 +461,24 @@ func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	GameState.heal_party_member(heal_target, GameState.priest_heal_amount())
 	var healed: int = GameState.party_hp[heal_target] - before_hp
 	if healed > 0:
-		_log_label.text = "%s의 HP가 %d 회복됐다!" % [GameState.party[heal_target].display_name, healed]
-		await _battle_pause(RESULT_MESSAGE_DURATION)
+		_log_label.text = "%s -%d / %s +%d" % [
+			GameState.party[attacker_index].display_name,
+			dealt,
+			GameState.party[heal_target].display_name,
+			healed,
+		]
 
 
 func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
-	EventBus.party_skill_activated.emit(attacker_index, &"pilfer")
-	await _basic_party_attack(attacker_index, target_enemy)
+	var dealt: int = _basic_party_attack(attacker_index, target_enemy)
 	var stolen: int = target_enemy.try_steal_gold(GameState.thief_steal_chance(), GameState.thief_steal_gold_amount())
 	if stolen <= 0:
 		return
 	GameState.add_gold(stolen)
-	_log_label.text = "%s는 %dG를 훔쳤다!" % [GameState.party[attacker_index].display_name, stolen]
-	await _battle_pause(RESULT_MESSAGE_DURATION)
+	_log_label.text = "%s -%d / stole %dG" % [GameState.party[attacker_index].display_name, dealt, stolen]
 
 
 func _enemy_attack(enemy: Enemy) -> void:
-	if not is_instance_valid(enemy) or not enemy.is_alive():
-		return
-	EventBus.battle_window_enemy_attack_started.emit(self)
 	var alive_indices: Array[int] = []
 	for i in GameState.party_size():
 		if GameState.is_alive(i):
@@ -1124,27 +488,14 @@ func _enemy_attack(enemy: Enemy) -> void:
 	var target_index: int = alive_indices.pick_random()
 	var target: CharacterData = GameState.party[target_index]
 	var attacker_name: String = enemy.data.display_name if enemy.data else "Enemy"
-	var base_damage: int = max(1, enemy.attack - GameState.effective_defense(target_index))
-	_log_label.text = "%s의 공격!" % attacker_name
-	await _battle_pause(ATTACK_CALL_DURATION)
-	if not _running or not is_instance_valid(enemy) or not enemy.is_alive() or not GameState.is_alive(target_index):
-		return
 	if GameState.roll_evade(target_index):
 		enemy.play_attack_lunge()
-		await _battle_pause(IMPACT_MESSAGE_DELAY)
-		if not _running:
-			return
-		_log_label.text = "%s는 몸을 피했다!" % target.display_name
-		await _battle_pause(RESULT_MESSAGE_DURATION)
+		_log_label.text = "%s dodges %s!" % [target.display_name, attacker_name]
 		return
-	var dealt: int = GameState.roll_damage(base_damage)
+	var dealt: int = max(1, enemy.attack - GameState.effective_defense(target_index))
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
-	await _battle_pause(IMPACT_MESSAGE_DELAY)
-	if not _running:
-		return
-	_log_label.text = "%s에게 %d포인트 데미지!!" % [target.display_name, dealt]
-	await _battle_pause(RESULT_MESSAGE_DURATION)
+	_log_label.text = "%s hits %s -%d" % [attacker_name, target.display_name, dealt]
 
 
 # ─── Enemy callbacks ──────────────────────────────────────────────────
@@ -1156,28 +507,27 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	var reward: int = GameState.modify_gold_reward(_enemy.gold_reward)
 	GameState.add_gold(reward)
 	_earned_gold_total += reward
-	_earned_recovery_orbs += 1
 	if _enemy.data:
 		_earned_xp_total += GameState.scaled_enemy_xp_reward(_enemy.data)
 		_roll_item_drop()
 	_refresh_hp_label()
 	if not _living_enemies().is_empty():
 		var defeated_name: String = _enemy.data.display_name if _enemy.data else "Enemy"
-		_log_label.text = "%s%s 쓰러뜨렸다! +%dG" % [defeated_name, _object_particle(defeated_name), reward]
+		_log_label.text = "%s defeated! +%d gold" % [defeated_name, reward]
 		return
 	_running = false
 	_turn_timer.stop()
-	_log_label.text = "몬스터를 모두 쓰러뜨렸다! +%dG" % _earned_gold_total
-	if _spin_pinned:
-		_log_label.text = "Pinned window keeps spinning!"
-		return
+	_log_label.text = "All defeated! +%d gold" % _earned_gold_total
 	await get_tree().create_timer(close_delay).timeout
 	EventBus.battle_window_closed.emit(self)
 	queue_free()
 
 
 func _roll_item_drop() -> void:
-	if randf() > item_drop_chance:
+	if not GameState.item_drops_enabled():
+		return
+	var chance: float = clampf(item_drop_chance + GameState.item_drop_chance_bonus(), 0.0, 1.0)
+	if randf() > chance:
 		return
 	var item: ItemData = ItemDB.random_drop()
 	if item:
@@ -1224,21 +574,6 @@ func _lowest_wounded_party_index() -> int:
 			best_ratio = ratio
 			best_index = i
 	return best_index
-
-
-## Returns the most wounded ally only if they are below the heal threshold.
-## Used to gate priest auto-casting so chip damage doesn't trigger heal spam.
-func _heal_target_index() -> int:
-	var candidate: int = _lowest_wounded_party_index()
-	if candidate == -1:
-		return -1
-	var max_hp: int = GameState.effective_max_hp(candidate)
-	if max_hp <= 0:
-		return -1
-	var ratio: float = float(GameState.party_hp[candidate]) / float(max_hp)
-	if ratio > PRIEST_HEAL_HP_RATIO_THRESHOLD:
-		return -1
-	return candidate
 
 
 func _next_actor() -> Dictionary:
@@ -1298,11 +633,10 @@ func _apply_enemy_layout(total: int) -> void:
 		next_size.x * 0.5,
 		ENEMY_AREA_TOP + (next_size.y - ENEMY_AREA_BOTTOM - ENEMY_AREA_TOP) * 0.5
 	)
-	_position_split_handle_visuals()
 
 
 func _layout_size_for_enemy_count(total: int) -> Vector2:
-	return _layout_size_for_rows(_row_counts_for_enemy_count(total))
+	return _layout_size_for_rows(_row_counts_for_enemy_count(total)) * _window_size_multiplier
 
 
 func _layout_size_for_rows(row_counts: Array[int]) -> Vector2:
@@ -1310,15 +644,13 @@ func _layout_size_for_rows(row_counts: Array[int]) -> Vector2:
 	var widest_row: int = 1
 	for row_count: int in row_counts:
 		widest_row = maxi(widest_row, row_count)
-	var total: int = _row_enemy_count(row_counts)
-	var visual_size: Vector2 = ENEMY_SPRITE_SIZE * _enemy_visual_scale(total)
-	var spacing: Vector2 = _enemy_spacing_for_count(total) * _enemy_visual_scale(total)
-	var grid_width: float = visual_size.x + float(widest_row - 1) * spacing.x
+	var spacing: Vector2 = _enemy_spacing_for_count(_row_enemy_count(row_counts))
+	var grid_width: float = ENEMY_SPRITE_SIZE.x + float(widest_row - 1) * spacing.x
 	var content_size := Vector2(
 		maxf(BASE_WINDOW_SIZE.x, grid_width + ENEMY_SIDE_PADDING * 2.0),
-		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(rows, spacing.y, visual_size.y) + ENEMY_AREA_BOTTOM)
+		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(rows, spacing.y) + ENEMY_AREA_BOTTOM)
 	)
-	return _cap_window_size(_fit_to_target_ratio(content_size))
+	return _fit_to_target_ratio(content_size)
 
 
 func _fit_to_target_ratio(content_size: Vector2) -> Vector2:
@@ -1399,18 +731,16 @@ func _compare_diamond_fraction(a: Dictionary, b: Dictionary) -> bool:
 	return fraction_a > fraction_b
 
 
-func _diamond_content_height(rows: int, row_height: float, enemy_height: float = ENEMY_SPRITE_SIZE.y) -> float:
-	return enemy_height + float(rows - 1) * row_height
+func _diamond_content_height(rows: int, row_height: float) -> float:
+	return ENEMY_SPRITE_SIZE.y + float(rows - 1) * row_height
 
 
 func _raw_layout_size_for_rows(row_counts: Array[int]) -> Vector2:
 	var widest_row: int = _widest_row_count(row_counts)
-	var total: int = _row_enemy_count(row_counts)
-	var visual_size: Vector2 = ENEMY_SPRITE_SIZE * _enemy_visual_scale(total)
-	var spacing: Vector2 = _enemy_spacing_for_count(total) * _enemy_visual_scale(total)
+	var spacing: Vector2 = _enemy_spacing_for_count(_row_enemy_count(row_counts))
 	return Vector2(
-		maxf(BASE_WINDOW_SIZE.x, visual_size.x + float(widest_row - 1) * spacing.x + ENEMY_SIDE_PADDING * 2.0),
-		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(row_counts.size(), spacing.y, visual_size.y) + ENEMY_AREA_BOTTOM)
+		maxf(BASE_WINDOW_SIZE.x, ENEMY_SPRITE_SIZE.x + float(widest_row - 1) * spacing.x + ENEMY_SIDE_PADDING * 2.0),
+		maxf(BASE_WINDOW_SIZE.y, ENEMY_AREA_TOP + _diamond_content_height(row_counts.size(), spacing.y) + ENEMY_AREA_BOTTOM)
 	)
 
 
@@ -1436,66 +766,22 @@ func _enemy_spacing_for_count(total: int) -> Vector2:
 	)
 
 
-func _enemy_visual_scale(total: int) -> float:
-	var crowding: float = clampf(
-		float(maxi(0, total - ENEMY_VISUAL_SCALE_FULL_COUNT)) / float(ENEMY_VISUAL_SCALE_MIN_COUNT - ENEMY_VISUAL_SCALE_FULL_COUNT),
-		0.0,
-		1.0
-	)
-	return lerpf(1.0, MIN_ENEMY_VISUAL_SCALE, crowding)
-
-
-func _enemy_spacing_for_layout(row_counts: Array[int], window_size: Vector2) -> Vector2:
-	var total: int = _row_enemy_count(row_counts)
-	var rows: int = row_counts.size()
-	var widest_row: int = _widest_row_count(row_counts)
-	var scale_factor: float = _enemy_visual_scale(total)
-	var desired: Vector2 = _enemy_spacing_for_count(total) * scale_factor
-	var visual_size: Vector2 = ENEMY_SPRITE_SIZE * scale_factor
-	var usable_width: float = maxf(visual_size.x, window_size.x - ENEMY_SIDE_PADDING * 2.0)
-	var usable_height: float = maxf(visual_size.y, window_size.y - ENEMY_AREA_TOP - ENEMY_AREA_BOTTOM)
-	var fit_x: float = desired.x if widest_row <= 1 else maxf(0.0, (usable_width - visual_size.x) / float(widest_row - 1))
-	var fit_y: float = desired.y if rows <= 1 else maxf(0.0, (usable_height - visual_size.y) / float(rows - 1))
-	return Vector2(minf(desired.x, fit_x), minf(desired.y, fit_y))
-
-
-func _cap_window_size(window_size: Vector2) -> Vector2:
-	var max_size: Vector2 = _max_window_size()
-	return Vector2(
-		clampf(window_size.x, BASE_WINDOW_SIZE.x, max_size.x),
-		clampf(window_size.y, BASE_WINDOW_SIZE.y, max_size.y)
-	)
-
-
-func _max_window_size() -> Vector2:
-	var viewport_size := Vector2(
-		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
-		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	)
-	if is_inside_tree():
-		viewport_size = get_viewport().get_visible_rect().size
-	return Vector2(
-		maxf(BASE_WINDOW_SIZE.x, viewport_size.x * MAX_WINDOW_VIEWPORT_RATIO.x),
-		maxf(BASE_WINDOW_SIZE.y, viewport_size.y * MAX_WINDOW_VIEWPORT_RATIO.y)
-	)
-
-
 func _enemy_offset(index: int, total: int) -> Vector2:
 	if total <= 1:
 		return Vector2.ZERO
-	var spacing: Vector2 = _enemy_spacing_for_layout(_enemy_row_counts, size)
+	var spacing: Vector2 = _enemy_spacing_for_count(total)
 	var rows: int = _enemy_row_counts.size()
 	var row: int = 0
 	var row_start: int = 0
 	for row_index in rows:
-		var current_row_count: int = _enemy_row_counts[row_index]
-		if index < row_start + current_row_count:
+		var row_count: int = _enemy_row_counts[row_index]
+		if index < row_start + row_count:
 			row = row_index
 			break
-		row_start += current_row_count
-	var selected_row_count: int = _enemy_row_counts[row]
+		row_start += row_count
+	var row_count: int = _enemy_row_counts[row]
 	var column: int = index - row_start
-	var width: float = float(selected_row_count - 1) * spacing.x
+	var width: float = float(row_count - 1) * spacing.x
 	var height: float = float(rows - 1) * spacing.y
 	return Vector2(
 		float(column) * spacing.x - width * 0.5,

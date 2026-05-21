@@ -1,0 +1,126 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/hero_box.gd" id="1_hero_box"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
+bg_color = Color(1, 1, 1, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_portrait"]
+bg_color = Color(0.92, 0.92, 0.86, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_name"]
+font_size = 8
+font_color = Color(0, 0, 0, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_stat"]
+font_size = 7
+font_color = Color(0.05, 0.05, 0.05, 1)
+
+[node name="HeroBox" type="Panel"]
+custom_minimum_size = Vector2(116, 72)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+script = ExtResource("1_hero_box")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = -4.0
+mouse_filter = 2
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="TopRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="PortraitFrame" type="Panel" parent="Margin/VBox/TopRow"]
+custom_minimum_size = Vector2(38, 38)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_portrait")
+
+[node name="Portrait" type="TextureRect" parent="Margin/VBox/TopRow/PortraitFrame"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 1.0
+offset_top = 1.0
+offset_right = -1.0
+offset_bottom = -1.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="Stats" type="VBoxContainer" parent="Margin/VBox/TopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="NameLabel" type="Label" parent="Margin/VBox/TopRow/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "Hero"
+label_settings = SubResource("LabelSettings_name")
+clip_text = true
+
+[node name="HpLabel" type="Label" parent="Margin/VBox/TopRow/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "HP 40/40"
+label_settings = SubResource("LabelSettings_stat")
+clip_text = true
+
+[node name="AtkLabel" type="Label" parent="Margin/VBox/TopRow/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "ATK 6"
+label_settings = SubResource("LabelSettings_stat")
+clip_text = true
+
+[node name="Upgrades" type="HFlowContainer" parent="Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+
+[node name="PopupLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+offset_left = 68.0
+offset_top = 4.0
+offset_right = 116.0
+offset_bottom = 18.0
+mouse_filter = 2
+text = "+10 HP"
+label_settings = SubResource("LabelSettings_name")
+horizontal_alignment = 2

@@ -1,8 +1,8 @@
-[gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://c6qt40ki0ys0b"]
+[gd_resource type="Resource" script_class="CharacterData" load_steps=4 format=3]
 
 [ext_resource type="Script" uid="uid://nnunb8mxorox" path="res://scripts/data/character_data.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://dtnw65msodpsj" path="res://assets/sprites/characters/hero_01.png" id="2_sheet"]
-[ext_resource type="Texture2D" uid="uid://d0xwqgkkt04jj" path="res://assets/sprites/slash_basic.png" id="3_effect"]
+[ext_resource type="Texture2D" path="res://assets/sprites/characters/hero_01.png" id="2_sheet"]
+[ext_resource type="Texture2D" path="res://assets/sprites/slash_basic.png" id="3_effect"]
 
 [resource]
 script = ExtResource("1_script")
@@ -10,8 +10,11 @@ id = &"hero"
 display_name = "Hero"
 sprite_sheet = ExtResource("2_sheet")
 attack_effect = ExtResource("3_effect")
+frame_size = Vector2i(16, 24)
+frames_per_direction = 3
+walk_fps = 6.0
 max_hp = 40
 max_mp = 5
 attack = 6
-defense = 2
+defense = 3
 agility = 6

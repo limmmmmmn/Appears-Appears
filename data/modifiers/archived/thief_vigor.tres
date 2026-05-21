@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_script")
 id = &"thief_vigor"
-display_name = "도적의 활력"
-description = "도적 최대 HP +10, 그만큼 회복."
+display_name = "Iron Body"
+description = "+10 max HP to Thief, and heal that much."
 cost = 6
 rarity = 0
 category = 0

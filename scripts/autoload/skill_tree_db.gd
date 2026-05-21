@@ -1,130 +1,100 @@
 extends Node
 
-## Catalog of meta skill-tree nodes (permanent unlocks bought with gold).
-## Nodes are built in code for now — once the set stabilizes we can move
-## them to .tres files like the modifier pool, but inline definitions keep
-## the iteration loop short during the incremental pivot.
-##
-## Query nodes by id, list all nodes for UI, or call try_purchase() to
-## spend meta gold and persist the unlock through GameState.
+## Static catalog for the incremental skill tree.
+## Nodes are authored in code for now so iteration stays fast while the tree is
+## still being redesigned.
 
-signal node_unlocked(node: NodeData)
-signal node_purchase_failed(node: NodeData, reason: String)
+const SKILL_NODE_DATA_SCRIPT: Script = preload("res://scripts/data/skill_node_data.gd")
 
-const REASON_ALREADY_UNLOCKED: String = "already_unlocked"
-const REASON_MISSING_PREREQ: String = "missing_prereq"
-const REASON_INSUFFICIENT_GOLD: String = "insufficient_gold"
-
-var _all: Array[NodeData] = []
-var _by_id: Dictionary = {}  # StringName -> NodeData
+var _all: Array = []
+var _by_id: Dictionary = {}
 
 
 func _ready() -> void:
-	_build_catalog()
-	print("[SkillTreeDB] loaded %d nodes" % _all.size())
+	_load_all()
+	print("[SkillTreeDB] loaded %d skill nodes" % _all.size())
 
 
-# ─── Catalog ──────────────────────────────────────────────────────────
-func _build_catalog() -> void:
-	_register(_make_node(
-		&"recruit_mage",
-		"마법사 영입",
-		"출동 시 마법사가 파티에 합류합니다.",
-		40,
-		[],
-		Vector2i(0, 0),
-		{"recruit_character_id": &"mage"},
-	))
-	_register(_make_node(
-		&"recruit_priest",
-		"사제 영입",
-		"출동 시 사제가 파티에 합류합니다.",
-		80,
-		[&"recruit_mage"],
-		Vector2i(1, 0),
-		{"recruit_character_id": &"priest"},
-	))
+func get_all() -> Array:
+	return _all.duplicate()
 
 
-func _make_node(
-	id: StringName,
-	display_name: String,
-	description: String,
-	cost: int,
-	prereq_ids: Array,
-	grid_position: Vector2i,
-	effect_data: Dictionary,
-) -> NodeData:
-	var node: NodeData = NodeData.new()
-	node.id = id
-	node.display_name = display_name
-	node.description = description
-	node.cost = cost
-	var typed_prereqs: Array[StringName] = []
-	for prereq in prereq_ids:
-		typed_prereqs.append(prereq)
-	node.prereq_ids = typed_prereqs
-	node.grid_position = grid_position
-	node.effect_data = effect_data
-	return node
+func get_by_id(id: StringName):
+	return _by_id.get(id, null)
 
 
-func _register(node: NodeData) -> void:
+func _load_all() -> void:
+	_all.clear()
+	_by_id.clear()
+	_register(_node(&"root", "Auto Battle", "AUTO", "The party fights battle windows automatically.", Vector2i(0, 0), 0))
+
+	# North: enemy supply.
+	_register(_node(&"more_slimes", "More Slimes", "SLIME", "Start fields with more enemies.", Vector2i(0, -2), 4, [&"root"], "", {"field_enemy_count_bonus": 1}))
+	_register(_node(&"more_slimes_2", "Slime Pack", "PACK", "Add even more field enemies.", Vector2i(1, -2), 80, [&"more_slimes"], "", {"field_enemy_count_bonus": 2}))
+	_register(_node(&"monster_chase", "Monster Chase", "CHASE", "Chaser enemies can begin appearing.", Vector2i(0, -3), 20, [&"more_slimes"], "", {"chaser_enemies_enabled": true}))
+	_register(_node(&"enemies_per_window", "Crowded Windows", "2/WIN", "Battle windows can hold one more enemy.", Vector2i(0, -4), 30, [&"monster_chase"], "", {"enemies_per_window_bonus": 1}))
+	_register(_node(&"spawner", "Spawner", "SPAWN", "Enemy waves refill faster.", Vector2i(0, -5), 130, [&"enemies_per_window"], "", {"field_spawn_interval_mult": 0.82}))
+	_register(_node(&"spawner_fast", "Fast Spawner", "FAST", "Enemy waves refill much faster.", Vector2i(-1, -5), 300, [&"spawner"], "", {"field_spawn_interval_mult": 0.72}))
+	_register(_node(&"spawner_burst", "Burst Spawner", "BURST", "Each wave spawns one extra enemy.", Vector2i(1, -5), 400, [&"spawner"], "", {"field_spawn_batch_bonus": 1}))
+	_register(_node(&"max_enemies", "More Room", "MAX8", "Raise field enemy pressure.", Vector2i(0, -6), 150, [&"spawner"], "", {"field_enemy_count_bonus": 3, "field_crowd_cap_bonus": 2}))
+	_register(_node(&"max_enemies_2", "Swarm Room", "MAX16", "Raise field enemy pressure again.", Vector2i(0, -7), 600, [&"max_enemies"], "", {"field_enemy_count_bonus": 6, "field_crowd_cap_bonus": 4}))
+
+	# West: resources and party growth.
+	_register(_node(&"gold", "Gold", "GOLD", "Enemies drop extra gold.", Vector2i(-2, 0), 2, [&"root"], "", {"gold_flat": 1}))
+	_register(_node(&"item", "Equipment", "ITEM", "Enemies can drop equipment.", Vector2i(-3, 0), 6, [&"gold"], "", {"item_drops_enabled": true}))
+	_register(_node(&"magic", "Magic", "MAGIC", "Recruit a mage with Fireburst.", Vector2i(-4, 0), 70, [&"item"], "res://data/modifiers/prototype/recruit_mage.tres"))
+	_register(_node(&"companion", "Companion", "ALLY", "Recruit a priest companion.", Vector2i(-5, 0), 140, [&"magic"], "res://data/modifiers/prototype/recruit_priest.tres"))
+	_register(_node(&"drop_uncommon", "Better Drops", "DROP1", "Equipment drops more often.", Vector2i(-3, -1), 100, [&"item"], "", {"item_drop_chance_bonus": 0.10}))
+	_register(_node(&"drop_rare", "Rare Drops", "DROP2", "Equipment drops more often.", Vector2i(-3, -2), 350, [&"drop_uncommon"], "", {"item_drop_chance_bonus": 0.10}))
+	_register(_node(&"drop_epic", "Epic Drops", "DROP3", "Equipment drops more often.", Vector2i(-3, -3), 1200, [&"drop_rare"], "", {"item_drop_chance_bonus": 0.10}))
+	_register(_node(&"drop_legendary", "Legend Drops", "DROP4", "Equipment drops more often.", Vector2i(-3, -4), 4000, [&"drop_epic"], "", {"item_drop_chance_bonus": 0.10}))
+
+	# South: automation.
+	_register(_node(&"atb", "ATB", "ATB", "Battle windows tick faster.", Vector2i(1, 2), 70, [&"root"], "", {"battle_turn_interval_mult": 0.82}))
+	_register(_node(&"battle_movement", "Battle Movement", "MOVE", "Move while battle windows run on the field.", Vector2i(0, 3), 96, [&"atb"], "res://data/modifiers/prototype/swift_boots.tres", {"battle_movement_enabled": true}))
+	_register(_node(&"pickup_range", "Pickup Range", "PICK", "Pickups have a wider collection range.", Vector2i(1, 3), 110, [&"battle_movement"], "", {"pickup_range_mult": 1.7}))
+	_register(_node(&"multi_battle", "Multi Battle", "MULTI", "Every encounter opens one extra battle window.", Vector2i(0, 4), 192, [&"battle_movement"], "", {"extra_windows_flat": 1}))
+
+	# East: window manipulation and economy.
+	_register(_node(&"window_push", "Window Push", "PUSH", "Battle windows push each other around.", Vector2i(2, 0), 60, [&"root"], "", {"window_push_enabled": true}))
+	_register(_node(&"window_bash", "Window Bash", "BASH", "Bumping windows damages enemies.", Vector2i(3, 0), 90, [&"window_push"], "res://data/modifiers/prototype/window_crash.tres"))
+	_register(_node(&"map_expand", "Map Expand", "MAP", "Fields become larger and hold more enemies.", Vector2i(4, 0), 250, [&"window_bash"], "", {"field_size_mult": 1.5, "field_enemy_count_bonus": 2}))
+	_register(_node(&"shop_haggle", "Haggle", "x1.5", "Enemy gold is multiplied.", Vector2i(2, 1), 50, [&"window_push"], "", {"gold_mult": 1.5}))
+	_register(_node(&"shop_merchant", "Merchant", "x2", "Enemy gold is multiplied again.", Vector2i(3, 1), 200, [&"shop_haggle"], "", {"gold_mult": 1.35}))
+	_register(_node(&"shop_baron", "Baron", "x3", "Enemy gold is multiplied again.", Vector2i(4, 1), 800, [&"shop_merchant"], "", {"gold_mult": 1.5}))
+
+
+func _register(node) -> void:
 	if node.id == &"":
-		push_warning("[SkillTreeDB] node has empty id")
+		push_warning("[SkillTreeDB] skill node has empty id")
 		return
 	if _by_id.has(node.id):
-		push_warning("[SkillTreeDB] duplicate id: %s" % node.id)
+		push_warning("[SkillTreeDB] duplicate skill node id: %s" % node.id)
 		return
 	_all.append(node)
 	_by_id[node.id] = node
 
 
-# ─── Queries ──────────────────────────────────────────────────────────
-func get_by_id(id: StringName) -> NodeData:
-	return _by_id.get(id, null)
-
-
-func get_all() -> Array[NodeData]:
-	return _all.duplicate()
-
-
-func is_unlocked(id: StringName) -> bool:
-	return GameState.unlocked_node_ids.has(id)
-
-
-## Returns true when every prereq has been unlocked. Root nodes (no
-## prereqs) always pass.
-func prereqs_satisfied(node: NodeData) -> bool:
-	if node == null:
-		return false
-	for prereq_id: StringName in node.prereq_ids:
-		if not is_unlocked(prereq_id):
-			return false
-	return true
-
-
-func can_purchase(node: NodeData) -> bool:
-	if node == null or is_unlocked(node.id):
-		return false
-	if not prereqs_satisfied(node):
-		return false
-	return GameState.gold >= node.cost
-
-
-# ─── Purchase ─────────────────────────────────────────────────────────
-func try_purchase(node: NodeData) -> bool:
-	if node == null:
-		return false
-	if is_unlocked(node.id):
-		node_purchase_failed.emit(node, REASON_ALREADY_UNLOCKED)
-		return false
-	if not prereqs_satisfied(node):
-		node_purchase_failed.emit(node, REASON_MISSING_PREREQ)
-		return false
-	if not GameState.spend_gold(node.cost):
-		node_purchase_failed.emit(node, REASON_INSUFFICIENT_GOLD)
-		return false
-	GameState.unlock_node(node.id)
-	node_unlocked.emit(node)
-	return true
+func _node(
+	id: StringName,
+	display_name: String,
+	short_label: String,
+	description: String,
+	grid_position: Vector2i,
+	cost: int,
+	prerequisite_ids: Array[StringName] = [],
+	modifier_path: String = "",
+	effect_data: Dictionary = {}
+) -> Resource:
+	var node: Resource = SKILL_NODE_DATA_SCRIPT.new()
+	node.id = id
+	node.display_name = display_name
+	node.short_label = short_label
+	node.description = description
+	node.grid_position = grid_position
+	node.cost = cost
+	node.prerequisite_ids = prerequisite_ids.duplicate()
+	node.effect_data = effect_data.duplicate()
+	if not modifier_path.is_empty() and ResourceLoader.exists(modifier_path):
+		node.linked_modifier = load(modifier_path) as ModifierData
+	return node
