@@ -6,9 +6,6 @@ extends CharacterBody2D
 
 @export var speed: float = 80.0
 
-const CAMERA_LIMIT_DISABLED_MIN: int = -10000000
-const CAMERA_LIMIT_DISABLED_MAX: int = 10000000
-
 @onready var _visual: CharacterVisual = $Visual
 @onready var _camera: Camera2D = $Camera2D
 
@@ -39,15 +36,10 @@ func setup(data: CharacterData) -> void:
 func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 	_field_bounds = Rect2(min_pos, max_pos - min_pos)
 	if _camera:
-		var viewport_size := Vector2(
-			float(ProjectSettings.get_setting("display/window/size/viewport_width")),
-			float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-		)
-		var field_size: Vector2 = max_pos - min_pos
-		_camera.limit_left = int(min_pos.x) if field_size.x > viewport_size.x else CAMERA_LIMIT_DISABLED_MIN
-		_camera.limit_right = int(max_pos.x) if field_size.x > viewport_size.x else CAMERA_LIMIT_DISABLED_MAX
-		_camera.limit_top = int(min_pos.y) if field_size.y > viewport_size.y else CAMERA_LIMIT_DISABLED_MIN
-		_camera.limit_bottom = int(max_pos.y) if field_size.y > viewport_size.y else CAMERA_LIMIT_DISABLED_MAX
+		_camera.limit_left = int(min_pos.x)
+		_camera.limit_right = int(max_pos.x)
+		_camera.limit_top = int(min_pos.y)
+		_camera.limit_bottom = int(max_pos.y)
 
 
 func _physics_process(_delta: float) -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" uid="uid://b1m4vxga6tiqb" path="res://scripts/runtime/hud.gd" id="1_hud"]
 [ext_resource type="Theme" path="res://assets/fonts/field_theme.tres" id="2_theme"]
@@ -27,6 +27,42 @@ font_size = 5
 font_color = Color(1, 1, 1, 0.9)
 shadow_size = 1
 shadow_color = Color(0, 0, 0, 0.8)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_debug_button"]
+bg_color = Color(0, 0, 0, 0.82)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 1
+corner_radius_top_right = 1
+corner_radius_bottom_right = 1
+corner_radius_bottom_left = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_debug_button_hover"]
+bg_color = Color(0.96, 0.68, 0.16, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 1
+corner_radius_top_right = 1
+corner_radius_bottom_right = 1
+corner_radius_bottom_left = 1
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_debug_button_pressed"]
+bg_color = Color(0.58, 0.34, 0.04, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 1
+corner_radius_top_right = 1
+corner_radius_bottom_right = 1
+corner_radius_bottom_left = 1
 
 [node name="HUD" type="CanvasLayer"]
 layer = 5
@@ -63,6 +99,21 @@ size_flags_horizontal = 3
 text = "Gold 0"
 label_settings = SubResource("LabelSettings_top")
 horizontal_alignment = 2
+
+[node name="DebugGoldButton" type="Button" parent="TopBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(66, 22)
+layout_mode = 2
+tooltip_text = "+1000 Gold"
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(0, 0, 0, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 7
+theme_override_styles/normal = SubResource("StyleBox_debug_button")
+theme_override_styles/hover = SubResource("StyleBox_debug_button_hover")
+theme_override_styles/pressed = SubResource("StyleBox_debug_button_pressed")
+text = "+1000"
 
 [node name="MemberRow" type="HBoxContainer" parent="."]
 unique_name_in_owner = true

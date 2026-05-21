@@ -57,7 +57,7 @@ func _load_all() -> void:
 
 	# East: window manipulation and economy.
 	_register(_node(&"window_push", "Window Push", "PUSH", "Battle windows push each other around.", Vector2i(2, 0), 60, [&"root"], "", {"window_push_enabled": true}))
-	_register(_node(&"window_bash", "Window Bash", "BASH", "Bumping windows damages enemies.", Vector2i(3, 0), 90, [&"window_push"], "res://data/modifiers/prototype/window_crash.tres"))
+	_register(_node(&"window_bash", "Window Bash", "BASH", "Bump into battle windows to push them and damage enemies.", Vector2i(3, 0), 90, [&"window_push"], "res://data/modifiers/prototype/window_crash.tres"))
 	_register(_node(&"map_expand", "Map Expand", "MAP", "Fields become larger and hold more enemies.", Vector2i(4, 0), 250, [&"window_bash"], "", {"field_size_mult": 1.5, "field_enemy_count_bonus": 2}))
 	_register(_node(&"shop_haggle", "Haggle", "ECO1", "Economy tuning placeholder.", Vector2i(2, 1), 50, [&"window_push"]))
 	_register(_node(&"shop_merchant", "Merchant", "ECO2", "Economy tuning placeholder.", Vector2i(3, 1), 200, [&"shop_haggle"]))

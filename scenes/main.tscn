@@ -19,7 +19,7 @@ script = ExtResource("1_main")
 
 [node name="Field" parent="." unique_id=23524025 instance=ExtResource("2_field")]
 
-[node name="BattleManager" type="CanvasLayer" parent="." unique_id=614174327]
+[node name="BattleManager" type="Node2D" parent="." unique_id=614174327]
 script = ExtResource("3_mgr")
 
 [node name="HUD" parent="." unique_id=1507021759 instance=ExtResource("4_hud")]

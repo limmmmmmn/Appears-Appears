@@ -1,9 +1,10 @@
 extends Node2D
 
 ## Main entry point.
-## Sets up the party and drives Field -> Settlement -> Field loops.
+## Sets up the party and drives Field -> Settlement report -> Town/Field loops.
 ## Battle window spawning lives in BattleManager.
 
+const SETTLEMENT_REPORT_SCENE: PackedScene = preload("res://scenes/settlement_report.tscn")
 const TOWN_SCENE: PackedScene = preload("res://scenes/town2.tscn")
 const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
@@ -19,6 +20,7 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 @onready var _hud: HUD = $HUD
 @onready var _pause_overlay: CanvasLayer = $PauseOverlay
 
+var _settlement_report: SettlementReport
 var _town: Town2
 var _game_over: GameOver
 var _is_manually_paused: bool = false
@@ -60,13 +62,40 @@ func _on_field_loop_settled(loop_num: int) -> void:
 		GameState.unlocked_field_node_count(),
 	])
 	_battle_manager.abort_all_battles()
-	_show_town("%s 정산" % GameState.field_region_name())
+	_show_settlement_report("%s 정산" % GameState.field_region_name())
 
 
 func _on_town_entered(_tile: Node) -> void:
 	print("[main] settlement tile entered — aborting active battles with no rewards")
 	_battle_manager.abort_all_battles()
-	_show_town("%s 정산" % GameState.field_region_name())
+	_show_settlement_report("%s 정산" % GameState.field_region_name())
+
+
+func _show_settlement_report(title: String = "") -> void:
+	if _settlement_report and is_instance_valid(_settlement_report):
+		return
+	_set_manual_pause(false)
+	_hud.set_level_up_ui_enabled(false)
+	_set_run_layers_visible(false)
+	_settlement_report = SETTLEMENT_REPORT_SCENE.instantiate()
+	_settlement_report.setup(title, GameStats.current_field_loop_report_lines(), GameState.gold)
+	_settlement_report.continue_requested.connect(_on_settlement_continue_requested)
+	_settlement_report.town_requested.connect(_on_settlement_town_requested)
+	add_child(_settlement_report)
+	get_tree().paused = true
+
+
+func _on_settlement_continue_requested() -> void:
+	_settlement_report = null
+	get_tree().paused = false
+	_set_run_layers_visible(true)
+	_hud.set_level_up_ui_enabled(true)
+	GameState.start_next_field_loop()
+
+
+func _on_settlement_town_requested() -> void:
+	_settlement_report = null
+	_show_town("%s 마을" % GameState.field_region_name())
 
 
 func _show_town(title: String = "") -> void:
@@ -117,6 +146,9 @@ func _show_game_over() -> void:
 	if _game_over and is_instance_valid(_game_over):
 		return
 	_set_manual_pause(false)
+	if _settlement_report and is_instance_valid(_settlement_report):
+		_settlement_report.queue_free()
+		_settlement_report = null
 	# Close town if it happens to be up (defensive — shouldn't be).
 	if _town and is_instance_valid(_town):
 		_town.queue_free()
@@ -149,7 +181,9 @@ func _set_manual_pause(is_paused: bool) -> void:
 
 
 func _can_toggle_manual_pause() -> bool:
-	return not (_town and is_instance_valid(_town)) and not (_game_over and is_instance_valid(_game_over))
+	return not (_settlement_report and is_instance_valid(_settlement_report)) \
+		and not (_town and is_instance_valid(_town)) \
+		and not (_game_over and is_instance_valid(_game_over))
 
 
 ## F1 = instant settlement (skip combat to test the upgrade tree)

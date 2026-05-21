@@ -17,8 +17,8 @@ const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.png")
 
-## Base world-map size. Nodes are the only thing that should expand it.
-const FIELD_SIZE: Vector2 = Vector2(240, 150)
+## Base world-map size. Starts as one camera-sized field; nodes expand it.
+const FIELD_SIZE: Vector2 = Vector2(640, 360)
 const TILE_SIZE: int = 16
 const SPAWN_MARGIN: float = 24.0
 ## Don't drop slimes within this radius of the player on field-loop start.
@@ -32,7 +32,7 @@ const DROP_SCATTER_RADIUS_MIN: float = 28.0
 const DROP_SCATTER_RADIUS_MAX: float = 52.0
 const CLEARED_FIELD_REMAINING_TIME: float = 3.0
 
-@export var initial_slime_count: int = 1
+@export var initial_slime_count: int = 16
 @export var small_forest_cluster_count_min: int = 3
 @export var small_forest_cluster_count_max: int = 5
 @export var small_forest_min_trees: int = 8
@@ -552,6 +552,10 @@ func _apply_field_size() -> void:
 	_town_tile.position = _hidden_town_tile_position()
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
+
+
+func get_field_rect() -> Rect2:
+	return Rect2(Vector2.ZERO, _field_size)
 
 
 func _reveal_town_tile() -> void:

@@ -1235,8 +1235,12 @@ func battle_window_push_enabled() -> bool:
 	return skill_effect_bool("window_push_enabled") or window_collision_damage_ratio() > 0.0
 
 
+func window_bash_enabled() -> bool:
+	return has_skill_node(&"window_bash") or window_collision_damage_ratio() > 0.0
+
+
 func party_window_push_enabled() -> bool:
-	return party_bump_damage_ratio() > 0.0 or window_collision_heal_amount() > 0
+	return window_bash_enabled() or party_bump_damage_ratio() > 0.0 or window_collision_heal_amount() > 0
 
 
 # ─── Reset ────────────────────────────────────────────────────────────
