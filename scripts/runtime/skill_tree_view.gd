@@ -10,6 +10,7 @@ const TOOLTIP_GAP: float = 7.0
 const ZOOM_MIN: float = 0.5
 const ZOOM_MAX: float = 1.75
 const ZOOM_STEP: float = 1.12
+const KEYBOARD_PAN_SPEED: float = 280.0
 const COLOR_LINE_OWNED: Color = Color(0.95, 0.62, 0.16, 1.0)
 const COLOR_LINE_AVAILABLE: Color = Color(0.26, 0.55, 0.7, 1.0)
 const COLOR_LINE_LOCKED: Color = Color(0.22, 0.28, 0.32, 0.45)
@@ -21,14 +22,19 @@ var _hover_tweens_by_button: Dictionary = {}
 var _tree_layer: Control
 var _tree_zoom: float = 0.86
 var _tree_offset: Vector2 = Vector2(0.0, 34.0)
-var _tooltip_panel: PanelContainer
+var _tooltip_panel: Panel
 var _tooltip_label: Label
 var _hovered_button: Button
 var _hovered_node
+var _is_drag_panning: bool = false
+var _drag_pan_button: int = 0
+var _keyboard_pan_armed: bool = false
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
+	set_process(true)
+	set_process_input(true)
 	_build_tree_layer()
 	_build_buttons()
 	_build_tooltip()
@@ -52,6 +58,15 @@ func _draw() -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	_handle_zoom_input(event)
+	_handle_left_drag_pan_input(event)
+
+
+func _input(event: InputEvent) -> void:
+	_handle_drag_pan_input(event)
+
+
+func _process(delta: float) -> void:
+	_handle_keyboard_pan(delta)
 
 
 func refresh() -> void:
@@ -81,7 +96,7 @@ func _build_tree_layer() -> void:
 
 
 func _build_tooltip() -> void:
-	_tooltip_panel = PanelContainer.new()
+	_tooltip_panel = Panel.new()
 	_tooltip_panel.visible = false
 	_tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tooltip_panel.z_index = 100
@@ -89,6 +104,11 @@ func _build_tooltip() -> void:
 	_tooltip_panel.size = TOOLTIP_SIZE
 	_tooltip_panel.add_theme_stylebox_override("panel", _tooltip_style())
 	_tooltip_label = Label.new()
+	_tooltip_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tooltip_label.offset_left = 8.0
+	_tooltip_label.offset_top = 6.0
+	_tooltip_label.offset_right = -8.0
+	_tooltip_label.offset_bottom = -6.0
 	_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tooltip_label.add_theme_font_override("font", TOWN_UI_FONT)
 	_tooltip_label.add_theme_font_size_override("font_size", 10)
@@ -96,6 +116,7 @@ func _build_tooltip() -> void:
 	_tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tooltip_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tooltip_label.clip_text = true
 	_tooltip_panel.add_child(_tooltip_label)
 	add_child(_tooltip_panel)
 
@@ -140,27 +161,36 @@ func _tooltip_text(node) -> String:
 
 
 func _apply_button_style(button: Button, owned: bool, available: bool, can_buy: bool) -> void:
-	var bg: Color = Color(0.18, 0.22, 0.24, 1.0)
-	var border: Color = Color(0.07, 0.08, 0.09, 1.0)
-	var text: Color = Color(0.64, 0.68, 0.68, 1.0)
+	var border: Color = Color.WHITE
+	var bg: Color = Color(0.12, 0.16, 0.17, 1.0)
+	var hover_bg: Color = Color(0.2, 0.25, 0.26, 1.0)
+	var pressed_bg: Color = Color(0.08, 0.11, 0.12, 1.0)
+	var focus_bg: Color = Color(0.24, 0.3, 0.31, 1.0)
+	var text: Color = Color(0.62, 0.66, 0.66, 1.0)
 	if owned:
 		bg = Color(0.95, 0.63, 0.18, 1.0)
-		border = Color(0.18, 0.1, 0.04, 1.0)
-		text = Color(0.09, 0.06, 0.03, 1.0)
+		hover_bg = Color(1.0, 0.74, 0.28, 1.0)
+		pressed_bg = Color(0.72, 0.43, 0.09, 1.0)
+		focus_bg = Color(1.0, 0.78, 0.32, 1.0)
+		text = Color(0.08, 0.05, 0.02, 1.0)
 	elif can_buy:
 		bg = Color(0.28, 0.68, 0.72, 1.0)
-		border = Color(0.05, 0.22, 0.26, 1.0)
-		text = Color(0.05, 0.09, 0.1, 1.0)
+		hover_bg = Color(0.38, 0.82, 0.86, 1.0)
+		pressed_bg = Color(0.17, 0.46, 0.5, 1.0)
+		focus_bg = Color(0.44, 0.9, 0.94, 1.0)
+		text = Color(0.02, 0.07, 0.08, 1.0)
 	elif available:
-		bg = Color(0.38, 0.42, 0.44, 1.0)
-		border = Color(0.12, 0.14, 0.15, 1.0)
-		text = Color(0.95, 0.88, 0.68, 1.0)
+		bg = Color(0.4, 0.45, 0.44, 1.0)
+		hover_bg = Color(0.52, 0.58, 0.56, 1.0)
+		pressed_bg = Color(0.28, 0.32, 0.31, 1.0)
+		focus_bg = Color(0.58, 0.64, 0.62, 1.0)
+		text = Color(1.0, 0.78, 0.22, 1.0)
 	var normal := _style(bg, border, 2)
-	var hover := _style(bg.lightened(0.08), border, 2)
-	var focus := _style(bg.lightened(0.14), Color(1.0, 0.9, 0.32, 1.0), 3)
+	var hover := _style(hover_bg, border, 2)
+	var focus := _style(focus_bg, border, 3)
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", _style(bg.darkened(0.08), border, 2))
+	button.add_theme_stylebox_override("pressed", _style(pressed_bg, border, 2))
 	button.add_theme_stylebox_override("focus", focus)
 	button.add_theme_stylebox_override("disabled", normal)
 	button.add_theme_color_override("font_color", text)
@@ -295,6 +325,67 @@ func _handle_zoom_input(event: InputEvent) -> void:
 		accept_event()
 
 
+func _handle_drag_pan_input(event: InputEvent) -> void:
+	var mouse_button := event as InputEventMouseButton
+	if mouse_button != null:
+		if mouse_button.button_index == MOUSE_BUTTON_MIDDLE or mouse_button.button_index == MOUSE_BUTTON_RIGHT:
+			if mouse_button.pressed:
+				_is_drag_panning = true
+				_drag_pan_button = mouse_button.button_index
+			elif _is_drag_panning and mouse_button.button_index == _drag_pan_button:
+				_is_drag_panning = false
+				_drag_pan_button = 0
+			accept_event()
+		return
+	var motion := event as InputEventMouseMotion
+	if motion != null and _is_drag_panning:
+		_pan_tree_by(motion.relative)
+		accept_event()
+
+
+func _handle_left_drag_pan_input(event: InputEvent) -> void:
+	var mouse_button := event as InputEventMouseButton
+	if mouse_button != null and mouse_button.button_index == MOUSE_BUTTON_LEFT:
+		if mouse_button.pressed:
+			_is_drag_panning = true
+			_drag_pan_button = MOUSE_BUTTON_LEFT
+		elif _is_drag_panning and _drag_pan_button == MOUSE_BUTTON_LEFT:
+			_is_drag_panning = false
+			_drag_pan_button = 0
+		accept_event()
+		return
+	var motion := event as InputEventMouseMotion
+	if motion != null and _is_drag_panning and _drag_pan_button == MOUSE_BUTTON_LEFT:
+		_pan_tree_by(motion.relative)
+		accept_event()
+
+
+func _handle_keyboard_pan(delta: float) -> void:
+	if not _keyboard_pan_armed:
+		if not _is_any_pan_action_pressed():
+			_keyboard_pan_armed = true
+		return
+	var pan := Vector2.ZERO
+	if Input.is_action_pressed("move_left"):
+		pan.x += 1.0
+	if Input.is_action_pressed("move_right"):
+		pan.x -= 1.0
+	if Input.is_action_pressed("move_up"):
+		pan.y += 1.0
+	if Input.is_action_pressed("move_down"):
+		pan.y -= 1.0
+	if pan == Vector2.ZERO:
+		return
+	_pan_tree_by(pan.normalized() * KEYBOARD_PAN_SPEED * delta)
+
+
+func _is_any_pan_action_pressed() -> bool:
+	return Input.is_action_pressed("move_left")\
+		or Input.is_action_pressed("move_right")\
+		or Input.is_action_pressed("move_up")\
+		or Input.is_action_pressed("move_down")
+
+
 func _zoom_tree_at(factor: float, pivot: Vector2) -> void:
 	var old_zoom: float = _tree_zoom
 	var next_zoom: float = clampf(old_zoom * factor, ZOOM_MIN, ZOOM_MAX)
@@ -303,6 +394,13 @@ func _zoom_tree_at(factor: float, pivot: Vector2) -> void:
 	var tree_point_under_cursor: Vector2 = (pivot - _tree_offset) / old_zoom
 	_tree_zoom = next_zoom
 	_tree_offset = pivot - tree_point_under_cursor * next_zoom
+	_apply_tree_transform()
+	if _hovered_button != null and _hovered_node != null:
+		_show_node_tooltip(_hovered_button, _hovered_node)
+
+
+func _pan_tree_by(delta: Vector2) -> void:
+	_tree_offset += delta
 	_apply_tree_transform()
 	if _hovered_button != null and _hovered_node != null:
 		_show_node_tooltip(_hovered_button, _hovered_node)

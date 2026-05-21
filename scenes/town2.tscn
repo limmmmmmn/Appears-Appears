@@ -6,13 +6,13 @@
 [ext_resource type="Font" path="res://assets/fonts/town_ui_font.tres" id="4_font"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_bg"]
-bg_color = Color(0.84, 0.93, 0.96, 1)
+bg_color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_horizon"]
-bg_color = Color(0.71, 0.87, 0.92, 1)
+bg_color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_divider"]
-bg_color = Color(0.18, 0.32, 0.45, 0.55)
+bg_color = Color(0.3529412, 0.70980394, 0.32156864, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_btn_normal"]
 bg_color = Color(0.13, 0.1, 0.07, 1)
@@ -65,7 +65,7 @@ border_color = Color(0, 0, 0, 1)
 [sub_resource type="LabelSettings" id="LabelSettings_title"]
 font = ExtResource("4_font")
 font_size = 10
-font_color = Color(0.1, 0.22, 0.32, 1)
+font_color = Color(1, 1, 1, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_gold"]
 font = ExtResource("4_font")
@@ -133,6 +133,7 @@ theme_override_constants/separation = 8
 alignment = 1
 
 [node name="DividerLine" type="Panel" parent="."]
+visible = false
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
