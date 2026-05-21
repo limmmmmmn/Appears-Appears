@@ -80,6 +80,7 @@ func _ready() -> void:
 	EventBus.field_loop_started.connect(_on_field_loop_started)
 	EventBus.field_item_drop_requested.connect(_on_field_item_drop_requested)
 	EventBus.field_gold_drop_requested.connect(_on_field_gold_drop_requested)
+	EventBus.field_loop_finish_requested.connect(_on_field_loop_finish_requested)
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
 
@@ -580,6 +581,13 @@ func _finish_field_loop_timer() -> void:
 	GameState.clear_move_speed_drag()
 	EventBus.field_loop_timer_changed.emit(0)
 	EventBus.field_loop_settled.emit(GameState.field_loop_count)
+
+
+func _on_field_loop_finish_requested() -> void:
+	if GameState.field_loop_count <= 0 or _loop_complete:
+		return
+	_loop_elapsed = _loop_settlement_time
+	_finish_field_loop_timer()
 
 
 func _emit_loop_timer_changed() -> void:

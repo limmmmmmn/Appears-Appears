@@ -11,10 +11,34 @@ const ZOOM_MIN: float = 0.5
 const ZOOM_MAX: float = 1.75
 const ZOOM_STEP: float = 1.12
 const KEYBOARD_PAN_SPEED: float = 280.0
+const TREE_DETAIL_FADE_SPEED: float = 7.5
+const CAMP_ACTOR_WANDER_RADIUS: Vector2 = Vector2(13.0, 7.0)
+const CAMP_ACTOR_WANDER_SPEED: float = 13.0
+const CAMP_SPEECH_MIN_WAIT: float = 3.8
+const CAMP_SPEECH_MAX_WAIT: float = 7.2
+const CAMP_SPEECH_DURATION: float = 2.1
+const CAMP_SPEECH_FONT_SIZE: int = 9
+const CAMP_SPEECH_PADDING: Vector2 = Vector2(8.0, 5.0)
+const CAMP_SPEECH_MIN_SIZE: Vector2 = Vector2(64.0, 22.0)
 const COLOR_LINE_OWNED: Color = Color(0.95, 0.62, 0.16, 1.0)
 const COLOR_LINE_AVAILABLE: Color = Color(0.26, 0.55, 0.7, 1.0)
 const COLOR_LINE_LOCKED: Color = Color(0.22, 0.28, 0.32, 0.45)
 const TOWN_UI_FONT: Font = preload("res://assets/fonts/town_ui_font.tres")
+const BONFIRE_ICON: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
+const ROOT_NODE_ID: StringName = &"root"
+const BONFIRE_COMPANION_OFFSET: Dictionary = {
+	&"mage": Vector2(24.0, 18.0),
+}
+const BONFIRE_COMPANION_REQUIRED_NODE: Dictionary = {
+	&"mage": &"companion",
+}
+const BONFIRE_COMPANION_LINES: Dictionary = {
+	&"mage": [
+		"난 불이 좋아.",
+		"불빛 옆이면 마력이 잘 돌아.",
+		"따뜻하네. 계속 타올라라.",
+	],
+}
 
 var _buttons_by_id: Dictionary = {}
 var _can_purchase_by_id: Dictionary = {}
@@ -26,9 +50,12 @@ var _tooltip_panel: Panel
 var _tooltip_label: Label
 var _hovered_button: Button
 var _hovered_node
+var _tree_detail_target_alpha: float = 0.0
+var _tree_detail_alpha: float = 0.0
 var _is_drag_panning: bool = false
 var _drag_pan_button: int = 0
 var _keyboard_pan_armed: bool = false
+var _camp_actors_by_id: Dictionary = {}
 
 
 func _ready() -> void:
@@ -67,6 +94,8 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_handle_keyboard_pan(delta)
+	_update_tree_detail_reveal(delta)
+	_update_camp_actors(delta)
 
 
 func refresh() -> void:
@@ -78,11 +107,17 @@ func refresh() -> void:
 		var available: bool = GameState.can_unlock_skill_node(node.id)
 		var can_buy: bool = GameState.can_purchase_skill_node(node.id)
 		_can_purchase_by_id[node.id] = can_buy
-		button.text = _button_text(node)
 		button.disabled = false
 		button.focus_mode = Control.FOCUS_ALL if can_buy else Control.FOCUS_NONE
 		button.tooltip_text = ""
-		_apply_button_style(button, owned, available, can_buy)
+		if node.id == ROOT_NODE_ID:
+			_apply_icon_node(button)
+		else:
+			button.icon = null
+			button.text = _button_text(node)
+			_apply_button_style(button, owned, available, can_buy)
+		_apply_button_visibility(button, node)
+	_refresh_camp_actors()
 	queue_redraw()
 
 
@@ -131,6 +166,9 @@ func _build_buttons() -> void:
 		button.mouse_filter = Control.MOUSE_FILTER_PASS
 		button.focus_mode = Control.FOCUS_ALL
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		button.expand_icon = false
 		button.add_theme_font_override("font", TOWN_UI_FONT)
 		button.add_theme_font_size_override("font_size", 10)
 		button.gui_input.connect(_handle_zoom_input)
@@ -199,6 +237,217 @@ func _apply_button_style(button: Button, owned: bool, available: bool, can_buy: 
 	button.add_theme_color_override("font_disabled_color", text.darkened(0.2) if not owned else text)
 
 
+func _apply_button_visibility(button: Button, node) -> void:
+	var shown_normally: bool = _is_node_shown_normally(node)
+	button.modulate.a = 1.0 if shown_normally else _tree_detail_alpha
+	button.mouse_filter = Control.MOUSE_FILTER_PASS if shown_normally or _tree_detail_alpha > 0.12 else Control.MOUSE_FILTER_IGNORE
+
+
+func _is_node_shown_normally(node) -> bool:
+	if node == null:
+		return false
+	if node.id == ROOT_NODE_ID:
+		return true
+	return GameState.has_skill_node(node.id) or GameState.can_purchase_skill_node(node.id)
+
+
+func _update_tree_detail_reveal(delta: float) -> void:
+	var next_alpha: float = move_toward(_tree_detail_alpha, _tree_detail_target_alpha, TREE_DETAIL_FADE_SPEED * delta)
+	if is_equal_approx(next_alpha, _tree_detail_alpha):
+		return
+	_tree_detail_alpha = next_alpha
+	for node in SkillTreeDB.get_all():
+		var button := _buttons_by_id.get(node.id, null) as Button
+		if button:
+			_apply_button_visibility(button, node)
+	queue_redraw()
+
+
+func _apply_icon_node(button: Button) -> void:
+	button.text = ""
+	button.icon = BONFIRE_ICON
+	button.add_theme_stylebox_override("normal", _icon_style())
+	button.add_theme_stylebox_override("hover", _icon_style())
+	button.add_theme_stylebox_override("pressed", _icon_style())
+	button.add_theme_stylebox_override("focus", _icon_focus_style())
+	button.add_theme_stylebox_override("disabled", _icon_style())
+	button.add_theme_color_override("icon_normal_color", Color.WHITE)
+	button.add_theme_color_override("icon_hover_color", Color.WHITE)
+	button.add_theme_color_override("icon_pressed_color", Color.WHITE)
+	button.add_theme_color_override("icon_focus_color", Color.WHITE)
+	button.add_theme_color_override("icon_disabled_color", Color.WHITE)
+
+
+func _refresh_camp_actors() -> void:
+	var wanted: Dictionary = {}
+	for i in range(1, GameState.party_size()):
+		var member: CharacterData = GameState.party[i]
+		if member == null:
+			continue
+		var required_node: StringName = BONFIRE_COMPANION_REQUIRED_NODE.get(member.id, &"")
+		if BONFIRE_COMPANION_OFFSET.has(member.id) and (required_node == &"" or GameState.has_skill_node(required_node)):
+			wanted[member.id] = member
+			if not _camp_actors_by_id.has(member.id):
+				_create_camp_actor(member)
+	for id in _camp_actors_by_id.keys():
+		if wanted.has(id):
+			continue
+		var actor_data: Dictionary = _camp_actors_by_id[id]
+		var actor := actor_data.get("root", null) as Control
+		if actor:
+			actor.queue_free()
+		_camp_actors_by_id.erase(id)
+
+
+func _create_camp_actor(member: CharacterData) -> void:
+	var root := Control.new()
+	root.name = "%sCampActor" % member.display_name
+	root.custom_minimum_size = Vector2(24.0, 34.0)
+	root.size = Vector2(24.0, 34.0)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.z_index = 18
+	var sprite := CharacterVisual.new()
+	sprite.name = "Sprite"
+	sprite.setup(member)
+	sprite.position = Vector2(12.0, 22.0)
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	root.add_child(sprite)
+	var bubble := Panel.new()
+	bubble.name = "SpeechBubble"
+	bubble.visible = false
+	bubble.size = Vector2(112.0, 22.0)
+	bubble.position = Vector2(-44.0, -15.0)
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.z_index = 20
+	bubble.add_theme_stylebox_override("panel", _speech_bubble_style())
+	var label := Label.new()
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 6.0
+	label.offset_top = 2.0
+	label.offset_right = -6.0
+	label.offset_bottom = -2.0
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_override("font", TOWN_UI_FONT)
+	label.add_theme_font_size_override("font_size", CAMP_SPEECH_FONT_SIZE)
+	label.add_theme_color_override("font_color", Color(0.08, 0.06, 0.04, 1.0))
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.clip_text = false
+	bubble.add_child(label)
+	root.add_child(bubble)
+	_tree_layer.add_child(root)
+	var lines: Array = BONFIRE_COMPANION_LINES.get(member.id, ["..."])
+	var root_node = SkillTreeDB.get_by_id(ROOT_NODE_ID)
+	var base_position := TREE_CENTER
+	if root_node != null:
+		base_position = _node_center(root_node)
+	_camp_actors_by_id[member.id] = {
+		"root": root,
+		"sprite": sprite,
+		"bubble": bubble,
+		"label": label,
+		"base": base_position + BONFIRE_COMPANION_OFFSET.get(member.id, Vector2.ZERO),
+		"offset": Vector2.ZERO,
+		"target_offset": _random_camp_actor_offset(),
+		"wait_timer": randf_range(0.2, 1.1),
+		"line_index": 0,
+		"speech_wait_timer": randf_range(0.8, 2.4),
+		"speech_visible_timer": 0.0,
+		"lines": lines,
+	}
+
+
+func _update_camp_actors(delta: float) -> void:
+	for id in _camp_actors_by_id.keys():
+		var actor_data: Dictionary = _camp_actors_by_id[id]
+		var root := actor_data.get("root", null) as Control
+		var sprite := actor_data.get("sprite", null) as CharacterVisual
+		var bubble := actor_data.get("bubble", null) as Panel
+		var label := actor_data.get("label", null) as Label
+		if root == null or sprite == null or bubble == null or label == null:
+			continue
+		var base: Vector2 = actor_data.get("base", Vector2.ZERO)
+		var offset: Vector2 = actor_data.get("offset", Vector2.ZERO)
+		var target_offset: Vector2 = actor_data.get("target_offset", Vector2.ZERO)
+		var wait_timer: float = float(actor_data.get("wait_timer", 0.0)) - delta
+		var velocity := Vector2.ZERO
+		if wait_timer <= 0.0:
+			var to_target: Vector2 = target_offset - offset
+			if to_target.length() <= 0.45:
+				offset = target_offset
+				target_offset = _random_camp_actor_offset()
+				wait_timer = randf_range(0.45, 1.25)
+			else:
+				velocity = to_target.normalized() * CAMP_ACTOR_WANDER_SPEED
+				offset += velocity * delta
+		sprite.set_velocity(velocity)
+		actor_data["offset"] = offset
+		actor_data["target_offset"] = target_offset
+		actor_data["wait_timer"] = wait_timer
+		root.position = base + offset - root.size * 0.5
+		var speech_visible_timer: float = float(actor_data.get("speech_visible_timer", 0.0)) - delta
+		if speech_visible_timer > 0.0:
+			bubble.visible = true
+			actor_data["speech_visible_timer"] = speech_visible_timer
+			continue
+		bubble.visible = false
+		var speech_wait_timer: float = float(actor_data.get("speech_wait_timer", 0.0)) - delta
+		if speech_wait_timer <= 0.0:
+			var lines: Array = actor_data.get("lines", [])
+			var line_index: int = int(actor_data.get("line_index", 0))
+			if not lines.is_empty():
+				_apply_speech_text(bubble, label, str(lines[line_index % lines.size()]))
+				actor_data["line_index"] = line_index + 1
+				bubble.visible = true
+				actor_data["speech_visible_timer"] = CAMP_SPEECH_DURATION
+			speech_wait_timer = randf_range(CAMP_SPEECH_MIN_WAIT, CAMP_SPEECH_MAX_WAIT)
+		actor_data["speech_wait_timer"] = speech_wait_timer
+
+
+func _random_camp_actor_offset() -> Vector2:
+	return Vector2(
+		randf_range(-CAMP_ACTOR_WANDER_RADIUS.x, CAMP_ACTOR_WANDER_RADIUS.x),
+		randf_range(-CAMP_ACTOR_WANDER_RADIUS.y, CAMP_ACTOR_WANDER_RADIUS.y)
+	)
+
+
+func _apply_speech_text(bubble: Panel, label: Label, raw_text: String) -> void:
+	var text: String = _single_speech_sentence(raw_text)
+	label.text = text
+	var text_size: Vector2 = TOWN_UI_FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, CAMP_SPEECH_FONT_SIZE)
+	var bubble_size := Vector2(
+		maxf(CAMP_SPEECH_MIN_SIZE.x, ceilf(text_size.x + CAMP_SPEECH_PADDING.x * 2.0)),
+		maxf(CAMP_SPEECH_MIN_SIZE.y, ceilf(text_size.y + CAMP_SPEECH_PADDING.y * 2.0))
+	)
+	bubble.size = bubble_size
+	bubble.position = Vector2(-bubble_size.x * 0.5 + 12.0, -bubble_size.y + 8.0)
+
+
+func _single_speech_sentence(raw_text: String) -> String:
+	var text: String = raw_text.replace("\n", " ").strip_edges()
+	for i in range(text.length()):
+		var ch: String = text.substr(i, 1)
+		if ch == "." or ch == "!" or ch == "?" or ch == "。" or ch == "！" or ch == "？":
+			return text.substr(0, i + 1).strip_edges()
+	return text
+
+
+func _speech_bubble_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 0.96, 0.82, 1.0)
+	style.border_color = Color(0.12, 0.09, 0.05, 1.0)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	return style
+
+
 func _style(bg: Color, border: Color, border_width: int) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg
@@ -214,10 +463,32 @@ func _style(bg: Color, border: Color, border_width: int) -> StyleBoxFlat:
 	return style
 
 
+func _icon_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_color = Color(0, 0, 0, 0)
+	style.content_margin_left = 0
+	style.content_margin_top = 0
+	style.content_margin_right = 0
+	style.content_margin_bottom = 0
+	return style
+
+
+func _icon_focus_style() -> StyleBoxFlat:
+	var style := _icon_style()
+	style.border_color = Color(1.0, 0.78, 0.22, 1.0)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	return style
+
+
 func _draw_connection(from: Vector2, to: Vector2, color: Color) -> void:
-	var shadow_width: float = maxf(2.0, 6.0 * _tree_zoom)
+	if _tree_detail_alpha <= 0.01:
+		return
 	var line_width: float = maxf(1.0, 3.0 * _tree_zoom)
-	draw_line(from, to, Color(0.03, 0.08, 0.1, 0.78), shadow_width)
+	color.a *= _tree_detail_alpha
 	draw_line(from, to, color, line_width)
 
 
@@ -239,6 +510,7 @@ func _tooltip_style() -> StyleBoxFlat:
 func _on_button_mouse_entered(button: Button, node) -> void:
 	_hovered_button = button
 	_hovered_node = node
+	_tree_detail_target_alpha = 1.0
 	_show_node_tooltip(button, node)
 	_play_hover_pop(button)
 
@@ -247,6 +519,7 @@ func _on_button_mouse_exited(button: Button) -> void:
 	if _hovered_button == button:
 		_hovered_button = null
 		_hovered_node = null
+		_tree_detail_target_alpha = 0.0
 	_hide_node_tooltip()
 	_stop_hover_pop(button)
 

@@ -28,6 +28,7 @@ const TIMER_URGENT_PULSE_COLOR: Color = Color(1.0, 0.82, 0.24, 1.0)
 @onready var _countdown_label: Label = %CountdownLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _debug_gold_button: Button = %DebugGoldButton
+@onready var _debug_finish_button: Button = %DebugFinishButton
 @onready var _member_row: HBoxContainer = %MemberRow
 @onready var _inventory_grid: GridContainer = %InventoryGrid
 
@@ -55,6 +56,7 @@ func _ready() -> void:
 	EventBus.field_loop_started.connect(_on_field_loop_started)
 	EventBus.field_loop_timer_changed.connect(_on_field_loop_timer_changed)
 	_debug_gold_button.pressed.connect(_on_debug_gold_button_pressed)
+	_debug_finish_button.pressed.connect(_on_debug_finish_button_pressed)
 	_refresh_gold()
 	_refresh_field_label()
 	_build_inventory_slots()
@@ -275,6 +277,10 @@ func _refresh_gold() -> void:
 
 func _on_debug_gold_button_pressed() -> void:
 	GameState.add_gold(1000)
+
+
+func _on_debug_finish_button_pressed() -> void:
+	EventBus.field_loop_finish_requested.emit()
 
 
 func _refresh_field_label() -> void:

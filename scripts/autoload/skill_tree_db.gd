@@ -42,8 +42,8 @@ func _load_all() -> void:
 	# West: resources and party growth.
 	_register(_node(&"gold", "Gold", "GOLD", "Enemies drop 1 gold pickup each.", Vector2i(-2, 0), 1, [&"root"]))
 	_register(_node(&"item", "Equipment", "ITEM", "Battle windows drop 1 equipment item.", Vector2i(-3, 0), 4, [&"gold"]))
-	_register(_node(&"magic", "Magic", "MAGIC", "Recruit a mage with Fireburst.", Vector2i(-4, 0), 70, [&"item"], "res://data/modifiers/prototype/recruit_mage.tres"))
-	_register(_node(&"companion", "Companion", "ALLY", "Recruit a priest companion.", Vector2i(-5, 0), 140, [&"magic"], "res://data/modifiers/prototype/recruit_priest.tres"))
+	_register(_node(&"magic", "Magic", "MAGIC", "Open the path to magical allies.", Vector2i(-4, 0), 70, [&"item"]))
+	_register(_node(&"companion", "Companion", "ALLY", "Recruit a mage companion.", Vector2i(-5, 0), 140, [&"magic"], "res://data/modifiers/prototype/recruit_mage.tres"))
 	_register(_node(&"drop_uncommon", "Better Drops", "DROP1", "Drop tuning placeholder.", Vector2i(-3, -1), 100, [&"item"]))
 	_register(_node(&"drop_rare", "Rare Drops", "DROP2", "Drop tuning placeholder.", Vector2i(-3, -2), 350, [&"drop_uncommon"]))
 	_register(_node(&"drop_epic", "Epic Drops", "DROP3", "Drop tuning placeholder.", Vector2i(-3, -3), 1200, [&"drop_rare"]))

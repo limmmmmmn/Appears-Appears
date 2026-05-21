@@ -59,6 +59,7 @@ signal field_loop_started(loop_num: int)
 signal field_loop_settled(loop_num: int)
 signal run_cleared()
 signal field_loop_timer_changed(remaining_seconds: int)
+signal field_loop_finish_requested()
 
 # ─── Economy / Modifiers ──────────────────────────────────────────────
 signal gold_changed(new_gold: int)
