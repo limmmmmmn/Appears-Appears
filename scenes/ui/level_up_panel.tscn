@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/level_up_panel.gd" id="1_panel"]
 [ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
+[ext_resource type="Font" path="res://assets/fonts/town_ui_font.tres" id="3_font"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
 bg_color = Color(0.86, 0.95, 0.98, 0.92)
@@ -11,6 +12,7 @@ corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
 [sub_resource type="LabelSettings" id="LabelSettings_title"]
+font = ExtResource("3_font")
 font_size = 13
 font_color = Color(0.12, 0.22, 0.34, 1)
 shadow_size = 1

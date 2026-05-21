@@ -23,9 +23,6 @@ y_sort_enabled = true
 [node name="TownTile" parent="Tiles" unique_id=797429025 instance=ExtResource("2_town_tile")]
 position = Vector2(768, 128)
 
-[node name="Treasures" type="Node2D" parent="." unique_id=1062582089]
-y_sort_enabled = true
-
 [node name="Items" type="Node2D" parent="." unique_id=630235893]
 y_sort_enabled = true
 

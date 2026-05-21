@@ -5,7 +5,7 @@ extends Node
 
 var _run_number: int = 0
 var _run_ended: bool = false
-var _stages_cleared: int = 0
+var _field_loops_completed: int = 0
 var _enemies_killed: int = 0
 var _total_damage_taken: int = 0
 var _card_order: Array[StringName] = []
@@ -14,8 +14,8 @@ var _card_names: Dictionary = {}   ## StringName -> String
 
 
 func _ready() -> void:
-	EventBus.stage_started.connect(_on_stage_started)
-	EventBus.stage_cleared.connect(_on_stage_cleared)
+	EventBus.field_loop_started.connect(_on_field_loop_started)
+	EventBus.field_loop_settled.connect(_on_field_loop_settled)
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
 	EventBus.party_damage_taken.connect(_on_party_damage_taken)
 	EventBus.card_purchased.connect(_on_card_purchased)
@@ -23,15 +23,15 @@ func _ready() -> void:
 	EventBus.run_cleared.connect(_on_run_cleared)
 
 
-func _on_stage_started(stage_num: int) -> void:
-	if stage_num == 1:
+func _on_field_loop_started(loop_num: int) -> void:
+	if loop_num == 1:
 		_begin_run()
 
 
 func _begin_run() -> void:
 	_run_number += 1
 	_run_ended = false
-	_stages_cleared = 0
+	_field_loops_completed = 0
 	_enemies_killed = 0
 	_total_damage_taken = 0
 	_card_order.clear()
@@ -43,9 +43,9 @@ func _begin_run() -> void:
 		_card_names[mod.id] = mod.display_name
 
 
-func _on_stage_cleared(stage_num: int) -> void:
-	if stage_num > _stages_cleared:
-		_stages_cleared = stage_num
+func _on_field_loop_settled(loop_num: int) -> void:
+	if loop_num > _field_loops_completed:
+		_field_loops_completed = loop_num
 
 
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
@@ -64,7 +64,7 @@ func _on_card_purchased(mod: ModifierData, _cost: int) -> void:
 
 
 func _on_party_wiped() -> void:
-	end_run("Died at Stage %d" % GameState.current_stage, "HP depleted")
+	end_run("Died in %s" % GameState.field_region_name(), "HP depleted")
 
 
 func _on_run_cleared() -> void:
@@ -78,7 +78,8 @@ func end_run(result: String, cause: String) -> void:
 	var lines: PackedStringArray = []
 	lines.append("=== Run #%d End ===" % _run_number)
 	lines.append("Result: %s" % result)
-	lines.append("Stages Cleared: %d" % _stages_cleared)
+	lines.append("Field Loops Completed: %d" % _field_loops_completed)
+	lines.append("Reached Region: %s" % GameState.field_region_name())
 	lines.append("Total Enemies Killed: %d" % _enemies_killed)
 	lines.append("Total Gold Earned: %d" % GameState.total_gold_earned)
 	lines.append("Total Damage Taken: %d" % _total_damage_taken)

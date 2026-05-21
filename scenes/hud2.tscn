@@ -101,7 +101,7 @@ offset_left = 18.0
 offset_top = 26.0
 offset_right = 170.0
 offset_bottom = 56.0
-text = "Field 1"
+text = "Field"
 label_settings = SubResource("LabelSettings_top")
 vertical_alignment = 1
 

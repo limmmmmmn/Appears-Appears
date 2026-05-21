@@ -1,13 +1,12 @@
 class_name Field
 extends Node2D
 
-## Top-down stage. Spawns enemies + the visible party (player leading,
+## Top-down field loop. Spawns enemies + the visible party (player leading,
 ## companions trailing). Player movement lives on the Player node;
 ## encounters fire EventBus signals.
 
 const FIELD_ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/field_enemy.tscn")
 const FIELD_DECORATION_SCENE: PackedScene = preload("res://scenes/decorations/field_decoration.tscn")
-const FIELD_TREASURE_CHEST_SCENE: PackedScene = preload("res://scenes/objects/field_treasure_chest.tscn")
 const FIELD_ITEM_DROP_SCENE: PackedScene = preload("res://scenes/objects/field_item_drop.tscn")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const COMPANION_SCENE: PackedScene = preload("res://scenes/companion.tscn")
@@ -18,17 +17,22 @@ const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.png")
 
-## Fixed world-map size for every field.
-const FIELD_SIZE: Vector2 = Vector2(480, 270)
+## Base world-map size. Nodes are the only thing that should expand it.
+const FIELD_SIZE: Vector2 = Vector2(240, 150)
 const TILE_SIZE: int = 16
-const SPAWN_MARGIN: float = 48.0
-## Don't drop slimes within this radius of the player on stage start.
-const PARTY_SAFE_RADIUS: float = 80.0
+const SPAWN_MARGIN: float = 24.0
+## Don't drop slimes within this radius of the player on field-loop start.
+const PARTY_SAFE_RADIUS: float = 48.0
 const DECOR_SAFE_RADIUS: float = 104.0
 const TOWN_TILE_SAFE_RADIUS: float = 96.0
 const TOWN_TILE_INSET: Vector2 = Vector2(96, 72)
+const DROP_PLAYER_SAFE_RADIUS: float = 42.0
+const DROP_SEPARATION_RADIUS: float = 20.0
+const DROP_SCATTER_RADIUS_MIN: float = 28.0
+const DROP_SCATTER_RADIUS_MAX: float = 52.0
+const CLEARED_FIELD_REMAINING_TIME: float = 3.0
 
-@export var peaceful_start_enemies: int = 2
+@export var initial_slime_count: int = 1
 @export var small_forest_cluster_count_min: int = 3
 @export var small_forest_cluster_count_max: int = 5
 @export var small_forest_min_trees: int = 8
@@ -43,14 +47,11 @@ const TOWN_TILE_INSET: Vector2 = Vector2(96, 72)
 @export var entry_burst_bonus: int = 0
 @export var crowd_growth_per_wave: int = 1
 @export var max_crowd_pressure: int = 7
-@export var treasure_kills_required_base: int = 3
-@export var treasure_gold_base: int = 45
-@export var stage_time: float = 20.0
+@export var field_loop_time: float = 20.0
 
 @onready var _background: ColorRect = $Background
 @onready var _decorations_root: Node2D = $Decorations
 @onready var _town_tile: FieldTownTile = $Tiles/TownTile
-@onready var _treasures_root: Node2D = $Treasures
 @onready var _items_root: Node2D = $Items
 @onready var _enemies_root: Node2D = $Enemies
 @onready var _party_root: Node2D = $Party
@@ -62,31 +63,39 @@ var _spawn_timer: float = 0.0
 var _crowd_pressure: int = 0
 var _field_size: Vector2 = FIELD_SIZE
 var _town_revealed: bool = false
-var _treasure_kills: int = 0
-var _treasure_spawned: bool = false
-var _stage_elapsed: float = 0.0
-var _stage_town_time: float = 20.0
-var _stage_complete: bool = false
+var _loop_elapsed: float = 0.0
+var _loop_settlement_time: float = 20.0
+var _loop_complete: bool = false
+var _loop_hurried: bool = false
 var _last_countdown_seconds: int = -1
+var _active_battle_windows: int = 0
+var _chaser_spawned_this_loop: bool = false
 
 
 func _ready() -> void:
 	EventBus.party_changed.connect(_setup_party_visuals)
-	EventBus.all_battles_resolved.connect(_check_stage_clear)
-	EventBus.stage_started.connect(_on_stage_started)
-	EventBus.enemy_defeated.connect(_on_enemy_defeated)
+	EventBus.battle_window_opened.connect(_on_battle_window_opened)
+	EventBus.battle_window_closed.connect(_on_battle_window_closed)
+	EventBus.all_battles_resolved.connect(_check_refill_after_battles)
+	EventBus.field_loop_started.connect(_on_field_loop_started)
 	EventBus.field_item_drop_requested.connect(_on_field_item_drop_requested)
+	EventBus.field_gold_drop_requested.connect(_on_field_gold_drop_requested)
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
 
 
 func _process(delta: float) -> void:
-	if GameState.current_stage <= 0 or GameState.is_party_wiped():
+	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
-	_update_wave_timer(delta)
+	_update_loop_timer(delta)
 	if GameState.is_field_battle_paused():
 		return
-	if _stage_complete:
+	if _loop_complete:
+		return
+	_try_hurry_loop_when_cleared()
+	if _loop_hurried:
+		return
+	if not GameState.field_spawner_enabled():
 		return
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
@@ -124,20 +133,20 @@ func _setup_party_visuals() -> void:
 
 
 # ─── Enemy spawning ───────────────────────────────────────────────────
-func _on_stage_started(_stage_num: int) -> void:
+func _on_field_loop_started(_loop_num: int) -> void:
 	_decor_rng.randomize()
-	_apply_stage_field_size(_stage_num)
+	_apply_field_size()
 	_town_revealed = false
-	_treasure_kills = 0
-	_treasure_spawned = false
-	_stage_elapsed = 0.0
-	_stage_town_time = stage_time
-	_stage_complete = false
+	_loop_elapsed = 0.0
+	_loop_settlement_time = field_loop_time
+	_loop_complete = false
+	_loop_hurried = false
+	_active_battle_windows = 0
+	_chaser_spawned_this_loop = false
 	_last_countdown_seconds = -1
-	_emit_wave_timer_changed()
+	_emit_loop_timer_changed()
 	_clear_field_enemies()
 	_clear_decorations()
-	_clear_treasures()
 	_clear_items()
 	_crowd_pressure = entry_burst_bonus
 	_town_tile.reset()
@@ -145,10 +154,11 @@ func _on_stage_started(_stage_num: int) -> void:
 	_scatter_decorations()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
+	_spawn_repeating_node_drops()
 
 
 ## Teleport the whole party back to the field center for a fresh start.
-## Without this, party would drift further and further from spawn each stage.
+## Without this, party would drift further and further from spawn each loop.
 func _recenter_party() -> void:
 	if _player == null:
 		return
@@ -166,6 +176,7 @@ func _recenter_party() -> void:
 
 func _clear_field_enemies() -> void:
 	for child in _enemies_root.get_children():
+		_enemies_root.remove_child(child)
 		child.queue_free()
 
 
@@ -180,11 +191,6 @@ func _despawn_field_enemies() -> void:
 func _clear_decorations() -> void:
 	_forest_cells.clear()
 	for child in _decorations_root.get_children():
-		child.queue_free()
-
-
-func _clear_treasures() -> void:
-	for child in _treasures_root.get_children():
 		child.queue_free()
 
 
@@ -331,7 +337,7 @@ func _max_grid_y() -> int:
 
 
 func _grow_crowd_pressure() -> void:
-	if _enemies_root.get_child_count() <= 0:
+	if _active_field_enemy_count() <= 0:
 		_crowd_pressure = 0
 		return
 	_crowd_pressure = mini(max_crowd_pressure + GameState.field_crowd_cap_bonus(), _crowd_pressure + crowd_growth_per_wave)
@@ -339,10 +345,34 @@ func _grow_crowd_pressure() -> void:
 
 func _refill_enemy_population(max_to_spawn: int) -> void:
 	var desired_count: int = _desired_enemy_count()
-	var missing_count: int = desired_count - _enemies_root.get_child_count()
-	var spawn_count: int = mini(max_to_spawn, missing_count)
+	var missing_count: int = desired_count - _active_field_enemy_count()
+	var spawn_count: int = maxi(0, mini(max_to_spawn, missing_count))
 	for i in spawn_count:
 		_spawn_field_enemy(_enemy_data_for_current_nodes())
+
+
+func _active_field_enemy_count() -> int:
+	var count: int = 0
+	for child in _enemies_root.get_children():
+		if not child.is_queued_for_deletion():
+			count += 1
+	return count
+
+
+func _active_item_count() -> int:
+	var count: int = 0
+	for child in _items_root.get_children():
+		if not child.is_queued_for_deletion():
+			count += 1
+	return count
+
+
+func _on_battle_window_opened(_window: Node) -> void:
+	_active_battle_windows += 1
+
+
+func _on_battle_window_closed(_window: Node) -> void:
+	_active_battle_windows = maxi(0, _active_battle_windows - 1)
 
 
 func debug_spawn_all_enemy_types() -> int:
@@ -370,15 +400,19 @@ func _spawn_field_enemy(data: EnemyData) -> void:
 	fe.wander_bounds_max = _field_size - Vector2.ONE * 16.0
 	fe.position = _random_spawn_position_for_enemy(data, safe_origin)
 	_enemies_root.add_child(fe)
+	if data == SLIME_CHASER_DATA:
+		_chaser_spawned_this_loop = true
 
 
 func _enemy_count_for_current_nodes() -> int:
-	return peaceful_start_enemies + GameState.field_enemy_count_bonus()
+	return initial_slime_count + GameState.field_enemy_count_bonus()
 
 
 func _enemy_data_for_current_nodes() -> EnemyData:
 	if not GameState.chaser_enemies_enabled():
 		return SLIME_DATA
+	if not _chaser_spawned_this_loop:
+		return SLIME_CHASER_DATA
 	return SLIME_CHASER_DATA if randf() < 0.35 else SLIME_DATA
 
 
@@ -423,51 +457,75 @@ func _random_safe_position(avoid: Vector2) -> Vector2:
 
 
 func _is_safe_enemy_spawn_position(pos: Vector2, avoid: Vector2) -> bool:
-	return pos.distance_to(avoid) >= PARTY_SAFE_RADIUS and not _is_near_town_tile(pos)
+	return pos.distance_to(avoid) >= _party_safe_radius() and not _is_near_town_tile(pos)
 
 
-func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
-	if GameState.current_stage <= 0 or _treasure_spawned:
-		return
-	_treasure_kills += 1
-	if _treasure_kills >= _treasure_kills_required():
-		_spawn_treasure_chest()
-
-
-func _treasure_kills_required() -> int:
-	return maxi(1, treasure_kills_required_base)
-
-
-func _spawn_treasure_chest() -> void:
-	_treasure_spawned = true
-	var chest := FIELD_TREASURE_CHEST_SCENE.instantiate() as FieldTreasureChest
-	chest.gold_amount = _treasure_gold_amount()
-	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
-	chest.position = _random_safe_treasure_position(safe_origin)
-	_treasures_root.add_child(chest)
-	chest.reveal_with_pop()
-
-
-func _treasure_gold_amount() -> int:
-	return treasure_gold_base
-
-
-func _random_safe_treasure_position(avoid: Vector2) -> Vector2:
-	for attempt in 40:
-		var pos: Vector2 = _random_safe_position(avoid)
-		if pos.distance_to(avoid) >= DECOR_SAFE_RADIUS:
-			return pos
-	return _random_safe_position(avoid)
+func _party_safe_radius() -> float:
+	return PARTY_SAFE_RADIUS
 
 
 func _on_field_item_drop_requested(item: ItemData, world_position: Vector2) -> void:
 	if item == null:
 		return
+	_spawn_item_drop(item, world_position)
+
+
+func _spawn_item_drop(item: ItemData, world_position: Vector2) -> void:
 	var drop := FIELD_ITEM_DROP_SCENE.instantiate() as FieldItemDrop
 	drop.setup(item)
-	drop.position = _clamp_field_position(world_position)
+	drop.position = _drop_position_near(world_position)
 	_items_root.add_child(drop)
 	drop.reveal_with_pop()
+
+
+func _on_field_gold_drop_requested(amount: int, world_position: Vector2) -> void:
+	if amount <= 0:
+		return
+	_spawn_gold_drop(amount, world_position)
+
+
+func _spawn_gold_drop(amount: int, world_position: Vector2) -> void:
+	var drop := FIELD_ITEM_DROP_SCENE.instantiate() as FieldItemDrop
+	drop.setup_gold_drop(amount)
+	drop.position = _drop_position_near(world_position)
+	_items_root.add_child(drop)
+	drop.reveal_with_pop()
+
+
+func _spawn_repeating_node_drops() -> void:
+	var origin: Vector2 = _field_size * 0.5
+	if GameState.gold_drops_enabled():
+		_spawn_gold_drop(1, origin)
+	if GameState.item_drops_enabled():
+		var item: ItemData = ItemDB.get_by_id(&"hero_sword")
+		if item:
+			_spawn_item_drop(item, origin)
+
+
+func _drop_position_near(origin: Vector2) -> Vector2:
+	var safe_origin: Vector2 = _clamp_field_position(origin)
+	for attempt in 36:
+		var angle: float = randf() * TAU
+		var radius: float = randf_range(DROP_SCATTER_RADIUS_MIN, DROP_SCATTER_RADIUS_MAX)
+		var candidate: Vector2 = _clamp_field_position(safe_origin + Vector2(cos(angle), sin(angle)) * radius)
+		if _is_valid_drop_position(candidate):
+			return candidate
+	for attempt in 36:
+		var candidate: Vector2 = _random_position()
+		if _is_valid_drop_position(candidate):
+			return candidate
+	return safe_origin
+
+
+func _is_valid_drop_position(pos: Vector2) -> bool:
+	var party_pos: Vector2 = _player.position if _player else _field_size * 0.5
+	if pos.distance_to(party_pos) < DROP_PLAYER_SAFE_RADIUS:
+		return false
+	for child in _items_root.get_children():
+		if child is Node2D and not child.is_queued_for_deletion():
+			if pos.distance_to((child as Node2D).position) < DROP_SEPARATION_RADIUS:
+				return false
+	return true
 
 
 func _clamp_field_position(pos: Vector2) -> Vector2:
@@ -488,7 +546,7 @@ func _random_position() -> Vector2:
 	)
 
 
-func _apply_stage_field_size(_stage_num: int) -> void:
+func _apply_field_size() -> void:
 	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
 	_background.size = _field_size
 	_town_tile.position = _hidden_town_tile_position()
@@ -504,28 +562,44 @@ func _reveal_town_tile() -> void:
 	_town_tile.reveal_with_impact()
 
 
-func _update_wave_timer(delta: float) -> void:
-	if _stage_complete:
+func _update_loop_timer(delta: float) -> void:
+	if _loop_complete:
 		return
-	_stage_elapsed += delta
-	_emit_wave_timer_changed()
-	if _stage_elapsed >= _stage_town_time:
-		_finish_stage_timer()
+	_loop_elapsed += delta
+	_emit_loop_timer_changed()
+	if _loop_elapsed >= _loop_settlement_time:
+		_finish_field_loop_timer()
 
 
-func _finish_stage_timer() -> void:
-	_stage_complete = true
+func _finish_field_loop_timer() -> void:
+	_loop_complete = true
 	GameState.clear_move_speed_drag()
-	EventBus.wave_timer_changed.emit(0)
-	EventBus.stage_cleared.emit(GameState.current_stage)
+	EventBus.field_loop_timer_changed.emit(0)
+	EventBus.field_loop_settled.emit(GameState.field_loop_count)
 
 
-func _emit_wave_timer_changed() -> void:
-	var remaining: int = maxi(0, ceili(_stage_town_time - _stage_elapsed))
+func _emit_loop_timer_changed() -> void:
+	var remaining: int = maxi(0, ceili(_loop_settlement_time - _loop_elapsed))
 	if remaining == _last_countdown_seconds:
 		return
 	_last_countdown_seconds = remaining
-	EventBus.wave_timer_changed.emit(remaining)
+	EventBus.field_loop_timer_changed.emit(remaining)
+
+
+func _try_hurry_loop_when_cleared() -> void:
+	if _loop_hurried or _loop_complete:
+		return
+	if _active_battle_windows > 0:
+		return
+	if _active_field_enemy_count() > 0 or _active_item_count() > 0:
+		return
+	var remaining: float = _loop_settlement_time - _loop_elapsed
+	if remaining <= CLEARED_FIELD_REMAINING_TIME:
+		return
+	_loop_hurried = true
+	_loop_settlement_time = _loop_elapsed + CLEARED_FIELD_REMAINING_TIME
+	_last_countdown_seconds = -1
+	_emit_loop_timer_changed()
 
 
 func _town_tile_corner_position() -> Vector2:
@@ -542,12 +616,15 @@ func _hidden_town_tile_position() -> Vector2:
 	return Vector2(_field_size.x + 256.0, _field_size.y + 256.0)
 
 
-## All windows closed AND the field is empty → stage clear.
+## All windows closed AND the field is empty → refill pressure.
 ## Echo Strike can keep extra windows running after the last field enemy is
 ## consumed, so we listen to all_battles_resolved (not battle_window_closed)
 ## and combine with the field-empty check.
-func _check_stage_clear() -> void:
-	if _stage_complete:
+func _check_refill_after_battles() -> void:
+	_active_battle_windows = 0
+	if _loop_complete:
 		return
-	if not _town_revealed and _enemies_root.get_child_count() == 0:
+	if not GameState.field_spawner_enabled():
+		return
+	if not _town_revealed and _active_field_enemy_count() == 0:
 		_refill_enemy_population(spawn_batch_size)

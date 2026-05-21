@@ -21,11 +21,11 @@ offset_right = -18.0
 offset_bottom = 36.0
 theme = ExtResource("2_theme")
 
-[node name="StageLabel" type="Label" parent="TopBar" unique_id=229650890]
+[node name="FieldLabel" type="Label" parent="TopBar" unique_id=229650890]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Field 1"
+text = "Field"
 label_settings = SubResource("LabelSettings_top")
 
 [node name="GoldLabel" type="Label" parent="TopBar" unique_id=1369998321]

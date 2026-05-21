@@ -1,7 +1,7 @@
 class_name PartyDisplay
 extends Control
 
-## Town party summary. Rebuilds from GameState and reacts to purchased cards.
+## Settlement party summary. Rebuilds from GameState and reacts to purchased cards.
 
 @export var hero_box_scene: PackedScene
 @export var hero_box_min_size: Vector2 = Vector2(116, 72)

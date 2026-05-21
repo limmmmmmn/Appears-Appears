@@ -1,43 +1,48 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3 uid="uid://dmhuxh1weyik3"]
 
-[ext_resource type="Script" path="res://scripts/runtime/battle_window.gd" id="1_window"]
+[ext_resource type="Script" uid="uid://brx145jqioxv8" path="res://scripts/runtime/battle_window.gd" id="1_window"]
+[ext_resource type="Theme" path="res://assets/fonts/field_theme.tres" id="2_theme"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
-bg_color = Color(1, 1, 1, 1)
+bg_color = Color(0, 0, 0, 1)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0, 0, 0, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_log"]
-bg_color = Color(1, 1, 1, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0, 0, 0, 1)
+border_color = Color(1, 1, 1, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_text"]
-font_size = 8
-font_color = Color(0, 0, 0, 1)
+font_size = 7
 
-[node name="BattleWindow" type="Control"]
-custom_minimum_size = Vector2(120, 80)
-offset_right = 120.0
-offset_bottom = 80.0
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_log"]
+bg_color = Color(0, 0, 0, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+
+[node name="BattleWindow" type="Control" unique_id=395533292]
+custom_minimum_size = Vector2(128, 96)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 128.0
+offset_bottom = 96.0
 mouse_filter = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_window")
 
-[node name="Background" type="Panel" parent="."]
+[node name="Background" type="Panel" parent="." unique_id=1362378333]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_bg")
 
-[node name="NameLabel" type="Label" parent="."]
+[node name="NameLabel" type="Label" parent="." unique_id=1988462660]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -47,16 +52,15 @@ offset_left = 2.0
 offset_top = 2.0
 offset_right = -2.0
 offset_bottom = 12.0
-mouse_filter = 2
+grow_horizontal = 2
 text = "Enemy"
 label_settings = SubResource("LabelSettings_text")
-horizontal_alignment = 1
 
-[node name="EnemyAnchor" type="Node2D" parent="."]
+[node name="EnemyAnchor" type="Node2D" parent="." unique_id=939356698]
 unique_name_in_owner = true
-position = Vector2(60, 40)
+position = Vector2(64, 32)
 
-[node name="HPLabel" type="Label" parent="."]
+[node name="HPLabel" type="Label" parent="." unique_id=903422948]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
@@ -68,39 +72,43 @@ offset_left = 2.0
 offset_top = -22.0
 offset_right = -2.0
 offset_bottom = -12.0
-mouse_filter = 2
+grow_horizontal = 2
+grow_vertical = 0
 text = "HP -/-"
 label_settings = SubResource("LabelSettings_text")
 horizontal_alignment = 1
 
-[node name="LogPanel" type="Panel" parent="."]
+[node name="LogPanel" type="Panel" parent="." unique_id=264940652]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 4.0
-offset_top = -24.0
+offset_top = -34.0
 offset_right = -4.0
 offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
-[node name="LogLabel" type="Label" parent="LogPanel"]
+[node name="LogLabel" type="Label" parent="LogPanel" unique_id=1023561067]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 2.0
-offset_top = 1.0
-offset_right = -2.0
-offset_bottom = -1.0
-mouse_filter = 2
-text = ""
+offset_left = 3.0
+offset_top = 3.0
+offset_right = -3.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/line_spacing = -2
 label_settings = SubResource("LabelSettings_text")
-horizontal_alignment = 1
-vertical_alignment = 1
+autowrap_mode = 3
+clip_text = true
 
-[node name="TurnTimer" type="Timer" parent="."]
+[node name="TurnTimer" type="Timer" parent="." unique_id=1466850664]
 wait_time = 0.5

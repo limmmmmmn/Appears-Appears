@@ -1,7 +1,8 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/town2_card.gd" id="1_card"]
 [ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
+[ext_resource type="Font" path="res://assets/fonts/town_ui_font.tres" id="3_font"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_normal"]
 bg_color = Color(1, 0.98, 0.88, 1)
@@ -36,18 +37,22 @@ border_width_bottom = 3
 border_color = Color(0.18, 0.14, 0.1, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_name"]
+font = ExtResource("3_font")
 font_size = 10
 font_color = Color(0.1, 0.08, 0.04, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_desc"]
+font = ExtResource("3_font")
 font_size = 8
 font_color = Color(0.32, 0.22, 0.1, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_cost"]
+font = ExtResource("3_font")
 font_size = 11
 font_color = Color(0.62, 0.36, 0.06, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_arrow"]
+font = ExtResource("3_font")
 font_size = 14
 font_color = Color(1, 0.7, 0.1, 1)
 shadow_size = 1

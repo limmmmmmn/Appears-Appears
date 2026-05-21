@@ -1,7 +1,7 @@
 extends Node2D
 
 ## Main entry point.
-## Sets up the party and drives Field -> Town -> Field stage progression.
+## Sets up the party and drives Field -> Settlement -> Field loops.
 ## Battle window spawning lives in BattleManager.
 
 const TOWN_SCENE: PackedScene = preload("res://scenes/town2.tscn")
@@ -34,10 +34,10 @@ func _ready() -> void:
 	])
 	_setup_default_party()
 	EventBus.party_wiped.connect(_on_party_wiped)
-	EventBus.stage_cleared.connect(_on_stage_cleared)
+	EventBus.field_loop_settled.connect(_on_field_loop_settled)
 	EventBus.town_entered.connect(_on_town_entered)
-	# Kick off the first stage. Field listens to stage_started and spawns enemies.
-	GameState.advance_stage()
+	# Kick off the first field loop. Field listens to field_loop_started and spawns enemies.
+	GameState.start_next_field_loop()
 
 
 func _setup_default_party() -> void:
@@ -50,17 +50,23 @@ func _setup_default_party() -> void:
 	print("[main] party loaded: %d members" % GameState.party_size())
 
 
-# ─── Stage flow ───────────────────────────────────────────────────────
-func _on_stage_cleared(stage_num: int) -> void:
-	print("[main] field cleared: %d (gold=%d)" % [stage_num, GameState.gold])
+# ─── Field loop flow ──────────────────────────────────────────────────
+func _on_field_loop_settled(loop_num: int) -> void:
+	print("[main] field loop settled: loop=%d region=%s gold=%d earned=%d nodes=%d" % [
+		loop_num,
+		GameState.field_region_name(),
+		GameState.gold,
+		GameState.total_gold_earned,
+		GameState.unlocked_field_node_count(),
+	])
 	_battle_manager.abort_all_battles()
-	_show_town("Field %d Cleared" % stage_num)
+	_show_town("%s 정산" % GameState.field_region_name())
 
 
 func _on_town_entered(_tile: Node) -> void:
-	print("[main] town tile entered — aborting active battles with no rewards")
+	print("[main] settlement tile entered — aborting active battles with no rewards")
 	_battle_manager.abort_all_battles()
-	_show_town("Town")
+	_show_town("%s 정산" % GameState.field_region_name())
 
 
 func _show_town(title: String = "") -> void:
@@ -81,7 +87,7 @@ func _on_town_closed() -> void:
 	get_tree().paused = false
 	_set_run_layers_visible(true)
 	_hud.set_level_up_ui_enabled(true)
-	GameState.advance_stage()
+	GameState.start_next_field_loop()
 
 
 func _set_run_layers_visible(is_visible: bool) -> void:
@@ -130,9 +136,9 @@ func _on_try_again_pressed() -> void:
 	_game_over = null
 	GameState.reset_run()
 	_setup_default_party()
-	# Field listens for stage_started to clear/respawn enemies + recenter the
+	# Field listens for field_loop_started to clear/respawn enemies + recenter the
 	# party. set_party (above) already triggered party_changed → fresh visuals.
-	GameState.advance_stage()
+	GameState.start_next_field_loop()
 
 
 # ─── Debug ────────────────────────────────────────────────────────────
@@ -146,7 +152,7 @@ func _can_toggle_manual_pause() -> bool:
 	return not (_town and is_instance_valid(_town)) and not (_game_over and is_instance_valid(_game_over))
 
 
-## F1 = instant stage clear (skip combat to test town)
+## F1 = instant settlement (skip combat to test the upgrade tree)
 ## F2 = stress spawn 20 battle windows
 ## F3 = spawn one of each field enemy type
 func _unhandled_input(event: InputEvent) -> void:
@@ -159,8 +165,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		match event.physical_keycode:
 			KEY_F1:
-				print("[main] DEBUG: forcing stage_cleared")
-				EventBus.stage_cleared.emit(GameState.current_stage)
+				print("[main] DEBUG: forcing field loop settlement")
+				EventBus.field_loop_settled.emit(GameState.field_loop_count)
 			KEY_F2:
 				_debug_stress_spawn(20)
 			KEY_F3:

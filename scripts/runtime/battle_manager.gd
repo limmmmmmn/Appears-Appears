@@ -31,7 +31,7 @@ const SETTLE_SPEED: float = 10.0
 const SETTLE_INTERVAL: float = 0.08
 const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 0.85
 const PARTY_COLLISION_DAMAGE_COOLDOWN: float = 0.45
-const MODAL_WINDOW_SIZE_MULTIPLIER: float = 2.25
+const MODAL_WINDOW_SIZE_MULTIPLIER: float = 1.0
 
 var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
 var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 screen velocity.
@@ -463,26 +463,43 @@ func _on_battle_window_closed(window: Node) -> void:
 		var xp_reward: int = battle_window.claim_xp_reward()
 		if xp_reward > 0:
 			GameState.add_party_xp(xp_reward)
+		_drop_gold_from_window(battle_window)
 		_drop_items_from_window(battle_window)
 	# Tell anyone who cares (Field, etc.) when the last fight ends. This is
-	# the gate Field uses before declaring stage_cleared — Echo Strike means
+	# the gate Field uses before declaring field_loop_settled — Echo Strike means
 	# the *first* window closing is rarely the last one.
 	if _window_rects.is_empty():
 		EventBus.all_battles_resolved.emit()
+
+
+func _drop_gold_from_window(window: BattleWindow) -> void:
+	var amount: int = window.claim_gold_drops()
+	if amount <= 0:
+		return
+	var base_pos: Vector2 = _drop_base_position(window)
+	for i in amount:
+		var angle: float = TAU * float(i) / float(maxi(1, amount))
+		var radius: float = 10.0 if amount > 1 else 0.0
+		EventBus.field_gold_drop_requested.emit(1, base_pos + Vector2(cos(angle), sin(angle)) * radius)
 
 
 func _drop_items_from_window(window: BattleWindow) -> void:
 	var drops: Array[ItemData] = window.claim_item_drops()
 	if drops.is_empty():
 		return
-	var base_pos: Vector2 = window.field_drop_position()
-	if base_pos == Vector2.INF:
-		var player := get_tree().get_first_node_in_group("player") as Node2D
-		base_pos = player.global_position if player else Vector2.ZERO
+	var base_pos: Vector2 = _drop_base_position(window)
 	for i in drops.size():
 		var angle: float = TAU * float(i) / float(maxi(1, drops.size()))
 		var radius: float = 10.0 if drops.size() > 1 else 0.0
 		EventBus.field_item_drop_requested.emit(drops[i], base_pos + Vector2(cos(angle), sin(angle)) * radius)
+
+
+func _drop_base_position(window: BattleWindow) -> Vector2:
+	var base_pos: Vector2 = window.field_drop_position()
+	if base_pos == Vector2.INF:
+		var player := get_tree().get_first_node_in_group("player") as Node2D
+		base_pos = player.global_position if player else Vector2.ZERO
+	return base_pos
 
 
 # ─── Run-over cleanup ─────────────────────────────────────────────────

@@ -29,25 +29,25 @@ func _load_all() -> void:
 	_register(_node(&"root", "Auto Battle", "AUTO", "The party fights battle windows automatically.", Vector2i(0, 0), 0))
 
 	# North: enemy supply.
-	_register(_node(&"more_slimes", "More Slimes", "SLIME", "Start fields with more enemies.", Vector2i(0, -2), 4, [&"root"], "", {"field_enemy_count_bonus": 1}))
+	_register(_node(&"more_slimes", "More Slimes", "SLIME", "Start fields with more enemies.", Vector2i(0, -2), 3, [&"root"], "", {"field_enemy_count_bonus": 1}))
 	_register(_node(&"more_slimes_2", "Slime Pack", "PACK", "Add even more field enemies.", Vector2i(1, -2), 80, [&"more_slimes"], "", {"field_enemy_count_bonus": 2}))
-	_register(_node(&"monster_chase", "Monster Chase", "CHASE", "Chaser enemies can begin appearing.", Vector2i(0, -3), 20, [&"more_slimes"], "", {"chaser_enemies_enabled": true}))
-	_register(_node(&"enemies_per_window", "Crowded Windows", "2/WIN", "Battle windows can hold one more enemy.", Vector2i(0, -4), 30, [&"monster_chase"], "", {"enemies_per_window_bonus": 1}))
-	_register(_node(&"spawner", "Spawner", "SPAWN", "Enemy waves refill faster.", Vector2i(0, -5), 130, [&"enemies_per_window"], "", {"field_spawn_interval_mult": 0.82}))
+	_register(_node(&"enemies_per_window", "Crowded Windows", "2/WIN", "Battle windows contain one more enemy.", Vector2i(0, -3), 12, [&"more_slimes"], "", {"enemies_per_window_bonus": 1}))
+	_register(_node(&"monster_chase", "Monster Chase", "CHASE", "Chaser enemies can begin appearing.", Vector2i(0, -4), 30, [&"enemies_per_window"], "", {"chaser_enemies_enabled": true}))
+	_register(_node(&"spawner", "Spawner", "SPAWN", "Enemy waves begin refilling.", Vector2i(0, -5), 130, [&"monster_chase"], "", {"field_spawn_interval_mult": 0.82}))
 	_register(_node(&"spawner_fast", "Fast Spawner", "FAST", "Enemy waves refill much faster.", Vector2i(-1, -5), 300, [&"spawner"], "", {"field_spawn_interval_mult": 0.72}))
 	_register(_node(&"spawner_burst", "Burst Spawner", "BURST", "Each wave spawns one extra enemy.", Vector2i(1, -5), 400, [&"spawner"], "", {"field_spawn_batch_bonus": 1}))
 	_register(_node(&"max_enemies", "More Room", "MAX8", "Raise field enemy pressure.", Vector2i(0, -6), 150, [&"spawner"], "", {"field_enemy_count_bonus": 3, "field_crowd_cap_bonus": 2}))
 	_register(_node(&"max_enemies_2", "Swarm Room", "MAX16", "Raise field enemy pressure again.", Vector2i(0, -7), 600, [&"max_enemies"], "", {"field_enemy_count_bonus": 6, "field_crowd_cap_bonus": 4}))
 
 	# West: resources and party growth.
-	_register(_node(&"gold", "Gold", "GOLD", "Enemies drop extra gold.", Vector2i(-2, 0), 2, [&"root"], "", {"gold_flat": 1}))
-	_register(_node(&"item", "Equipment", "ITEM", "Enemies can drop equipment.", Vector2i(-3, 0), 6, [&"gold"], "", {"item_drops_enabled": true}))
+	_register(_node(&"gold", "Gold", "GOLD", "Enemies drop 1 gold pickup each.", Vector2i(-2, 0), 1, [&"root"]))
+	_register(_node(&"item", "Equipment", "ITEM", "Battle windows drop 1 equipment item.", Vector2i(-3, 0), 4, [&"gold"]))
 	_register(_node(&"magic", "Magic", "MAGIC", "Recruit a mage with Fireburst.", Vector2i(-4, 0), 70, [&"item"], "res://data/modifiers/prototype/recruit_mage.tres"))
 	_register(_node(&"companion", "Companion", "ALLY", "Recruit a priest companion.", Vector2i(-5, 0), 140, [&"magic"], "res://data/modifiers/prototype/recruit_priest.tres"))
-	_register(_node(&"drop_uncommon", "Better Drops", "DROP1", "Equipment drops more often.", Vector2i(-3, -1), 100, [&"item"], "", {"item_drop_chance_bonus": 0.10}))
-	_register(_node(&"drop_rare", "Rare Drops", "DROP2", "Equipment drops more often.", Vector2i(-3, -2), 350, [&"drop_uncommon"], "", {"item_drop_chance_bonus": 0.10}))
-	_register(_node(&"drop_epic", "Epic Drops", "DROP3", "Equipment drops more often.", Vector2i(-3, -3), 1200, [&"drop_rare"], "", {"item_drop_chance_bonus": 0.10}))
-	_register(_node(&"drop_legendary", "Legend Drops", "DROP4", "Equipment drops more often.", Vector2i(-3, -4), 4000, [&"drop_epic"], "", {"item_drop_chance_bonus": 0.10}))
+	_register(_node(&"drop_uncommon", "Better Drops", "DROP1", "Drop tuning placeholder.", Vector2i(-3, -1), 100, [&"item"]))
+	_register(_node(&"drop_rare", "Rare Drops", "DROP2", "Drop tuning placeholder.", Vector2i(-3, -2), 350, [&"drop_uncommon"]))
+	_register(_node(&"drop_epic", "Epic Drops", "DROP3", "Drop tuning placeholder.", Vector2i(-3, -3), 1200, [&"drop_rare"]))
+	_register(_node(&"drop_legendary", "Legend Drops", "DROP4", "Drop tuning placeholder.", Vector2i(-3, -4), 4000, [&"drop_epic"]))
 
 	# South: automation.
 	_register(_node(&"atb", "ATB", "ATB", "Battle windows tick faster.", Vector2i(1, 2), 70, [&"root"], "", {"battle_turn_interval_mult": 0.82}))
@@ -59,9 +59,9 @@ func _load_all() -> void:
 	_register(_node(&"window_push", "Window Push", "PUSH", "Battle windows push each other around.", Vector2i(2, 0), 60, [&"root"], "", {"window_push_enabled": true}))
 	_register(_node(&"window_bash", "Window Bash", "BASH", "Bumping windows damages enemies.", Vector2i(3, 0), 90, [&"window_push"], "res://data/modifiers/prototype/window_crash.tres"))
 	_register(_node(&"map_expand", "Map Expand", "MAP", "Fields become larger and hold more enemies.", Vector2i(4, 0), 250, [&"window_bash"], "", {"field_size_mult": 1.5, "field_enemy_count_bonus": 2}))
-	_register(_node(&"shop_haggle", "Haggle", "x1.5", "Enemy gold is multiplied.", Vector2i(2, 1), 50, [&"window_push"], "", {"gold_mult": 1.5}))
-	_register(_node(&"shop_merchant", "Merchant", "x2", "Enemy gold is multiplied again.", Vector2i(3, 1), 200, [&"shop_haggle"], "", {"gold_mult": 1.35}))
-	_register(_node(&"shop_baron", "Baron", "x3", "Enemy gold is multiplied again.", Vector2i(4, 1), 800, [&"shop_merchant"], "", {"gold_mult": 1.5}))
+	_register(_node(&"shop_haggle", "Haggle", "ECO1", "Economy tuning placeholder.", Vector2i(2, 1), 50, [&"window_push"]))
+	_register(_node(&"shop_merchant", "Merchant", "ECO2", "Economy tuning placeholder.", Vector2i(3, 1), 200, [&"shop_haggle"]))
+	_register(_node(&"shop_baron", "Baron", "ECO3", "Economy tuning placeholder.", Vector2i(4, 1), 800, [&"shop_merchant"]))
 
 
 func _register(node) -> void:

@@ -28,7 +28,8 @@ func _ready() -> void:
 func _populate_stats() -> void:
 	for child in _stats_container.get_children():
 		child.queue_free()
-	_add_stat("Stages cleared", str(GameState.current_stage))
+	_add_stat("Field loops", str(GameState.field_loop_count))
+	_add_stat("Reached", GameState.field_region_name())
 	_add_stat("Enemies slain", str(GameState.enemies_killed))
 	_add_stat("Gold earned", str(GameState.total_gold_earned))
 	_add_stat("Biggest hit", str(GameState.biggest_hit))

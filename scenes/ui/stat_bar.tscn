@@ -11,7 +11,7 @@ border_width_bottom = 1
 border_color = Color(0, 0, 0, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_bar"]
-font_size = 7
+font_size = 5
 font_color = Color(1, 1, 1, 1)
 shadow_size = 1
 shadow_color = Color(0, 0, 0, 0.85)

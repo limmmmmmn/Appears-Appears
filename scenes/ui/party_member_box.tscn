@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/party_member_box.gd" id="1_box"]
-[ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
+[ext_resource type="Theme" path="res://assets/fonts/field_theme.tres" id="2_theme"]
 [ext_resource type="PackedScene" path="res://scenes/ui/character_portrait.tscn" id="3_portrait"]
 [ext_resource type="PackedScene" path="res://scenes/ui/stat_bar.tscn" id="4_stat_bar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/equip_slot.tscn" id="5_equip_slot"]
@@ -19,7 +19,7 @@ corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 
 [sub_resource type="LabelSettings" id="LabelSettings_name"]
-font_size = 7
+font_size = 5
 font_color = Color(1, 1, 1, 1)
 shadow_size = 1
 shadow_color = Color(0, 0, 0, 0.7)

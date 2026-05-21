@@ -44,6 +44,7 @@ func setup(index: int, data: CharacterData) -> void:
 
 
 func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_PASS
 	if _pending_setup or character != null:
 		_pending_setup = false
 		_apply()
@@ -53,6 +54,7 @@ func _ready() -> void:
 func set_hp(hp: int, max_hp: int) -> void:
 	_hp_bar.set_label("%d/%d" % [hp, max_hp])
 	_hp_bar.set_ratio(_safe_ratio(hp, max_hp))
+	_refresh_tooltip()
 
 
 func set_exp_ratio(ratio: float) -> void:
@@ -61,6 +63,7 @@ func set_exp_ratio(ratio: float) -> void:
 
 func set_level(level: int) -> void:
 	_exp_bar.set_label("LV %d" % maxi(level, 1))
+	_refresh_tooltip()
 
 
 ## Paint a specific slot (placeholder until ItemData lands). Indices outside
@@ -75,7 +78,9 @@ func set_equipment(items: Array) -> void:
 	for i in _equip_row.get_child_count():
 		var slot: EquipSlot = _equip_slot_at(i)
 		if slot:
+			slot.set_empty_label(_slot_label(i))
 			slot.set_item(items[i] if i < items.size() else null)
+	_refresh_tooltip()
 
 
 ## Reset every equipment slot to the empty state.
@@ -138,6 +143,7 @@ func _apply() -> void:
 		set_hp(0, 1)
 		set_exp_ratio(0.0)
 		set_level(1)
+		tooltip_text = ""
 		return
 	_name_label.text = character.display_name
 	_portrait.set_character(character)
@@ -147,6 +153,7 @@ func _apply() -> void:
 	set_exp_ratio(GameState.party_xp_ratio(party_index))
 	set_level(GameState.party_level(party_index))
 	set_equipment(GameState.equipment_for_member(party_index))
+	_refresh_tooltip()
 
 
 func _resolve_max_hp() -> int:
@@ -171,3 +178,15 @@ func _safe_ratio(value: int, max_value: int) -> float:
 	if max_value <= 0:
 		return 0.0
 	return clampf(float(value) / float(max_value), 0.0, 1.0)
+
+
+func _refresh_tooltip() -> void:
+	tooltip_text = GameState.party_member_stat_tooltip(party_index)
+
+
+func _slot_label(slot_index: int) -> String:
+	if slot_index == GameState.EQUIPMENT_ACCESSORY_SLOT_B:
+		return "Accessory B"
+	if slot_index == GameState.EQUIPMENT_ACCESSORY_SLOT_A:
+		return "Accessory A"
+	return GameState.equipment_slot_name(slot_index)

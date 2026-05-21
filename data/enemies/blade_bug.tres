@@ -13,5 +13,5 @@ attack = 6
 defense = 1
 agility = 4
 party_bump_counter_damage_ratio = 0.1
-gold_reward = 9
+gold_reward = 1
 xp_reward = 9

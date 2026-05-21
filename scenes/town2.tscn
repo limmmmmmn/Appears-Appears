@@ -1,8 +1,9 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/town2.gd" id="1_town2"]
 [ext_resource type="PackedScene" path="res://scenes/ui/town2_slot.tscn" id="2_slot"]
 [ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="3_theme"]
+[ext_resource type="Font" path="res://assets/fonts/town_ui_font.tres" id="4_font"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_bg"]
 bg_color = Color(0.84, 0.93, 0.96, 1)
@@ -62,10 +63,12 @@ border_width_bottom = 3
 border_color = Color(0, 0, 0, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_title"]
+font = ExtResource("4_font")
 font_size = 10
 font_color = Color(0.1, 0.22, 0.32, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_gold"]
+font = ExtResource("4_font")
 font_size = 14
 font_color = Color(0.7, 0.42, 0.06, 1)
 
@@ -99,12 +102,12 @@ offset_bottom = 26.0
 theme = ExtResource("3_theme")
 theme_override_constants/separation = 12
 
-[node name="StageLabel" type="Label" parent="HeaderBar"]
+[node name="SettlementLabel" type="Label" parent="HeaderBar"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 5
-text = "Town"
+text = "Settlement"
 label_settings = SubResource("LabelSettings_title")
 vertical_alignment = 1
 
@@ -219,6 +222,7 @@ theme_override_styles/focus = SubResource("StyleBox_btn_focus")
 theme_override_colors/font_color = Color(1, 0.93, 0.78, 1)
 theme_override_colors/font_hover_color = Color(1, 0.93, 0.78, 1)
 theme_override_colors/font_focus_color = Color(1, 0.93, 0.78, 1)
+theme_override_fonts/font = ExtResource("4_font")
 theme_override_font_sizes/font_size = 9
 text = "Reroll  5G"
 
@@ -239,5 +243,6 @@ theme_override_styles/focus = SubResource("StyleBox_continue_focus")
 theme_override_colors/font_color = Color(0.1, 0.07, 0.03, 1)
 theme_override_colors/font_hover_color = Color(0.1, 0.07, 0.03, 1)
 theme_override_colors/font_focus_color = Color(0.1, 0.07, 0.03, 1)
+theme_override_fonts/font = ExtResource("4_font")
 theme_override_font_sizes/font_size = 11
-text = "Continue ▶"
+text = "Return to Field"

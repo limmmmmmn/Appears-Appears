@@ -7,6 +7,8 @@ extends Button
 
 signal purchase_requested(card: Town2Card, mod: ModifierData)
 
+const TOWN_UI_FONT: Font = preload("res://assets/fonts/town_ui_font.tres")
+
 @onready var _name_label: Label = %CardName
 @onready var _desc_label: Label = %CardDesc
 @onready var _cost_label: Label = %CardCost
@@ -244,14 +246,17 @@ func _transparent_style() -> StyleBoxFlat:
 
 func _build_poster_settings() -> void:
 	_poster_name_settings = LabelSettings.new()
+	_poster_name_settings.font = TOWN_UI_FONT
 	_poster_name_settings.font_size = 10
 	_poster_name_settings.font_color = POSTER_DARK_TEXT
 	_poster_name_settings.shadow_size = 1
 	_poster_name_settings.shadow_color = Color(0, 0, 0, 0.2)
 	_poster_desc_settings = LabelSettings.new()
+	_poster_desc_settings.font = TOWN_UI_FONT
 	_poster_desc_settings.font_size = 7
 	_poster_desc_settings.font_color = POSTER_DARK_TEXT
 	_poster_cost_settings = LabelSettings.new()
+	_poster_cost_settings.font = TOWN_UI_FONT
 	_poster_cost_settings.font_size = 9
 	_poster_cost_settings.font_color = POSTER_DARK_TEXT
 

@@ -1,6 +1,6 @@
 extends Node
 
-## Run-wide state: party, gold, modifiers, stage.
+## Run-wide state: party, gold, modifiers, and field loop progress.
 ## Read freely. Mutate through helper methods so signals fire correctly.
 ##
 ## Use the effective_* helpers when you need stat values during combat —
@@ -22,7 +22,7 @@ var party_mp: Array[int] = []
 var party_levels: Array[int] = []
 var party_xp: Array[int] = []
 var party_equipment: Array[Array] = []
-var inventory: Array[ItemData] = []
+var inventory: Array = []
 var _move_speed_drag_multiplier: float = 1.0
 var _move_speed_drag_until_msec: int = 0
 var _move_speed_boost_multiplier: float = 1.0
@@ -30,7 +30,7 @@ var _move_speed_boost_until_msec: int = 0
 var _field_battle_pause_count: int = 0
 
 # ─── Economy ──────────────────────────────────────────────────────────
-const STARTING_GOLD: int = 30
+const STARTING_GOLD: int = 0
 
 var gold: int = STARTING_GOLD
 ## Stat-affecting modifiers picked this run.
@@ -44,12 +44,22 @@ var purchased_skill_nodes: Dictionary = {}
 var recruited_companions: Array[ModifierData] = []
 
 # ─── Progression ──────────────────────────────────────────────────────
-var current_stage: int = 0
+var field_loop_count: int = 0
+
+const FIELD_REGION_MILESTONES: Array[Dictionary] = [
+	{"name": "초원", "gold": 0, "nodes": 0},
+	{"name": "깊은 숲", "gold": 75, "nodes": 2},
+	{"name": "오래된 폐허", "gold": 250, "nodes": 5},
+	{"name": "검은 늪", "gold": 700, "nodes": 8},
+	{"name": "마왕성 외곽", "gold": 1800, "nodes": 12},
+	{"name": "마왕성", "gold": 4200, "nodes": 16},
+]
 
 const MAX_CHARACTER_LEVEL: int = 20
 const EQUIPMENT_SLOT_COUNT: int = 6
 const EQUIPMENT_ACCESSORY_SLOT_A: int = 4
 const EQUIPMENT_ACCESSORY_SLOT_B: int = 5
+const EQUIPMENT_SLOT_LABELS: Array[String] = ["Weapon", "Shield", "Helmet", "Armor", "Accessory"]
 const XP_CURVE_BASE: int = 10
 const XP_CURVE_LEVEL_STEP: int = 5
 const XP_CURVE_QUADRATIC: int = 3
@@ -267,6 +277,32 @@ func purchased_skill_node_ids() -> Array[StringName]:
 	return out
 
 
+func unlocked_field_node_count() -> int:
+	var count: int = 0
+	for id in purchased_skill_nodes.keys():
+		if id == &"root":
+			continue
+		count += 1
+	return count
+
+
+func field_region_name() -> String:
+	var unlocked_nodes: int = unlocked_field_node_count()
+	var best_name: String = str(FIELD_REGION_MILESTONES.front()["name"])
+	for milestone: Dictionary in FIELD_REGION_MILESTONES:
+		if total_gold_earned >= int(milestone["gold"]) and unlocked_nodes >= int(milestone["nodes"]):
+			best_name = str(milestone["name"])
+	return best_name
+
+
+func field_region_summary() -> String:
+	return "%s  |  %dG earned  |  %d nodes" % [
+		field_region_name(),
+		total_gold_earned,
+		unlocked_field_node_count(),
+	]
+
+
 func skill_node_level(node_id: StringName) -> int:
 	return int(purchased_skill_nodes.get(node_id, 0))
 
@@ -358,12 +394,24 @@ func field_spawn_batch_bonus() -> int:
 	return skill_effect_int_sum("field_spawn_batch_bonus")
 
 
+func field_spawner_enabled() -> bool:
+	return has_skill_node(&"spawner")
+
+
 func field_spawn_interval_multiplier() -> float:
 	return skill_effect_float_product("field_spawn_interval_mult")
 
 
 func field_size_multiplier() -> float:
 	return maxf(1.0, skill_effect_float_product("field_size_mult"))
+
+
+func gold_drops_enabled() -> bool:
+	return has_skill_node(&"gold")
+
+
+func item_drops_enabled() -> bool:
+	return has_skill_node(&"item")
 
 
 func chaser_enemies_enabled() -> bool:
@@ -376,14 +424,6 @@ func enemies_per_window_bonus() -> int:
 
 func battle_turn_interval_multiplier() -> float:
 	return skill_effect_float_product("battle_turn_interval_mult")
-
-
-func item_drops_enabled() -> bool:
-	return skill_effect_bool("item_drops_enabled")
-
-
-func item_drop_chance_bonus() -> float:
-	return skill_effect_float_sum("item_drop_chance_bonus")
 
 
 func pickup_range_multiplier() -> float:
@@ -456,7 +496,7 @@ func modifier_last_float_effect(mod: ModifierData, key: String) -> float:
 	return _float_effect_value_for_stack(mod, key, maxi(0, modifier_level(mod.id) - 1), _multipliers_for_float_key(key))
 
 
-## Check whether `mod` can actually be applied right now. Town shops should
+## Check whether `mod` can actually be applied right now. Settlement shops should
 ## call this *before* spending gold so a stale/invalid card doesn't silently
 ## eat the player's coin.
 func can_add_modifier(mod: ModifierData) -> bool:
@@ -569,10 +609,10 @@ func modifier_level(modifier_id: StringName) -> int:
 	return level
 
 
-# ─── Stage ────────────────────────────────────────────────────────────
-func advance_stage() -> void:
-	current_stage += 1
-	EventBus.stage_started.emit(current_stage)
+# ─── Field Loop ───────────────────────────────────────────────────────
+func start_next_field_loop() -> void:
+	field_loop_count += 1
+	EventBus.field_loop_started.emit(field_loop_count)
 
 
 # ─── Enemy scaling ────────────────────────────────────────────────────
@@ -603,7 +643,7 @@ func scaled_enemy_agility(data: EnemyData) -> int:
 func scaled_enemy_gold_reward(data: EnemyData) -> int:
 	if data == null:
 		return 0
-	return maxi(1, data.gold_reward)
+	return 1
 
 
 func scaled_enemy_xp_reward(data: EnemyData) -> int:
@@ -616,29 +656,40 @@ func scaled_enemy_xp_reward(data: EnemyData) -> int:
 func collect_item(item: ItemData) -> bool:
 	if item == null:
 		return false
-	if equip_item(item):
-		return true
-	add_item_to_inventory(item)
+	_absorb_item_entry(_make_item_entry(item, 1))
 	return true
 
 
 func add_item_to_inventory(item: ItemData) -> void:
 	if item == null:
 		return
-	inventory.append(item)
+	_absorb_item_entry(_make_item_entry(item, 1))
+
+
+func _add_item_entry_to_inventory(entry: Dictionary) -> void:
+	if item_entry_data(entry) == null:
+		return
+	inventory.append(entry)
 	EventBus.inventory_changed.emit()
 
 
 func equip_item(item: ItemData) -> bool:
 	if item == null:
 		return false
+	return _equip_item_entry(_make_item_entry(item, 1))
+
+
+func _equip_item_entry(entry: Dictionary) -> bool:
+	var item: ItemData = item_entry_data(entry)
+	if item == null:
+		return false
 	var target_index: int = _equipment_target_index(item)
 	if target_index < 0:
 		return false
-	var slot_index: int = _equipment_slot_index(target_index, item)
+	var slot_index: int = _equipment_slot_index(target_index, item, false)
 	if slot_index < 0:
 		return false
-	party_equipment[target_index][slot_index] = item
+	party_equipment[target_index][slot_index] = entry
 	party_hp[target_index] = mini(party_hp[target_index], effective_max_hp(target_index))
 	EventBus.party_member_hp_changed.emit(target_index, party_hp[target_index], effective_max_hp(target_index))
 	EventBus.party_equipment_changed.emit(target_index)
@@ -649,7 +700,7 @@ func can_equip_item(item: ItemData) -> bool:
 	return item != null and _equipment_target_index(item) >= 0
 
 
-func inventory_items() -> Array[ItemData]:
+func inventory_items() -> Array:
 	return inventory.duplicate()
 
 
@@ -657,6 +708,231 @@ func equipment_for_member(index: int) -> Array:
 	if index < 0 or index >= party_equipment.size():
 		return _empty_equipment_slots()
 	return party_equipment[index].duplicate()
+
+
+func equipment_slot_name(slot: int) -> String:
+	if slot >= 0 and slot < EQUIPMENT_SLOT_LABELS.size():
+		return EQUIPMENT_SLOT_LABELS[slot]
+	return "Item"
+
+
+func item_entry_data(entry) -> ItemData:
+	if entry is ItemData:
+		return entry as ItemData
+	if entry is Dictionary:
+		return (entry as Dictionary).get("item", null) as ItemData
+	return null
+
+
+func item_entry_level(entry) -> int:
+	if entry is Dictionary:
+		return maxi(1, int((entry as Dictionary).get("level", 1)))
+	return 1 if entry is ItemData else 0
+
+
+func item_entry_tooltip(entry) -> String:
+	var item: ItemData = item_entry_data(entry)
+	if item == null:
+		return ""
+	var level: int = item_entry_level(entry)
+	var lines: PackedStringArray = []
+	lines.append("%s  Lv %d" % [item.display_name, level])
+	lines.append("%s  |  %s" % [equipment_slot_name(int(item.slot)), _item_owner_label(item)])
+	var stat_line: String = _item_stat_line(item, level)
+	lines.append(stat_line if not stat_line.is_empty() else "No stats")
+	if level > 0:
+		lines.append("Merge: same Lv %d -> Lv %d" % [level, level + 1])
+	return "\n".join(lines)
+
+
+func party_member_stat_tooltip(index: int) -> String:
+	if index < 0 or index >= party.size():
+		return ""
+	var member: CharacterData = party[index]
+	var max_hp: int = effective_max_hp(index)
+	var hp: int = party_hp[index] if index < party_hp.size() else max_hp
+	var mp: int = party_mp[index] if index < party_mp.size() else member.max_mp
+	var lines: PackedStringArray = []
+	lines.append("%s  Lv %d" % [member.display_name, party_level(index)])
+	lines.append("HP %d/%d   MP %d/%d" % [hp, max_hp, mp, member.max_mp])
+	lines.append("ATK %d   DEF %d   AGI %d" % [
+		effective_attack(index),
+		effective_defense(index),
+		effective_agility(index),
+	])
+	lines.append("XP %d/%d" % [
+		party_xp[index] if index < party_xp.size() else 0,
+		party_xp_to_next(index),
+	])
+	lines.append("Gear  %s" % _member_gear_stat_line(index))
+	return "\n".join(lines)
+
+
+func enemy_stat_tooltip(data: EnemyData, current_hp: int = -1, max_hp_override: int = -1) -> String:
+	if data == null:
+		return ""
+	var max_hp_value: int = max_hp_override if max_hp_override > 0 else scaled_enemy_max_hp(data)
+	var hp_value: int = current_hp if current_hp >= 0 else max_hp_value
+	var gold_reward: int = scaled_enemy_gold_reward(data) if gold_drops_enabled() else 0
+	var lines: PackedStringArray = []
+	lines.append(data.display_name)
+	lines.append("HP %d/%d" % [hp_value, max_hp_value])
+	lines.append("ATK %d   DEF %d   AGI %d" % [
+		scaled_enemy_attack(data),
+		scaled_enemy_defense(data),
+		scaled_enemy_agility(data),
+	])
+	lines.append("XP %d   Gold %d" % [scaled_enemy_xp_reward(data), gold_reward])
+	if data.chases_player_on_field:
+		lines.append("Field: chase %d  detect %d" % [int(data.field_chase_speed), int(data.field_detect_radius)])
+	else:
+		lines.append("Field: passive  wander %d" % int(data.field_wander_speed))
+	return "\n".join(lines)
+
+
+func _make_item_entry(item: ItemData, level: int = 1) -> Dictionary:
+	return {
+		"item": item,
+		"level": maxi(1, level),
+	}
+
+
+func _item_owner_label(item: ItemData) -> String:
+	if item.allowed_character_id == &"":
+		return "Any member"
+	return "%s only" % _character_display_name(item.allowed_character_id)
+
+
+func _character_display_name(character_id: StringName) -> String:
+	for member: CharacterData in party:
+		if member.id == character_id:
+			return member.display_name
+	match character_id:
+		&"hero": return "Hero"
+		&"mage": return "Mage"
+		&"priest": return "Priest"
+		&"thief": return "Thief"
+	return String(character_id).capitalize()
+
+
+func _item_stat_line(item: ItemData, level: int) -> String:
+	var parts: PackedStringArray = []
+	var hp: int = item.max_hp_bonus * level
+	var atk: int = item.attack_bonus * level
+	var defense: int = item.defense_bonus * level
+	var agility: int = item.agility_bonus * level
+	if hp != 0:
+		parts.append(_signed_stat("HP", hp))
+	if atk != 0:
+		parts.append(_signed_stat("ATK", atk))
+	if defense != 0:
+		parts.append(_signed_stat("DEF", defense))
+	if agility != 0:
+		parts.append(_signed_stat("AGI", agility))
+	return "   ".join(parts)
+
+
+func _member_gear_stat_line(index: int) -> String:
+	var parts: PackedStringArray = []
+	var hp: int = _equipment_bonus(index, "max_hp_bonus")
+	var atk: int = _equipment_bonus(index, "attack_bonus")
+	var defense: int = _equipment_bonus(index, "defense_bonus")
+	var agility: int = _equipment_bonus(index, "agility_bonus")
+	if hp != 0:
+		parts.append(_signed_stat("HP", hp))
+	if atk != 0:
+		parts.append(_signed_stat("ATK", atk))
+	if defense != 0:
+		parts.append(_signed_stat("DEF", defense))
+	if agility != 0:
+		parts.append(_signed_stat("AGI", agility))
+	return "none" if parts.is_empty() else "   ".join(parts)
+
+
+func _signed_stat(label: String, value: int) -> String:
+	var sign: String = "+" if value > 0 else ""
+	return "%s %s%d" % [label, sign, value]
+
+
+func _absorb_item_entry(entry: Dictionary) -> void:
+	var item: ItemData = item_entry_data(entry)
+	var level: int = item_entry_level(entry)
+	if item == null or level <= 0:
+		return
+	var target_index: int = _equipment_target_index(item)
+	if target_index >= 0:
+		var equipped_slot: int = _find_equipped_match(target_index, item, level)
+		if equipped_slot >= 0:
+			_upgrade_equipped_entry(target_index, equipped_slot)
+			return
+	var inventory_index: int = _find_inventory_match(item, level)
+	if inventory_index >= 0:
+		inventory.remove_at(inventory_index)
+		EventBus.inventory_changed.emit()
+		_absorb_item_entry(_make_item_entry(item, level + 1))
+		return
+	if target_index >= 0 and not _has_equipped_item(target_index, item):
+		if _equip_item_entry(entry):
+			return
+	_add_item_entry_to_inventory(entry)
+
+
+func _upgrade_equipped_entry(member_index: int, slot_index: int) -> void:
+	var entry = party_equipment[member_index][slot_index]
+	var item: ItemData = item_entry_data(entry)
+	var level: int = item_entry_level(entry)
+	if item == null:
+		return
+	party_equipment[member_index][slot_index] = _make_item_entry(item, level + 1)
+	_cascade_equipped_inventory_merge(member_index, slot_index)
+	party_hp[member_index] = mini(party_hp[member_index], effective_max_hp(member_index))
+	EventBus.party_member_hp_changed.emit(member_index, party_hp[member_index], effective_max_hp(member_index))
+	EventBus.party_equipment_changed.emit(member_index)
+
+
+func _cascade_equipped_inventory_merge(member_index: int, slot_index: int) -> void:
+	while true:
+		var entry = party_equipment[member_index][slot_index]
+		var item: ItemData = item_entry_data(entry)
+		var level: int = item_entry_level(entry)
+		var inventory_index: int = _find_inventory_match(item, level)
+		if inventory_index < 0:
+			return
+		inventory.remove_at(inventory_index)
+		party_equipment[member_index][slot_index] = _make_item_entry(item, level + 1)
+		EventBus.inventory_changed.emit()
+
+
+func _find_equipped_match(member_index: int, item: ItemData, level: int) -> int:
+	if member_index < 0 or member_index >= party_equipment.size():
+		return -1
+	for i in party_equipment[member_index].size():
+		var entry = party_equipment[member_index][i]
+		if _entry_matches(entry, item, level):
+			return i
+	return -1
+
+
+func _find_inventory_match(item: ItemData, level: int) -> int:
+	for i in inventory.size():
+		if _entry_matches(inventory[i], item, level):
+			return i
+	return -1
+
+
+func _has_equipped_item(member_index: int, item: ItemData) -> bool:
+	if member_index < 0 or member_index >= party_equipment.size():
+		return false
+	for entry in party_equipment[member_index]:
+		var equipped: ItemData = item_entry_data(entry)
+		if equipped != null and equipped.id == item.id:
+			return true
+	return false
+
+
+func _entry_matches(entry, item: ItemData, level: int) -> bool:
+	var entry_item: ItemData = item_entry_data(entry)
+	return entry_item != null and item != null and entry_item.id == item.id and item_entry_level(entry) == level
 
 
 func _equipment_target_index(item: ItemData) -> int:
@@ -900,9 +1176,10 @@ func _equipment_bonus(index: int, property_name: StringName) -> int:
 	if index < 0 or index >= party_equipment.size():
 		return 0
 	var total: int = 0
-	for item in party_equipment[index]:
-		if item is ItemData:
-			total += int((item as ItemData).get(property_name))
+	for entry in party_equipment[index]:
+		var item: ItemData = item_entry_data(entry)
+		if item:
+			total += int(item.get(property_name)) * item_entry_level(entry)
 	return total
 
 
@@ -962,18 +1239,6 @@ func party_window_push_enabled() -> bool:
 	return party_bump_damage_ratio() > 0.0 or window_collision_heal_amount() > 0
 
 
-## Apply gold modifiers to a base reward. Multiplicative then additive.
-func modify_gold_reward(base: int) -> int:
-	var mult: float = 1.0
-	var flat: int = 0
-	for mod: ModifierData in active_modifiers:
-		mult *= float(mod.effect_data.get("gold_mult", 1.0))
-		flat += int(mod.effect_data.get("gold_flat", 0))
-	mult *= skill_effect_float_product("gold_mult")
-	flat += skill_effect_int_sum("gold_flat")
-	return int(round(base * mult)) + flat
-
-
 # ─── Reset ────────────────────────────────────────────────────────────
 func reset_run() -> void:
 	party.clear()
@@ -996,7 +1261,7 @@ func reset_run() -> void:
 	_move_speed_boost_multiplier = 1.0
 	_move_speed_boost_until_msec = 0
 	_field_battle_pause_count = 0
-	current_stage = 0
+	field_loop_count = 0
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).
 	EventBus.gold_changed.emit(gold)

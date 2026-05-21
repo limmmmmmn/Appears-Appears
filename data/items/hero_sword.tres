@@ -10,4 +10,4 @@ display_name = "Hero Sword"
 slot = 0
 icon = ExtResource("2_icon")
 allowed_character_id = &"hero"
-attack_bonus = 2
+attack_bonus = 6

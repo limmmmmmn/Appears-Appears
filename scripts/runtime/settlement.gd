@@ -1,16 +1,16 @@
 class_name Settlement
 extends CanvasLayer
 
-## Stage-clear settlement screen.
+## Field-loop settlement screen.
 ## Brotato-style: pull 4 random modifier offerings, multi-buy with gold,
-## "Next Region" advances the run.
+## "Return to Field" advances the run.
 
 signal closed
 
 const CARD_SCENE: PackedScene = preload("res://scenes/ui/modifier_card.tscn")
 const OFFER_COUNT: int = 4
 
-@onready var _stage_label: Label = %StageLabel
+@onready var _settlement_label: Label = %SettlementLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _cards_container: HBoxContainer = %CardsContainer
 @onready var _next_button: Button = %NextButton
@@ -22,7 +22,7 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
-	_stage_label.text = "Stage %d Cleared" % GameState.current_stage
+	_settlement_label.text = GameState.field_region_summary()
 	_refresh_gold_label()
 	_spawn_offers()
 	_next_button.pressed.connect(_on_next_pressed)
@@ -32,7 +32,7 @@ func _ready() -> void:
 func _spawn_offers() -> void:
 	var offers: Array[ModifierData] = ModifierDB.get_random_modifiers(OFFER_COUNT)
 	if offers.is_empty():
-		_stage_label.text = "Stage %d Cleared (no offers — empty DB)" % GameState.current_stage
+		_settlement_label.text = "%s (no offers - empty DB)" % GameState.field_region_summary()
 		return
 	for mod: ModifierData in offers:
 		var card: ModifierCard = CARD_SCENE.instantiate()

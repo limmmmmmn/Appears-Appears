@@ -1,9 +1,11 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/damage_number.gd" id="1_dn"]
+[ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="2_font"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_dn"]
-font_size = 9
+font = ExtResource("2_font")
+font_size = 8
 font_color = Color(1, 1, 1, 1)
 outline_size = 2
 outline_color = Color(0, 0, 0, 1)

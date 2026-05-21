@@ -2,7 +2,7 @@ class_name HUD
 extends CanvasLayer
 
 ## Field HUD:
-##   • Top bar:   "Field N" (left) | "Gold N" (right)
+##   • Top bar:   field loop status (left) | "Gold N" (right)
 ##   • Bottom bar: a row of party member boxes — portrait + name on the left
 ##                 column, HP bar / EXP bar / equipment slots on the right.
 ##
@@ -10,6 +10,7 @@ extends CanvasLayer
 ## come through EventBus.
 
 const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.tscn")
+const EQUIP_SLOT_SCENE: PackedScene = preload("res://scenes/ui/equip_slot.tscn")
 const LEVEL_UP_PANEL_SCENE: PackedScene = preload("res://scenes/ui/level_up_panel.tscn")
 const LEVEL_UP_SKILL_BY_CHARACTER_ID: Dictionary = {
 	&"hero": preload("res://data/modifiers/prototype/heavy_strike.tres"),
@@ -18,20 +19,28 @@ const LEVEL_UP_SKILL_BY_CHARACTER_ID: Dictionary = {
 	&"thief": preload("res://data/modifiers/prototype/pilfer.tres"),
 }
 const LEVEL_UP_STAT_CARD_KINDS: Array[String] = ["blade", "vigor", "step"]
+const INVENTORY_SLOT_COUNT: int = 12
+const TIMER_NORMAL_COLOR: Color = Color(1.0, 1.0, 1.0, 1.0)
+const TIMER_URGENT_COLOR: Color = Color(1.0, 0.16, 0.10, 1.0)
+const TIMER_URGENT_PULSE_COLOR: Color = Color(1.0, 0.82, 0.24, 1.0)
 
-@onready var _stage_label: Label = %StageLabel
+@onready var _field_label: Label = %FieldLabel
 @onready var _countdown_label: Label = %CountdownLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _member_row: HBoxContainer = %MemberRow
+@onready var _inventory_grid: GridContainer = %InventoryGrid
 
 ## Live member box references, parallel to GameState.party. Rebuilt from
 ## scratch on party_changed so we never have stale indices when a recruit
 ## or wipe shifts the party array.
 var _member_boxes: Array[PartyMemberBox] = []
+var _inventory_slots: Array[EquipSlot] = []
 var _level_up_panel: LevelUpPanel
 var _level_up_ui_enabled: bool = false
 var _queued_level_up_members: Array[int] = []
 var _level_up_pause_active: bool = false
+var _timer_urgent: bool = false
+var _timer_pulse_time: float = 0.0
 
 
 func _ready() -> void:
@@ -40,12 +49,23 @@ func _ready() -> void:
 	EventBus.party_member_xp_changed.connect(_on_party_member_xp_changed)
 	EventBus.party_member_leveled_up.connect(_on_party_member_leveled_up)
 	EventBus.party_equipment_changed.connect(_on_party_equipment_changed)
+	EventBus.inventory_changed.connect(_on_inventory_changed)
 	EventBus.gold_changed.connect(_on_gold_changed)
-	EventBus.stage_started.connect(_on_stage_started)
-	EventBus.wave_timer_changed.connect(_on_wave_timer_changed)
+	EventBus.field_loop_started.connect(_on_field_loop_started)
+	EventBus.field_loop_timer_changed.connect(_on_field_loop_timer_changed)
 	_refresh_gold()
-	_refresh_stage()
+	_refresh_field_label()
+	_build_inventory_slots()
 	_rebuild_member_boxes()
+	_refresh_inventory()
+
+
+func _process(delta: float) -> void:
+	if not _timer_urgent:
+		return
+	_timer_pulse_time += delta
+	var pulse: float = (sin(_timer_pulse_time * 12.0) + 1.0) * 0.5
+	_countdown_label.modulate = TIMER_URGENT_COLOR.lerp(TIMER_URGENT_PULSE_COLOR, pulse)
 
 
 # ─── Bottom row ───────────────────────────────────────────────────────
@@ -211,23 +231,54 @@ func _on_party_equipment_changed(index: int) -> void:
 	_member_boxes[index].set_equipment(GameState.equipment_for_member(index))
 
 
+func _on_inventory_changed() -> void:
+	_refresh_inventory()
+
+
+func _build_inventory_slots() -> void:
+	for child in _inventory_grid.get_children():
+		child.queue_free()
+	_inventory_slots.clear()
+	for i in INVENTORY_SLOT_COUNT:
+		var slot: EquipSlot = EQUIP_SLOT_SCENE.instantiate()
+		slot.custom_minimum_size = Vector2(14, 14)
+		_inventory_grid.add_child(slot)
+		slot.set_empty_label("Inventory %d" % (i + 1))
+		_inventory_slots.append(slot)
+
+
+func _refresh_inventory() -> void:
+	var items: Array = GameState.inventory_items()
+	for i in _inventory_slots.size():
+		_inventory_slots[i].set_item(items[i] if i < items.size() else null)
+
+
 # ─── Top bar ──────────────────────────────────────────────────────────
 func _on_gold_changed(_new_gold: int) -> void:
 	_refresh_gold()
 
 
-func _on_stage_started(_stage_num: int) -> void:
-	_refresh_stage()
+func _on_field_loop_started(_loop_num: int) -> void:
+	_refresh_field_label()
 
 
-func _on_wave_timer_changed(remaining_seconds: int) -> void:
+func _on_field_loop_timer_changed(remaining_seconds: int) -> void:
 	_countdown_label.text = str(maxi(0, remaining_seconds))
+	_set_timer_urgent(remaining_seconds > 0 and remaining_seconds <= 3)
 
 
 func _refresh_gold() -> void:
 	_gold_label.text = "Gold %d" % GameState.gold
 
 
-func _refresh_stage() -> void:
-	var stage: int = maxi(GameState.current_stage, 1)
-	_stage_label.text = "Field %d" % stage
+func _refresh_field_label() -> void:
+	_field_label.text = "Field"
+
+
+func _set_timer_urgent(is_urgent: bool) -> void:
+	if _timer_urgent == is_urgent:
+		return
+	_timer_urgent = is_urgent
+	_timer_pulse_time = 0.0
+	if not is_urgent:
+		_countdown_label.modulate = TIMER_NORMAL_COLOR

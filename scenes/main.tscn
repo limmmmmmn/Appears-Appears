@@ -1,13 +1,15 @@
-[gd_scene format=3 uid="uid://cqf6bpvn7qq6m"]
+[gd_scene load_steps=8 format=3 uid="uid://cqf6bpvn7qq6m"]
 
 [ext_resource type="Script" uid="uid://c6lq6ty8adwon" path="res://scripts/runtime/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://3bdh8ubp16k5" path="res://scenes/field.tscn" id="2_field"]
 [ext_resource type="Script" uid="uid://do1c4iqw30pbj" path="res://scripts/runtime/battle_manager.gd" id="3_mgr"]
 [ext_resource type="PackedScene" uid="uid://c2cjn8arjiui3" path="res://scenes/hud.tscn" id="4_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/low_health_overlay.tscn" id="5_low_hp"]
+[ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
-font_size = 18
+font = ExtResource("6_font")
+font_size = 14
 font_color = Color(1, 1, 0.92, 1)
 outline_size = 2
 outline_color = Color(0, 0, 0, 0.75)

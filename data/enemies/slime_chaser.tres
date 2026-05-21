@@ -18,5 +18,5 @@ field_charge_enabled = true
 field_charge_speed = 116.0
 field_charge_duration = 0.2
 field_charge_cooldown = 2.2
-gold_reward = 5
+gold_reward = 1
 xp_reward = 5

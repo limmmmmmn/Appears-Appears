@@ -66,7 +66,7 @@ func _physics_process(_delta: float) -> void:
 
 
 ## Drop the camera's smoothing for one frame — used after teleporting the
-## player (e.g. start of a new stage) so the camera doesn't pan from the
+## player (e.g. start of a new field loop) so the camera doesn't pan from the
 ## old spot.
 func snap_camera() -> void:
 	if _camera:

@@ -1,7 +1,7 @@
 class_name Town2
 extends CanvasLayer
 
-## Streamlined between-stage town. Three zones, in descending size:
+## Streamlined settlement between field loops. Three zones, in descending size:
 ##   • Top:    4 big offer cards (the actual decision). Buying exhausts that
 ##             slot until the player rerolls or visits town again.
 ##   • Middle: a thin feed of party rows — one line each, "[NAME] [stats]
@@ -25,7 +25,7 @@ const SILENT_STAT_IDS: Dictionary = {
 	&"agi_up": true,
 }
 
-@onready var _stage_label: Label = %StageLabel
+@onready var _settlement_label: Label = %SettlementLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _top_zone: HBoxContainer = %TopZone
 @onready var _bottom_zone: VBoxContainer = %BottomZone
@@ -53,7 +53,7 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
-	_stage_label.text = _title_override if not _title_override.is_empty() else "Town"
+	_settlement_label.text = _title_override if not _title_override.is_empty() else GameState.field_region_summary()
 	_heal_party_to_full()
 	_refresh_gold_label()
 	_install_skill_tree()

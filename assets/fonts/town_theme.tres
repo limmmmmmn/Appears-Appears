@@ -1,6 +1,6 @@
 [gd_resource type="Theme" format=3 uid="uid://btown2theme01"]
 
-[ext_resource type="FontFile" uid="uid://clecwhexwkxbq" path="res://assets/fonts/poppins/Poppins-Medium.ttf" id="1_font"]
+[ext_resource type="FontVariation" path="res://assets/fonts/town_ui_font.tres" id="1_font"]
 
 [resource]
 default_font = ExtResource("1_font")

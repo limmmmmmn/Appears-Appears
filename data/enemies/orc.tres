@@ -12,5 +12,5 @@ max_hp = 38
 attack = 6
 defense = 1
 agility = 3
-gold_reward = 8
+gold_reward = 1
 xp_reward = 9

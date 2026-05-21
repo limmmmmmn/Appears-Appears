@@ -39,6 +39,7 @@ extends Area2D
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _alert_bubble: Control = $AlertBubble
 @onready var _collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var _tooltip_area: Control = $TooltipArea
 
 var _player: Node2D
 var _target: Node2D
@@ -87,6 +88,13 @@ func _apply_data() -> void:
 	charge_speed = data.field_charge_speed
 	charge_duration = data.field_charge_duration
 	charge_cooldown = data.field_charge_cooldown
+	_refresh_tooltip()
+
+
+func _refresh_tooltip() -> void:
+	if _tooltip_area == null:
+		return
+	_tooltip_area.tooltip_text = GameState.enemy_stat_tooltip(data)
 
 
 func _physics_process(delta: float) -> void:

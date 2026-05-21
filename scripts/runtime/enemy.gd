@@ -18,6 +18,7 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _hp_bar: ProgressBar = $HPBar
+@onready var _tooltip_area: Control = $TooltipArea
 
 var current_hp: int = 0
 var max_hp: int = 0
@@ -65,6 +66,7 @@ func _apply_data() -> void:
 	if data.sprite and _sprite:
 		_sprite.texture = data.sprite
 	_refresh_hp_bar()
+	_refresh_tooltip()
 	hp_changed.emit(current_hp, max_hp)
 
 
@@ -124,6 +126,13 @@ func _refresh_hp_bar() -> void:
 	if _hp_bar == null:
 		return
 	_hp_bar.value = 0.0 if max_hp <= 0 else clampf(float(current_hp) / float(max_hp), 0.0, 1.0)
+	_refresh_tooltip()
+
+
+func _refresh_tooltip() -> void:
+	if _tooltip_area == null:
+		return
+	_tooltip_area.tooltip_text = GameState.enemy_stat_tooltip(data, current_hp, max_hp)
 
 
 func _spawn_hit_effect(texture: Texture2D, is_crit: bool) -> void:

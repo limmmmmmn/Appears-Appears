@@ -14,8 +14,7 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 
 @export var enemy_data: EnemyData
 @export var turn_interval: float = 0.5
-@export var close_delay: float = 0.4
-@export_range(0.0, 1.0, 0.05) var item_drop_chance: float = 0.5
+@export var close_delay: float = 1.15
 
 ## How long to linger at spawn center before sliding to the assigned slot.
 @export var slide_delay: float = 0.3
@@ -32,7 +31,7 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
 
-const BASE_WINDOW_SIZE: Vector2 = Vector2(96.0, 72.0)
+const BASE_WINDOW_SIZE: Vector2 = Vector2(128.0, 96.0)
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -40,7 +39,7 @@ const ENEMY_ROW_HEIGHT_MIN: float = 22.0
 const ENEMY_ROW_HEIGHT_MAX: float = 30.0
 const ENEMY_SIDE_PADDING: float = 12.0
 const ENEMY_AREA_TOP: float = 8.0
-const ENEMY_AREA_BOTTOM: float = 32.0
+const ENEMY_AREA_BOTTOM: float = 40.0
 const TARGET_WINDOW_RATIO: float = 4.0 / 3.0
 const DIAMOND_EDGE_WEIGHT: float = 0.5
 const CRASH_FLASH_COLOR: Color = Color(1.0, 0.48, 0.12, 1.0)
@@ -50,15 +49,10 @@ const BASE_ENEMY_REPEAT_CHANCE: float = 0.68
 const STRONGER_SUPPORT_CHANCE: float = 0.06
 const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
-const POSTER_LIGHT_TEXT: Color = Color(0.94, 1.0, 0.86, 1.0)
-const DEFAULT_WINDOW_BG: Color = Color(0.95, 0.78, 0.14, 1.0)
-const WINDOW_BG_BY_ENEMY_ID: Dictionary = {
-	&"slime": Color(0.1, 0.55, 0.43, 1.0),
-	&"slime_chaser": Color(0.2, 0.68, 0.35, 1.0),
-	&"bat": Color(0.18, 0.46, 0.72, 1.0),
-	&"orc": Color(0.98, 0.66, 0.16, 1.0),
-	&"blade_bug": Color(0.72, 0.22, 0.2, 1.0),
-}
+const DEFAULT_WINDOW_BG: Color = Color(0.0, 0.0, 0.0, 1.0)
+const DQ_WINDOW_BG: Color = Color(0.0, 0.0, 0.0, 1.0)
+const DQ_WINDOW_BORDER: Color = Color(1.0, 1.0, 1.0, 1.0)
+const DQ_WINDOW_TEXT: Color = Color(1.0, 1.0, 1.0, 1.0)
 const ENEMY_TIER_BY_ID: Dictionary = {
 	&"slime": 0,
 	&"slime_chaser": 1,
@@ -70,8 +64,8 @@ const ENEMY_TIER_BY_ID: Dictionary = {
 var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
 var _running: bool = false
-var _earned_gold_total: int = 0
 var _earned_xp_total: int = 0
+var _gold_drops_total: int = 0
 var _field_drop_position: Vector2 = Vector2.INF
 var _item_drops: Array[ItemData] = []
 var _enemy_row_counts: Array[int] = [1]
@@ -139,6 +133,12 @@ func claim_xp_reward() -> int:
 	var xp: int = _earned_xp_total
 	_earned_xp_total = 0
 	return xp
+
+
+func claim_gold_drops() -> int:
+	var amount: int = _gold_drops_total
+	_gold_drops_total = 0
+	return amount
 
 
 func claim_item_drops() -> Array[ItemData]:
@@ -233,15 +233,11 @@ func _play_window_color_flash(flash_color: Color) -> void:
 
 
 func _apply_card_color_chrome() -> void:
-	var bg: Color = _window_bg_color()
-	var border: Color = bg.darkened(0.42)
-	var log_bg: Color = _log_bg_color(bg)
-	var text_color: Color = POSTER_LIGHT_TEXT if log_bg.get_luminance() < 0.42 else POSTER_DARK_TEXT
-	_background.add_theme_stylebox_override("panel", _flat_panel_style(bg, border))
-	_log_panel.add_theme_stylebox_override("panel", _flat_panel_style(log_bg, border))
-	_apply_label_color(_log_label, text_color)
-	_apply_label_color(_name_label, text_color)
-	_apply_label_color(_hp_label, text_color)
+	_background.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
+	_log_panel.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
+	_apply_label_color(_log_label, DQ_WINDOW_TEXT)
+	_apply_label_color(_name_label, DQ_WINDOW_TEXT)
+	_apply_label_color(_hp_label, DQ_WINDOW_TEXT)
 
 
 func _flat_panel_style(bg: Color, border: Color) -> StyleBoxFlat:
@@ -265,13 +261,11 @@ func _apply_label_color(label: Label, color: Color) -> void:
 
 
 func _window_bg_color() -> Color:
-	if enemy_data == null:
-		return DEFAULT_WINDOW_BG
-	return WINDOW_BG_BY_ENEMY_ID.get(enemy_data.id, DEFAULT_WINDOW_BG)
+	return DEFAULT_WINDOW_BG
 
 
-func _log_bg_color(bg: Color) -> Color:
-	return bg.lightened(0.34 if bg.get_luminance() < 0.42 else 0.14)
+func _log_bg_color(_bg: Color) -> Color:
+	return DQ_WINDOW_BG
 
 
 func _spawn_window_damage_number(amount: int, label_prefix: String) -> void:
@@ -311,7 +305,7 @@ func _spawn_enemy() -> void:
 func _ensure_enemy_plan() -> void:
 	if _planned_enemy_count > 0:
 		return
-	_planned_enemy_count = randi_range(1, _max_enemies_per_window())
+	_planned_enemy_count = _enemies_per_window()
 	_planned_enemy_data = _plan_enemy_mix(_planned_enemy_count)
 
 
@@ -319,7 +313,7 @@ func _ensure_enemy_count_planned() -> void:
 	_ensure_enemy_plan()
 
 
-func _max_enemies_per_window() -> int:
+func _enemies_per_window() -> int:
 	return maxi(1, 1 + GameState.enemies_per_window_bonus())
 
 
@@ -430,6 +424,8 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	var crit: Dictionary = GameState.roll_crit()
 	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"])))
 	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], member.attack_effect)
+	if not _running:
+		return dealt
 	var target_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
 	var tag: String = "%s hits %s -%d" % [member.display_name, target_name, dealt]
 	if crit["is_crit"]:
@@ -448,12 +444,16 @@ func _mage_splash_attack(attacker_index: int) -> void:
 	var total_dealt: int = 0
 	for i in target_count:
 		total_dealt += targets[i].take_damage(damage, crit["is_crit"], member.attack_effect)
+	if not _running:
+		return
 	var suffix := "!" if crit["is_crit"] else ""
 	_log_label.text = "%s scorches x%d -%d%s" % [member.display_name, target_count, total_dealt, suffix]
 
 
 func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	var dealt: int = _basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
+	if not _running:
+		return
 	var heal_target: int = _lowest_wounded_party_index()
 	if heal_target == -1:
 		return
@@ -471,6 +471,8 @@ func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 
 func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	var dealt: int = _basic_party_attack(attacker_index, target_enemy)
+	if not _running:
+		return
 	var stolen: int = target_enemy.try_steal_gold(GameState.thief_steal_chance(), GameState.thief_steal_gold_amount())
 	if stolen <= 0:
 		return
@@ -504,30 +506,32 @@ func _on_enemy_hp_changed(_current: int, _max_hp: int) -> void:
 
 
 func _on_enemy_died(_enemy: Enemy) -> void:
-	var reward: int = GameState.modify_gold_reward(_enemy.gold_reward)
-	GameState.add_gold(reward)
-	_earned_gold_total += reward
+	var drop_reward: int = _enemy.gold_reward if GameState.gold_drops_enabled() else 0
+	if GameState.gold_drops_enabled():
+		_gold_drops_total += drop_reward
 	if _enemy.data:
 		_earned_xp_total += GameState.scaled_enemy_xp_reward(_enemy.data)
-		_roll_item_drop()
 	_refresh_hp_label()
 	if not _living_enemies().is_empty():
 		var defeated_name: String = _enemy.data.display_name if _enemy.data else "Enemy"
-		_log_label.text = "%s defeated! +%d gold" % [defeated_name, reward]
+		if drop_reward > 0:
+			_log_label.text = "%s defeated! +%d gold drop" % [defeated_name, drop_reward]
+		else:
+			_log_label.text = "%s defeated!" % defeated_name
 		return
 	_running = false
 	_turn_timer.stop()
-	_log_label.text = "All defeated! +%d gold" % _earned_gold_total
+	_add_window_item_drop()
+	GameState.add_gold(1)
+	_log_label.text = "All defeated!\n1 gold gained"
+	await get_tree().process_frame
 	await get_tree().create_timer(close_delay).timeout
 	EventBus.battle_window_closed.emit(self)
 	queue_free()
 
 
-func _roll_item_drop() -> void:
+func _add_window_item_drop() -> void:
 	if not GameState.item_drops_enabled():
-		return
-	var chance: float = clampf(item_drop_chance + GameState.item_drop_chance_bonus(), 0.0, 1.0)
-	if randf() > chance:
 		return
 	var item: ItemData = ItemDB.random_drop()
 	if item:

@@ -20,7 +20,7 @@ signal party_changed()
 signal battle_window_opened(window: Node)
 signal battle_window_closed(window: Node)
 ## All battle windows have finished — there is no active combat anywhere.
-## Used to gate stage_cleared so it doesn't fire while combat is still running.
+## Used to gate field-loop settlement so it doesn't fire while combat is running.
 signal all_battles_resolved()
 
 # ─── Combat ───────────────────────────────────────────────────────────
@@ -43,6 +43,7 @@ signal inventory_changed()
 
 ## Field should spawn an item pickup at this world position.
 signal field_item_drop_requested(item: ItemData, world_position: Vector2)
+signal field_gold_drop_requested(amount: int, world_position: Vector2)
 
 ## At least one party member changed HP. Used for "any-change" listeners.
 signal party_hp_changed()
@@ -53,11 +54,11 @@ signal party_wiped()
 ## Actual HP removed from a party member after clamping overkill.
 signal party_damage_taken(member_index: int, amount: int)
 
-# ─── Stage / Progression ──────────────────────────────────────────────
-signal stage_started(stage_num: int)
-signal stage_cleared(stage_num: int)
+# ─── Field Loop / Progression ─────────────────────────────────────────
+signal field_loop_started(loop_num: int)
+signal field_loop_settled(loop_num: int)
 signal run_cleared()
-signal wave_timer_changed(remaining_seconds: int)
+signal field_loop_timer_changed(remaining_seconds: int)
 
 # ─── Economy / Modifiers ──────────────────────────────────────────────
 signal gold_changed(new_gold: int)

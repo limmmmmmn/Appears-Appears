@@ -14,5 +14,13 @@ script = ExtResource("1_drop")
 centered = true
 texture_filter = 1
 
+[node name="TooltipArea" type="Control" parent="."]
+z_index = 5
+offset_left = -10.0
+offset_top = -14.0
+offset_right = 10.0
+offset_bottom = 8.0
+mouse_filter = 1
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectShape_item")

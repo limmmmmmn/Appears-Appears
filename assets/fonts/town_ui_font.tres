@@ -1,0 +1,8 @@
+[gd_resource type="FontVariation" format=3 uid="uid://b2e45hfdami3s"]
+
+[ext_resource type="FontFile" uid="uid://csbjs0xylqnhq" path="res://assets/fonts/VT323/VT323-Regular.ttf" id="1_town_pixel"]
+[ext_resource type="FontFile" uid="uid://db63wk4sagp0h" path="res://assets/fonts/neodgm.ttf" id="2_korean_pixel"]
+
+[resource]
+fallbacks = Array[Font]([ExtResource("2_korean_pixel")])
+base_font = ExtResource("1_town_pixel")
