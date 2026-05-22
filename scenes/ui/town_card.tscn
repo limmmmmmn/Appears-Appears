@@ -1,6 +1,6 @@
 [gd_scene load_steps=11 format=3]
 
-[ext_resource type="Script" path="res://scripts/runtime/town2_card.gd" id="1_card"]
+[ext_resource type="Script" path="res://scripts/runtime/town_card.gd" id="1_card"]
 [ext_resource type="Theme" path="res://assets/fonts/town_theme.tres" id="2_theme"]
 [ext_resource type="Font" path="res://assets/fonts/town_ui_font.tres" id="3_font"]
 
@@ -59,7 +59,7 @@ shadow_size = 1
 shadow_color = Color(0, 0, 0, 0.6)
 shadow_offset = Vector2(1, 1)
 
-[node name="Town2Card" type="Button"]
+[node name="TownCard" type="Button"]
 custom_minimum_size = Vector2(108, 138)
 focus_mode = 2
 theme = ExtResource("2_theme")

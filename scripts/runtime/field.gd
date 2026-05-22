@@ -51,7 +51,7 @@ const CLEARED_FIELD_REMAINING_TIME: float = 3.0
 
 @onready var _background: ColorRect = $Background
 @onready var _decorations_root: Node2D = $Decorations
-@onready var _town_tile: FieldTownTile = $Tiles/TownTile
+@onready var _town_tile: FieldTownTile = get_node_or_null("Tiles/TownTile") as FieldTownTile
 @onready var _items_root: Node2D = $Items
 @onready var _enemies_root: Node2D = $Enemies
 @onready var _party_root: Node2D = $Party
@@ -150,7 +150,8 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_clear_decorations()
 	_clear_items()
 	_crowd_pressure = entry_burst_bonus
-	_town_tile.reset()
+	if _town_tile:
+		_town_tile.reset()
 	_recenter_party()
 	_scatter_decorations()
 	_spawn_timer = spawn_interval
@@ -537,7 +538,7 @@ func _clamp_field_position(pos: Vector2) -> Vector2:
 
 
 func _is_near_town_tile(pos: Vector2) -> bool:
-	return _town_revealed and pos.distance_to(_town_tile.position) < TOWN_TILE_SAFE_RADIUS
+	return _town_tile != null and _town_revealed and pos.distance_to(_town_tile.position) < TOWN_TILE_SAFE_RADIUS
 
 
 func _random_position() -> Vector2:
@@ -550,7 +551,8 @@ func _random_position() -> Vector2:
 func _apply_field_size() -> void:
 	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
 	_background.size = _field_size
-	_town_tile.position = _hidden_town_tile_position()
+	if _town_tile:
+		_town_tile.position = _hidden_town_tile_position()
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 
@@ -560,7 +562,7 @@ func get_field_rect() -> Rect2:
 
 
 func _reveal_town_tile() -> void:
-	if _town_revealed:
+	if _town_tile == null or _town_revealed:
 		return
 	_town_revealed = true
 	_town_tile.position = _town_tile_corner_position()

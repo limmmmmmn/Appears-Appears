@@ -36,10 +36,10 @@ func setup(data: CharacterData) -> void:
 func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 	_field_bounds = Rect2(min_pos, max_pos - min_pos)
 	if _camera:
-		_camera.limit_left = int(min_pos.x)
-		_camera.limit_right = int(max_pos.x)
-		_camera.limit_top = int(min_pos.y)
-		_camera.limit_bottom = int(max_pos.y)
+		_camera.limit_left = -10000000
+		_camera.limit_right = 10000000
+		_camera.limit_top = -10000000
+		_camera.limit_bottom = 10000000
 
 
 func _physics_process(_delta: float) -> void:

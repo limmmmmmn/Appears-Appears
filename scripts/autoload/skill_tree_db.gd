@@ -50,8 +50,7 @@ func _load_all() -> void:
 	_register(_node(&"drop_legendary", "Legend Drops", "DROP4", "Drop tuning placeholder.", Vector2i(-3, -4), 4000, [&"drop_epic"]))
 
 	# South: automation.
-	_register(_node(&"atb", "ATB", "ATB", "Battle windows tick faster.", Vector2i(1, 2), 70, [&"root"], "", {"battle_turn_interval_mult": 0.82}))
-	_register(_node(&"battle_movement", "Battle Movement", "MOVE", "Move while battle windows run on the field.", Vector2i(0, 3), 96, [&"atb"], "res://data/modifiers/prototype/swift_boots.tres", {"battle_movement_enabled": true}))
+	_register(_node(&"battle_movement", "Battle Movement", "MOVE", "Move while battle windows run on the field.", Vector2i(0, 2), 10, [&"root"], "res://data/modifiers/prototype/swift_boots.tres", {"battle_movement_enabled": true}))
 	_register(_node(&"pickup_range", "Pickup Range", "PICK", "Pickups have a wider collection range.", Vector2i(1, 3), 110, [&"battle_movement"], "", {"pickup_range_mult": 1.7}))
 	_register(_node(&"multi_battle", "Multi Battle", "MULTI", "Every encounter opens one extra battle window.", Vector2i(0, 4), 192, [&"battle_movement"], "", {"extra_windows_flat": 1}))
 

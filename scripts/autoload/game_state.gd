@@ -456,8 +456,9 @@ func _purchased_skill_node_data() -> Array:
 
 
 func _ensure_default_skill_nodes() -> void:
-	if not purchased_skill_nodes.has(&"root"):
-		purchased_skill_nodes[&"root"] = 1
+	for node_id: StringName in [&"root", &"gold", &"item"]:
+		if not purchased_skill_nodes.has(node_id):
+			purchased_skill_nodes[node_id] = 1
 
 
 func modifier_purchase_cost(mod: ModifierData) -> int:

@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://3bdh8ubp16k5"]
 
 [ext_resource type="Script" uid="uid://b8bhrhdxjfyt1" path="res://scripts/runtime/field.gd" id="1_field"]
-[ext_resource type="PackedScene" path="res://scenes/tiles/field_town_tile.tscn" id="2_town_tile"]
 
 [node name="Field" type="Node2D" unique_id=536184698]
 y_sort_enabled = true
@@ -19,9 +18,6 @@ y_sort_enabled = true
 
 [node name="Tiles" type="Node2D" parent="." unique_id=1406173895]
 y_sort_enabled = true
-
-[node name="TownTile" parent="Tiles" unique_id=797429025 instance=ExtResource("2_town_tile")]
-position = Vector2(768, 128)
 
 [node name="Items" type="Node2D" parent="." unique_id=630235893]
 y_sort_enabled = true

@@ -285,14 +285,15 @@ project_root/
 │   ├── main.tscn                  # 진입점
 │   ├── field.tscn                  # 필드 (탑다운)
 │   ├── battle_window.tscn          # 1인칭 전투창
-│   ├── settlement.tscn             # 정산창
+│   ├── settlement_report.tscn      # 필드 루프 정산 리포트
+│   ├── town.tscn                   # 마을 / 스킬 트리
 │   ├── hud.tscn                    # HUD
 │   ├── enemies/
 │   │   ├── slime.tscn
 │   │   ├── bat.tscn
 │   │   └── zombie.tscn
 │   ├── ui/
-│   │   ├── modifier_card.tscn
+│   │   ├── town_card.tscn
 │   │   ├── party_display.tscn
 │   │   └── damage_number.tscn
 │   └── effects/
@@ -427,23 +428,24 @@ ModifierData 필드:
 - 코드 수정 X
 ```
 
-### **시스템 5: 정산창**
+### **시스템 5: 정산 리포트 + 마을**
 
 ```
-씬: settlement.tscn
+씬:
+- settlement_report.tscn
+- town.tscn
+
 구조:
-- 4슬롯 모디파이어 카드 (UI)
-- 골드 표시
-- "리프레시" 버튼 (옵션)
-- "다음 지역" 버튼 (명확한 출구)
+- 정산 리포트: 루프 결과, 골드, 전투 통계 표시
+- 마을: 스킬 트리 구매, 골드 표시, 필드 복귀 버튼
 
 흐름:
-1. 스테이지 끝 → settlement.tscn 인스턴스
-2. ModifierDB.get_random_modifiers(4) 받음
-3. 4슬롯에 표시
-4. 플레이어 구매 시 EventBus.modifier_purchased.emit
-5. "다음 지역" 클릭 → settlement.queue_free()
-6. 다음 스테이지 시작
+1. 필드 루프 종료 → settlement_report.tscn 인스턴스
+2. 리포트에서 바로 필드 복귀 또는 마을 진입 선택
+3. 마을 진입 → town.tscn 인스턴스
+4. 스킬 트리 노드 구매 시 GameState.purchase_skill_node 호출
+5. "Return to Field" 클릭 → town.queue_free()
+6. 다음 필드 루프 시작
 
 UI 원칙:
 - 그림 위주 (텍스트 최소)

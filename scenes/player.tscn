@@ -14,10 +14,10 @@ script = ExtResource("1_player")
 script = ExtResource("2_visual")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=488853346]
-limit_left = 0
-limit_top = 0
-limit_right = 640
-limit_bottom = 480
+limit_left = -10000000
+limit_top = -10000000
+limit_right = 10000000
+limit_bottom = 10000000
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1156702480]
 position = Vector2(0, 4)

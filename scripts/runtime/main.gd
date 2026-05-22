@@ -5,7 +5,7 @@ extends Node2D
 ## Battle window spawning lives in BattleManager.
 
 const SETTLEMENT_REPORT_SCENE: PackedScene = preload("res://scenes/settlement_report.tscn")
-const TOWN_SCENE: PackedScene = preload("res://scenes/town2.tscn")
+const TOWN_SCENE: PackedScene = preload("res://scenes/town.tscn")
 const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
@@ -21,7 +21,7 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 @onready var _pause_overlay: CanvasLayer = $PauseOverlay
 
 var _settlement_report: SettlementReport
-var _town: Town2
+var _town: CanvasLayer
 var _game_over: GameOver
 var _is_manually_paused: bool = false
 

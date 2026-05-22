@@ -6,7 +6,7 @@ extends Panel
 ## already use, so no separate portrait asset pipeline is required.
 ##
 ## Reusable anywhere that needs a "who is this party member" badge: HUD
-## boxes, town2 recruit cards, future inventory headers, etc.
+## boxes, town cards, future inventory headers, etc.
 
 @onready var _texture: TextureRect = %PortraitTexture
 

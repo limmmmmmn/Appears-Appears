@@ -3,7 +3,7 @@ extends Control
 
 signal modifier_chosen(member_index: int, modifier: ModifierData)
 
-const CARD_SCENE: PackedScene = preload("res://scenes/ui/town2_card.tscn")
+const CARD_SCENE: PackedScene = preload("res://scenes/ui/town_card.tscn")
 
 @onready var _title_label: Label = %TitleLabel
 @onready var _cards: HBoxContainer = %Cards
@@ -40,7 +40,7 @@ func _apply() -> void:
 	for child in _cards.get_children():
 		child.queue_free()
 	for mod: ModifierData in _offers:
-		var card: Town2Card = CARD_SCENE.instantiate()
+		var card := CARD_SCENE.instantiate()
 		card.custom_minimum_size = Vector2(108, 138)
 		_cards.add_child(card)
 		card.setup(mod, true)
@@ -49,6 +49,6 @@ func _apply() -> void:
 		(_cards.get_child(0) as Control).call_deferred("grab_focus")
 
 
-func _on_card_pressed(_card: Town2Card, mod: ModifierData) -> void:
+func _on_card_pressed(_card: Button, mod: ModifierData) -> void:
 	modifier_chosen.emit(_member_index, mod)
 	queue_free()
