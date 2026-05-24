@@ -8,7 +8,7 @@ extends Node
 ## Player collided with an enemy on the field. Triggers a battle_window spawn.
 signal enemy_encountered(enemy: Node)
 
-## Player stepped onto the town field tile. Main handles the scene transition.
+## Player stepped onto the home-base field tile. Main handles the scene transition.
 signal town_entered(tile: Node)
 
 # ─── Party Composition ────────────────────────────────────────────────

@@ -71,6 +71,7 @@ const DEFAULT_LEVEL_GROWTH: Dictionary = {
 }
 const LEVEL_GROWTH_BY_CHARACTER_ID: Dictionary = {
 	&"hero": {"hp": 5, "atk": 2, "def": 1, "agi": 1},
+	&"elf": {"hp": 4, "atk": 2, "def": 1, "agi": 2},
 	&"mage": {"hp": 3, "atk": 3, "def": 0, "agi": 1},
 	&"priest": {"hp": 5, "atk": 1, "def": 1, "agi": 1},
 	&"thief": {"hp": 3, "atk": 2, "def": 0, "agi": 2},
@@ -810,6 +811,7 @@ func _character_display_name(character_id: StringName) -> String:
 			return member.display_name
 	match character_id:
 		&"hero": return "Hero"
+		&"elf": return "Elf"
 		&"mage": return "Mage"
 		&"priest": return "Priest"
 		&"thief": return "Thief"

@@ -1,7 +1,7 @@
 class_name HeroBox
 extends Panel
 
-## Compact town readout for one party member. Pure display: no input.
+## Compact base readout for one party member. Pure display: no input.
 
 const ATTACK_COLOR: Color = Color(0.85, 0.18, 0.16, 1.0)
 const DEFENSE_COLOR: Color = Color(0.55, 0.55, 0.58, 1.0)

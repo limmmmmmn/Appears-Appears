@@ -267,6 +267,10 @@ func _on_field_loop_started(_loop_num: int) -> void:
 
 
 func _on_field_loop_timer_changed(remaining_seconds: int) -> void:
+	if remaining_seconds < 0:
+		_countdown_label.text = ""
+		_set_timer_urgent(false)
+		return
 	_countdown_label.text = str(maxi(0, remaining_seconds))
 	_set_timer_urgent(remaining_seconds > 0 and remaining_seconds <= 3)
 

@@ -5,7 +5,7 @@ signal purchase_requested(node_id: StringName)
 const GRID_STEP: Vector2 = Vector2(56, 35)
 const NODE_SIZE: Vector2 = Vector2(34, 34)
 const TREE_CENTER: Vector2 = Vector2(330, 220)
-const TOOLTIP_SIZE: Vector2 = Vector2(190, 58)
+const TOOLTIP_SIZE: Vector2 = Vector2(260, 112)
 const TOOLTIP_GAP: float = 7.0
 const ZOOM_MIN: float = 0.5
 const ZOOM_MAX: float = 1.75
@@ -27,16 +27,16 @@ const TOWN_UI_FONT: Font = preload("res://assets/fonts/town_ui_font.tres")
 const BONFIRE_ICON: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
 const ROOT_NODE_ID: StringName = &"root"
 const BONFIRE_COMPANION_OFFSET: Dictionary = {
-	&"mage": Vector2(24.0, 18.0),
+	&"elf": Vector2(24.0, 18.0),
 }
 const BONFIRE_COMPANION_REQUIRED_NODE: Dictionary = {
-	&"mage": &"companion",
+	&"elf": &"companion",
 }
 const BONFIRE_COMPANION_LINES: Dictionary = {
-	&"mage": [
-		"난 불이 좋아.",
-		"불빛 옆이면 마력이 잘 돌아.",
-		"따뜻하네. 계속 타올라라.",
+	&"elf": [
+		"길은 내가 볼게.",
+		"숲 냄새가 나.",
+		"조용히 가자.",
 	],
 }
 
@@ -146,10 +146,10 @@ func _build_tooltip() -> void:
 	_tooltip_label.offset_bottom = -6.0
 	_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tooltip_label.add_theme_font_override("font", TOWN_UI_FONT)
-	_tooltip_label.add_theme_font_size_override("font_size", 10)
+	_tooltip_label.add_theme_font_size_override("font_size", 9)
 	_tooltip_label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.78, 1.0))
 	_tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tooltip_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tooltip_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tooltip_label.clip_text = true
 	_tooltip_panel.add_child(_tooltip_label)
@@ -192,10 +192,10 @@ func _button_text(node) -> String:
 
 
 func _tooltip_text(node) -> String:
-	var state: String = "Owned" if GameState.has_skill_node(node.id) else "Locked"
+	var state: String = "습득 완료" if GameState.has_skill_node(node.id) else "잠김"
 	if not GameState.has_skill_node(node.id) and GameState.can_unlock_skill_node(node.id):
-		state = "Available"
-	return "%s\n%s\nCost: %dG\n%s" % [node.display_name, state, node.cost, node.description]
+		state = "구매 가능"
+	return "%s\n%s | 비용 %dG\n%s" % [node.display_name, state, node.cost, node.description]
 
 
 func _apply_button_style(button: Button, owned: bool, available: bool, can_buy: bool) -> void:
@@ -302,14 +302,20 @@ func _refresh_camp_actors() -> void:
 func _create_camp_actor(member: CharacterData) -> void:
 	var root := Control.new()
 	root.name = "%sCampActor" % member.display_name
-	root.custom_minimum_size = Vector2(24.0, 34.0)
-	root.size = Vector2(24.0, 34.0)
+	var actor_size := Vector2(
+		maxf(24.0, member.frame_size.x + 8.0),
+		maxf(34.0, member.frame_size.y + 10.0)
+	)
+	var foot_position := Vector2(actor_size.x * 0.5, actor_size.y - 4.0)
+	var speech_anchor := foot_position + member.speech_anchor_local()
+	root.custom_minimum_size = actor_size
+	root.size = actor_size
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.z_index = 18
 	var sprite := CharacterVisual.new()
 	sprite.name = "Sprite"
 	sprite.setup(member)
-	sprite.position = Vector2(12.0, 22.0)
+	sprite.position = foot_position
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	root.add_child(sprite)
 	var bubble := Panel.new()
@@ -347,6 +353,8 @@ func _create_camp_actor(member: CharacterData) -> void:
 		"sprite": sprite,
 		"bubble": bubble,
 		"label": label,
+		"foot_position": foot_position,
+		"speech_anchor": speech_anchor,
 		"base": base_position + BONFIRE_COMPANION_OFFSET.get(member.id, Vector2.ZERO),
 		"offset": Vector2.ZERO,
 		"target_offset": _random_camp_actor_offset(),
@@ -368,6 +376,7 @@ func _update_camp_actors(delta: float) -> void:
 		if root == null or sprite == null or bubble == null or label == null:
 			continue
 		var base: Vector2 = actor_data.get("base", Vector2.ZERO)
+		var foot_position: Vector2 = actor_data.get("foot_position", root.size * 0.5)
 		var offset: Vector2 = actor_data.get("offset", Vector2.ZERO)
 		var target_offset: Vector2 = actor_data.get("target_offset", Vector2.ZERO)
 		var wait_timer: float = float(actor_data.get("wait_timer", 0.0)) - delta
@@ -385,7 +394,7 @@ func _update_camp_actors(delta: float) -> void:
 		actor_data["offset"] = offset
 		actor_data["target_offset"] = target_offset
 		actor_data["wait_timer"] = wait_timer
-		root.position = base + offset - root.size * 0.5
+		root.position = base + offset - foot_position
 		var speech_visible_timer: float = float(actor_data.get("speech_visible_timer", 0.0)) - delta
 		if speech_visible_timer > 0.0:
 			bubble.visible = true
@@ -397,7 +406,8 @@ func _update_camp_actors(delta: float) -> void:
 			var lines: Array = actor_data.get("lines", [])
 			var line_index: int = int(actor_data.get("line_index", 0))
 			if not lines.is_empty():
-				_apply_speech_text(bubble, label, str(lines[line_index % lines.size()]))
+				var speech_anchor: Vector2 = actor_data.get("speech_anchor", Vector2.ZERO)
+				_apply_speech_text(bubble, label, str(lines[line_index % lines.size()]), speech_anchor)
 				actor_data["line_index"] = line_index + 1
 				bubble.visible = true
 				actor_data["speech_visible_timer"] = CAMP_SPEECH_DURATION
@@ -412,7 +422,7 @@ func _random_camp_actor_offset() -> Vector2:
 	)
 
 
-func _apply_speech_text(bubble: Panel, label: Label, raw_text: String) -> void:
+func _apply_speech_text(bubble: Panel, label: Label, raw_text: String, anchor: Vector2) -> void:
 	var text: String = _single_speech_sentence(raw_text)
 	label.text = text
 	var text_size: Vector2 = TOWN_UI_FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, CAMP_SPEECH_FONT_SIZE)
@@ -421,7 +431,7 @@ func _apply_speech_text(bubble: Panel, label: Label, raw_text: String) -> void:
 		maxf(CAMP_SPEECH_MIN_SIZE.y, ceilf(text_size.y + CAMP_SPEECH_PADDING.y * 2.0))
 	)
 	bubble.size = bubble_size
-	bubble.position = Vector2(-bubble_size.x * 0.5 + 12.0, -bubble_size.y + 8.0)
+	bubble.position = anchor + Vector2(-bubble_size.x * 0.5, -bubble_size.y - 4.0)
 
 
 func _single_speech_sentence(raw_text: String) -> String:

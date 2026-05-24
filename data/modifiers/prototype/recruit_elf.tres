@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ModifierData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/modifier_data.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/characters/elf.tres" id="2_elf"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"recruit_elf"
+display_name = "Recruit Elf"
+description = "Elf joins the party. Fast and reliable, she adds another steady attacker to every battle window."
+cost = 30
+max_level = 1
+rarity = 1
+category = 3
+companion_data = ExtResource("2_elf")

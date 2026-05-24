@@ -1,11 +1,12 @@
 class_name CharacterVisual
 extends Sprite2D
 
-## Sprite2D wrapper that animates a 4-row × N-col walk sheet.
+## Sprite2D wrapper that animates a 4-row x N-col walk sheet.
 ## Sheet row order (RPG convention): 0=Down, 1=Left, 2=Right, 3=Up.
 ## Each row has `frames_per_direction` columns in the order [step1, idle, step2].
 ##
 ## Pass it CharacterData via setup(), then call set_velocity() each physics frame.
+## The node's own position is the character's ground contact point.
 
 enum Dir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 
@@ -37,9 +38,11 @@ func _apply_data() -> void:
 	if character_data == null or character_data.sprite_sheet == null:
 		return
 	texture = character_data.sprite_sheet
-	hframes = character_data.frames_per_direction
-	vframes = 4
-	centered = true
+	hframes = 1
+	vframes = 1
+	centered = false
+	region_enabled = true
+	offset = -character_data.foot_anchor
 	_show_idle()
 
 
@@ -68,9 +71,29 @@ func _process(delta: float) -> void:
 	if _step_timer >= step_period:
 		_step_timer = 0.0
 		_step = (_step + 1) % WALK_CYCLE.size()
-	frame = int(_dir) * hframes + WALK_CYCLE[_step]
+	_set_frame(WALK_CYCLE[_step], int(_dir))
 
 
 func _show_idle() -> void:
-	if hframes > 0:
-		frame = int(_dir) * hframes + idle_col
+	if character_data == null:
+		return
+	_set_frame(clampi(idle_col, 0, maxi(0, character_data.frames_per_direction - 1)), int(_dir))
+
+
+func _set_frame(col: int, row: int) -> void:
+	if character_data == null:
+		return
+	var frame_size := character_data.frame_size_vec()
+	region_rect = Rect2(Vector2(col * frame_size.x, row * frame_size.y), frame_size)
+
+
+func visual_center_offset() -> Vector2:
+	return character_data.visual_center_local() if character_data else Vector2.ZERO
+
+
+func speech_anchor_offset() -> Vector2:
+	return character_data.speech_anchor_local() if character_data else Vector2.ZERO
+
+
+func popup_anchor_offset() -> Vector2:
+	return character_data.popup_anchor_local() if character_data else Vector2.ZERO

@@ -3,7 +3,7 @@ extends CanvasLayer
 
 ## Radial red-tinted vignette that fades in when the party's total HP drops
 ## to the danger zone and fades out when it recovers. Stays on its own
-## CanvasLayer so it sits above the field but below the HUD / town panels.
+## CanvasLayer so it sits above the field but below the HUD / base panels.
 ##
 ## Threshold uses a small hysteresis (enter at 50%, exit at 55%) so the
 ## effect doesn't strobe at the boundary. While active, the intensity
@@ -28,7 +28,7 @@ var _pulse_tween: Tween
 
 func _enter_tree() -> void:
 	# Process while the game is paused so we can smoothly fade out during the
-	# town visit that healed the party past the danger threshold.
+	# base visit that healed the party past the danger threshold.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 

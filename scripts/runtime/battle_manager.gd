@@ -442,7 +442,7 @@ func _clamped_position(pos: Vector2, size: Vector2) -> Vector2:
 
 
 func _field_rect() -> Rect2:
-	var field := get_node_or_null("../Field") as Field
+	var field := get_node_or_null("../Field")
 	if field and field.has_method("get_field_rect"):
 		return field.get_field_rect()
 	return Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)

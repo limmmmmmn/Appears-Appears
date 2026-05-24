@@ -1,10 +1,42 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/field_town_tile.gd" id="1_tile"]
 [ext_resource type="Texture2D" path="res://assets/sprites/objects/town.png" id="2_town"]
+[ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="3_font"]
 
 [sub_resource type="RectangleShape2D" id="RectShape_town"]
 size = Vector2(34, 28)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_prompt"]
+bg_color = Color(0.02, 0.03, 0.02, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 0.82, 0.28, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_button"]
+bg_color = Color(0.12, 0.1, 0.06, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_button_focus"]
+bg_color = Color(0.9, 0.62, 0.18, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_prompt"]
+font = ExtResource("3_font")
+font_size = 8
+font_color = Color(0.94, 1, 0.84, 1)
+shadow_size = 1
+shadow_color = Color(0, 0, 0, 0.8)
 
 [node name="FieldTownTile" type="Area2D"]
 collision_layer = 0
@@ -18,3 +50,65 @@ centered = true
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 4)
 shape = SubResource("RectShape_town")
+
+[node name="PromptPanel" type="Panel" parent="."]
+visible = false
+offset_left = -55.0
+offset_top = -58.0
+offset_right = 55.0
+offset_bottom = -14.0
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBox_prompt")
+
+[node name="PromptVBox" type="VBoxContainer" parent="PromptPanel"]
+offset_left = 6.0
+offset_top = 4.0
+offset_right = 104.0
+offset_bottom = 40.0
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="PromptLabel" type="Label" parent="PromptPanel/PromptVBox"]
+layout_mode = 2
+mouse_filter = 2
+text = "본거지로 돌아가겠습니까?"
+label_settings = SubResource("LabelSettings_prompt")
+horizontal_alignment = 1
+
+[node name="ButtonRow" type="HBoxContainer" parent="PromptPanel/PromptVBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="YesButton" type="Button" parent="PromptPanel/PromptVBox/ButtonRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(34, 16)
+layout_mode = 2
+focus_mode = 2
+theme_override_styles/normal = SubResource("StyleBox_button")
+theme_override_styles/hover = SubResource("StyleBox_button_focus")
+theme_override_styles/pressed = SubResource("StyleBox_button_focus")
+theme_override_styles/focus = SubResource("StyleBox_button_focus")
+theme_override_colors/font_color = Color(1, 0.95, 0.78, 1)
+theme_override_colors/font_hover_color = Color(0.08, 0.05, 0.02, 1)
+theme_override_colors/font_focus_color = Color(0.08, 0.05, 0.02, 1)
+theme_override_fonts/font = ExtResource("3_font")
+theme_override_font_sizes/font_size = 8
+text = "예"
+
+[node name="NoButton" type="Button" parent="PromptPanel/PromptVBox/ButtonRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(34, 16)
+layout_mode = 2
+focus_mode = 2
+theme_override_styles/normal = SubResource("StyleBox_button")
+theme_override_styles/hover = SubResource("StyleBox_button_focus")
+theme_override_styles/pressed = SubResource("StyleBox_button_focus")
+theme_override_styles/focus = SubResource("StyleBox_button_focus")
+theme_override_colors/font_color = Color(1, 0.95, 0.78, 1)
+theme_override_colors/font_hover_color = Color(0.08, 0.05, 0.02, 1)
+theme_override_colors/font_focus_color = Color(0.08, 0.05, 0.02, 1)
+theme_override_fonts/font = ExtResource("3_font")
+theme_override_font_sizes/font_size = 8
+text = "아니오"

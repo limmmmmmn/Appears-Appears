@@ -1,7 +1,7 @@
 extends Node2D
 
 ## Main entry point.
-## Sets up the party and drives Field -> Settlement report -> Town/Field loops.
+## Sets up the party and drives Field -> Settlement report -> Base/Field loops.
 ## Battle window spawning lives in BattleManager.
 
 const SETTLEMENT_REPORT_SCENE: PackedScene = preload("res://scenes/settlement_report.tscn")
@@ -10,12 +10,12 @@ const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
 ## The run starts with the leader alone. Companions are recruited via
-## town cards from the active prototype modifier pool.
+## base cards from the active prototype modifier pool.
 const DEFAULT_PARTY_PATHS: PackedStringArray = [
 	"res://data/characters/hero.tres",
 ]
 
-@onready var _field: Field = $Field
+@onready var _field: Node2D = $Field
 @onready var _battle_manager: BattleManager = $BattleManager
 @onready var _hud: HUD = $HUD
 @onready var _pause_overlay: CanvasLayer = $PauseOverlay
@@ -95,7 +95,7 @@ func _on_settlement_continue_requested() -> void:
 
 func _on_settlement_town_requested() -> void:
 	_settlement_report = null
-	_show_town("%s 마을" % GameState.field_region_name())
+	_show_town("%s 본거지" % GameState.field_region_name())
 
 
 func _show_town(title: String = "") -> void:
@@ -149,7 +149,7 @@ func _show_game_over() -> void:
 	if _settlement_report and is_instance_valid(_settlement_report):
 		_settlement_report.queue_free()
 		_settlement_report = null
-	# Close town if it happens to be up (defensive — shouldn't be).
+	# Close the base screen if it happens to be up (defensive — shouldn't be).
 	if _town and is_instance_valid(_town):
 		_town.queue_free()
 		_town = null

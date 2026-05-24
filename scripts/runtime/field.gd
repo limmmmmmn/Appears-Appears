@@ -8,6 +8,7 @@ extends Node2D
 const FIELD_ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/field_enemy.tscn")
 const FIELD_DECORATION_SCENE: PackedScene = preload("res://scenes/decorations/field_decoration.tscn")
 const FIELD_ITEM_DROP_SCENE: PackedScene = preload("res://scenes/objects/field_item_drop.tscn")
+const FIELD_TOWN_TILE_SCENE: PackedScene = preload("res://scenes/tiles/field_town_tile.tscn")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const COMPANION_SCENE: PackedScene = preload("res://scenes/companion.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
@@ -25,12 +26,13 @@ const SPAWN_MARGIN: float = 24.0
 const PARTY_SAFE_RADIUS: float = 48.0
 const DECOR_SAFE_RADIUS: float = 104.0
 const TOWN_TILE_SAFE_RADIUS: float = 96.0
-const TOWN_TILE_INSET: Vector2 = Vector2(96, 72)
 const DROP_PLAYER_SAFE_RADIUS: float = 42.0
 const DROP_SEPARATION_RADIUS: float = 20.0
 const DROP_SCATTER_RADIUS_MIN: float = 28.0
 const DROP_SCATTER_RADIUS_MAX: float = 52.0
-const CLEARED_FIELD_REMAINING_TIME: float = 3.0
+const TOWN_UNLOCK_KILLS: int = 3
+const TOWN_TILE_PLAYER_SAFE_RADIUS: float = 96.0
+const GRASS_FIELD_COLOR: Color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 
 @export var initial_slime_count: int = 16
 @export var small_forest_cluster_count_min: int = 3
@@ -47,29 +49,29 @@ const CLEARED_FIELD_REMAINING_TIME: float = 3.0
 @export var entry_burst_bonus: int = 0
 @export var crowd_growth_per_wave: int = 1
 @export var max_crowd_pressure: int = 7
-@export var field_loop_time: float = 20.0
 
 @onready var _background: ColorRect = $Background
 @onready var _decorations_root: Node2D = $Decorations
-@onready var _town_tile: FieldTownTile = get_node_or_null("Tiles/TownTile") as FieldTownTile
+@onready var _tiles_root: Node2D = $Tiles
 @onready var _items_root: Node2D = $Items
 @onready var _enemies_root: Node2D = $Enemies
 @onready var _party_root: Node2D = $Party
+@onready var _message_panel: Panel = %MessagePanel
+@onready var _message_label: Label = %MessageLabel
 
-var _player: Player
+var _player: CharacterBody2D
 var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
 var _crowd_pressure: int = 0
 var _field_size: Vector2 = FIELD_SIZE
 var _town_revealed: bool = false
-var _loop_elapsed: float = 0.0
-var _loop_settlement_time: float = 20.0
 var _loop_complete: bool = false
-var _loop_hurried: bool = false
-var _last_countdown_seconds: int = -1
 var _active_battle_windows: int = 0
 var _chaser_spawned_this_loop: bool = false
+var _kills_toward_town: int = 0
+var _town_tile: Area2D
+var _message_tween: Tween
 
 
 func _ready() -> void:
@@ -81,6 +83,8 @@ func _ready() -> void:
 	EventBus.field_item_drop_requested.connect(_on_field_item_drop_requested)
 	EventBus.field_gold_drop_requested.connect(_on_field_gold_drop_requested)
 	EventBus.field_loop_finish_requested.connect(_on_field_loop_finish_requested)
+	EventBus.enemy_defeated.connect(_on_enemy_defeated)
+	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
 
@@ -88,13 +92,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
-	_update_loop_timer(delta)
 	if GameState.is_field_battle_paused():
 		return
 	if _loop_complete:
-		return
-	_try_hurry_loop_when_cleared()
-	if _loop_hurried:
 		return
 	if not GameState.field_spawner_enabled():
 		return
@@ -115,7 +115,7 @@ func _setup_party_visuals() -> void:
 	_player = null
 	if GameState.party_size() == 0:
 		return
-	_player = PLAYER_SCENE.instantiate()
+	_player = PLAYER_SCENE.instantiate() as CharacterBody2D
 	_player.setup(GameState.party[0])
 	if _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
@@ -123,7 +123,7 @@ func _setup_party_visuals() -> void:
 	_party_root.add_child(_player)
 	var leader: Node2D = _player
 	for i in range(1, GameState.party_size()):
-		var comp: Companion = COMPANION_SCENE.instantiate()
+		var comp := COMPANION_SCENE.instantiate()
 		comp.setup(GameState.party[i])
 		comp.leader = leader
 		# All stack on the player exactly — z_index on the player keeps the
@@ -137,26 +137,22 @@ func _setup_party_visuals() -> void:
 func _on_field_loop_started(_loop_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_field_size()
+	_background.color = GRASS_FIELD_COLOR
 	_town_revealed = false
-	_loop_elapsed = 0.0
-	_loop_settlement_time = field_loop_time
+	_kills_toward_town = 0
 	_loop_complete = false
-	_loop_hurried = false
 	_active_battle_windows = 0
 	_chaser_spawned_this_loop = false
-	_last_countdown_seconds = -1
-	_emit_loop_timer_changed()
+	EventBus.field_loop_timer_changed.emit(-1)
 	_clear_field_enemies()
 	_clear_decorations()
+	_clear_town_tile()
 	_clear_items()
 	_crowd_pressure = entry_burst_bonus
-	if _town_tile:
-		_town_tile.reset()
 	_recenter_party()
 	_scatter_decorations()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
-	_spawn_repeating_node_drops()
 
 
 ## Teleport the whole party back to the field center for a fresh start.
@@ -172,7 +168,7 @@ func _recenter_party() -> void:
 	if _player.has_method("snap_camera"):
 		_player.snap_camera()
 	for child in _party_root.get_children():
-		if child is Companion:
+		if child.is_in_group("party_member") and child != _player:
 			child.position = center
 
 
@@ -199,6 +195,71 @@ func _clear_decorations() -> void:
 func _clear_items() -> void:
 	for child in _items_root.get_children():
 		child.queue_free()
+
+
+func _clear_town_tile() -> void:
+	if _town_tile and is_instance_valid(_town_tile):
+		_town_tile.queue_free()
+	_town_tile = null
+	for child in _tiles_root.get_children():
+		if child.name == "FieldTownTile":
+			child.queue_free()
+
+
+func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
+	if _loop_complete or _town_revealed:
+		return
+	if GameState.field_loop_count <= 0:
+		return
+	_kills_toward_town += 1
+	if _kills_toward_town >= TOWN_UNLOCK_KILLS:
+		_open_town_path()
+
+
+func _open_town_path() -> void:
+	if _town_revealed:
+		return
+	_town_revealed = true
+	_spawn_town_tile()
+	_show_message("본거지로 돌아가는 길이 열렸습니다.")
+
+
+func _spawn_town_tile() -> void:
+	_clear_town_tile()
+	_town_tile = FIELD_TOWN_TILE_SCENE.instantiate() as Area2D
+	_town_tile.position = _random_town_tile_position()
+	_tiles_root.add_child(_town_tile)
+	_town_tile.reveal_with_impact()
+
+
+func _random_town_tile_position() -> Vector2:
+	var avoid: Vector2 = _player.position if _player else _field_size * 0.5
+	for attempt in 48:
+		var pos: Vector2 = _random_position()
+		if pos.distance_to(avoid) >= TOWN_TILE_PLAYER_SAFE_RADIUS:
+			return pos
+	return _clamp_field_position(avoid + Vector2(TOWN_TILE_PLAYER_SAFE_RADIUS, 0.0))
+
+
+func _show_message(text: String) -> void:
+	if _message_panel == null or _message_label == null:
+		return
+	_message_label.text = text
+	_message_panel.visible = true
+	_message_panel.modulate.a = 0.0
+	if _message_tween and _message_tween.is_valid():
+		_message_tween.kill()
+	_message_tween = create_tween()
+	_message_tween.tween_property(_message_panel, "modulate:a", 1.0, 0.12)
+	_message_tween.tween_interval(2.0)
+	_message_tween.tween_property(_message_panel, "modulate:a", 0.0, 0.2)
+	_message_tween.tween_callback(_hide_message)
+
+
+func _hide_message() -> void:
+	if _message_panel:
+		_message_panel.visible = false
+		_message_panel.modulate.a = 0.0
 
 
 func _scatter_decorations() -> void:
@@ -231,6 +292,31 @@ func _scatter_decorations() -> void:
 		if cell == Vector2i(-1, -1):
 			return
 		_add_tree_cell(cell, occupied)
+
+
+func _scatter_forest_field_decorations() -> void:
+	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
+	var occupied: Dictionary = {}
+	var large_count: int = maxi(1, _decor_range(large_forest_cluster_count_min, large_forest_cluster_count_max))
+	for i in large_count:
+		_add_forest_cluster(
+			safe_origin,
+			occupied,
+			large_forest_min_trees,
+			large_forest_max_trees,
+			7,
+			10
+		)
+	var small_count: int = maxi(2, _decor_range(small_forest_cluster_count_min, small_forest_cluster_count_max))
+	for i in small_count:
+		_add_forest_cluster(
+			safe_origin,
+			occupied,
+			small_forest_min_trees,
+			small_forest_max_trees,
+			2,
+			4
+		)
 
 
 func _add_decoration(texture: Texture2D, pos: Vector2) -> void:
@@ -361,14 +447,6 @@ func _active_field_enemy_count() -> int:
 	return count
 
 
-func _active_item_count() -> int:
-	var count: int = 0
-	for child in _items_root.get_children():
-		if not child.is_queued_for_deletion():
-			count += 1
-	return count
-
-
 func _on_battle_window_opened(_window: Node) -> void:
 	_active_battle_windows += 1
 
@@ -494,16 +572,6 @@ func _spawn_gold_drop(amount: int, world_position: Vector2) -> void:
 	drop.reveal_with_pop()
 
 
-func _spawn_repeating_node_drops() -> void:
-	var origin: Vector2 = _field_size * 0.5
-	if GameState.gold_drops_enabled():
-		_spawn_gold_drop(1, origin)
-	if GameState.item_drops_enabled():
-		var item: ItemData = ItemDB.get_by_id(&"hero_sword")
-		if item:
-			_spawn_item_drop(item, origin)
-
-
 func _drop_position_near(origin: Vector2) -> Vector2:
 	var safe_origin: Vector2 = _clamp_field_position(origin)
 	for attempt in 36:
@@ -551,8 +619,6 @@ func _random_position() -> Vector2:
 func _apply_field_size() -> void:
 	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
 	_background.size = _field_size
-	if _town_tile:
-		_town_tile.position = _hidden_town_tile_position()
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 
@@ -561,73 +627,16 @@ func get_field_rect() -> Rect2:
 	return Rect2(Vector2.ZERO, _field_size)
 
 
-func _reveal_town_tile() -> void:
-	if _town_tile == null or _town_revealed:
-		return
-	_town_revealed = true
-	_town_tile.position = _town_tile_corner_position()
-	_town_tile.reveal_with_impact()
-
-
-func _update_loop_timer(delta: float) -> void:
-	if _loop_complete:
-		return
-	_loop_elapsed += delta
-	_emit_loop_timer_changed()
-	if _loop_elapsed >= _loop_settlement_time:
-		_finish_field_loop_timer()
-
-
-func _finish_field_loop_timer() -> void:
+func _settle_field_loop() -> void:
 	_loop_complete = true
 	GameState.clear_move_speed_drag()
-	EventBus.field_loop_timer_changed.emit(0)
 	EventBus.field_loop_settled.emit(GameState.field_loop_count)
 
 
 func _on_field_loop_finish_requested() -> void:
 	if GameState.field_loop_count <= 0 or _loop_complete:
 		return
-	_loop_elapsed = _loop_settlement_time
-	_finish_field_loop_timer()
-
-
-func _emit_loop_timer_changed() -> void:
-	var remaining: int = maxi(0, ceili(_loop_settlement_time - _loop_elapsed))
-	if remaining == _last_countdown_seconds:
-		return
-	_last_countdown_seconds = remaining
-	EventBus.field_loop_timer_changed.emit(remaining)
-
-
-func _try_hurry_loop_when_cleared() -> void:
-	if _loop_hurried or _loop_complete:
-		return
-	if _active_battle_windows > 0:
-		return
-	if _active_field_enemy_count() > 0 or _active_item_count() > 0:
-		return
-	var remaining: float = _loop_settlement_time - _loop_elapsed
-	if remaining <= CLEARED_FIELD_REMAINING_TIME:
-		return
-	_loop_hurried = true
-	_loop_settlement_time = _loop_elapsed + CLEARED_FIELD_REMAINING_TIME
-	_last_countdown_seconds = -1
-	_emit_loop_timer_changed()
-
-
-func _town_tile_corner_position() -> Vector2:
-	var candidates: Array[Vector2] = [
-		TOWN_TILE_INSET,
-		Vector2(_field_size.x - TOWN_TILE_INSET.x, TOWN_TILE_INSET.y),
-		Vector2(TOWN_TILE_INSET.x, _field_size.y - TOWN_TILE_INSET.y),
-		_field_size - TOWN_TILE_INSET,
-	]
-	return candidates.pick_random()
-
-
-func _hidden_town_tile_position() -> Vector2:
-	return Vector2(_field_size.x + 256.0, _field_size.y + 256.0)
+	_settle_field_loop()
 
 
 ## All windows closed AND the field is empty → refill pressure.

@@ -1,7 +1,7 @@
 class_name TownCard
 extends Button
 
-## Upgrade box for town and level-up choices. Every offer renders like a small poster:
+## Upgrade box for base and level-up choices. Every offer renders like a small poster:
 ## bold flat color, big centered pixel icon, short title, short copy.
 ## A "▶" arrow appears on focus, Zelda 2 style.
 
@@ -54,6 +54,7 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"bump_attack": Color(0.98, 0.5, 0.12, 1),
 	&"window_crash": Color(0.98, 0.66, 0.16, 1),
 	&"bump_blessing": Color(0.63, 0.86, 0.68, 1),
+	&"recruit_elf": Color(0.6, 0.86, 0.56, 1),
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
@@ -65,11 +66,12 @@ const CARD_BG_BY_EFFECT: Dictionary = {
 	"evade_chance": Color(0.53, 0.76, 0.93, 1),
 }
 const POSTER_DESC_BY_ID: Dictionary = {
-	&"swift_boots": "Move faster on the field.",
+	&"swift_boots": "Move +1 pixel per tick faster.",
 	&"battle_prayer": "Priest heals an ally on attack.",
 	&"fireburst": "Mage burns extra enemies.",
 	&"heavy_strike": "Hero basic attacks hit harder.",
 	&"pilfer": "Thief can steal gold on attack.",
+	&"recruit_elf": "Elf joins as a fast attacker.",
 	&"recruit_mage": "Joins with Fireburst: hits +1 enemy.",
 	&"recruit_priest": "Joins with Prayer: attacks and heals.",
 	&"recruit_thief": "Joins with Pilfer: steals 1G.",

@@ -1,7 +1,7 @@
 class_name Town
 extends CanvasLayer
 
-## Settlement hub between field loops. The current town is the incremental
+## Home-base hub between field loops. The current screen is the incremental
 ## skill-tree screen plus a small persistent bottom bar.
 
 signal closed

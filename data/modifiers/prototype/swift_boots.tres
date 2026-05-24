@@ -6,10 +6,10 @@
 script = ExtResource("1_script")
 id = &"swift_boots"
 display_name = "Swift Boots"
-description = "Increase field movement speed. Higher levels give a smaller boost."
+description = "Increase field movement speed by one pixel per physics tick."
 cost = 10
 rarity = 0
 category = 0
 effect_data = {
-"move_speed_flat": 10
+"move_speed_flat": 60
 }

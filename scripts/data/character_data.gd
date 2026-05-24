@@ -21,6 +21,17 @@ enum Direction { DOWN, LEFT, RIGHT, UP }
 @export var frames_per_direction: int = 3
 @export var walk_fps: float = 6.0
 
+## Frame-local anchor points. The character node sits on foot_anchor, so
+## different-sized party sprites can share the same ground contact point.
+@export var foot_anchor: Vector2 = Vector2(8, 22)
+@export var speech_anchor: Vector2 = Vector2(8, 0)
+@export var popup_anchor: Vector2 = Vector2(8, 2)
+
+## Player-only collision, also authored in frame-local coordinates so a tall
+## or short leader can keep its feet, body, and camera feeling aligned.
+@export var body_size: Vector2 = Vector2(10, 12)
+@export var body_center: Vector2 = Vector2(8, 17)
+
 ## Optional UI portrait (separate texture, used in HUD / dialogs).
 @export var portrait: Texture2D
 @export var attack_effect: Texture2D
@@ -31,3 +42,23 @@ enum Direction { DOWN, LEFT, RIGHT, UP }
 @export var attack: int = 5
 @export var defense: int = 1
 @export var agility: int = 5
+
+
+func frame_size_vec() -> Vector2:
+	return Vector2(frame_size)
+
+
+func visual_center_local() -> Vector2:
+	return frame_size_vec() * 0.5 - foot_anchor
+
+
+func speech_anchor_local() -> Vector2:
+	return speech_anchor - foot_anchor
+
+
+func popup_anchor_local() -> Vector2:
+	return popup_anchor - foot_anchor
+
+
+func body_center_local() -> Vector2:
+	return body_center - foot_anchor

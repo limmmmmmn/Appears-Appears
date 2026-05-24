@@ -2,11 +2,11 @@ class_name CharacterPortrait
 extends Panel
 
 ## Square portrait box. Feed it a CharacterData and it crops a head+shoulders
-## thumbnail from the character's walk sheet — same data the field/town
+## thumbnail from the character's walk sheet — same data the field/base
 ## already use, so no separate portrait asset pipeline is required.
 ##
 ## Reusable anywhere that needs a "who is this party member" badge: HUD
-## boxes, town cards, future inventory headers, etc.
+## boxes, base cards, future inventory headers, etc.
 
 @onready var _texture: TextureRect = %PortraitTexture
 

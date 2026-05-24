@@ -1,6 +1,22 @@
-[gd_scene format=3 uid="uid://3bdh8ubp16k5"]
+[gd_scene load_steps=4 format=3 uid="uid://3bdh8ubp16k5"]
 
 [ext_resource type="Script" uid="uid://b8bhrhdxjfyt1" path="res://scripts/runtime/field.gd" id="1_field"]
+[ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="2_font"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_message"]
+bg_color = Color(0.02, 0.04, 0.02, 0.86)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.78, 1, 0.52, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_message"]
+font = ExtResource("2_font")
+font_size = 10
+font_color = Color(0.9, 1, 0.82, 1)
+shadow_size = 1
+shadow_color = Color(0, 0, 0, 0.8)
 
 [node name="Field" type="Node2D" unique_id=536184698]
 y_sort_enabled = true
@@ -27,3 +43,33 @@ y_sort_enabled = true
 
 [node name="Party" type="Node2D" parent="." unique_id=1572474564]
 y_sort_enabled = true
+
+[node name="MessageLayer" type="CanvasLayer" parent="."]
+layer = 8
+
+[node name="MessagePanel" type="Panel" parent="MessageLayer"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -136.0
+offset_top = 34.0
+offset_right = 136.0
+offset_bottom = 62.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_message")
+
+[node name="MessageLabel" type="Label" parent="MessageLayer/MessagePanel"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_right = -8.0
+mouse_filter = 2
+text = ""
+label_settings = SubResource("LabelSettings_message")
+horizontal_alignment = 1
+vertical_alignment = 1

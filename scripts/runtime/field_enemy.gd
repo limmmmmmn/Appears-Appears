@@ -8,7 +8,7 @@ extends Area2D
 
 @export var data: EnemyData
 @export var wander_speed: float = 18.0
-@export var chase_speed: float = 58.0  ## pixels/sec. Player is 80.
+@export var chase_speed: float = 58.0  ## pixels/sec. Player starts at 60.
 @export var detect_radius: float = 92.0
 @export var lose_radius: float = 180.0
 @export var charge_enabled: bool = false

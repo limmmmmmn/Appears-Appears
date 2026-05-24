@@ -286,7 +286,7 @@ project_root/
 │   ├── field.tscn                  # 필드 (탑다운)
 │   ├── battle_window.tscn          # 1인칭 전투창
 │   ├── settlement_report.tscn      # 필드 루프 정산 리포트
-│   ├── town.tscn                   # 마을 / 스킬 트리
+│   ├── town.tscn                   # 본거지 / 스킬 트리
 │   ├── hud.tscn                    # HUD
 │   ├── enemies/
 │   │   ├── slime.tscn
@@ -428,7 +428,7 @@ ModifierData 필드:
 - 코드 수정 X
 ```
 
-### **시스템 5: 정산 리포트 + 마을**
+### **시스템 5: 정산 리포트 + 본거지**
 
 ```
 씬:
@@ -437,12 +437,12 @@ ModifierData 필드:
 
 구조:
 - 정산 리포트: 루프 결과, 골드, 전투 통계 표시
-- 마을: 스킬 트리 구매, 골드 표시, 필드 복귀 버튼
+- 본거지: 스킬 트리 구매, 골드 표시, 필드 복귀 버튼
 
 흐름:
 1. 필드 루프 종료 → settlement_report.tscn 인스턴스
-2. 리포트에서 바로 필드 복귀 또는 마을 진입 선택
-3. 마을 진입 → town.tscn 인스턴스
+2. 리포트에서 바로 필드 복귀 또는 본거지 진입 선택
+3. 본거지 진입 → town.tscn 인스턴스
 4. 스킬 트리 노드 구매 시 GameState.purchase_skill_node 호출
 5. "Return to Field" 클릭 → town.queue_free()
 6. 다음 필드 루프 시작

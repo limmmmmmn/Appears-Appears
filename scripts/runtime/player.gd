@@ -4,10 +4,11 @@ extends CharacterBody2D
 ## Top-down player avatar. Conceptually = the camera = the party (README: 시스템 3).
 ## Owns the Camera2D and its CharacterVisual. Combat lives in battle_windows.
 
-@export var speed: float = 80.0
+@export var speed: float = 60.0
 
 @onready var _visual: CharacterVisual = $Visual
 @onready var _camera: Camera2D = $Camera2D
+@onready var _collision_shape: CollisionShape2D = $CollisionShape2D
 
 var _pending_data: CharacterData
 var _field_bounds := Rect2(Vector2.ZERO, Vector2(960, 540))
@@ -19,11 +20,15 @@ func _ready() -> void:
 	add_to_group("player")
 	add_to_group("party_member")
 	_camera.make_current()
+	# Match the camera update to CharacterBody2D movement. With pixel snapping
+	# enabled, an idle-updated camera can visibly jitter during vertical walks.
+	_camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	# Party_changed re-creates the player mid-run (e.g. after recruiting a
 	# companion). Snap so the camera doesn't pan from wherever it was.
 	_camera.reset_smoothing()
 	if _pending_data:
 		_visual.setup(_pending_data)
+		_apply_character_layout()
 
 
 ## Inject the character data (sprite sheet, stats). Safe to call before _ready.
@@ -31,6 +36,21 @@ func setup(data: CharacterData) -> void:
 	_pending_data = data
 	if is_inside_tree() and _visual:
 		_visual.setup(data)
+		_apply_character_layout()
+
+
+func _apply_character_layout() -> void:
+	if _pending_data == null:
+		return
+	if _camera:
+		_camera.position = _pending_data.visual_center_local()
+	if _collision_shape:
+		var rect_shape := _collision_shape.shape as RectangleShape2D
+		if rect_shape == null:
+			rect_shape = RectangleShape2D.new()
+			_collision_shape.shape = rect_shape
+		rect_shape.size = _pending_data.body_size
+		_collision_shape.position = _pending_data.body_center_local()
 
 
 func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
@@ -47,7 +67,10 @@ func _physics_process(_delta: float) -> void:
 		velocity = Vector2.ZERO
 		_visual.set_velocity(velocity)
 		return
-	var dir: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var dir := Vector2(
+		Input.get_action_strength("move_right") - Input.get_action_strength("move_left"),
+		Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
+	)
 	velocity = dir * GameState.effective_move_speed(speed)
 	move_and_slide()
 	global_position = Vector2(
