@@ -1,7 +1,7 @@
 [gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/field_town_tile.gd" id="1_tile"]
-[ext_resource type="Texture2D" path="res://assets/sprites/objects/town.png" id="2_town"]
+[ext_resource type="Texture2D" path="res://assets/sprites/objects/bonfire.png" id="2_town"]
 [ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="3_font"]
 
 [sub_resource type="RectangleShape2D" id="RectShape_town"]
@@ -71,7 +71,7 @@ theme_override_constants/separation = 3
 [node name="PromptLabel" type="Label" parent="PromptPanel/PromptVBox"]
 layout_mode = 2
 mouse_filter = 2
-text = "본거지로 돌아가겠습니까?"
+text = "모닥불로 돌아가겠습니까?"
 label_settings = SubResource("LabelSettings_prompt")
 horizontal_alignment = 1
 

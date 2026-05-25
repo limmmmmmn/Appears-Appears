@@ -16,6 +16,7 @@ const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tr
 const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
 const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
+const GRASS_FIELD_TEXTURE: Texture2D = preload("res://assets/sprites/field/grass_field.png")
 const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.png")
 const FOREST_TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/forest_tree.png")
 const COMBO_ATTACK_TEXTURE: Texture2D = preload("res://assets/sprites/skeleton_scythe.png")
@@ -58,6 +59,7 @@ const FOREST_FIELD_COLOR: Color = Color(0.18039216, 0.4862745, 0.23921569, 1)
 @export var max_crowd_pressure: int = 7
 
 @onready var _background: ColorRect = $Background
+@onready var _background_texture: TextureRect = $BackgroundTexture
 @onready var _decorations_root: Node2D = $Decorations
 @onready var _tiles_root: Node2D = $Tiles
 @onready var _items_root: Node2D = $Items
@@ -104,6 +106,8 @@ func _process(delta: float) -> void:
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
 	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
+	if GameState.STORY_MODE_ENABLED:
+		return
 	if GameState.is_field_battle_paused():
 		return
 	if _loop_complete:
@@ -122,6 +126,7 @@ func _process(delta: float) -> void:
 ## Rebuilds the visible party from GameState.party. Slot 0 = player avatar,
 ## slots 1..N = companions trailing each previous member like a JRPG snake.
 func _setup_party_visuals() -> void:
+	var start_position: Vector2 = _player.position if _player != null else _field_size * 0.5
 	for child in _party_root.get_children():
 		child.queue_free()
 	_player = null
@@ -131,7 +136,7 @@ func _setup_party_visuals() -> void:
 	_player.setup(GameState.party[0])
 	if _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
-	_player.position = _field_size * 0.5
+	_player.position = start_position
 	_party_root.add_child(_player)
 	for i in range(1, GameState.party_size()):
 		var comp := COMPANION_SCENE.instantiate()
@@ -147,7 +152,7 @@ func _setup_party_visuals() -> void:
 func _on_field_loop_started(_loop_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_field_size()
-	_background.color = _field_background_color()
+	_apply_field_background()
 	_town_revealed = false
 	_kills_toward_town = 0
 	_combo_kills = 0
@@ -166,6 +171,8 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_scatter_region_decorations()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
+	if GameState.STORY_MODE_ENABLED:
+		_show_message(_story_field_intro())
 
 
 ## Teleport the whole party back to the field center for a fresh start.
@@ -225,9 +232,13 @@ func _clear_town_tile() -> void:
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
 	if _loop_complete or GameState.field_loop_count <= 0:
 		return
+	if GameState.STORY_MODE_ENABLED and GameState.story_field_index() == 2 and not GameState.story_companion_joined:
+		if GameState.story_recruit_first_companion():
+			_show_message("동료가 나타났습니다. 함께 싸웁니다.")
 	if not _town_revealed:
 		_kills_toward_town += 1
-		if _kills_toward_town >= TOWN_UNLOCK_KILLS:
+		var unlock_kills: int = GameState.story_campfire_unlock_kills() if GameState.STORY_MODE_ENABLED else TOWN_UNLOCK_KILLS
+		if _kills_toward_town >= unlock_kills:
 			_open_town_path()
 	if GameState.combo_attack_unlocked() and not _combo_attack_running and _combo_cooldown_remaining <= 0.0:
 		_combo_kills += 1
@@ -429,7 +440,7 @@ func _open_town_path() -> void:
 		return
 	_town_revealed = true
 	_spawn_town_tile()
-	_show_message("본거지로 돌아가는 길이 열렸습니다.")
+	_show_message("모닥불이 피어납니다." if GameState.STORY_MODE_ENABLED else "본거지로 돌아가는 길이 열렸습니다.")
 
 
 func _spawn_town_tile() -> void:
@@ -468,6 +479,16 @@ func _hide_message() -> void:
 	if _message_panel:
 		_message_panel.visible = false
 		_message_panel.modulate.a = 0.0
+
+
+func _story_field_intro() -> String:
+	match GameState.story_field_index():
+		1:
+			return "필드 1 - 초원. 슬라임이 나타났습니다."
+		2:
+			return "필드 2 - 싸우는 소리를 듣고 누군가 다가옵니다."
+		_:
+			return "필드 %d - 더 멀리 나아갑니다." % GameState.story_field_index()
 
 
 func _scatter_decorations() -> void:
@@ -701,6 +722,8 @@ func _spawn_field_enemy(data: EnemyData) -> void:
 
 
 func _enemy_count_for_current_nodes() -> int:
+	if GameState.STORY_MODE_ENABLED:
+		return GameState.story_field_enemy_count()
 	return initial_slime_count + GameState.field_enemy_count_bonus()
 
 
@@ -841,8 +864,15 @@ func _random_position() -> Vector2:
 func _apply_field_size() -> void:
 	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
 	_background.size = _field_size
+	_background_texture.size = _field_size
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
+
+
+func _apply_field_background() -> void:
+	_background.color = _field_background_color()
+	_background_texture.texture = GRASS_FIELD_TEXTURE
+	_background_texture.visible = GameState.current_field_region_id == GameState.FIELD_REGION_GRASS
 
 
 func _field_background_color() -> Color:
@@ -871,6 +901,8 @@ func _on_field_loop_finish_requested() -> void:
 ## and combine with the field-empty check.
 func _check_refill_after_battles() -> void:
 	_active_battle_windows = 0
+	if GameState.STORY_MODE_ENABLED:
+		return
 	if _loop_complete:
 		return
 	if not GameState.field_spawner_enabled():

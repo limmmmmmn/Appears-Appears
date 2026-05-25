@@ -14,7 +14,7 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 
 @export var enemy_data: EnemyData
 @export var turn_interval: float = 0.5
-@export var close_delay: float = 1.15
+@export var close_delay: float = 0.35
 
 ## How long to linger at spawn center before sliding to the assigned slot.
 @export var slide_delay: float = 0.3
@@ -53,6 +53,7 @@ const DEFAULT_WINDOW_BG: Color = Color(0.0, 0.0, 0.0, 1.0)
 const DQ_WINDOW_BG: Color = Color(0.0, 0.0, 0.0, 1.0)
 const DQ_WINDOW_BORDER: Color = Color(1.0, 1.0, 1.0, 1.0)
 const DQ_WINDOW_TEXT: Color = Color(1.0, 1.0, 1.0, 1.0)
+const LOG_STEP_DURATION: float = 0.46
 const ENEMY_TIER_BY_ID: Dictionary = {
 	&"slime": 0,
 	&"slime_chaser": 1,
@@ -74,6 +75,11 @@ var _planned_enemy_data: Array[EnemyData] = []
 var _window_size_multiplier: float = 1.0
 var _slide_tween: Tween
 var _crash_tween: Tween
+var _log_queue: Array[String] = []
+var _pending_defeat_logs: Array[String] = []
+var _log_sequence_running: bool = false
+var _close_when_log_queue_empty: bool = false
+var _close_started: bool = false
 
 
 func _ready() -> void:
@@ -162,7 +168,8 @@ func apply_window_collision_damage(ratio: float, log_prefix: String = "Window cr
 	if total_dealt > 0:
 		_play_crash_flash()
 		_spawn_window_damage_number(total_dealt, _window_damage_label(log_prefix))
-		_log_label.text = "%s! -%d" % [log_prefix, total_dealt]
+		_queue_log("%s!\nEnemies take %d damage." % [log_prefix, total_dealt])
+		_flush_pending_defeat_logs()
 	return total_dealt
 
 
@@ -188,12 +195,12 @@ func has_living_enemy_id(enemy_id: StringName) -> bool:
 	return false
 
 
-func show_party_bump_counter_damage(total_amount: int, ratio: float) -> void:
-	_log_label.text = "Blade counter! Party -%d%% (%d)" % [int(round(ratio * 100.0)), total_amount]
+func show_party_bump_counter_damage(total_amount: int, _ratio: float) -> void:
+	_queue_log("Blade counter!\nParty takes %d damage." % total_amount)
 
 
 func show_window_collision_heal(member_name: String, amount: int) -> void:
-	_log_label.text = "Bump blessing! %s +%d" % [member_name, amount]
+	_queue_log("Bump blessing!\n%s recovers %d HP." % [member_name, amount])
 
 
 func _play_crash_flash() -> void:
@@ -301,7 +308,7 @@ func _spawn_enemy() -> void:
 		_enemies.append(enemy)
 	_name_label.text = _encounter_display_name()
 	_refresh_hp_label()
-	_log_label.text = "%s appears!" % _name_label.text
+	_set_log("%s appears!" % _name_label.text)
 
 
 func _ensure_enemy_plan() -> void:
@@ -385,6 +392,8 @@ func _encounter_display_name() -> String:
 func _on_turn_tick() -> void:
 	if not _running:
 		return
+	if _is_log_busy():
+		return
 	if _living_enemies().is_empty() or GameState.is_party_wiped():
 		return
 	var actor: Dictionary = _next_actor()
@@ -426,13 +435,10 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	var crit: Dictionary = GameState.roll_crit()
 	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"])))
 	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], member.attack_effect)
-	if not _running:
-		return dealt
 	var target_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
-	var tag: String = "%s hits %s -%d" % [member.display_name, target_name, dealt]
-	if crit["is_crit"]:
-		tag += "!"
-	_log_label.text = tag
+	var crit_text := "\nCritical hit!" if crit["is_crit"] else ""
+	_queue_log("%s attacks!%s\n%s takes %d damage." % [member.display_name, crit_text, target_name, dealt])
+	_flush_pending_defeat_logs()
 	return dealt
 
 
@@ -446,14 +452,13 @@ func _mage_splash_attack(attacker_index: int) -> void:
 	var total_dealt: int = 0
 	for i in target_count:
 		total_dealt += targets[i].take_damage(damage, crit["is_crit"], member.attack_effect)
-	if not _running:
-		return
-	var suffix := "!" if crit["is_crit"] else ""
-	_log_label.text = "%s scorches x%d -%d%s" % [member.display_name, target_count, total_dealt, suffix]
+	var crit_text := "\nCritical hit!" if crit["is_crit"] else ""
+	_queue_log("%s casts a spell!%s\nx%d take %d damage." % [member.display_name, crit_text, target_count, total_dealt])
+	_flush_pending_defeat_logs()
 
 
 func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
-	var dealt: int = _basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
+	_basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
 	if not _running:
 		return
 	var heal_target: int = _lowest_wounded_party_index()
@@ -463,23 +468,22 @@ func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	GameState.heal_party_member(heal_target, GameState.priest_heal_amount())
 	var healed: int = GameState.party_hp[heal_target] - before_hp
 	if healed > 0:
-		_log_label.text = "%s -%d / %s +%d" % [
+		_queue_log("%s prays.\n%s recovers %d HP." % [
 			GameState.party[attacker_index].display_name,
-			dealt,
 			GameState.party[heal_target].display_name,
 			healed,
-		]
+		])
 
 
 func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
-	var dealt: int = _basic_party_attack(attacker_index, target_enemy)
+	_basic_party_attack(attacker_index, target_enemy)
 	if not _running:
 		return
 	var stolen: int = target_enemy.try_steal_gold(GameState.thief_steal_chance(), GameState.thief_steal_gold_amount())
 	if stolen <= 0:
 		return
 	GameState.add_gold(stolen)
-	_log_label.text = "%s -%d / stole %dG" % [GameState.party[attacker_index].display_name, dealt, stolen]
+	_queue_log("%s steals %dG!" % [GameState.party[attacker_index].display_name, stolen])
 
 
 func _enemy_attack(enemy: Enemy) -> void:
@@ -494,12 +498,12 @@ func _enemy_attack(enemy: Enemy) -> void:
 	var attacker_name: String = enemy.data.display_name if enemy.data else "Enemy"
 	if GameState.roll_evade(target_index):
 		enemy.play_attack_lunge()
-		_log_label.text = "%s dodges %s!" % [target.display_name, attacker_name]
+		_queue_log("%s attacks!\n%s dodges!" % [attacker_name, target.display_name])
 		return
 	var dealt: int = max(1, enemy.attack - GameState.effective_defense(target_index))
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
-	_log_label.text = "%s hits %s -%d" % [attacker_name, target.display_name, dealt]
+	_queue_log("%s attacks!\n%s takes %d damage." % [attacker_name, target.display_name, dealt])
 
 
 # ─── Enemy callbacks ──────────────────────────────────────────────────
@@ -514,20 +518,68 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	if _enemy.data:
 		_earned_xp_total += GameState.scaled_enemy_xp_reward(_enemy.data)
 	_refresh_hp_label()
+	var defeated_name: String = _enemy.data.display_name if _enemy.data else "Enemy"
 	if not _living_enemies().is_empty():
-		var defeated_name: String = _enemy.data.display_name if _enemy.data else "Enemy"
 		if drop_reward > 0:
-			_log_label.text = "%s defeated! +%d gold drop" % [defeated_name, drop_reward]
+			_pending_defeat_logs.append("%s is defeated!\n%dG drops." % [defeated_name, drop_reward])
 		else:
-			_log_label.text = "%s defeated!" % defeated_name
+			_pending_defeat_logs.append("%s is defeated!" % defeated_name)
+		call_deferred("_flush_pending_defeat_logs")
 		return
 	_running = false
 	_turn_timer.stop()
 	_add_window_item_drop()
 	GameState.add_gold(1)
-	_log_label.text = "All defeated!\n1 gold gained"
+	_pending_defeat_logs.append("%s is defeated!" % defeated_name)
+	_pending_defeat_logs.append("Victory!\n1 gold gained.")
+	_close_when_log_queue_empty = true
+	call_deferred("_flush_pending_defeat_logs")
+
+
+func _set_log(text: String) -> void:
+	_log_label.text = text
+
+
+func _queue_log(text: String) -> void:
+	if text.is_empty():
+		return
+	_log_queue.append(text)
+	if not _log_sequence_running:
+		_drain_log_queue()
+
+
+func _is_log_busy() -> bool:
+	return _log_sequence_running or not _log_queue.is_empty()
+
+
+func _flush_pending_defeat_logs() -> void:
+	if _pending_defeat_logs.is_empty():
+		return
+	for text: String in _pending_defeat_logs:
+		_queue_log(text)
+	_pending_defeat_logs.clear()
+
+
+func _drain_log_queue() -> void:
+	if _log_sequence_running:
+		return
+	_log_sequence_running = true
+	while not _log_queue.is_empty() and is_inside_tree():
+		_set_log(_log_queue.pop_front())
+		await get_tree().create_timer(LOG_STEP_DURATION).timeout
+	_log_sequence_running = false
+	if _close_when_log_queue_empty:
+		_close_after_log_sequence()
+
+
+func _close_after_log_sequence() -> void:
+	if _close_started:
+		return
+	_close_started = true
 	await get_tree().process_frame
 	await get_tree().create_timer(close_delay).timeout
+	if not is_inside_tree():
+		return
 	EventBus.battle_window_closed.emit(self)
 	queue_free()
 

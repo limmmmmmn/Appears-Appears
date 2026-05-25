@@ -7,10 +7,14 @@ extends CanvasLayer
 signal closed(region_id: StringName)
 
 const SKILL_TREE_VIEW_SCENE_SCRIPT: Script = preload("res://scripts/runtime/skill_tree_view.gd")
+const BONFIRE_TEXTURE: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
+const CHARACTER_VISUAL_SCRIPT: Script = preload("res://scripts/runtime/character_visual.gd")
 
 @onready var _title_label: Label = %TitleLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _continue_button: Button = %ContinueButton
+@onready var _background: Panel = $Background
+@onready var _horizon_strip: Panel = $HorizonStrip
 
 var _title_override: String = ""
 var _tree_view: Control
@@ -31,14 +35,88 @@ func _ready() -> void:
 	_title_label.text = _title_override if not _title_override.is_empty() else GameState.field_region_summary()
 	_heal_party_to_full()
 	_refresh_gold_label()
-	_install_skill_tree()
-	_install_region_buttons()
+	if GameState.STORY_MODE_ENABLED:
+		_install_story_camp()
+	else:
+		_install_skill_tree()
+		_install_region_buttons()
 	_update_continue_button()
 	_continue_button.pressed.connect(_on_continue_pressed)
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.skill_node_purchase_succeeded.connect(_on_skill_node_purchase_succeeded)
 	EventBus.skill_node_purchase_failed.connect(_on_skill_node_purchase_failed)
 	_continue_button.grab_focus()
+
+
+func _install_story_camp() -> void:
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.015, 0.018, 0.02, 1.0)
+	_background.add_theme_stylebox_override("panel", bg_style)
+	_horizon_strip.hide()
+	_title_label.text = "모닥불"
+
+	var glow := ColorRect.new()
+	glow.name = "Firelight"
+	glow.size = Vector2(214.0, 112.0)
+	glow.position = Vector2(213.0, 118.0)
+	glow.color = Color(1.0, 0.58, 0.18, 0.12)
+	add_child(glow)
+	move_child(glow, 2)
+
+	var camp := Node2D.new()
+	camp.name = "StoryCamp"
+	add_child(camp)
+	move_child(camp, 3)
+
+	var bonfire := Sprite2D.new()
+	bonfire.texture = BONFIRE_TEXTURE
+	bonfire.centered = true
+	bonfire.position = Vector2(320.0, 178.0)
+	bonfire.scale = Vector2(1.35, 1.35)
+	bonfire.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	camp.add_child(bonfire)
+
+	if GameState.party_size() > 0:
+		_add_camp_member(camp, GameState.party[0], Vector2(320.0, 150.0))
+	if GameState.party_size() > 1:
+		_add_camp_member(camp, GameState.party[1], Vector2(292.0, 184.0))
+
+	var line := Label.new()
+	line.name = "CampLine"
+	line.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	line.offset_left = 36.0
+	line.offset_top = 246.0
+	line.offset_right = -36.0
+	line.offset_bottom = 284.0
+	line.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	line.add_theme_font_size_override("font_size", 10)
+	line.add_theme_color_override("font_color", Color(0.92, 0.9, 0.78, 1.0))
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.text = _story_camp_line()
+	add_child(line)
+
+
+func _add_camp_member(root: Node2D, data: CharacterData, pos: Vector2) -> void:
+	if data == null:
+		return
+	var visual := Sprite2D.new()
+	visual.set_script(CHARACTER_VISUAL_SCRIPT)
+	root.add_child(visual)
+	visual.position = pos
+	visual.scale = Vector2(1.35, 1.35)
+	visual.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if visual.has_method("setup"):
+		visual.setup(data)
+
+
+func _story_camp_line() -> String:
+	if GameState.story_field_index() <= 1:
+		return "불빛 말고는 아무것도 없습니다."
+	if GameState.gold < GameState.STORY_GOLD_GOAL:
+		return "돈 좀 모아서 잠자리좀 만들어보자. %d골드가 필요합니다." % GameState.STORY_GOLD_GOAL
+	return "1000골드가 모였습니다. 이제 잠자리를 만들 수 있습니다."
 
 
 func _install_skill_tree() -> void:
@@ -115,6 +193,9 @@ func _on_skill_node_purchase_failed(_node) -> void:
 
 
 func _on_continue_pressed() -> void:
+	if GameState.STORY_MODE_ENABLED:
+		_close_with_region(GameState.FIELD_REGION_GRASS)
+		return
 	if GameState.forest_region_unlocked():
 		_show_region_choices()
 		return
@@ -132,6 +213,9 @@ func _show_region_choices() -> void:
 
 
 func _update_continue_button() -> void:
+	if GameState.STORY_MODE_ENABLED:
+		_continue_button.text = "다음 필드로"
+		return
 	_continue_button.text = "필드로 나가기" if GameState.forest_region_unlocked() else "초원으로 나가기"
 
 

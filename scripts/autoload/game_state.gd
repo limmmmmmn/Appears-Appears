@@ -49,6 +49,8 @@ var recruited_companions: Array[ModifierData] = []
 # ─── Progression ──────────────────────────────────────────────────────
 var field_loop_count: int = 0
 var current_field_region_id: StringName = FIELD_REGION_GRASS
+var story_companion_joined: bool = false
+var story_gold_goal_announced: bool = false
 
 const FIELD_REGION_MILESTONES: Array[Dictionary] = [
 	{"name": "초원", "gold": 0, "nodes": 0},
@@ -59,7 +61,16 @@ const FIELD_REGION_MILESTONES: Array[Dictionary] = [
 	{"name": "마왕성", "gold": 4200, "nodes": 16},
 ]
 
+const STORY_MODE_ENABLED: bool = true
+const STORY_GOLD_GOAL: int = 1000
+const STORY_FIELD_ENEMY_COUNTS: Dictionary = {
+	1: 3,
+	2: 8,
+}
+const STORY_FIRST_COMPANION: CharacterData = preload("res://data/characters/elf.tres")
 const MAX_CHARACTER_LEVEL: int = 20
+const PARTY_LEVELING_ENABLED: bool = false
+const ITEM_MERGING_ENABLED: bool = false
 const EQUIPMENT_SLOT_COUNT: int = 6
 const EQUIPMENT_ACCESSORY_SLOT_A: int = 4
 const EQUIPMENT_ACCESSORY_SLOT_B: int = 5
@@ -180,6 +191,8 @@ func heal_party_member(index: int, amount: int) -> void:
 func add_party_xp(amount: int) -> void:
 	if amount <= 0:
 		return
+	if not PARTY_LEVELING_ENABLED:
+		return
 	for i in party.size():
 		_add_xp_to_member(i, amount)
 
@@ -265,6 +278,42 @@ func add_gold(amount: int) -> void:
 	if amount > 0:
 		total_gold_earned += amount
 	EventBus.gold_changed.emit(gold)
+
+
+func story_field_index() -> int:
+	return maxi(1, field_loop_count)
+
+
+func story_field_enemy_count() -> int:
+	return int(STORY_FIELD_ENEMY_COUNTS.get(story_field_index(), 10 + story_field_index() * 2))
+
+
+func story_campfire_unlock_kills() -> int:
+	return story_field_enemy_count() if story_field_index() == 1 else 3
+
+
+func story_recruit_first_companion() -> bool:
+	if story_companion_joined or STORY_FIRST_COMPANION == null:
+		return false
+	if _party_has_character(STORY_FIRST_COMPANION.id):
+		story_companion_joined = true
+		return false
+	party.append(STORY_FIRST_COMPANION)
+	party_levels.append(1)
+	party_xp.append(0)
+	party_equipment.append(_empty_equipment_slots())
+	party_hp.append(effective_max_hp(party_hp.size()))
+	party_mp.append(STORY_FIRST_COMPANION.max_mp)
+	story_companion_joined = true
+	EventBus.party_changed.emit()
+	return true
+
+
+func _party_has_character(character_id: StringName) -> bool:
+	for member: CharacterData in party:
+		if member.id == character_id:
+			return true
+	return false
 
 
 func spend_gold(amount: int) -> bool:
@@ -752,6 +801,32 @@ func inventory_items() -> Array:
 	return inventory.duplicate()
 
 
+func inventory_sell_value(entry) -> int:
+	if item_entry_data(entry) == null:
+		return 0
+	return maxi(1, item_entry_level(entry))
+
+
+func inventory_sell_total() -> int:
+	var total: int = 0
+	for entry in inventory:
+		total += inventory_sell_value(entry)
+	return total
+
+
+func sell_inventory_entry_at(index: int) -> int:
+	if index < 0 or index >= inventory.size():
+		return 0
+	var entry = inventory[index]
+	var value: int = inventory_sell_value(entry)
+	if value <= 0:
+		return 0
+	inventory.remove_at(index)
+	EventBus.inventory_changed.emit()
+	add_gold(value)
+	return value
+
+
 func equipment_for_member(index: int) -> Array:
 	if index < 0 or index >= party_equipment.size():
 		return _empty_equipment_slots()
@@ -788,7 +863,7 @@ func item_entry_tooltip(entry) -> String:
 	lines.append("%s  |  %s" % [equipment_slot_name(int(item.slot)), _item_owner_label(item)])
 	var stat_line: String = _item_stat_line(item, level)
 	lines.append(stat_line if not stat_line.is_empty() else "No stats")
-	if level > 0:
+	if ITEM_MERGING_ENABLED and level > 0:
 		lines.append("Merge: same Lv %d -> Lv %d" % [level, level + 1])
 	return "\n".join(lines)
 
@@ -910,13 +985,13 @@ func _absorb_item_entry(entry: Dictionary) -> void:
 	if item == null or level <= 0:
 		return
 	var target_index: int = _equipment_target_index(item)
-	if target_index >= 0:
+	if ITEM_MERGING_ENABLED and target_index >= 0:
 		var equipped_slot: int = _find_equipped_match(target_index, item, level)
 		if equipped_slot >= 0:
 			_upgrade_equipped_entry(target_index, equipped_slot)
 			return
-	var inventory_index: int = _find_inventory_match(item, level)
-	if inventory_index >= 0:
+	var inventory_index: int = _find_inventory_match(item, level) if ITEM_MERGING_ENABLED else -1
+	if ITEM_MERGING_ENABLED and inventory_index >= 0:
 		inventory.remove_at(inventory_index)
 		EventBus.inventory_changed.emit()
 		_absorb_item_entry(_make_item_entry(item, level + 1))
@@ -928,6 +1003,8 @@ func _absorb_item_entry(entry: Dictionary) -> void:
 
 
 func _upgrade_equipped_entry(member_index: int, slot_index: int) -> void:
+	if not ITEM_MERGING_ENABLED:
+		return
 	var entry = party_equipment[member_index][slot_index]
 	var item: ItemData = item_entry_data(entry)
 	var level: int = item_entry_level(entry)
@@ -941,6 +1018,8 @@ func _upgrade_equipped_entry(member_index: int, slot_index: int) -> void:
 
 
 func _cascade_equipped_inventory_merge(member_index: int, slot_index: int) -> void:
+	if not ITEM_MERGING_ENABLED:
+		return
 	while true:
 		var entry = party_equipment[member_index][slot_index]
 		var item: ItemData = item_entry_data(entry)
@@ -1317,6 +1396,8 @@ func reset_run() -> void:
 	_field_battle_pause_count = 0
 	field_loop_count = 0
 	current_field_region_id = FIELD_REGION_GRASS
+	story_companion_joined = false
+	story_gold_goal_announced = false
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).
 	EventBus.gold_changed.emit(gold)

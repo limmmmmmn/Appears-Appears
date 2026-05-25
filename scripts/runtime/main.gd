@@ -24,6 +24,7 @@ var _settlement_report: SettlementReport
 var _town: CanvasLayer
 var _game_over: GameOver
 var _is_manually_paused: bool = false
+var _story_notice_layer: CanvasLayer
 
 
 func _ready() -> void:
@@ -38,6 +39,15 @@ func _ready() -> void:
 	EventBus.party_wiped.connect(_on_party_wiped)
 	EventBus.field_loop_settled.connect(_on_field_loop_settled)
 	EventBus.town_entered.connect(_on_town_entered)
+	EventBus.gold_changed.connect(_on_gold_changed)
+	await _start_run()
+
+
+func _start_run() -> void:
+	if GameState.STORY_MODE_ENABLED:
+		_set_run_layers_visible(false)
+		await _play_opening_sequence()
+		_set_run_layers_visible(true)
 	# Kick off the first field loop. Field listens to field_loop_started and spawns enemies.
 	GameState.start_next_field_loop()
 
@@ -68,6 +78,9 @@ func _on_field_loop_settled(loop_num: int) -> void:
 func _on_town_entered(_tile: Node) -> void:
 	print("[main] settlement tile entered — aborting active battles with no rewards")
 	_battle_manager.abort_all_battles()
+	if GameState.STORY_MODE_ENABLED:
+		_show_town("모닥불")
+		return
 	_show_settlement_report("%s 정산" % GameState.current_field_region_display_name())
 
 
@@ -119,6 +132,17 @@ func _on_town_closed(region_id: StringName = GameState.FIELD_REGION_GRASS) -> vo
 	GameState.start_next_field_loop(region_id)
 
 
+func _on_gold_changed(new_gold: int) -> void:
+	if not GameState.STORY_MODE_ENABLED:
+		return
+	if GameState.story_gold_goal_announced or GameState.story_field_index() < 2:
+		return
+	if new_gold < GameState.STORY_GOLD_GOAL:
+		return
+	GameState.story_gold_goal_announced = true
+	_show_story_notice("1000골드가 모였습니다.\n이제 잠자리를 만들 수 있을 것 같습니다.")
+
+
 func _set_run_layers_visible(is_visible: bool) -> void:
 	_field.visible = is_visible
 	_battle_manager.visible = is_visible
@@ -168,9 +192,89 @@ func _on_try_again_pressed() -> void:
 	_game_over = null
 	GameState.reset_run()
 	_setup_default_party()
-	# Field listens for field_loop_started to clear/respawn enemies + recenter the
-	# party. set_party (above) already triggered party_changed → fresh visuals.
-	GameState.start_next_field_loop()
+	await _start_run()
+
+
+func _play_opening_sequence() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "OpeningLayer"
+	layer.layer = 30
+	add_child(layer)
+
+	var bg := ColorRect.new()
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color.BLACK
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(bg)
+
+	var label := Label.new()
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 36.0
+	label.offset_right = -36.0
+	label.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	label.add_theme_font_size_override("font_size", 18)
+	label.add_theme_color_override("font_color", Color.WHITE)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layer.add_child(label)
+
+	for line in ["마왕이 점령한 세계.", "용사는 너무 늦게 움직인다."]:
+		label.text = line
+		label.modulate.a = 0.0
+		var tween := create_tween()
+		tween.tween_property(label, "modulate:a", 1.0, 0.35)
+		tween.tween_interval(1.05)
+		tween.tween_property(label, "modulate:a", 0.0, 0.25)
+		await tween.finished
+	await get_tree().create_timer(0.25).timeout
+	layer.queue_free()
+
+
+func _show_story_notice(text: String) -> void:
+	if _story_notice_layer and is_instance_valid(_story_notice_layer):
+		_story_notice_layer.queue_free()
+	_story_notice_layer = CanvasLayer.new()
+	_story_notice_layer.name = "StoryNoticeLayer"
+	_story_notice_layer.layer = 18
+	add_child(_story_notice_layer)
+
+	var panel := Panel.new()
+	panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	panel.offset_left = 96.0
+	panel.offset_top = 28.0
+	panel.offset_right = -96.0
+	panel.offset_bottom = 82.0
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.02, 0.025, 0.02, 0.92)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(1.0, 0.82, 0.32, 1.0)
+	panel.add_theme_stylebox_override("panel", style)
+	_story_notice_layer.add_child(panel)
+
+	var label := Label.new()
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 8.0
+	label.offset_right = -8.0
+	label.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.72, 1.0))
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(label)
+
+	var tween := create_tween()
+	panel.modulate.a = 0.0
+	tween.tween_property(panel, "modulate:a", 1.0, 0.12)
+	tween.tween_interval(3.0)
+	tween.tween_property(panel, "modulate:a", 0.0, 0.25)
+	tween.tween_callback(Callable(_story_notice_layer, "queue_free"))
 
 
 # ─── Debug ────────────────────────────────────────────────────────────
