@@ -56,6 +56,7 @@ const CARD_BG_BY_ID: Dictionary = {
 	&"bump_blessing": Color(0.63, 0.86, 0.68, 1),
 	&"recruit_elf": Color(0.6, 0.86, 0.56, 1),
 	&"recruit_mage": Color(0.76, 0.9, 0.94, 1),
+	&"recruit_knight": Color(0.78, 0.78, 0.84, 1),
 	&"recruit_priest": Color(0.97, 0.71, 0.8, 1),
 	&"recruit_thief": Color(0.79, 0.88, 0.58, 1),
 }
@@ -73,6 +74,7 @@ const POSTER_DESC_BY_ID: Dictionary = {
 	&"pilfer": "Thief can steal gold on attack.",
 	&"recruit_elf": "Elf joins as a fast attacker.",
 	&"recruit_mage": "Joins with Fireburst: hits +1 enemy.",
+	&"recruit_knight": "Knight joins as a sturdy ally.",
 	&"recruit_priest": "Joins with Prayer: attacks and heals.",
 	&"recruit_thief": "Joins with Pilfer: steals 1G.",
 	&"bump_attack": "Bump windows to hurt enemies.",

@@ -62,13 +62,13 @@ func _on_field_loop_settled(loop_num: int) -> void:
 		GameState.unlocked_field_node_count(),
 	])
 	_battle_manager.abort_all_battles()
-	_show_settlement_report("%s 정산" % GameState.field_region_name())
+	_show_settlement_report("%s 정산" % GameState.current_field_region_display_name())
 
 
 func _on_town_entered(_tile: Node) -> void:
 	print("[main] settlement tile entered — aborting active battles with no rewards")
 	_battle_manager.abort_all_battles()
-	_show_settlement_report("%s 정산" % GameState.field_region_name())
+	_show_settlement_report("%s 정산" % GameState.current_field_region_display_name())
 
 
 func _show_settlement_report(title: String = "") -> void:
@@ -90,12 +90,12 @@ func _on_settlement_continue_requested() -> void:
 	get_tree().paused = false
 	_set_run_layers_visible(true)
 	_hud.set_level_up_ui_enabled(true)
-	GameState.start_next_field_loop()
+	GameState.start_next_field_loop(GameState.FIELD_REGION_GRASS)
 
 
 func _on_settlement_town_requested() -> void:
 	_settlement_report = null
-	_show_town("%s 본거지" % GameState.field_region_name())
+	_show_town("%s 본거지" % GameState.current_field_region_display_name())
 
 
 func _show_town(title: String = "") -> void:
@@ -111,12 +111,12 @@ func _show_town(title: String = "") -> void:
 	get_tree().paused = true
 
 
-func _on_town_closed() -> void:
+func _on_town_closed(region_id: StringName = GameState.FIELD_REGION_GRASS) -> void:
 	_town = null
 	get_tree().paused = false
 	_set_run_layers_visible(true)
 	_hud.set_level_up_ui_enabled(true)
-	GameState.start_next_field_loop()
+	GameState.start_next_field_loop(region_id)
 
 
 func _set_run_layers_visible(is_visible: bool) -> void:

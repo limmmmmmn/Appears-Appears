@@ -2,16 +2,25 @@ extends Control
 
 signal purchase_requested(node_id: StringName)
 
-const GRID_STEP: Vector2 = Vector2(56, 35)
-const NODE_SIZE: Vector2 = Vector2(34, 34)
+const GRID_STEP: Vector2 = Vector2(54, 40)
+const ROOT_NODE_SIZE: Vector2 = Vector2(36, 36)
+## Per-tier node face metrics. 0 = minor pip, 1 = normal, 2 = major feature.
+const NODE_SIZE_BY_TIER: Dictionary = {
+	0: Vector2(26, 20),
+	1: Vector2(32, 27),
+	2: Vector2(38, 31),
+}
+const NODE_FONT_BY_TIER: Dictionary = {0: 8, 1: 9, 2: 9}
+const NODE_BORDER_BY_TIER: Dictionary = {0: 1, 1: 2, 2: 2}
+const NODE_CORNER_BY_TIER: Dictionary = {0: 1, 1: 2, 2: 3}
 const TREE_CENTER: Vector2 = Vector2(330, 220)
-const TOOLTIP_SIZE: Vector2 = Vector2(260, 112)
+const TOOLTIP_WIDTH: float = 168.0
+const TOOLTIP_PAD: Vector2 = Vector2(9.0, 7.0)
 const TOOLTIP_GAP: float = 7.0
 const ZOOM_MIN: float = 0.5
 const ZOOM_MAX: float = 1.75
 const ZOOM_STEP: float = 1.12
 const KEYBOARD_PAN_SPEED: float = 280.0
-const TREE_DETAIL_FADE_SPEED: float = 7.5
 const CAMP_ACTOR_WANDER_RADIUS: Vector2 = Vector2(13.0, 7.0)
 const CAMP_ACTOR_WANDER_SPEED: float = 13.0
 const CAMP_SPEECH_MIN_WAIT: float = 3.8
@@ -25,18 +34,34 @@ const COLOR_LINE_AVAILABLE: Color = Color(0.26, 0.55, 0.7, 1.0)
 const COLOR_LINE_LOCKED: Color = Color(0.22, 0.28, 0.32, 0.45)
 const TOWN_UI_FONT: Font = preload("res://assets/fonts/town_ui_font.tres")
 const BONFIRE_ICON: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
+const FOREST_ICON: Texture2D = preload("res://assets/sprites/objects/forest 2.png")
 const ROOT_NODE_ID: StringName = &"root"
+const FOREST_NODE_ID: StringName = &"forest_region"
 const BONFIRE_COMPANION_OFFSET: Dictionary = {
 	&"elf": Vector2(24.0, 18.0),
+	&"mage": Vector2(-24.0, 18.0),
+	&"knight": Vector2(0.0, 34.0),
 }
 const BONFIRE_COMPANION_REQUIRED_NODE: Dictionary = {
 	&"elf": &"companion",
+	&"mage": &"companion_2",
+	&"knight": &"companion_3",
 }
 const BONFIRE_COMPANION_LINES: Dictionary = {
 	&"elf": [
 		"길은 내가 볼게.",
 		"숲 냄새가 나.",
 		"조용히 가자.",
+	],
+	&"mage": [
+		"불씨는 준비됐어.",
+		"창 안쪽까지 태워볼까?",
+		"마력이 잘 돌아.",
+	],
+	&"knight": [
+		"내가 앞을 맡지.",
+		"대열을 지키겠다.",
+		"방패를 올려.",
 	],
 }
 
@@ -47,11 +72,12 @@ var _tree_layer: Control
 var _tree_zoom: float = 0.86
 var _tree_offset: Vector2 = Vector2(0.0, 34.0)
 var _tooltip_panel: Panel
-var _tooltip_label: Label
+var _tooltip_title: Label
+var _tooltip_rule: ColorRect
+var _tooltip_status: Label
+var _tooltip_desc: Label
 var _hovered_button: Button
 var _hovered_node
-var _tree_detail_target_alpha: float = 0.0
-var _tree_detail_alpha: float = 0.0
 var _is_drag_panning: bool = false
 var _drag_pan_button: int = 0
 var _keyboard_pan_armed: bool = false
@@ -94,7 +120,6 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_handle_keyboard_pan(delta)
-	_update_tree_detail_reveal(delta)
 	_update_camp_actors(delta)
 
 
@@ -112,10 +137,12 @@ func refresh() -> void:
 		button.tooltip_text = ""
 		if node.id == ROOT_NODE_ID:
 			_apply_icon_node(button)
+		elif node.id == FOREST_NODE_ID:
+			_apply_forest_node(button, node, owned, available, can_buy)
 		else:
 			button.icon = null
 			button.text = _button_text(node)
-			_apply_button_style(button, owned, available, can_buy)
+			_apply_button_style(button, node, owned, available, can_buy)
 		_apply_button_visibility(button, node)
 	_refresh_camp_actors()
 	queue_redraw()
@@ -135,42 +162,61 @@ func _build_tooltip() -> void:
 	_tooltip_panel.visible = false
 	_tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tooltip_panel.z_index = 100
-	_tooltip_panel.custom_minimum_size = TOOLTIP_SIZE
-	_tooltip_panel.size = TOOLTIP_SIZE
 	_tooltip_panel.add_theme_stylebox_override("panel", _tooltip_style())
-	_tooltip_label = Label.new()
-	_tooltip_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_tooltip_label.offset_left = 8.0
-	_tooltip_label.offset_top = 6.0
-	_tooltip_label.offset_right = -8.0
-	_tooltip_label.offset_bottom = -6.0
-	_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tooltip_label.add_theme_font_override("font", TOWN_UI_FONT)
-	_tooltip_label.add_theme_font_size_override("font_size", 9)
-	_tooltip_label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.78, 1.0))
-	_tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tooltip_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-	_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_tooltip_label.clip_text = true
-	_tooltip_panel.add_child(_tooltip_label)
+
+	_tooltip_title = Label.new()
+	_tooltip_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip_title.add_theme_font_override("font", TOWN_UI_FONT)
+	_tooltip_title.add_theme_font_size_override("font_size", 11)
+	_tooltip_title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.4, 1.0))
+	_tooltip_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tooltip_title.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_tooltip_panel.add_child(_tooltip_title)
+
+	_tooltip_status = Label.new()
+	_tooltip_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip_status.add_theme_font_override("font", TOWN_UI_FONT)
+	_tooltip_status.add_theme_font_size_override("font_size", 8)
+	_tooltip_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tooltip_status.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_tooltip_panel.add_child(_tooltip_status)
+
+	_tooltip_rule = ColorRect.new()
+	_tooltip_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip_rule.color = Color(1.0, 0.82, 0.28, 0.45)
+	_tooltip_panel.add_child(_tooltip_rule)
+
+	_tooltip_desc = Label.new()
+	_tooltip_desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip_desc.add_theme_font_override("font", TOWN_UI_FONT)
+	_tooltip_desc.add_theme_font_size_override("font_size", 9)
+	_tooltip_desc.add_theme_color_override("font_color", Color(0.86, 0.89, 0.82, 1.0))
+	_tooltip_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_tooltip_desc.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_tooltip_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tooltip_panel.add_child(_tooltip_desc)
+
 	add_child(_tooltip_panel)
 
 
 func _build_buttons() -> void:
 	for node in SkillTreeDB.get_all():
 		var button := Button.new()
-		button.custom_minimum_size = NODE_SIZE
-		button.size = NODE_SIZE
-		button.position = _node_center(node) - NODE_SIZE * 0.5
-		button.pivot_offset = NODE_SIZE * 0.5
+		var node_size: Vector2 = _node_size(node)
+		button.custom_minimum_size = node_size
+		button.size = node_size
+		button.position = _node_center(node) - node_size * 0.5
+		button.pivot_offset = node_size * 0.5
 		button.mouse_filter = Control.MOUSE_FILTER_PASS
 		button.focus_mode = Control.FOCUS_ALL
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 		button.expand_icon = false
+		button.clip_text = true
 		button.add_theme_font_override("font", TOWN_UI_FONT)
-		button.add_theme_font_size_override("font_size", 10)
+		button.add_theme_font_size_override("font_size", _node_font_size(node))
+		button.add_theme_constant_override("h_separation", 0)
 		button.gui_input.connect(_handle_zoom_input)
 		button.mouse_entered.connect(_on_button_mouse_entered.bind(button, node))
 		button.mouse_exited.connect(_on_button_mouse_exited.bind(button))
@@ -183,52 +229,127 @@ func _node_center(node) -> Vector2:
 	return TREE_CENTER + Vector2(node.grid_position) * GRID_STEP
 
 
+func _node_size(node) -> Vector2:
+	if node.id == ROOT_NODE_ID:
+		return ROOT_NODE_SIZE
+	return NODE_SIZE_BY_TIER.get(node.tier, NODE_SIZE_BY_TIER[1])
+
+
+func _node_font_size(node) -> int:
+	return int(NODE_FONT_BY_TIER.get(node.tier, 9))
+
+
 func _button_text(node) -> String:
-	if GameState.has_skill_node(node.id):
+	var level: int = GameState.skill_node_level(node.id)
+	var max_level: int = int(node.max_level)
+	if max_level > 1 and level > 0:
+		return "%s\n%d/%d" % [node.short_label, level, max_level]
+	# Minor pips show only their name; bigger nodes carry the price tag too.
+	if node.tier <= 0:
+		return node.short_label
+	if level > 0:
 		return "%s\nON" % node.short_label
 	if node.cost <= 0:
-		return "%s\nFREE" % node.short_label
-	return "%s\n%dG" % [node.short_label, node.cost]
+		return "%s\n무료" % node.short_label
+	return "%s\n%dG" % [node.short_label, GameState.skill_node_purchase_cost(node.id)]
 
 
-func _tooltip_text(node) -> String:
-	var state: String = "습득 완료" if GameState.has_skill_node(node.id) else "잠김"
-	if not GameState.has_skill_node(node.id) and GameState.can_unlock_skill_node(node.id):
-		state = "구매 가능"
-	return "%s\n%s | 비용 %dG\n%s" % [node.display_name, state, node.cost, node.description]
+func _tooltip_status_parts(node) -> Array:
+	var level: int = GameState.skill_node_level(node.id)
+	var max_level: int = int(node.max_level)
+	if level >= max_level:
+		if max_level > 1:
+			return ["최대 레벨 · Lv %d/%d" % [level, max_level], Color(1.0, 0.84, 0.4, 1.0)]
+		return ["습득 완료", Color(1.0, 0.84, 0.4, 1.0)]
+	var cost: int = GameState.skill_node_purchase_cost(node.id)
+	var cost_text: String = "무료" if cost <= 0 else "%dG" % cost
+	if GameState.can_purchase_skill_node(node.id):
+		if level > 0 and max_level > 1:
+			return ["강화 가능 · Lv %d/%d · %s" % [level + 1, max_level, cost_text], Color(0.5, 0.9, 0.95, 1.0)]
+		return ["구매 가능 · %s" % cost_text, Color(0.5, 0.9, 0.95, 1.0)]
+	if GameState.can_unlock_skill_node(node.id):
+		if level > 0 and max_level > 1:
+			return ["골드 부족 · Lv %d/%d · %s" % [level + 1, max_level, cost_text], Color(0.93, 0.56, 0.42, 1.0)]
+		return ["골드 부족 · %s" % cost_text, Color(0.93, 0.56, 0.42, 1.0)]
+	return ["잠김 · %s" % cost_text, Color(0.62, 0.65, 0.65, 1.0)]
 
 
-func _apply_button_style(button: Button, owned: bool, available: bool, can_buy: bool) -> void:
-	var border: Color = Color.WHITE
+## Fills the tooltip window for a node and sizes it to its content. Returns the
+## final panel size so callers can place it without clipping the viewport.
+func _layout_tooltip(node) -> Vector2:
+	var inner_w: float = TOOLTIP_WIDTH - TOOLTIP_PAD.x * 2.0
+	var status_parts: Array = _tooltip_status_parts(node)
+	_tooltip_title.text = node.display_name
+	_tooltip_status.text = str(status_parts[0])
+	_tooltip_status.add_theme_color_override("font_color", status_parts[1])
+	_tooltip_desc.text = node.description
+
+	var title_h: float = ceilf(TOWN_UI_FONT.get_multiline_string_size(
+		_tooltip_title.text, HORIZONTAL_ALIGNMENT_CENTER, inner_w, 11).y)
+	var status_h: float = ceilf(TOWN_UI_FONT.get_multiline_string_size(
+		_tooltip_status.text, HORIZONTAL_ALIGNMENT_CENTER, inner_w, 8).y)
+	var desc_h: float = ceilf(TOWN_UI_FONT.get_multiline_string_size(
+		_tooltip_desc.text, HORIZONTAL_ALIGNMENT_LEFT, inner_w, 9).y)
+
+	var y: float = TOOLTIP_PAD.y
+	_tooltip_title.position = Vector2(TOOLTIP_PAD.x, y)
+	_tooltip_title.size = Vector2(inner_w, title_h)
+	y += title_h + 3.0
+	_tooltip_status.position = Vector2(TOOLTIP_PAD.x, y)
+	_tooltip_status.size = Vector2(inner_w, status_h)
+	y += status_h + 4.0
+	_tooltip_rule.position = Vector2(TOOLTIP_PAD.x, y)
+	_tooltip_rule.size = Vector2(inner_w, 1.0)
+	y += 1.0 + 5.0
+	_tooltip_desc.position = Vector2(TOOLTIP_PAD.x, y)
+	_tooltip_desc.size = Vector2(inner_w, desc_h)
+	y += desc_h + TOOLTIP_PAD.y
+
+	var panel_size := Vector2(TOOLTIP_WIDTH, y)
+	_tooltip_panel.size = panel_size
+	return panel_size
+
+
+func _apply_button_style(button: Button, node, owned: bool, available: bool, can_buy: bool) -> void:
+	var bw: int = int(NODE_BORDER_BY_TIER.get(node.tier, 2))
+	var corner: int = int(NODE_CORNER_BY_TIER.get(node.tier, 2))
+	var is_major: bool = node.tier >= 2
+	var border: Color = Color(0.32, 0.38, 0.4, 1.0)
 	var bg: Color = Color(0.12, 0.16, 0.17, 1.0)
 	var hover_bg: Color = Color(0.2, 0.25, 0.26, 1.0)
 	var pressed_bg: Color = Color(0.08, 0.11, 0.12, 1.0)
 	var focus_bg: Color = Color(0.24, 0.3, 0.31, 1.0)
 	var text: Color = Color(0.62, 0.66, 0.66, 1.0)
 	if owned:
+		border = Color(1.0, 0.92, 0.62, 1.0)
 		bg = Color(0.95, 0.63, 0.18, 1.0)
 		hover_bg = Color(1.0, 0.74, 0.28, 1.0)
 		pressed_bg = Color(0.72, 0.43, 0.09, 1.0)
 		focus_bg = Color(1.0, 0.78, 0.32, 1.0)
 		text = Color(0.08, 0.05, 0.02, 1.0)
 	elif can_buy:
+		border = Color(0.72, 0.96, 1.0, 1.0)
 		bg = Color(0.28, 0.68, 0.72, 1.0)
 		hover_bg = Color(0.38, 0.82, 0.86, 1.0)
 		pressed_bg = Color(0.17, 0.46, 0.5, 1.0)
 		focus_bg = Color(0.44, 0.9, 0.94, 1.0)
 		text = Color(0.02, 0.07, 0.08, 1.0)
 	elif available:
+		border = Color(0.82, 0.86, 0.84, 1.0)
 		bg = Color(0.4, 0.45, 0.44, 1.0)
 		hover_bg = Color(0.52, 0.58, 0.56, 1.0)
 		pressed_bg = Color(0.28, 0.32, 0.31, 1.0)
 		focus_bg = Color(0.58, 0.64, 0.62, 1.0)
 		text = Color(1.0, 0.78, 0.22, 1.0)
-	var normal := _style(bg, border, 2)
-	var hover := _style(hover_bg, border, 2)
-	var focus := _style(focus_bg, border, 3)
+	elif is_major:
+		# Locked major nodes still glint gold so milestones read as important.
+		border = Color(0.55, 0.45, 0.24, 1.0)
+	var normal := _style(bg, border, bw, corner)
+	var hover := _style(hover_bg, border, bw, corner)
+	var focus := _style(focus_bg, border, bw + 1, corner)
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", _style(pressed_bg, border, 2))
+	button.add_theme_stylebox_override("pressed", _style(pressed_bg, border, bw, corner))
 	button.add_theme_stylebox_override("focus", focus)
 	button.add_theme_stylebox_override("disabled", normal)
 	button.add_theme_color_override("font_color", text)
@@ -238,29 +359,8 @@ func _apply_button_style(button: Button, owned: bool, available: bool, can_buy: 
 
 
 func _apply_button_visibility(button: Button, node) -> void:
-	var shown_normally: bool = _is_node_shown_normally(node)
-	button.modulate.a = 1.0 if shown_normally else _tree_detail_alpha
-	button.mouse_filter = Control.MOUSE_FILTER_PASS if shown_normally or _tree_detail_alpha > 0.12 else Control.MOUSE_FILTER_IGNORE
-
-
-func _is_node_shown_normally(node) -> bool:
-	if node == null:
-		return false
-	if node.id == ROOT_NODE_ID:
-		return true
-	return GameState.has_skill_node(node.id) or GameState.can_purchase_skill_node(node.id)
-
-
-func _update_tree_detail_reveal(delta: float) -> void:
-	var next_alpha: float = move_toward(_tree_detail_alpha, _tree_detail_target_alpha, TREE_DETAIL_FADE_SPEED * delta)
-	if is_equal_approx(next_alpha, _tree_detail_alpha):
-		return
-	_tree_detail_alpha = next_alpha
-	for node in SkillTreeDB.get_all():
-		var button := _buttons_by_id.get(node.id, null) as Button
-		if button:
-			_apply_button_visibility(button, node)
-	queue_redraw()
+	button.modulate.a = 1.0
+	button.mouse_filter = Control.MOUSE_FILTER_PASS
 
 
 func _apply_icon_node(button: Button) -> void:
@@ -271,6 +371,18 @@ func _apply_icon_node(button: Button) -> void:
 	button.add_theme_stylebox_override("pressed", _icon_style())
 	button.add_theme_stylebox_override("focus", _icon_focus_style())
 	button.add_theme_stylebox_override("disabled", _icon_style())
+	button.add_theme_color_override("icon_normal_color", Color.WHITE)
+	button.add_theme_color_override("icon_hover_color", Color.WHITE)
+	button.add_theme_color_override("icon_pressed_color", Color.WHITE)
+	button.add_theme_color_override("icon_focus_color", Color.WHITE)
+	button.add_theme_color_override("icon_disabled_color", Color.WHITE)
+
+
+func _apply_forest_node(button: Button, node, owned: bool, available: bool, can_buy: bool) -> void:
+	button.text = ""
+	button.icon = FOREST_ICON
+	button.expand_icon = false
+	_apply_button_style(button, node, owned, available, can_buy)
 	button.add_theme_color_override("icon_normal_color", Color.WHITE)
 	button.add_theme_color_override("icon_hover_color", Color.WHITE)
 	button.add_theme_color_override("icon_pressed_color", Color.WHITE)
@@ -458,7 +570,7 @@ func _speech_bubble_style() -> StyleBoxFlat:
 	return style
 
 
-func _style(bg: Color, border: Color, border_width: int) -> StyleBoxFlat:
+func _style(bg: Color, border: Color, border_width: int, corner: int = 2) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg
 	style.border_color = border
@@ -466,10 +578,10 @@ func _style(bg: Color, border: Color, border_width: int) -> StyleBoxFlat:
 	style.border_width_top = border_width
 	style.border_width_right = border_width
 	style.border_width_bottom = border_width
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
+	style.corner_radius_top_left = corner
+	style.corner_radius_top_right = corner
+	style.corner_radius_bottom_left = corner
+	style.corner_radius_bottom_right = corner
 	return style
 
 
@@ -495,10 +607,7 @@ func _icon_focus_style() -> StyleBoxFlat:
 
 
 func _draw_connection(from: Vector2, to: Vector2, color: Color) -> void:
-	if _tree_detail_alpha <= 0.01:
-		return
 	var line_width: float = maxf(1.0, 3.0 * _tree_zoom)
-	color.a *= _tree_detail_alpha
 	draw_line(from, to, color, line_width)
 
 
@@ -520,7 +629,6 @@ func _tooltip_style() -> StyleBoxFlat:
 func _on_button_mouse_entered(button: Button, node) -> void:
 	_hovered_button = button
 	_hovered_node = node
-	_tree_detail_target_alpha = 1.0
 	_show_node_tooltip(button, node)
 	_play_hover_pop(button)
 
@@ -529,25 +637,23 @@ func _on_button_mouse_exited(button: Button) -> void:
 	if _hovered_button == button:
 		_hovered_button = null
 		_hovered_node = null
-		_tree_detail_target_alpha = 0.0
 	_hide_node_tooltip()
 	_stop_hover_pop(button)
 
 
 func _show_node_tooltip(button: Button, node) -> void:
-	_tooltip_label.text = _tooltip_text(node)
-	_tooltip_panel.size = TOOLTIP_SIZE
+	var tip_size: Vector2 = _layout_tooltip(node)
 	var button_top_left: Vector2 = _tree_to_view(button.position)
 	var button_center: Vector2 = _tree_to_view(button.position + button.size * 0.5)
 	var scaled_button_height: float = button.size.y * _tree_zoom
 	var bounds: Vector2 = get_viewport_rect().size
-	var prefer_below: bool = button_top_left.y - TOOLTIP_SIZE.y - TOOLTIP_GAP < 8.0
+	var prefer_below: bool = button_top_left.y - tip_size.y - TOOLTIP_GAP < 8.0
 	var target := Vector2(
-		button_center.x - TOOLTIP_SIZE.x * 0.5,
-		button_top_left.y + scaled_button_height + TOOLTIP_GAP if prefer_below else button_top_left.y - TOOLTIP_SIZE.y - TOOLTIP_GAP
+		button_center.x - tip_size.x * 0.5,
+		button_top_left.y + scaled_button_height + TOOLTIP_GAP if prefer_below else button_top_left.y - tip_size.y - TOOLTIP_GAP
 	)
-	target.x = clampf(target.x, 8.0, maxf(8.0, bounds.x - TOOLTIP_SIZE.x - 8.0))
-	target.y = clampf(target.y, 8.0, maxf(8.0, bounds.y - TOOLTIP_SIZE.y - 8.0))
+	target.x = clampf(target.x, 8.0, maxf(8.0, bounds.x - tip_size.x - 8.0))
+	target.y = clampf(target.y, 8.0, maxf(8.0, bounds.y - tip_size.y - 8.0))
 	_tooltip_panel.position = target
 	_tooltip_panel.visible = true
 	_tooltip_panel.modulate = Color.WHITE

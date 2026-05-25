@@ -196,7 +196,7 @@ func _build_loop_report_lines(loop_num: int) -> PackedStringArray:
 	var net_gold: int = GameState.gold - _current_loop_gold_start
 	var lines: PackedStringArray = []
 	lines.append("Field Loop %d" % loop_num)
-	lines.append("Region: %s" % GameState.field_region_name())
+	lines.append("Region: %s" % GameState.current_field_region_display_name())
 	lines.append("Time: %.1fs" % elapsed_sec)
 	lines.append("Battles: %d opened / %d cleared" % [_current_loop_battles_started, _current_loop_battles_cleared])
 	lines.append("Enemies defeated: %d%s" % [_current_loop_enemies_killed, _enemy_breakdown_text()])

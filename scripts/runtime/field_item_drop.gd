@@ -17,6 +17,7 @@ const DROP_MAGNET_DURATION_MIN: float = 0.18
 const DROP_MAGNET_DURATION_MAX: float = 0.46
 const DROP_MAGNET_ARC_HEIGHT: float = 12.0
 const DROP_MAGNET_SIDE_SWAY: float = 5.0
+const DROP_SHADOW_ALPHA: float = 0.28
 
 @export var item: ItemData
 @export var gold_amount: int = 0
@@ -36,7 +37,7 @@ var _magnet_duration: float = 0.0
 var _magnet_start: Vector2 = Vector2.ZERO
 var _magnet_phase: float = 0.0
 var _magnet_target: Node2D
-var _gold_shadow: Polygon2D
+var _drop_shadow: Polygon2D
 
 
 func _ready() -> void:
@@ -62,21 +63,27 @@ func setup_gold_drop(amount: int) -> void:
 
 func reveal_with_pop() -> void:
 	_set_pickup_collision_enabled(false)
+	scale = Vector2.ONE
 	if gold_amount > 0:
 		_play_gold_drop_motion()
 		return
-	scale = Vector2(0.4, 0.4)
 	modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_sprite.scale = Vector2(0.82, 0.82)
+	_sprite.position = Vector2(0.0, -5.0)
+	_set_drop_shadow_alpha(0.0)
+	_set_drop_shadow_scale(0.72)
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	_tween = create_tween()
 	_tween.tween_property(self, "modulate:a", 1.0, 0.10)
-	_tween.parallel().tween_property(self, "scale", Vector2(1.18, 0.82), 0.14)\
+	_tween.parallel().tween_property(_sprite, "scale", Vector2.ONE, 0.18)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_OUT)
-	_tween.tween_property(self, "scale", Vector2.ONE, 0.16)\
+	_tween.parallel().tween_property(_sprite, "position", Vector2.ZERO, 0.18)\
 		.set_trans(Tween.TRANS_BACK)\
 		.set_ease(Tween.EASE_OUT)
+	_tween.parallel().tween_method(_set_drop_shadow_alpha, 0.0, DROP_SHADOW_ALPHA, 0.18)
+	_tween.parallel().tween_method(_set_drop_shadow_scale, 0.72, 1.0, 0.18)
 	_tween.tween_callback(_on_reveal_finished)
 
 
@@ -100,10 +107,12 @@ func _apply_item() -> void:
 		return
 	if gold_amount > 0:
 		_sprite.texture = GOLD_TEXTURE
-		_ensure_gold_shadow()
+		_ensure_drop_shadow()
 	elif item and item.icon:
 		_sprite.texture = item.icon
-		_hide_gold_shadow()
+		_ensure_drop_shadow()
+		_set_drop_shadow_alpha(DROP_SHADOW_ALPHA)
+		_set_drop_shadow_scale(1.0)
 	_refresh_tooltip()
 
 
@@ -144,7 +153,7 @@ func _collect_gold() -> void:
 func _play_gold_drop_motion() -> void:
 	_collected = true
 	_magnet_active = false
-	_ensure_gold_shadow()
+	_ensure_drop_shadow()
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	var landed_position: Vector2 = position
@@ -153,26 +162,24 @@ func _play_gold_drop_motion() -> void:
 		-randf_range(GOLD_DROP_HEIGHT_MIN, GOLD_DROP_HEIGHT_MAX)
 	)
 	rotation = randf_range(-0.12, 0.12)
-	scale = Vector2(0.82, 0.82)
+	scale = Vector2.ONE
+	_sprite.scale = Vector2.ONE
 	modulate = Color(1.0, 1.0, 1.0, 0.0)
-	_set_gold_shadow_alpha(0.0)
-	_set_gold_shadow_scale(0.55)
+	_set_drop_shadow_alpha(0.0)
+	_set_drop_shadow_scale(0.55)
 	_tween = create_tween().set_parallel(true)
 	_tween.tween_property(self, "position", landed_position, GOLD_DROP_DURATION)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_IN)
 	_tween.tween_property(self, "modulate:a", 1.0, 0.08)
-	_tween.tween_property(self, "scale", Vector2(1.06, 0.94), GOLD_DROP_DURATION)\
-		.set_trans(Tween.TRANS_QUAD)\
-		.set_ease(Tween.EASE_IN)
 	_tween.tween_property(self, "rotation", randf_range(-0.08, 0.08), GOLD_DROP_DURATION)
-	if _gold_shadow:
-		_tween.tween_method(_set_gold_shadow_alpha, 0.0, 0.34, GOLD_DROP_DURATION)
-		_tween.tween_method(_set_gold_shadow_scale, 0.55, 1.0, GOLD_DROP_DURATION)
-	_tween.chain().tween_property(self, "scale", Vector2(1.12, 0.86), GOLD_LAND_SETTLE_DURATION * 0.45)\
+	if _drop_shadow:
+		_tween.tween_method(_set_drop_shadow_alpha, 0.0, DROP_SHADOW_ALPHA, GOLD_DROP_DURATION)
+		_tween.tween_method(_set_drop_shadow_scale, 0.55, 1.0, GOLD_DROP_DURATION)
+	_tween.chain().tween_property(_sprite, "scale", Vector2(1.0, 0.88), GOLD_LAND_SETTLE_DURATION * 0.45)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_OUT)
-	_tween.tween_property(self, "scale", Vector2.ONE, GOLD_LAND_SETTLE_DURATION * 0.55)\
+	_tween.tween_property(_sprite, "scale", Vector2.ONE, GOLD_LAND_SETTLE_DURATION * 0.55)\
 		.set_trans(Tween.TRANS_BACK)\
 		.set_ease(Tween.EASE_OUT)
 	_tween.tween_callback(_finish_drop_motion)
@@ -226,8 +233,8 @@ func _update_drop_magnet(delta: float) -> void:
 	rotation = sin(raw_t * PI * 1.4 + _magnet_phase) * 0.16
 	scale = Vector2.ONE * lerpf(1.0, 0.42, eased_t)
 	modulate.a = lerpf(1.0, 0.18, maxf(0.0, raw_t - 0.78) / 0.22)
-	_set_gold_shadow_alpha(lerpf(0.34, 0.0, raw_t))
-	_set_gold_shadow_scale(lerpf(1.0, 0.25, raw_t))
+	_set_drop_shadow_alpha(lerpf(DROP_SHADOW_ALPHA, 0.0, raw_t))
+	_set_drop_shadow_scale(lerpf(1.0, 0.25, raw_t))
 	if raw_t >= 1.0:
 		_finish_magnet_collect()
 
@@ -250,14 +257,14 @@ func _finish_magnet_collect() -> void:
 	scale = Vector2.ONE
 
 
-func _ensure_gold_shadow() -> void:
-	if _gold_shadow:
+func _ensure_drop_shadow() -> void:
+	if _drop_shadow:
 		return
-	_gold_shadow = Polygon2D.new()
-	_gold_shadow.name = "GoldShadow"
-	_gold_shadow.z_index = -1
-	_gold_shadow.position = Vector2(0, 5)
-	_gold_shadow.polygon = PackedVector2Array([
+	_drop_shadow = Polygon2D.new()
+	_drop_shadow.name = "DropShadow"
+	_drop_shadow.z_index = -1
+	_drop_shadow.position = Vector2(3, 5)
+	_drop_shadow.polygon = PackedVector2Array([
 		Vector2(-6, 0),
 		Vector2(-4, -2),
 		Vector2(0, -3),
@@ -267,25 +274,20 @@ func _ensure_gold_shadow() -> void:
 		Vector2(0, 3),
 		Vector2(-4, 2),
 	])
-	_gold_shadow.color = Color(0, 0, 0, 0.0)
-	add_child(_gold_shadow)
+	_drop_shadow.color = Color(0, 0, 0, 0.0)
+	add_child(_drop_shadow)
 
 
-func _hide_gold_shadow() -> void:
-	if _gold_shadow:
-		_gold_shadow.visible = false
-
-
-func _set_gold_shadow_alpha(alpha: float) -> void:
-	if _gold_shadow == null:
+func _set_drop_shadow_alpha(alpha: float) -> void:
+	if _drop_shadow == null:
 		return
-	_gold_shadow.visible = alpha > 0.0
-	_gold_shadow.color = Color(0, 0, 0, alpha)
+	_drop_shadow.visible = alpha > 0.0
+	_drop_shadow.color = Color(0, 0, 0, alpha)
 
 
-func _set_gold_shadow_scale(value: float) -> void:
-	if _gold_shadow:
-		_gold_shadow.scale = Vector2(value, value)
+func _set_drop_shadow_scale(value: float) -> void:
+	if _drop_shadow:
+		_drop_shadow.scale = Vector2(value, value)
 
 
 func _set_pickup_collision_enabled(enabled: bool) -> void:
@@ -300,9 +302,10 @@ func _play_collect_animation() -> void:
 		_tween.kill()
 	_tween = create_tween().set_parallel(true)
 	_tween.tween_property(self, "modulate:a", 0.0, 0.18)
-	_tween.tween_property(self, "scale", Vector2(1.4, 0.6), 0.18)\
+	_tween.tween_property(_sprite, "scale", Vector2(1.2, 0.62), 0.18)\
 		.set_trans(Tween.TRANS_BACK)\
 		.set_ease(Tween.EASE_IN)
+	_tween.tween_method(_set_drop_shadow_alpha, DROP_SHADOW_ALPHA, 0.0, 0.18)
 	_tween.chain().tween_callback(queue_free)
 
 

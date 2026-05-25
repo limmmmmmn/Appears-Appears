@@ -8,6 +8,9 @@ extends Node
 ## Player collided with an enemy on the field. Triggers a battle_window spawn.
 signal enemy_encountered(enemy: Node)
 
+## A party combo attack should damage the battle windows opened by that combo.
+signal combo_attack_damage_requested(damage_ratio: float, combo_batch_id: int)
+
 ## Player stepped onto the home-base field tile. Main handles the scene transition.
 signal town_entered(tile: Node)
 

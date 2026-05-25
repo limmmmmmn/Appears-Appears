@@ -373,6 +373,19 @@ func _build_spawn_sparkle() -> Node2D:
 func _on_body_entered(body: Node) -> void:
 	if _triggered or _spawning or body is not Player:
 		return
+	_trigger_encounter(false)
+
+
+func trigger_combo_encounter(combo_batch_id: int) -> void:
+	if _triggered or _spawning or _despawning:
+		return
+	_trigger_encounter(true, combo_batch_id)
+
+
+func _trigger_encounter(is_combo_encounter: bool, combo_batch_id: int = 0) -> void:
 	_triggered = true
+	if is_combo_encounter:
+		set_meta("combo_encounter", true)
+		set_meta("combo_batch_id", combo_batch_id)
 	EventBus.enemy_encountered.emit(self)
 	queue_free()

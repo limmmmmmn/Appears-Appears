@@ -39,6 +39,7 @@ var _settle_timer: float = 0.0
 
 func _ready() -> void:
 	EventBus.enemy_encountered.connect(_on_enemy_encountered)
+	EventBus.combo_attack_damage_requested.connect(_on_combo_attack_damage_requested)
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
 	EventBus.party_wiped.connect(_on_party_wiped)
 
@@ -64,9 +65,12 @@ func _on_enemy_encountered(field_enemy: Node) -> void:
 	if data == null:
 		return
 	var source := field_enemy as Node2D
-	var is_modal_battle: bool = not GameState.battle_movement_unlocked()
-	spawn_battle(data, source, is_modal_battle)
-	if is_modal_battle:
+	var is_combo_encounter: bool = bool(field_enemy.get_meta("combo_encounter", false))
+	var is_modal_battle: bool = not is_combo_encounter and not GameState.battle_movement_unlocked()
+	var window: BattleWindow = spawn_battle(data, source, is_modal_battle, is_combo_encounter)
+	if is_combo_encounter and window:
+		window.set_meta("combo_batch_id", int(field_enemy.get_meta("combo_batch_id", 0)))
+	if is_modal_battle or is_combo_encounter:
 		return
 	# Echo Strike & friends: roll for bonus duplicate windows.
 	var extras: int = GameState.roll_window_duplicates()
@@ -74,17 +78,25 @@ func _on_enemy_encountered(field_enemy: Node) -> void:
 		spawn_battle(data, source)
 
 
+func _on_combo_attack_damage_requested(damage_ratio: float, combo_batch_id: int) -> void:
+	if damage_ratio <= 0.0 or combo_batch_id <= 0:
+		return
+	for window: BattleWindow in _window_rects.keys():
+		if is_instance_valid(window) and int(window.get_meta("combo_batch_id", 0)) == combo_batch_id:
+			window.apply_window_collision_damage(damage_ratio, "Combo attack")
+
+
 ## Public API. Used by enemy_encountered handler and debug helpers.
-func spawn_battle(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false) -> void:
-	_spawn_window(data, source, is_modal_battle)
+func spawn_battle(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false, at_source_position: bool = false) -> BattleWindow:
+	return _spawn_window(data, source, is_modal_battle, at_source_position)
 
 
-func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false) -> void:
+func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false, at_source_position: bool = false) -> BattleWindow:
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
 	var field_drop_position: Vector2 = source.global_position if source != null and is_instance_valid(source) else Vector2.INF
 	window.setup(data, field_drop_position, MODAL_WINDOW_SIZE_MULTIPLIER if is_modal_battle else 1.0)
 	var window_size: Vector2 = window.get_expected_window_size()
-	var spawn_position: Vector2 = _centered_modal_position(window_size) if is_modal_battle else _spawn_position_for_encounter(window_size, source)
+	var spawn_position: Vector2 = _centered_modal_position(window_size) if is_modal_battle else _spawn_position_for_encounter(window_size, source, at_source_position)
 	window.position = spawn_position
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
@@ -94,6 +106,7 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 	add_child(window)
 	if not is_modal_battle:
 		_apply_window_push(0.0, true)
+	return window
 
 
 func _centered_modal_position(window_size: Vector2) -> Vector2:
@@ -102,9 +115,11 @@ func _centered_modal_position(window_size: Vector2) -> Vector2:
 
 
 # ─── Window drift ─────────────────────────────────────────────────────
-func _spawn_position_for_encounter(window_size: Vector2, source: Node2D) -> Vector2:
+func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, at_source_position: bool = false) -> Vector2:
 	if source == null or not is_instance_valid(source):
 		return _random_spawn_position(window_size)
+	if at_source_position:
+		return _clamped_position(source.global_position - window_size * 0.5, window_size)
 	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
 		return _clamped_position(_visible_world_rect().get_center() + SPAWN_CENTER_OFFSET, window_size)

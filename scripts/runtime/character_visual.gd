@@ -15,6 +15,7 @@ const WALK_CYCLE: Array[int] = [0, 1, 2, 1]
 
 @export var character_data: CharacterData
 @export var idle_col: int = 1
+@export var diagonal_vertical_bias: float = 0.65
 
 var _dir: Dir = Dir.DOWN
 var _step: int = 0
@@ -56,8 +57,15 @@ func set_velocity(v: Vector2) -> void:
 			_show_idle()
 		return
 	_moving = true
-	# Pick the dominant axis. Ties favor the vertical axis (JRPG feel).
-	if absf(v.x) > absf(v.y):
+	var abs_x: float = absf(v.x)
+	var abs_y: float = absf(v.y)
+	var minor_axis: float = minf(abs_x, abs_y)
+	var major_axis: float = maxf(abs_x, abs_y)
+	# Near-diagonal movement favors vertical facing, which keeps low-speed
+	# party followers from flickering left/right while they trail the path.
+	if major_axis > 0.0 and minor_axis / major_axis >= diagonal_vertical_bias:
+		_dir = Dir.DOWN if v.y > 0 else Dir.UP
+	elif abs_x > abs_y:
 		_dir = Dir.RIGHT if v.x > 0 else Dir.LEFT
 	else:
 		_dir = Dir.DOWN if v.y > 0 else Dir.UP

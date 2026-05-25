@@ -277,6 +277,8 @@ func _spawn_window_damage_number(amount: int, label_prefix: String) -> void:
 
 
 func _window_damage_label(log_prefix: String) -> String:
+	if log_prefix.to_lower().contains("combo"):
+		return "COMBO"
 	if log_prefix.to_lower().contains("bump"):
 		return "BUMP"
 	return "CRASH"

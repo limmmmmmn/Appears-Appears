@@ -29,6 +29,9 @@ var _move_speed_boost_multiplier: float = 1.0
 var _move_speed_boost_until_msec: int = 0
 var _field_battle_pause_count: int = 0
 
+const FIELD_REGION_GRASS: StringName = &"grass"
+const FIELD_REGION_FOREST: StringName = &"forest"
+
 # ─── Economy ──────────────────────────────────────────────────────────
 const STARTING_GOLD: int = 0
 
@@ -45,6 +48,7 @@ var recruited_companions: Array[ModifierData] = []
 
 # ─── Progression ──────────────────────────────────────────────────────
 var field_loop_count: int = 0
+var current_field_region_id: StringName = FIELD_REGION_GRASS
 
 const FIELD_REGION_MILESTONES: Array[Dictionary] = [
 	{"name": "초원", "gold": 0, "nodes": 0},
@@ -73,6 +77,7 @@ const LEVEL_GROWTH_BY_CHARACTER_ID: Dictionary = {
 	&"hero": {"hp": 5, "atk": 2, "def": 1, "agi": 1},
 	&"elf": {"hp": 4, "atk": 2, "def": 1, "agi": 2},
 	&"mage": {"hp": 3, "atk": 3, "def": 0, "agi": 1},
+	&"knight": {"hp": 6, "atk": 2, "def": 2, "agi": 0},
 	&"priest": {"hp": 5, "atk": 1, "def": 1, "agi": 1},
 	&"thief": {"hp": 3, "atk": 2, "def": 0, "agi": 2},
 }
@@ -328,11 +333,24 @@ func can_purchase_skill_node(node_id: StringName) -> bool:
 	var node = SkillTreeDB.get_by_id(node_id)
 	if node == null or not can_unlock_skill_node(node.id):
 		return false
-	if gold < node.cost:
+	if gold < skill_node_purchase_cost(node.id):
 		return false
 	if node.linked_modifier and not can_add_modifier(node.linked_modifier):
 		return false
 	return true
+
+
+func skill_node_purchase_cost(node_id: StringName) -> int:
+	var node = SkillTreeDB.get_by_id(node_id)
+	if node == null:
+		return 0
+	if node.max_level <= 1:
+		return node.cost
+	var level: int = clampi(skill_node_level(node.id), 0, node.max_level - 1)
+	if level == 0:
+		return node.cost
+	var raw_cost: float = float(node.cost) * _price_multiplier_for_level(level)
+	return maxi(node.cost, ceili(raw_cost / 5.0) * 5)
 
 
 func purchase_skill_node(node_id: StringName) -> bool:
@@ -343,7 +361,7 @@ func purchase_skill_node(node_id: StringName) -> bool:
 	if not can_purchase_skill_node(node.id):
 		EventBus.skill_node_purchase_failed.emit(node)
 		return false
-	if not spend_gold(node.cost):
+	if not spend_gold(skill_node_purchase_cost(node.id)):
 		EventBus.skill_node_purchase_failed.emit(node)
 		return false
 	purchased_skill_nodes[node.id] = skill_node_level(node.id) + 1
@@ -355,31 +373,38 @@ func purchase_skill_node(node_id: StringName) -> bool:
 
 
 func skill_effect_bool(key: String) -> bool:
-	for node in _purchased_skill_node_data():
-		if bool(node.effect_data.get(key, false)):
+	for id in purchased_skill_nodes.keys():
+		var node = SkillTreeDB.get_by_id(id)
+		if node and skill_node_level(id) > 0 and bool(node.effect_data.get(key, false)):
 			return true
 	return false
 
 
 func skill_effect_int_sum(key: String) -> int:
 	var total: int = 0
-	for node in _purchased_skill_node_data():
-		total += int(node.effect_data.get(key, 0))
+	for id in purchased_skill_nodes.keys():
+		var node = SkillTreeDB.get_by_id(id)
+		if node:
+			total += int(node.effect_data.get(key, 0)) * skill_node_level(id)
 	return total
 
 
 func skill_effect_float_sum(key: String) -> float:
 	var total: float = 0.0
-	for node in _purchased_skill_node_data():
-		total += float(node.effect_data.get(key, 0.0))
+	for id in purchased_skill_nodes.keys():
+		var node = SkillTreeDB.get_by_id(id)
+		if node:
+			total += float(node.effect_data.get(key, 0.0)) * float(skill_node_level(id))
 	return total
 
 
 func skill_effect_float_product(key: String, default_value: float = 1.0) -> float:
 	var value: float = default_value
-	for node in _purchased_skill_node_data():
-		if node.effect_data.has(key):
-			value *= float(node.effect_data[key])
+	for id in purchased_skill_nodes.keys():
+		var node = SkillTreeDB.get_by_id(id)
+		if node and node.effect_data.has(key):
+			for i in skill_node_level(id):
+				value *= float(node.effect_data[key])
 	return value
 
 
@@ -405,6 +430,16 @@ func field_spawn_interval_multiplier() -> float:
 
 func field_size_multiplier() -> float:
 	return maxf(1.0, skill_effect_float_product("field_size_mult"))
+
+
+func forest_region_unlocked() -> bool:
+	return skill_effect_bool("forest_region_unlocked") or has_skill_node(&"forest_region")
+
+
+func current_field_region_display_name() -> String:
+	if current_field_region_id == FIELD_REGION_FOREST:
+		return "숲"
+	return "초원"
 
 
 func gold_drops_enabled() -> bool:
@@ -433,6 +468,10 @@ func pickup_range_multiplier() -> float:
 
 func battle_movement_unlocked() -> bool:
 	return has_skill_node(&"battle_movement") or skill_effect_bool("battle_movement_enabled")
+
+
+func combo_attack_unlocked() -> bool:
+	return has_skill_node(&"combo_attack") or skill_effect_bool("combo_attack_enabled")
 
 
 func begin_field_battle_pause() -> void:
@@ -612,9 +651,16 @@ func modifier_level(modifier_id: StringName) -> int:
 
 
 # ─── Field Loop ───────────────────────────────────────────────────────
-func start_next_field_loop() -> void:
+func start_next_field_loop(region_id: StringName = FIELD_REGION_GRASS) -> void:
+	current_field_region_id = _validated_field_region(region_id)
 	field_loop_count += 1
 	EventBus.field_loop_started.emit(field_loop_count)
+
+
+func _validated_field_region(region_id: StringName) -> StringName:
+	if region_id == FIELD_REGION_FOREST and forest_region_unlocked():
+		return FIELD_REGION_FOREST
+	return FIELD_REGION_GRASS
 
 
 # ─── Enemy scaling ────────────────────────────────────────────────────
@@ -813,6 +859,7 @@ func _character_display_name(character_id: StringName) -> String:
 		&"hero": return "Hero"
 		&"elf": return "Elf"
 		&"mage": return "Mage"
+		&"knight": return "Knight"
 		&"priest": return "Priest"
 		&"thief": return "Thief"
 	return String(character_id).capitalize()
@@ -1082,7 +1129,7 @@ func effective_agility(index: int) -> int:
 
 
 func effective_move_speed(base_speed: float) -> float:
-	var flat_bonus: float = float(_stacked_int_effect("move_speed_flat"))
+	var flat_bonus: float = float(_stacked_int_effect("move_speed_flat") + skill_effect_int_sum("move_speed_flat"))
 	var mult_bonus: float = 0.0
 	for mod: ModifierData in active_modifiers:
 		mult_bonus += float(mod.effect_data.get("move_speed_mult", 0.0))
@@ -1269,6 +1316,7 @@ func reset_run() -> void:
 	_move_speed_boost_until_msec = 0
 	_field_battle_pause_count = 0
 	field_loop_count = 0
+	current_field_region_id = FIELD_REGION_GRASS
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).
 	EventBus.gold_changed.emit(gold)

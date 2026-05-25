@@ -1,24 +1,22 @@
 class_name Companion
 extends Node2D
 
-## A non-combatant party member that trails a leader (player or another companion).
-## Pure visual — no physics body, no collision. Lerps toward the leader and
-## animates the sprite sheet via CharacterVisual.
+## A non-combatant party member that follows the player's path like a classic
+## JRPG party line. Pure visual — no physics body, no collision.
 
-@export var follow_distance: float = 14.0
-@export var leader_follow_distance: float = 22.0
-@export var max_gap: float = 28.0
-@export var leader_max_gap: float = 40.0
-@export var max_speed: float = 160.0
-@export var catch_up_factor: float = 9.0  ## higher = snappier catch-up
-@export var leader_speed_margin: float = 28.0
-@export var trail_min_step: float = 1.0
-@export var trail_max_points: int = 36
+@export var follow_spacing: float = 18.0
+@export var trail_min_step: float = 0.5
+@export var trail_max_points: int = 240
+@export var diagonal_trail_step: float = 0.5
+@export var max_speed: float = 180.0
+@export var catch_up_factor: float = 12.0  ## higher = snappier catch-up
+@export var stop_distance: float = 0.5
 
-var leader: Node2D
+var player: CharacterBody2D
+var slot_index: int = 1
 var _pending_data: CharacterData
 var _last_position: Vector2
-var _leader_trail: Array[Vector2] = []
+var _player_trail: Array[Vector2] = []
 
 @onready var _visual: CharacterVisual = $Visual
 
@@ -26,6 +24,7 @@ var _leader_trail: Array[Vector2] = []
 func _ready() -> void:
 	add_to_group("party_member")
 	_last_position = global_position
+	_seed_trail()
 	if _pending_data:
 		_visual.setup(_pending_data)
 
@@ -38,71 +37,73 @@ func setup(data: CharacterData) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if leader == null:
+	if player == null:
 		_visual.set_velocity(Vector2.ZERO)
-		_leader_trail.clear()
 		_last_position = global_position
 		return
-	_remember_leader_position()
-	var target_distance: float = _target_follow_distance()
-	var target_position: Vector2 = _leader_trail_target(target_distance)
+	_remember_player_position()
+	var target_position: Vector2 = _trail_target(float(slot_index) * follow_spacing)
 	var to_target: Vector2 = target_position - global_position
 	var dist_to_target: float = to_target.length()
-	if dist_to_target > 0.5:
-		var dir: Vector2 = to_target / dist_to_target
-		var leader_speed: float = _leader_speed()
-		var leader_dist: float = global_position.distance_to(leader.global_position)
-		var gap_range: float = maxf(_target_max_gap() - target_distance, 1.0)
-		var gap_ratio: float = clampf((leader_dist - target_distance) / gap_range, 0.0, 1.0)
-		var desired_speed: float = dist_to_target * catch_up_factor
-		var speed: float = minf(maxf(max_speed, leader_speed + leader_speed_margin), desired_speed + leader_speed * gap_ratio)
-		var velocity: Vector2 = dir * speed
-		global_position += velocity * delta
-		_limit_gap_to_leader()
+	if dist_to_target > stop_distance:
+		var player_speed: float = player.velocity.length()
+		var speed: float = minf(max_speed, maxf(player_speed + follow_spacing * 2.0, dist_to_target * catch_up_factor))
+		var previous_position: Vector2 = global_position
+		global_position = global_position.move_toward(target_position, speed * delta)
+		var velocity: Vector2 = (global_position - previous_position) / maxf(delta, 0.001)
 		_visual.set_velocity(velocity)
 	else:
+		global_position = target_position
 		_visual.set_velocity(Vector2.ZERO)
 	_last_position = global_position
-
-
-func _leader_speed() -> float:
-	if leader is CharacterBody2D:
-		return (leader as CharacterBody2D).velocity.length()
-	if leader is Companion:
-		return (leader as Companion).current_speed()
-	return 0.0
 
 
 func current_speed() -> float:
 	return (global_position - _last_position).length() / maxf(get_physics_process_delta_time(), 0.001)
 
 
-func _target_follow_distance() -> float:
-	return leader_follow_distance if leader is Player else follow_distance
-
-
-func _target_max_gap() -> float:
-	return leader_max_gap if leader is Player else max_gap
-
-
-func _remember_leader_position() -> void:
-	var pos: Vector2 = leader.global_position
-	if _leader_trail.is_empty():
-		_leader_trail.append(pos)
+func snap_to_formation() -> void:
+	if player == null:
 		return
-	if pos.distance_squared_to(_leader_trail[0]) >= trail_min_step * trail_min_step:
-		_leader_trail.push_front(pos)
-	while _leader_trail.size() > trail_max_points:
-		_leader_trail.pop_back()
+	_seed_trail()
+	global_position = _trail_target(float(slot_index) * follow_spacing)
+	_last_position = global_position
 
 
-func _leader_trail_target(distance: float) -> Vector2:
-	if _leader_trail.is_empty():
-		return leader.global_position
-	var previous: Vector2 = _leader_trail[0]
+func _seed_trail() -> void:
+	_player_trail.clear()
+	if player == null:
+		return
+	_player_trail.append(player.global_position)
+	for i in range(1, maxi(slot_index + 4, 8)):
+		_player_trail.append(player.global_position + Vector2.UP * follow_spacing * float(i))
+
+
+func _remember_player_position() -> void:
+	if _player_trail.is_empty():
+		_seed_trail()
+		return
+	var pos: Vector2 = player.global_position
+	var step: float = _current_trail_step()
+	if pos.distance_squared_to(_player_trail[0]) >= step * step:
+		_player_trail.push_front(pos)
+	while _player_trail.size() > trail_max_points:
+		_player_trail.pop_back()
+
+
+func _current_trail_step() -> float:
+	if absf(player.velocity.x) > 0.01 and absf(player.velocity.y) > 0.01:
+		return diagonal_trail_step
+	return trail_min_step
+
+
+func _trail_target(distance: float) -> Vector2:
+	if _player_trail.is_empty():
+		return player.global_position if player else global_position
+	var previous: Vector2 = _player_trail[0]
 	var traveled: float = 0.0
-	for i in range(1, _leader_trail.size()):
-		var point: Vector2 = _leader_trail[i]
+	for i in range(1, _player_trail.size()):
+		var point: Vector2 = _player_trail[i]
 		var segment: float = previous.distance_to(point)
 		if segment <= 0.001:
 			previous = point
@@ -112,13 +113,4 @@ func _leader_trail_target(distance: float) -> Vector2:
 			return previous.lerp(point, t)
 		traveled += segment
 		previous = point
-	return _leader_trail.back()
-
-
-func _limit_gap_to_leader() -> void:
-	var offset: Vector2 = global_position - leader.global_position
-	var dist: float = offset.length()
-	var allowed_gap: float = _target_max_gap()
-	if dist <= allowed_gap or dist <= 0.001:
-		return
-	global_position = leader.global_position + offset.normalized() * allowed_gap
+	return _player_trail.back()

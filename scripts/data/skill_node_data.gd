@@ -6,6 +6,8 @@ extends Resource
 @export var id: StringName = &""
 @export var display_name: String = ""
 @export var short_label: String = ""
+## Visual rank: 0 = minor stat pip, 1 = normal upgrade, 2 = major feature unlock.
+@export_range(0, 2, 1) var tier: int = 1
 @export_multiline var description: String = ""
 @export var grid_position: Vector2i = Vector2i.ZERO
 @export var cost: int = 0

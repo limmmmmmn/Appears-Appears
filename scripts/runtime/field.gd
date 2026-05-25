@@ -17,6 +17,9 @@ const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
 const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
 const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.png")
+const FOREST_TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/forest_tree.png")
+const COMBO_ATTACK_TEXTURE: Texture2D = preload("res://assets/sprites/skeleton_scythe.png")
+const COMBO_SKELETON_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
 
 ## Base world-map size. Starts as one camera-sized field; nodes expand it.
 const FIELD_SIZE: Vector2 = Vector2(640, 360)
@@ -31,8 +34,12 @@ const DROP_SEPARATION_RADIUS: float = 20.0
 const DROP_SCATTER_RADIUS_MIN: float = 28.0
 const DROP_SCATTER_RADIUS_MAX: float = 52.0
 const TOWN_UNLOCK_KILLS: int = 3
+const COMBO_ATTACK_KILLS: int = 5
+const COMBO_ATTACK_DAMAGE_RATIO: float = 0.35
+const COMBO_ATTACK_COOLDOWN: float = 8.0
 const TOWN_TILE_PLAYER_SAFE_RADIUS: float = 96.0
 const GRASS_FIELD_COLOR: Color = Color(0.3529412, 0.70980394, 0.32156864, 1)
+const FOREST_FIELD_COLOR: Color = Color(0.18039216, 0.4862745, 0.23921569, 1)
 
 @export var initial_slime_count: int = 16
 @export var small_forest_cluster_count_min: int = 3
@@ -70,6 +77,10 @@ var _loop_complete: bool = false
 var _active_battle_windows: int = 0
 var _chaser_spawned_this_loop: bool = false
 var _kills_toward_town: int = 0
+var _combo_kills: int = 0
+var _combo_attack_running: bool = false
+var _combo_cooldown_remaining: float = 0.0
+var _combo_attack_batch_id: int = 0
 var _town_tile: Area2D
 var _message_tween: Tween
 
@@ -92,6 +103,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
+	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
 	if GameState.is_field_battle_paused():
 		return
 	if _loop_complete:
@@ -121,25 +133,26 @@ func _setup_party_visuals() -> void:
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 	_player.position = _field_size * 0.5
 	_party_root.add_child(_player)
-	var leader: Node2D = _player
 	for i in range(1, GameState.party_size()):
 		var comp := COMPANION_SCENE.instantiate()
 		comp.setup(GameState.party[i])
-		comp.leader = leader
-		# All stack on the player exactly — z_index on the player keeps the
-		# leader visible until the column starts trailing on first move.
+		comp.player = _player
+		comp.slot_index = i
 		comp.position = _player.position
 		_party_root.add_child(comp)
-		leader = comp
+		comp.call_deferred("snap_to_formation")
 
 
 # ─── Enemy spawning ───────────────────────────────────────────────────
 func _on_field_loop_started(_loop_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_field_size()
-	_background.color = GRASS_FIELD_COLOR
+	_background.color = _field_background_color()
 	_town_revealed = false
 	_kills_toward_town = 0
+	_combo_kills = 0
+	_combo_attack_running = false
+	_combo_cooldown_remaining = 0.0
 	_loop_complete = false
 	_active_battle_windows = 0
 	_chaser_spawned_this_loop = false
@@ -150,7 +163,7 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_clear_items()
 	_crowd_pressure = entry_burst_bonus
 	_recenter_party()
-	_scatter_decorations()
+	_scatter_region_decorations()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
 
@@ -169,7 +182,10 @@ func _recenter_party() -> void:
 		_player.snap_camera()
 	for child in _party_root.get_children():
 		if child.is_in_group("party_member") and child != _player:
-			child.position = center
+			if child.has_method("snap_to_formation"):
+				child.snap_to_formation()
+			else:
+				child.position = center
 
 
 func _clear_field_enemies() -> void:
@@ -207,13 +223,205 @@ func _clear_town_tile() -> void:
 
 
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
-	if _loop_complete or _town_revealed:
+	if _loop_complete or GameState.field_loop_count <= 0:
 		return
-	if GameState.field_loop_count <= 0:
+	if not _town_revealed:
+		_kills_toward_town += 1
+		if _kills_toward_town >= TOWN_UNLOCK_KILLS:
+			_open_town_path()
+	if GameState.combo_attack_unlocked() and not _combo_attack_running and _combo_cooldown_remaining <= 0.0:
+		_combo_kills += 1
+		if _combo_kills >= COMBO_ATTACK_KILLS:
+			var targets: Array[FieldEnemy] = _combo_attack_targets()
+			if targets.is_empty():
+				return
+			_combo_kills = 0
+			_trigger_combo_attack(targets)
+
+
+func _trigger_combo_attack(targets: Array[FieldEnemy]) -> void:
+	if _combo_attack_running:
 		return
-	_kills_toward_town += 1
-	if _kills_toward_town >= TOWN_UNLOCK_KILLS:
-		_open_town_path()
+	if targets.is_empty():
+		return
+	_combo_attack_running = true
+	_combo_cooldown_remaining = COMBO_ATTACK_COOLDOWN
+	_combo_attack_batch_id += 1
+	_show_message("합체 공격! 거대 해골이 전장을 쓸어버립니다.")
+	await _play_combo_skeleton(targets, _combo_attack_batch_id)
+	_combo_attack_running = false
+
+
+## A giant reaper skeleton rears up from below the screen, cackles "하하하!",
+## then swings its scythe to wipe the field. Screen-space spectacle on its own
+## CanvasLayer; the per-target scythes and field-wide damage fire on the swing.
+func _play_combo_skeleton(targets: Array[FieldEnemy], combo_batch_id: int) -> void:
+	const REST_Y: float = 186.0
+	const HIDDEN_Y: float = 560.0
+	const SKULL_X: float = 320.0
+
+	var layer := CanvasLayer.new()
+	layer.name = "ComboSkeletonLayer"
+	layer.layer = 9
+	add_child(layer)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.03, 0.0, 0.06, 0.0)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(dim)
+
+	var skeleton := Sprite2D.new()
+	skeleton.texture = COMBO_ATTACK_TEXTURE
+	skeleton.centered = true
+	skeleton.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	skeleton.scale = Vector2(2.3, 2.3)
+	skeleton.position = Vector2(SKULL_X, HIDDEN_Y)
+	skeleton.rotation_degrees = -6.0
+	layer.add_child(skeleton)
+
+	var laugh := Label.new()
+	laugh.text = "하하하!"
+	laugh.add_theme_font_override("font", COMBO_SKELETON_FONT)
+	laugh.add_theme_font_size_override("font_size", 34)
+	laugh.add_theme_color_override("font_color", Color(0.97, 1.0, 0.92, 1.0))
+	laugh.add_theme_color_override("font_outline_color", Color(0.05, 0.01, 0.08, 1.0))
+	laugh.add_theme_constant_override("outline_size", 6)
+	laugh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	laugh.position = Vector2(354.0, 60.0)
+	laugh.pivot_offset = Vector2(48.0, 22.0)
+	laugh.scale = Vector2(0.3, 0.3)
+	laugh.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	layer.add_child(laugh)
+
+	# 1) Darken the field and let the skeleton burst up from below.
+	var rise := create_tween()
+	rise.set_parallel(true)
+	rise.tween_property(dim, "color", Color(0.03, 0.0, 0.06, 0.5), 0.28)
+	rise.tween_property(skeleton, "position:y", REST_Y, 0.36)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	await rise.finished
+
+	# 2) Cackle: text pops in while the skull bobs.
+	var laugh_tween := create_tween()
+	laugh_tween.tween_property(laugh, "modulate:a", 1.0, 0.08)
+	laugh_tween.parallel().tween_property(laugh, "scale", Vector2(1.18, 1.18), 0.14)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	laugh_tween.tween_property(laugh, "scale", Vector2(1.0, 1.0), 0.08)
+	var bob := create_tween()
+	bob.set_loops(3)
+	bob.tween_property(skeleton, "position:y", REST_Y - 9.0, 0.09).set_trans(Tween.TRANS_SINE)
+	bob.tween_property(skeleton, "position:y", REST_Y, 0.09).set_trans(Tween.TRANS_SINE)
+	await get_tree().create_timer(0.58).timeout
+
+	# 3) Wind the scythe back, then swing down hard.
+	var windup := create_tween()
+	windup.tween_property(skeleton, "rotation_degrees", -22.0, 0.13)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	await windup.finished
+	var swing := create_tween()
+	swing.tween_property(skeleton, "rotation_degrees", 24.0, 0.08)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await swing.finished
+
+	# 4) Impact — flash, per-target scythes, field-wide damage.
+	_flash_screen(layer)
+	for target: FieldEnemy in targets:
+		if is_instance_valid(target):
+			_spawn_combo_scythe(target.global_position)
+	for target: FieldEnemy in targets:
+		if is_instance_valid(target):
+			target.trigger_combo_encounter(combo_batch_id)
+	var fade_laugh := create_tween()
+	fade_laugh.tween_property(laugh, "modulate:a", 0.0, 0.12)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	EventBus.combo_attack_damage_requested.emit(COMBO_ATTACK_DAMAGE_RATIO, combo_batch_id)
+	var settle := create_tween()
+	settle.tween_property(skeleton, "rotation_degrees", 6.0, 0.2)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	await get_tree().create_timer(0.42).timeout
+
+	# 5) Sink back below and clear the overlay.
+	var sink := create_tween()
+	sink.set_parallel(true)
+	sink.tween_property(skeleton, "position:y", HIDDEN_Y, 0.3)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	sink.tween_property(dim, "color", Color(0.03, 0.0, 0.06, 0.0), 0.3)
+	await sink.finished
+	layer.queue_free()
+
+
+func _flash_screen(layer: CanvasLayer) -> void:
+	var flash := ColorRect.new()
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flash.color = Color(1.0, 1.0, 1.0, 0.0)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(flash)
+	var t := create_tween()
+	t.tween_property(flash, "color:a", 0.7, 0.04)
+	t.tween_property(flash, "color:a", 0.0, 0.18)
+	t.tween_callback(Callable(flash, "queue_free"))
+
+
+func _combo_attack_targets() -> Array[FieldEnemy]:
+	var targets: Array[FieldEnemy] = []
+	var visible_rect: Rect2 = _visible_world_rect()
+	for child: Node in _enemies_root.get_children():
+		if child is FieldEnemy and not child.is_queued_for_deletion() and visible_rect.has_point((child as FieldEnemy).global_position):
+			targets.append(child as FieldEnemy)
+	return targets
+
+
+func _visible_world_rect() -> Rect2:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var camera := get_viewport().get_camera_2d()
+	if camera == null:
+		return Rect2(Vector2.ZERO, viewport_size)
+	var visible_size: Vector2 = viewport_size * camera.zoom
+	return Rect2(camera.get_screen_center_position() - visible_size * 0.5, visible_size)
+
+
+func _spawn_combo_scythe(world_position: Vector2) -> void:
+	var effect := Node2D.new()
+	effect.name = "ComboScythe"
+	effect.z_index = 80
+	add_child(effect)
+	effect.global_position = world_position
+
+	var sprite := Sprite2D.new()
+	sprite.texture = COMBO_ATTACK_TEXTURE
+	sprite.centered = true
+	sprite.position = Vector2(0.0, 18.0)
+	sprite.scale = Vector2(0.72, 0.18)
+	sprite.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	sprite.rotation_degrees = -10.0
+	effect.add_child(sprite)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(sprite, "modulate:a", 1.0, 0.08)
+	tween.tween_property(sprite, "position:y", -10.0, 0.16)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(sprite, "scale", Vector2(1.15, 1.15), 0.16)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(sprite, "rotation_degrees", 18.0, 0.16)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+	tween.chain().set_parallel(true)
+	tween.tween_property(sprite, "position:x", 10.0, 0.06)
+	tween.tween_property(sprite, "rotation_degrees", -22.0, 0.06)
+	tween.chain().set_parallel(true)
+	tween.tween_property(sprite, "position:x", -10.0, 0.06)
+	tween.tween_property(sprite, "rotation_degrees", 26.0, 0.06)
+	tween.chain().set_parallel(true)
+	tween.tween_property(sprite, "position:x", 0.0, 0.08)
+	tween.tween_property(sprite, "position:y", -24.0, 0.12)
+	tween.tween_property(sprite, "scale", Vector2(1.38, 0.32), 0.12)
+	tween.tween_property(sprite, "modulate:a", 0.0, 0.12)
+	tween.chain().tween_callback(Callable(effect, "queue_free"))
 
 
 func _open_town_path() -> void:
@@ -292,6 +500,13 @@ func _scatter_decorations() -> void:
 		if cell == Vector2i(-1, -1):
 			return
 		_add_tree_cell(cell, occupied)
+
+
+func _scatter_region_decorations() -> void:
+	if GameState.current_field_region_id == GameState.FIELD_REGION_FOREST:
+		_scatter_forest_field_decorations()
+	else:
+		_scatter_decorations()
 
 
 func _scatter_forest_field_decorations() -> void:
@@ -387,7 +602,8 @@ func _add_tree_cell(cell: Vector2i, occupied: Dictionary, is_forest: bool = fals
 	occupied[cell] = true
 	if is_forest:
 		_forest_cells[cell] = true
-	_add_decoration(TREE_TEXTURE, _cell_to_world(cell))
+	var texture: Texture2D = FOREST_TREE_TEXTURE if GameState.current_field_region_id == GameState.FIELD_REGION_FOREST else TREE_TEXTURE
+	_add_decoration(texture, _cell_to_world(cell))
 
 
 func _random_decor_cell(avoid: Vector2, occupied: Dictionary) -> Vector2i:
@@ -489,6 +705,12 @@ func _enemy_count_for_current_nodes() -> int:
 
 
 func _enemy_data_for_current_nodes() -> EnemyData:
+	if GameState.current_field_region_id == GameState.FIELD_REGION_FOREST:
+		if randf() < 0.45:
+			return BAT_DATA
+		if GameState.chaser_enemies_enabled() and randf() < 0.25:
+			return SLIME_CHASER_DATA
+		return SLIME_DATA
 	if not GameState.chaser_enemies_enabled():
 		return SLIME_DATA
 	if not _chaser_spawned_this_loop:
@@ -623,6 +845,10 @@ func _apply_field_size() -> void:
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 
 
+func _field_background_color() -> Color:
+	return FOREST_FIELD_COLOR if GameState.current_field_region_id == GameState.FIELD_REGION_FOREST else GRASS_FIELD_COLOR
+
+
 func get_field_rect() -> Rect2:
 	return Rect2(Vector2.ZERO, _field_size)
 
@@ -649,5 +875,5 @@ func _check_refill_after_battles() -> void:
 		return
 	if not GameState.field_spawner_enabled():
 		return
-	if not _town_revealed and _active_field_enemy_count() == 0:
+	if _active_field_enemy_count() == 0:
 		_refill_enemy_population(spawn_batch_size)
