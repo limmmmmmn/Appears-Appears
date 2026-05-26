@@ -42,6 +42,24 @@ const TOWN_TILE_PLAYER_SAFE_RADIUS: float = 96.0
 const GRASS_FIELD_COLOR: Color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 const FOREST_FIELD_COLOR: Color = Color(0.18039216, 0.4862745, 0.23921569, 1)
 
+# ─── World-edge diorama: the field reads as a floating island over deep water ──
+## How far the void backdrop extends past the field edge. Must comfortably cover
+## what the camera can show beyond the edge (half a viewport ≈ 320px).
+const VOID_MARGIN: float = 900.0
+const DEEP_WATER_COLOR: Color = Color(0.09, 0.18, 0.27, 1.0)
+const DEEP_WATER_FOREST_COLOR: Color = Color(0.05, 0.11, 0.16, 1.0)
+const VOID_VIGNETTE_COLOR: Color = Color(0.01, 0.02, 0.05, 0.92)
+const ISLAND_SHADOW_COLOR: Color = Color(0.0, 0.0, 0.0, 0.26)
+const ISLAND_SHADOW_OFFSET: Vector2 = Vector2(0.0, 12.0)
+const ISLAND_SHADOW_EXPAND: float = 14.0
+## Thin earthy rim peeking around the grass + a taller, darker cliff face below.
+const CLIFF_RIM_COLOR: Color = Color(0.36, 0.26, 0.16, 1.0)
+const CLIFF_FACE_COLOR: Color = Color(0.22, 0.15, 0.09, 1.0)
+const CLIFF_RIM_FOREST_COLOR: Color = Color(0.26, 0.2, 0.13, 1.0)
+const CLIFF_FACE_FOREST_COLOR: Color = Color(0.14, 0.1, 0.07, 1.0)
+const CLIFF_RIM: float = 4.0
+const CLIFF_FACE_HEIGHT: float = 11.0
+
 @export var initial_slime_count: int = 16
 @export var small_forest_cluster_count_min: int = 3
 @export var small_forest_cluster_count_max: int = 5
@@ -85,6 +103,12 @@ var _combo_cooldown_remaining: float = 0.0
 var _combo_attack_batch_id: int = 0
 var _town_tile: Area2D
 var _message_tween: Tween
+var _diorama_root: Node2D
+var _void_rect: ColorRect
+var _void_vignette: TextureRect
+var _island_shadow: ColorRect
+var _cliff_face: ColorRect
+var _cliff_rim: ColorRect
 
 
 func _ready() -> void:
@@ -96,6 +120,7 @@ func _ready() -> void:
 	EventBus.field_item_drop_requested.connect(_on_field_item_drop_requested)
 	EventBus.field_gold_drop_requested.connect(_on_field_gold_drop_requested)
 	EventBus.field_loop_finish_requested.connect(_on_field_loop_finish_requested)
+	EventBus.enemy_encountered.connect(_on_enemy_encountered_for_story)
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
@@ -153,6 +178,7 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_field_size()
 	_apply_field_background()
+	_apply_diorama()
 	_town_revealed = false
 	_kills_toward_town = 0
 	_combo_kills = 0
@@ -172,7 +198,7 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
 	if GameState.STORY_MODE_ENABLED:
-		_show_message(_story_field_intro())
+		_show_message(GameState.story_field_intro())
 
 
 ## Teleport the whole party back to the field center for a fresh start.
@@ -232,9 +258,9 @@ func _clear_town_tile() -> void:
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
 	if _loop_complete or GameState.field_loop_count <= 0:
 		return
-	if GameState.STORY_MODE_ENABLED and GameState.story_field_index() == 2 and not GameState.story_companion_joined:
+	if GameState.STORY_MODE_ENABLED and GameState.story_should_recruit_first_companion():
 		if GameState.story_recruit_first_companion():
-			_show_message("동료가 나타났습니다. 함께 싸웁니다.")
+			_show_message(GameState.story_first_companion_join_message())
 	if not _town_revealed:
 		_kills_toward_town += 1
 		var unlock_kills: int = GameState.story_campfire_unlock_kills() if GameState.STORY_MODE_ENABLED else TOWN_UNLOCK_KILLS
@@ -248,6 +274,13 @@ func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> v
 				return
 			_combo_kills = 0
 			_trigger_combo_attack(targets)
+
+
+func _on_enemy_encountered_for_story(_enemy: Node) -> void:
+	var line: String = GameState.story_claim_movement_battle_line()
+	if line.is_empty():
+		return
+	_show_player_speech_bubble(line)
 
 
 func _trigger_combo_attack(targets: Array[FieldEnemy]) -> void:
@@ -481,14 +514,80 @@ func _hide_message() -> void:
 		_message_panel.modulate.a = 0.0
 
 
-func _story_field_intro() -> String:
-	match GameState.story_field_index():
-		1:
-			return "필드 1 - 초원. 슬라임이 나타났습니다."
-		2:
-			return "필드 2 - 싸우는 소리를 듣고 누군가 다가옵니다."
-		_:
-			return "필드 %d - 더 멀리 나아갑니다." % GameState.story_field_index()
+func _show_player_speech_bubble(text: String) -> void:
+	if _player == null or not is_instance_valid(_player) or GameState.party_size() <= 0:
+		return
+	var bubble := Panel.new()
+	bubble.name = "PlayerSpeechBubble"
+	bubble.size = Vector2(134.0, 28.0)
+	var anchor: Vector2 = GameState.party[0].speech_anchor_local()
+	bubble.position = anchor + Vector2(-bubble.size.x * 0.5, -bubble.size.y - 6.0)
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.z_index = 120
+	bubble.add_theme_stylebox_override("panel", _speech_bubble_style())
+	_player.add_child(bubble)
+
+	var tail := ColorRect.new()
+	tail.name = "Tail"
+	tail.size = Vector2(7.0, 7.0)
+	tail.position = Vector2(bubble.size.x * 0.5 - 3.5, bubble.size.y - 3.0)
+	tail.rotation = deg_to_rad(45.0)
+	tail.color = Color(1.0, 0.96, 0.82, 1.0)
+	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(tail)
+
+	var label := Label.new()
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 7.0
+	label.offset_right = -7.0
+	label.add_theme_font_override("font", COMBO_SKELETON_FONT)
+	label.add_theme_font_size_override("font_size", 8)
+	label.add_theme_color_override("font_color", Color(0.08, 0.06, 0.04, 1.0))
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(label)
+	_play_player_speech_bubble(bubble, label, text)
+
+
+func _play_player_speech_bubble(bubble: Control, label: Label, text: String) -> void:
+	bubble.modulate.a = 0.0
+	bubble.scale = Vector2(0.78, 0.78)
+	bubble.pivot_offset = bubble.size * 0.5
+	var pop := create_tween()
+	pop.tween_property(bubble, "modulate:a", 1.0, 0.06)
+	pop.parallel().tween_property(bubble, "scale", Vector2(1.05, 1.05), 0.08)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	pop.tween_property(bubble, "scale", Vector2.ONE, 0.05)
+	await pop.finished
+	label.text = ""
+	for i in text.length():
+		label.text = text.substr(0, i + 1)
+		await get_tree().create_timer(0.03).timeout
+	await get_tree().create_timer(0.75).timeout
+	if not is_instance_valid(bubble):
+		return
+	var fade := create_tween()
+	fade.tween_property(bubble, "modulate:a", 0.0, 0.12)
+	fade.parallel().tween_property(bubble, "scale", Vector2(0.86, 0.86), 0.12)
+	fade.tween_callback(Callable(bubble, "queue_free"))
+
+
+func _speech_bubble_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 0.96, 0.82, 1.0)
+	style.border_color = Color(0.12, 0.09, 0.05, 1.0)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	return style
 
 
 func _scatter_decorations() -> void:
@@ -877,6 +976,88 @@ func _apply_field_background() -> void:
 
 func _field_background_color() -> Color:
 	return FOREST_FIELD_COLOR if GameState.current_field_region_id == GameState.FIELD_REGION_FOREST else GRASS_FIELD_COLOR
+
+
+# ─── World-edge diorama ───────────────────────────────────────────────
+## Out-of-bounds used to be raw black. Instead we paint the field as a floating
+## island: deep water all around, a soft depth vignette, a cast shadow under the
+## island and an earthy cliff edge so the world ends on something intentional.
+func _apply_diorama() -> void:
+	_ensure_diorama()
+	var fs: Vector2 = _field_size
+	var is_forest: bool = GameState.current_field_region_id == GameState.FIELD_REGION_FOREST
+
+	# Deep water filling everything the camera can see past the edge.
+	_void_rect.color = DEEP_WATER_FOREST_COLOR if is_forest else DEEP_WATER_COLOR
+	_void_rect.position = Vector2(-VOID_MARGIN, -VOID_MARGIN)
+	_void_rect.size = fs + Vector2(VOID_MARGIN * 2.0, VOID_MARGIN * 2.0)
+
+	# Radial vignette centered on the island darkens the far abyss for depth.
+	_void_vignette.position = _void_rect.position
+	_void_vignette.size = _void_rect.size
+
+	# Cast shadow on the water, nudged down so the island feels lifted.
+	_island_shadow.position = Vector2(-CLIFF_RIM - ISLAND_SHADOW_EXPAND, -CLIFF_RIM) + ISLAND_SHADOW_OFFSET
+	_island_shadow.size = fs + Vector2(
+		(CLIFF_RIM + ISLAND_SHADOW_EXPAND) * 2.0,
+		CLIFF_RIM * 2.0 + CLIFF_FACE_HEIGHT + ISLAND_SHADOW_EXPAND
+	)
+
+	# Earthy rim peeking around the grass on every side...
+	_cliff_rim.position = Vector2(-CLIFF_RIM, -CLIFF_RIM)
+	_cliff_rim.size = fs + Vector2(CLIFF_RIM * 2.0, CLIFF_RIM * 2.0)
+	_cliff_rim.color = CLIFF_RIM_FOREST_COLOR if is_forest else CLIFF_RIM_COLOR
+
+	# ...and a taller, darker cliff face along the bottom for 3D thickness.
+	_cliff_face.position = Vector2(-CLIFF_RIM, fs.y)
+	_cliff_face.size = Vector2(fs.x + CLIFF_RIM * 2.0, CLIFF_FACE_HEIGHT)
+	_cliff_face.color = CLIFF_FACE_FOREST_COLOR if is_forest else CLIFF_FACE_COLOR
+
+
+func _ensure_diorama() -> void:
+	if _diorama_root != null and is_instance_valid(_diorama_root):
+		return
+	_diorama_root = Node2D.new()
+	_diorama_root.name = "Diorama"
+	add_child(_diorama_root)
+	move_child(_diorama_root, 0)
+	# z_index (not child order) drives layering; all sit behind the grass (-100).
+	_void_rect = _make_diorama_rect(-300)
+	_void_vignette = TextureRect.new()
+	_void_vignette.name = "VoidVignette"
+	_void_vignette.z_index = -290
+	_void_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_void_vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_void_vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	_void_vignette.texture = _build_vignette_texture()
+	_diorama_root.add_child(_void_vignette)
+	_island_shadow = _make_diorama_rect(-200)
+	_island_shadow.color = ISLAND_SHADOW_COLOR
+	_cliff_face = _make_diorama_rect(-149)
+	_cliff_rim = _make_diorama_rect(-150)
+
+
+func _make_diorama_rect(z: int) -> ColorRect:
+	var rect := ColorRect.new()
+	rect.z_index = z
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_diorama_root.add_child(rect)
+	return rect
+
+
+func _build_vignette_texture() -> GradientTexture2D:
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.0, 0.0, 0.0, 0.0))
+	grad.set_color(1, VOID_VIGNETTE_COLOR)
+	grad.add_point(0.32, Color(0.0, 0.0, 0.0, 0.0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 1.0)
+	tex.width = 256
+	tex.height = 256
+	return tex
 
 
 func get_field_rect() -> Rect2:

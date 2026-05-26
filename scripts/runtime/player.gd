@@ -5,6 +5,8 @@ extends CharacterBody2D
 ## Owns the Camera2D and its CharacterVisual. Combat lives in battle_windows.
 
 @export var speed: float = 60.0
+## Godot's built-in Camera2D follow lag. Higher = snappier, lower = floatier.
+@export var camera_smoothing_speed: float = 5.0
 
 @onready var _visual: CharacterVisual = $Visual
 @onready var _camera: Camera2D = $Camera2D
@@ -12,6 +14,7 @@ extends CharacterBody2D
 
 var _pending_data: CharacterData
 var _field_bounds := Rect2(Vector2.ZERO, Vector2(960, 540))
+var _camera_shake_tween: Tween
 
 
 func _ready() -> void:
@@ -20,6 +23,10 @@ func _ready() -> void:
 	add_to_group("player")
 	add_to_group("party_member")
 	_camera.make_current()
+	# Built-in smooth follow: camera eases toward the player instead of pinning
+	# to it 1:1, giving that gentle "trailing" feel.
+	_camera.position_smoothing_enabled = true
+	_camera.position_smoothing_speed = camera_smoothing_speed
 	# Match the camera update to CharacterBody2D movement. With pixel snapping
 	# enabled, an idle-updated camera can visibly jitter during vertical walks.
 	_camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
@@ -86,3 +93,22 @@ func _physics_process(_delta: float) -> void:
 func snap_camera() -> void:
 	if _camera:
 		_camera.reset_smoothing()
+
+
+## Quick decaying screen shake. Tweens the camera offset (separate from the
+## smoothed follow position) so it always returns cleanly to zero. Runs even
+## while the field is battle-paused since tweens ignore our pause flag.
+func shake_camera(strength: float = 4.0, duration: float = 0.25) -> void:
+	if _camera == null:
+		return
+	if _camera_shake_tween and _camera_shake_tween.is_valid():
+		_camera_shake_tween.kill()
+	_camera_shake_tween = create_tween()
+	var steps: int = 6
+	var step_time: float = duration / float(steps)
+	for i in steps:
+		var falloff: float = 1.0 - float(i) / float(steps)
+		var offset := Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * strength * falloff
+		_camera_shake_tween.tween_property(_camera, "offset", offset, step_time)\
+			.set_trans(Tween.TRANS_SINE)
+	_camera_shake_tween.tween_property(_camera, "offset", Vector2.ZERO, step_time)

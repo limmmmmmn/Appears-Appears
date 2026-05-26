@@ -19,6 +19,8 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 ## How long to linger at spawn center before sliding to the assigned slot.
 @export var slide_delay: float = 0.3
 @export var slide_duration: float = 0.3
+## "쭈욱" intro: window erupts from the encounter point and pops out to its slot.
+@export var open_duration: float = 0.24
 
 @onready var _name_label: Label = %NameLabel
 @onready var _hp_label: Label = %HPLabel
@@ -26,6 +28,7 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 @onready var _enemy_anchor: Node2D = %EnemyAnchor
 @onready var _turn_timer: Timer = $TurnTimer
 @onready var _background: Panel = $Background
+@onready var _background_image: TextureRect = %BackgroundImage
 @onready var _log_panel: Panel = $LogPanel
 
 const ACTOR_PARTY: int = 0
@@ -80,6 +83,8 @@ var _pending_defeat_logs: Array[String] = []
 var _log_sequence_running: bool = false
 var _close_when_log_queue_empty: bool = false
 var _close_started: bool = false
+var _opening: bool = false
+var _open_tween: Tween
 
 
 func _ready() -> void:
@@ -105,6 +110,44 @@ func setup(data: EnemyData, field_drop_position: Vector2 = Vector2.INF, window_s
 func get_expected_window_size() -> Vector2:
 	_ensure_enemy_count_planned()
 	return _layout_size_for_enemy_count(_planned_enemy_count)
+
+
+## True while the open intro is animating — the spawner skips drift/push on us
+## so the "쭈욱" reveal isn't fought by the window-separation forces.
+func is_opening() -> bool:
+	return _opening
+
+
+## Erupt from the encounter point: start as a near-zero dot centered on where the
+## enemy was, then pop+travel out to the resting slot the spawner already set on
+## `position`. Center pivot keeps the growth anchored to the travelling center.
+func play_open_intro() -> void:
+	var rest_position: Vector2 = position
+	pivot_offset = size * 0.5
+	var origin: Vector2 = _field_drop_position
+	if origin == Vector2.INF:
+		origin = rest_position + size * 0.5
+	position = origin - size * 0.5
+	scale = Vector2(0.1, 0.1)
+	modulate.a = 0.0
+	_opening = true
+	if _open_tween and _open_tween.is_valid():
+		_open_tween.kill()
+	_open_tween = create_tween()
+	_open_tween.set_parallel(true)
+	_open_tween.tween_property(self, "position", rest_position, open_duration)\
+		.set_trans(Tween.TRANS_CUBIC)\
+		.set_ease(Tween.EASE_OUT)
+	_open_tween.tween_property(self, "scale", Vector2.ONE, open_duration)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	_open_tween.tween_property(self, "modulate:a", 1.0, open_duration * 0.55)
+	_open_tween.chain().tween_callback(_finish_open_intro)
+
+
+func _finish_open_intro() -> void:
+	_opening = false
+	scale = Vector2.ONE
 
 
 ## Slide from spawn position to the assigned slot. Caller decides target.
@@ -221,6 +264,8 @@ func _play_window_color_flash(flash_color: Color) -> void:
 	var flash_log_style := _flat_panel_style(flash_log_bg, flash_color.darkened(0.18))
 	_background.add_theme_stylebox_override("panel", flash_style)
 	_log_panel.add_theme_stylebox_override("panel", flash_log_style)
+	if _background_image:
+		_background_image.modulate = flash_color.lightened(0.25)
 	_apply_label_color(_log_label, POSTER_DARK_TEXT)
 	_crash_tween = create_tween()
 	_crash_tween.tween_interval(WINDOW_FLASH_HOLD_DURATION)
@@ -236,12 +281,18 @@ func _play_window_color_flash(flash_color: Color) -> void:
 	_crash_tween.parallel().tween_property(flash_log_style, "border_color", base_log_border, WINDOW_FLASH_FADE_DURATION)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_OUT)
+	if _background_image:
+		_crash_tween.parallel().tween_property(_background_image, "modulate", Color.WHITE, WINDOW_FLASH_FADE_DURATION)\
+			.set_trans(Tween.TRANS_QUAD)\
+			.set_ease(Tween.EASE_OUT)
 	_crash_tween.tween_callback(_apply_card_color_chrome)
 
 
 func _apply_card_color_chrome() -> void:
 	_background.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
 	_log_panel.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
+	if _background_image:
+		_background_image.modulate = Color.WHITE
 	_apply_label_color(_log_label, DQ_WINDOW_TEXT)
 	_apply_label_color(_name_label, DQ_WINDOW_TEXT)
 	_apply_label_color(_hp_label, DQ_WINDOW_TEXT)

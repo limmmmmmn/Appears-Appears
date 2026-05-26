@@ -51,6 +51,8 @@ var field_loop_count: int = 0
 var current_field_region_id: StringName = FIELD_REGION_GRASS
 var story_companion_joined: bool = false
 var story_gold_goal_announced: bool = false
+var story_movement_battle_line_shown: bool = false
+var story_mage_joined: bool = false
 
 const FIELD_REGION_MILESTONES: Array[Dictionary] = [
 	{"name": "초원", "gold": 0, "nodes": 0},
@@ -63,9 +65,31 @@ const FIELD_REGION_MILESTONES: Array[Dictionary] = [
 
 const STORY_MODE_ENABLED: bool = true
 const STORY_GOLD_GOAL: int = 1000
-const STORY_FIELD_ENEMY_COUNTS: Dictionary = {
-	1: 3,
-	2: 8,
+const STORY_OPENING_LINES: PackedStringArray = [
+	"마왕이 점령한 세계.",
+	"용사는 너무 늦게 움직인다.",
+]
+const STORY_FIRST_CAMP_HERO_LINES: PackedStringArray = [
+	"아직 너무 느려.",
+	"이미 마왕은 세계를 정복했어.",
+	"더 빠르게 가자.",
+]
+const STORY_FIRST_CAMP_SKILL_NODE_ID: StringName = &"battle_movement"
+const STORY_MOVEMENT_BATTLE_LINE: String = "좋아 계속 움직이자."
+const STORY_MAGE_COMPANION: CharacterData = preload("res://data/characters/mage.tres")
+const STORY_FIELD_CONFIGS: Dictionary = {
+	1: {
+		"enemy_count": 3,
+		"campfire_unlock_kills": 3,
+		"intro": "필드 1 - 초원. 슬라임이 나타났습니다.",
+	},
+	2: {
+		"enemy_count": 8,
+		"campfire_unlock_kills": 3,
+		"intro": "필드 2 - 싸우는 소리를 듣고 누군가 다가옵니다.",
+		"recruit_first_companion": true,
+		"companion_join_message": "동료가 나타났습니다. 함께 싸웁니다.",
+	},
 }
 const STORY_FIRST_COMPANION: CharacterData = preload("res://data/characters/elf.tres")
 const MAX_CHARACTER_LEVEL: int = 20
@@ -284,12 +308,112 @@ func story_field_index() -> int:
 	return maxi(1, field_loop_count)
 
 
+func story_opening_lines() -> PackedStringArray:
+	return STORY_OPENING_LINES
+
+
+func story_field_config() -> Dictionary:
+	return STORY_FIELD_CONFIGS.get(story_field_index(), {})
+
+
 func story_field_enemy_count() -> int:
-	return int(STORY_FIELD_ENEMY_COUNTS.get(story_field_index(), 10 + story_field_index() * 2))
+	return int(story_field_config().get("enemy_count", 10 + story_field_index() * 2))
 
 
 func story_campfire_unlock_kills() -> int:
-	return story_field_enemy_count() if story_field_index() == 1 else 3
+	return int(story_field_config().get("campfire_unlock_kills", 3))
+
+
+func story_field_intro() -> String:
+	return str(story_field_config().get("intro", "필드 %d - 더 멀리 나아갑니다." % story_field_index()))
+
+
+func story_should_recruit_first_companion() -> bool:
+	return bool(story_field_config().get("recruit_first_companion", false)) and not story_companion_joined
+
+
+func story_first_companion_join_message() -> String:
+	return str(story_field_config().get("companion_join_message", "동료가 나타났습니다. 함께 싸웁니다."))
+
+
+func story_is_first_camp() -> bool:
+	return STORY_MODE_ENABLED and story_field_index() == 1
+
+
+func story_first_camp_hero_lines() -> PackedStringArray:
+	return STORY_FIRST_CAMP_HERO_LINES
+
+
+func story_first_camp_skill_node():
+	return SkillTreeDB.get_by_id(STORY_FIRST_CAMP_SKILL_NODE_ID)
+
+
+func story_claim_first_camp_skill_node():
+	if not story_is_first_camp():
+		return null
+	var node = story_first_camp_skill_node()
+	if node == null or has_skill_node(node.id):
+		return null
+	purchased_skill_nodes[node.id] = 1
+	if node.linked_modifier:
+		add_modifier(node.linked_modifier)
+		EventBus.modifier_purchased.emit(node.linked_modifier)
+	EventBus.skill_node_purchase_succeeded.emit(node)
+	return node
+
+
+func story_should_show_movement_battle_line() -> bool:
+	return STORY_MODE_ENABLED \
+		and not story_movement_battle_line_shown \
+		and story_field_index() == 2 \
+		and battle_movement_unlocked()
+
+
+func story_claim_movement_battle_line() -> String:
+	if not story_should_show_movement_battle_line():
+		return ""
+	story_movement_battle_line_shown = true
+	return STORY_MOVEMENT_BATTLE_LINE
+
+
+func story_should_play_mage_event() -> bool:
+	return STORY_MODE_ENABLED \
+		and story_field_index() == 3 \
+		and not story_mage_joined \
+		and STORY_MAGE_COMPANION != null \
+		and not has_party_member(STORY_MAGE_COMPANION.id)
+
+
+func story_recruit_mage_companion() -> bool:
+	if story_mage_joined or STORY_MAGE_COMPANION == null:
+		return false
+	if has_party_member(STORY_MAGE_COMPANION.id):
+		story_mage_joined = true
+		return false
+	party.append(STORY_MAGE_COMPANION)
+	party_levels.append(1)
+	party_xp.append(0)
+	party_equipment.append(_empty_equipment_slots())
+	party_hp.append(effective_max_hp(party_hp.size()))
+	party_mp.append(STORY_MAGE_COMPANION.max_mp)
+	story_mage_joined = true
+	EventBus.party_changed.emit()
+	return true
+
+
+func story_camp_line() -> String:
+	if story_field_index() <= 1:
+		return "불빛 말고는 아무것도 없습니다."
+	if gold < STORY_GOLD_GOAL:
+		return "돈 좀 모아서 잠자리좀 만들어보자. %d골드가 필요합니다." % STORY_GOLD_GOAL
+	return "1000골드가 모였습니다. 이제 잠자리를 만들 수 있습니다."
+
+
+func story_should_announce_gold_goal(new_gold: int) -> bool:
+	return STORY_MODE_ENABLED \
+		and not story_gold_goal_announced \
+		and story_field_index() >= 2 \
+		and new_gold >= STORY_GOLD_GOAL
 
 
 func story_recruit_first_companion() -> bool:
@@ -1398,6 +1522,8 @@ func reset_run() -> void:
 	current_field_region_id = FIELD_REGION_GRASS
 	story_companion_joined = false
 	story_gold_goal_announced = false
+	story_movement_battle_line_shown = false
+	story_mage_joined = false
 	run_started_at_ms = Time.get_ticks_msec()
 	# Make sure UI listeners flush stale numbers (HUD gold, etc.).
 	EventBus.gold_changed.emit(gold)

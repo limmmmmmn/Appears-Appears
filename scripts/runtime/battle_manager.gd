@@ -17,7 +17,6 @@ const WINDOW_PUSH_PADDING: float = 10.0
 const WINDOW_PUSH_STRENGTH: float = 260.0
 const PARTY_COLLISION_SIZE: Vector2 = Vector2(18.0, 24.0)
 const PARTY_COLLISION_STRENGTH: float = 1800.0
-const WALL_PUSH_STRENGTH: float = 900.0
 const ORC_WINDOW_PUSH_MULTIPLIER: float = 0.35
 const ORC_WINDOW_DRAG_SPEED_MULTIPLIER: float = 0.45
 const ORC_WINDOW_DRAG_DURATION: float = 0.12
@@ -104,6 +103,7 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 		_modal_windows[window] = true
 		GameState.begin_field_battle_pause()
 	add_child(window)
+	window.play_open_intro()
 	if not is_modal_battle:
 		_apply_window_push(0.0, true)
 	return window
@@ -111,7 +111,7 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 
 func _centered_modal_position(window_size: Vector2) -> Vector2:
 	var visible_rect: Rect2 = _visible_world_rect()
-	return _clamped_position(visible_rect.get_center() - window_size * 0.5, window_size)
+	return visible_rect.get_center() - window_size * 0.5
 
 
 # ─── Window drift ─────────────────────────────────────────────────────
@@ -119,10 +119,10 @@ func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, at_sour
 	if source == null or not is_instance_valid(source):
 		return _random_spawn_position(window_size)
 	if at_source_position:
-		return _clamped_position(source.global_position - window_size * 0.5, window_size)
+		return source.global_position - window_size * 0.5
 	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _clamped_position(_visible_world_rect().get_center() + SPAWN_CENTER_OFFSET, window_size)
+		return _visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
 	var source_position: Vector2 = source.global_position
 	var direction: Vector2 = source_position - player_position
 	if direction.length_squared() < 1.0:
@@ -130,13 +130,13 @@ func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, at_sour
 	direction = direction.normalized()
 	var half_extent: float = absf(direction.x) * window_size.x * 0.5 + absf(direction.y) * window_size.y * 0.5
 	var center: Vector2 = player_position + direction * (SPAWN_DISTANCE + half_extent)
-	return _clamped_position(center - window_size * 0.5, window_size)
+	return center - window_size * 0.5
 
 
 func _random_spawn_position(window_size: Vector2) -> Vector2:
 	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _clamped_position(_visible_world_rect().get_center() + SPAWN_CENTER_OFFSET, window_size)
+		return _visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
 	var candidates: Array[Vector2] = [
 		player_position + Vector2(-window_size.x * 0.5, -SPAWN_DISTANCE - window_size.y),
 		player_position + Vector2(-window_size.x * 0.5, SPAWN_DISTANCE),
@@ -147,7 +147,7 @@ func _random_spawn_position(window_size: Vector2) -> Vector2:
 	for candidate: Vector2 in candidates:
 		if _is_spawn_position_valid(candidate, window_size):
 			return candidate
-	return _clamped_position(candidates.front(), window_size)
+	return candidates.front()
 
 
 func _is_spawn_position_valid(pos: Vector2, size: Vector2) -> bool:
@@ -170,6 +170,8 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 			continue
 		if _modal_windows.has(window):
 			continue
+		if window.is_opening():
+			continue
 		_window_rects[window] = _window_rect(window)
 		var force := Vector2.ZERO
 		var rect: Rect2 = _window_rects[window]
@@ -187,15 +189,13 @@ func _apply_window_push(delta: float, burst: bool = false) -> void:
 					_apply_party_collision_effects(window)
 					_apply_party_drag_effects(window)
 				force += _party_collision_push(rect, party_position)
-		if window_collision_enabled or party_collision_enabled:
-			force += _wall_push(rect)
 		force *= _window_push_multiplier(window)
 		var velocity: Vector2 = _window_velocities.get(window, Vector2.ZERO)
 		var step_delta: float = 1.0 / 60.0 if burst else delta
 		velocity += force * step_delta
 		velocity = velocity.limit_length(MAX_WINDOW_SPEED)
 		velocity = velocity.move_toward(Vector2.ZERO, VELOCITY_DAMPING * velocity.length() * step_delta)
-		var next_position: Vector2 = _clamped_position(window.position + velocity * step_delta, rect.size)
+		var next_position: Vector2 = window.position + velocity * step_delta
 		_window_velocities[window] = velocity
 		_window_rects[window] = Rect2(next_position, rect.size)
 		if burst or velocity.length() >= SETTLE_SPEED:
@@ -424,36 +424,6 @@ func _party_collision_push(rect: Rect2, party_position: Vector2) -> Vector2:
 	var overlap_y: float = minf(rect.end.y, party_rect.end.y) - maxf(rect.position.y, party_rect.position.y)
 	var penetration: float = maxf(1.0, minf(overlap_x, overlap_y))
 	return delta.normalized() * penetration * PARTY_COLLISION_STRENGTH
-
-
-func _wall_push(rect: Rect2) -> Vector2:
-	var field_rect: Rect2 = _field_rect()
-	var force := Vector2.ZERO
-	var left: float = field_rect.position.x + SLOT_MARGIN
-	var top: float = field_rect.position.y + SLOT_MARGIN
-	var right: float = field_rect.end.x - SLOT_MARGIN
-	var bottom: float = field_rect.end.y - SLOT_MARGIN
-	if rect.position.x < left:
-		force.x += (left - rect.position.x) * WALL_PUSH_STRENGTH
-	if rect.end.x > right:
-		force.x -= (rect.end.x - right) * WALL_PUSH_STRENGTH
-	if rect.position.y < top:
-		force.y += (top - rect.position.y) * WALL_PUSH_STRENGTH
-	if rect.end.y > bottom:
-		force.y -= (rect.end.y - bottom) * WALL_PUSH_STRENGTH
-	return force
-
-
-func _clamped_position(pos: Vector2, size: Vector2) -> Vector2:
-	var field_rect: Rect2 = _field_rect()
-	var left: float = field_rect.position.x + SLOT_MARGIN
-	var top: float = field_rect.position.y + SLOT_MARGIN
-	var right: float = field_rect.end.x - SLOT_MARGIN
-	var bottom: float = field_rect.end.y - SLOT_MARGIN
-	return Vector2(
-		clampf(pos.x, left, maxf(left, right - size.x)),
-		clampf(pos.y, top, maxf(top, bottom - size.y))
-	)
 
 
 func _field_rect() -> Rect2:

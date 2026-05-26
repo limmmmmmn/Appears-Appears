@@ -288,7 +288,7 @@ func _on_debug_finish_button_pressed() -> void:
 
 
 func _refresh_field_label() -> void:
-	_field_label.text = "Field"
+	_field_label.text = "Field %d" % maxi(1, GameState.field_loop_count)
 
 
 func _set_timer_urgent(is_urgent: bool) -> void:

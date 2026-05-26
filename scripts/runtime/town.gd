@@ -9,6 +9,7 @@ signal closed(region_id: StringName)
 const SKILL_TREE_VIEW_SCENE_SCRIPT: Script = preload("res://scripts/runtime/skill_tree_view.gd")
 const BONFIRE_TEXTURE: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
 const CHARACTER_VISUAL_SCRIPT: Script = preload("res://scripts/runtime/character_visual.gd")
+const STORY_HERO_POSITION: Vector2 = Vector2(320.0, 150.0)
 
 @onready var _title_label: Label = %TitleLabel
 @onready var _gold_label: Label = %GoldLabel
@@ -21,6 +22,10 @@ var _tree_view: Control
 var _grass_button: Button
 var _forest_button: Button
 var _choosing_region: bool = false
+var _story_skill_unlock_node
+var _story_sequence_running: bool = false
+var _story_skill_button: Button
+var _story_skill_prompt_bubble: Control
 
 
 func setup(title_override: String = "") -> void:
@@ -77,9 +82,13 @@ func _install_story_camp() -> void:
 	camp.add_child(bonfire)
 
 	if GameState.party_size() > 0:
-		_add_camp_member(camp, GameState.party[0], Vector2(320.0, 150.0))
+		_add_camp_member(camp, GameState.party[0], STORY_HERO_POSITION)
 	if GameState.party_size() > 1:
 		_add_camp_member(camp, GameState.party[1], Vector2(292.0, 184.0))
+	if GameState.story_is_first_camp():
+		_story_sequence_running = true
+		_continue_button.disabled = true
+		_play_first_camp_sequence()
 
 	var line := Label.new()
 	line.name = "CampLine"
@@ -95,6 +104,7 @@ func _install_story_camp() -> void:
 	line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	line.text = _story_camp_line()
+	line.visible = not GameState.story_is_first_camp()
 	add_child(line)
 
 
@@ -112,11 +122,293 @@ func _add_camp_member(root: Node2D, data: CharacterData, pos: Vector2) -> void:
 
 
 func _story_camp_line() -> String:
-	if GameState.story_field_index() <= 1:
-		return "불빛 말고는 아무것도 없습니다."
-	if GameState.gold < GameState.STORY_GOLD_GOAL:
-		return "돈 좀 모아서 잠자리좀 만들어보자. %d골드가 필요합니다." % GameState.STORY_GOLD_GOAL
-	return "1000골드가 모였습니다. 이제 잠자리를 만들 수 있습니다."
+	return GameState.story_camp_line()
+
+
+func _play_first_camp_sequence() -> void:
+	for speech_line in GameState.story_first_camp_hero_lines():
+		await _show_typed_first_camp_hero_bubble(speech_line)
+	_story_skill_unlock_node = GameState.story_first_camp_skill_node()
+	if _story_skill_unlock_node != null:
+		_story_skill_button = _add_story_skill_unlock_node(_story_skill_unlock_node)
+		_story_skill_prompt_bubble = _add_click_skill_prompt_bubble()
+		_pulse(_story_skill_button)
+		return
+	_finish_first_camp_sequence()
+
+
+func _show_typed_first_camp_hero_bubble(text: String) -> void:
+	var bubble := Panel.new()
+	bubble.name = "HeroSpeechBubble"
+	bubble.size = Vector2(246.0, 34.0)
+	bubble.position = Vector2(STORY_HERO_POSITION.x - bubble.size.x * 0.5, STORY_HERO_POSITION.y - 66.0)
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.z_index = 20
+	bubble.add_theme_stylebox_override("panel", _speech_bubble_style())
+	add_child(bubble)
+
+	var tail := ColorRect.new()
+	tail.name = "Tail"
+	tail.size = Vector2(8.0, 8.0)
+	tail.position = Vector2(bubble.size.x * 0.5 - 4.0, bubble.size.y - 3.0)
+	tail.rotation = deg_to_rad(45.0)
+	tail.color = Color(1.0, 0.96, 0.82, 1.0)
+	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(tail)
+
+	var label := Label.new()
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 8.0
+	label.offset_right = -8.0
+	label.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", Color(0.08, 0.06, 0.04, 1.0))
+	label.text = ""
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(label)
+	await _pop_in(bubble, 0.04)
+	await _type_label(label, text, 0.035)
+	await get_tree().create_timer(0.38).timeout
+	await _fade_out_and_free(bubble, 0.12)
+
+
+func _add_story_skill_unlock_node(node) -> Button:
+	var button := Button.new()
+	button.name = "StorySkillNode"
+	button.size = Vector2(42.0, 36.0)
+	button.position = Vector2(299.0, 206.0)
+	button.z_index = 18
+	button.text = str(node.short_label)
+	button.focus_mode = Control.FOCUS_ALL
+	button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.clip_text = true
+	button.add_theme_font_override("font", load("res://assets/fonts/town_ui_font.tres"))
+	button.add_theme_font_size_override("font_size", 9)
+	button.add_theme_constant_override("h_separation", 0)
+	_apply_story_skill_button_style(button, false)
+	button.pressed.connect(_on_story_skill_node_pressed)
+	add_child(button)
+	_pop_in(button, 0.04)
+	button.grab_focus()
+	return button
+
+
+func _add_click_skill_prompt_bubble() -> Control:
+	var bubble := Panel.new()
+	bubble.name = "SkillPromptBubble"
+	bubble.size = Vector2(228.0, 34.0)
+	bubble.position = Vector2(206.0, 160.0)
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.z_index = 21
+	bubble.add_theme_stylebox_override("panel", _speech_bubble_style())
+	add_child(bubble)
+
+	var tail := ColorRect.new()
+	tail.name = "Tail"
+	tail.size = Vector2(8.0, 8.0)
+	tail.position = Vector2(bubble.size.x * 0.5 - 4.0, bubble.size.y - 3.0)
+	tail.rotation = deg_to_rad(45.0)
+	tail.color = Color(1.0, 0.96, 0.82, 1.0)
+	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(tail)
+
+	var label := Label.new()
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 8.0
+	label.offset_right = -8.0
+	label.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", Color(0.08, 0.06, 0.04, 1.0))
+	label.text = "네모난 노드를 클릭하여 스킬을 습득하자."
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(label)
+	_pop_in(bubble, 0.12)
+	return bubble
+
+
+func _on_story_skill_node_pressed() -> void:
+	if _story_skill_button == null or not is_instance_valid(_story_skill_button):
+		return
+	_story_skill_button.disabled = true
+	_apply_story_skill_button_style(_story_skill_button, true)
+	_story_skill_unlock_node = GameState.story_claim_first_camp_skill_node()
+	if _story_skill_prompt_bubble != null and is_instance_valid(_story_skill_prompt_bubble):
+		_story_skill_prompt_bubble.queue_free()
+	_story_skill_prompt_bubble = _add_story_skill_learned_bubble()
+	_pulse(_story_skill_button)
+	await get_tree().create_timer(0.75).timeout
+	_finish_first_camp_sequence()
+
+
+func _add_story_skill_learned_bubble() -> Control:
+	var bubble := Panel.new()
+	bubble.name = "SkillLearnedBubble"
+	bubble.size = Vector2(238.0, 42.0)
+	bubble.position = Vector2(201.0, 154.0)
+	bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.z_index = 21
+	bubble.add_theme_stylebox_override("panel", _speech_bubble_style())
+	add_child(bubble)
+
+	var tail := ColorRect.new()
+	tail.name = "Tail"
+	tail.size = Vector2(8.0, 8.0)
+	tail.position = Vector2(bubble.size.x * 0.5 - 4.0, bubble.size.y - 3.0)
+	tail.rotation = deg_to_rad(45.0)
+	tail.color = Color(1.0, 0.96, 0.82, 1.0)
+	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(tail)
+
+	var label := Label.new()
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 8.0
+	label.offset_right = -8.0
+	label.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", Color(0.08, 0.06, 0.04, 1.0))
+	label.text = "멀티 전투창 터득!\n전투창 중에도 움직일 수 있다."
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bubble.add_child(label)
+	_pop_in(bubble, 0.02)
+	return bubble
+
+
+func _finish_first_camp_sequence() -> void:
+	_story_sequence_running = false
+	_continue_button.disabled = false
+	_continue_button.grab_focus()
+
+
+func _speech_bubble_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 0.96, 0.82, 1.0)
+	style.border_color = Color(0.12, 0.09, 0.05, 1.0)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	return style
+
+
+func _skill_unlock_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.045, 0.042, 0.96)
+	style.border_color = Color(1.0, 0.82, 0.28, 1.0)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 2
+	style.corner_radius_top_right = 2
+	style.corner_radius_bottom_left = 2
+	style.corner_radius_bottom_right = 2
+	return style
+
+
+func _skill_node_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.95, 0.63, 0.18, 1.0)
+	style.border_color = Color(1.0, 0.92, 0.62, 1.0)
+	style.border_width_left = 2
+	style.border_width_top = 2
+	style.border_width_right = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 1
+	style.corner_radius_top_right = 1
+	style.corner_radius_bottom_left = 1
+	style.corner_radius_bottom_right = 1
+	return style
+
+
+func _apply_story_skill_button_style(button: Button, learned: bool) -> void:
+	var bg: Color = Color(0.28, 0.68, 0.72, 1.0)
+	var border: Color = Color(0.72, 0.96, 1.0, 1.0)
+	var hover_bg: Color = Color(0.38, 0.82, 0.86, 1.0)
+	var pressed_bg: Color = Color(0.17, 0.46, 0.5, 1.0)
+	if learned:
+		bg = Color(0.95, 0.63, 0.18, 1.0)
+		border = Color(1.0, 0.92, 0.62, 1.0)
+		hover_bg = Color(1.0, 0.74, 0.28, 1.0)
+		pressed_bg = Color(0.72, 0.43, 0.09, 1.0)
+	button.add_theme_stylebox_override("normal", _button_box(bg, border))
+	button.add_theme_stylebox_override("hover", _button_box(hover_bg, border))
+	button.add_theme_stylebox_override("pressed", _button_box(pressed_bg, border))
+	button.add_theme_stylebox_override("focus", _button_box(hover_bg, border, 3))
+	button.add_theme_stylebox_override("disabled", _button_box(bg, border))
+	button.add_theme_color_override("font_color", Color(0.08, 0.05, 0.02, 1.0))
+	button.add_theme_color_override("font_hover_color", Color(0.08, 0.05, 0.02, 1.0))
+	button.add_theme_color_override("font_focus_color", Color(0.08, 0.05, 0.02, 1.0))
+	button.add_theme_color_override("font_disabled_color", Color(0.08, 0.05, 0.02, 1.0))
+
+
+func _button_box(bg: Color, border: Color, border_width: int = 2) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.border_width_left = border_width
+	style.border_width_top = border_width
+	style.border_width_right = border_width
+	style.border_width_bottom = border_width
+	style.corner_radius_top_left = 1
+	style.corner_radius_top_right = 1
+	style.corner_radius_bottom_left = 1
+	style.corner_radius_bottom_right = 1
+	return style
+
+
+func _pop_in(control: Control, delay: float = 0.0) -> void:
+	control.modulate.a = 0.0
+	control.scale = Vector2(0.78, 0.78)
+	control.pivot_offset = control.size * 0.5
+	var tween := create_tween()
+	if delay > 0.0:
+		tween.tween_interval(delay)
+	tween.tween_property(control, "modulate:a", 1.0, 0.06)
+	tween.parallel().tween_property(control, "scale", Vector2(1.08, 1.08), 0.1)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "scale", Vector2.ONE, 0.06)
+	await tween.finished
+
+
+func _fade_out_and_free(control: Control, duration: float) -> void:
+	if control == null or not is_instance_valid(control):
+		return
+	var tween := create_tween()
+	tween.tween_property(control, "modulate:a", 0.0, duration)
+	tween.parallel().tween_property(control, "scale", Vector2(0.86, 0.86), duration)
+	tween.tween_callback(Callable(control, "queue_free"))
+	await tween.finished
+
+
+func _type_label(label: Label, text: String, seconds_per_character: float) -> void:
+	label.text = ""
+	for i in text.length():
+		label.text = text.substr(0, i + 1)
+		await get_tree().create_timer(seconds_per_character).timeout
+
+
+func _pulse(control: Control) -> void:
+	if control == null or not is_instance_valid(control):
+		return
+	var tween := create_tween()
+	tween.tween_property(control, "scale", Vector2(1.06, 1.06), 0.08)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "scale", Vector2.ONE, 0.08)
 
 
 func _install_skill_tree() -> void:
@@ -193,6 +485,8 @@ func _on_skill_node_purchase_failed(_node) -> void:
 
 
 func _on_continue_pressed() -> void:
+	if _story_sequence_running:
+		return
 	if GameState.STORY_MODE_ENABLED:
 		_close_with_region(GameState.FIELD_REGION_GRASS)
 		return

@@ -50,6 +50,12 @@ func reset() -> void:
 	hide_until_revealed()
 
 
+func release_after_story_event() -> void:
+	_triggered = false
+	_player_inside = true
+	_hide_prompt()
+
+
 func hide_until_revealed() -> void:
 	_revealed = false
 	visible = false
@@ -97,6 +103,9 @@ func _enable_entry() -> void:
 
 func _on_body_entered(body: Node) -> void:
 	if _triggered or not _revealed or not body.is_in_group("player"):
+		return
+	if GameState.story_should_play_mage_event():
+		_enter_town()
 		return
 	_player_inside = true
 	_show_prompt()

@@ -55,13 +55,22 @@ var _wander_timer: float = 0.0
 var _wander_dir: Vector2 = Vector2.RIGHT
 var _squish_time: float = 0.0
 var _despawning: bool = false
+var _encounter_pause_held: bool = false
 
 enum State { WANDER, ALERT, CHASE, CHARGE }
 enum WanderMode { MOVE, PAUSE }
 
+## Movement-encounter "juice" — a brief hit-stop, flash and burst before the
+## battle window takes over, so the fight doesn't just blink into existence.
+const ENCOUNTER_FREEZE_TIME: float = 0.1
+const ENCOUNTER_FLASH_MODULATE: Color = Color(2.0, 2.0, 2.0, 1.0)
+const ENCOUNTER_SQUASH: Vector2 = Vector2(1.45, 0.6)
+
 func _ready() -> void:
 	_apply_data()
 	body_entered.connect(_on_body_entered)
+	# Safety net: if we're freed mid hit-stop, don't leak the field pause.
+	tree_exiting.connect(_release_encounter_pause)
 	_player = _find_player()
 	_pick_new_wander_dir()
 	_start_spawn_telegraph()
@@ -384,8 +393,114 @@ func trigger_combo_encounter(combo_batch_id: int) -> void:
 
 func _trigger_encounter(is_combo_encounter: bool, combo_batch_id: int = 0) -> void:
 	_triggered = true
+	monitoring = false
+	monitorable = false
+	_collision_shape.disabled = true
+	_alert_bubble.visible = false
+	# Combo wipes have their own giant-skeleton spectacle — fire straight away
+	# so a dozen enemies don't each hit-stop the field.
 	if is_combo_encounter:
 		set_meta("combo_encounter", true)
 		set_meta("combo_batch_id", combo_batch_id)
+		EventBus.enemy_encountered.emit(self)
+		queue_free()
+		return
+	await _play_movement_encounter_hit()
+	if not is_instance_valid(self):
+		return
+	# Window slides in as the struck enemy bursts away.
 	EventBus.enemy_encountered.emit(self)
-	queue_free()
+	_vanish_after_hit()
+
+
+## The "멈칫": freeze the field for a beat while the enemy flashes, gets squashed
+## and throws an impact burst. Camera kicks for weight.
+func _play_movement_encounter_hit() -> void:
+	_hold_encounter_pause()
+	_sprite.visible = true
+	_sprite.modulate = ENCOUNTER_FLASH_MODULATE
+	_sprite.scale = ENCOUNTER_SQUASH
+	_spawn_encounter_burst()
+	_shake_player_camera()
+	await get_tree().create_timer(ENCOUNTER_FREEZE_TIME).timeout
+	_release_encounter_pause()
+
+
+func _vanish_after_hit() -> void:
+	var drift := Vector2(randf_range(-4.0, 4.0), randf_range(-10.0, -5.0))
+	var tween: Tween = create_tween().set_parallel(true)
+	tween.tween_property(self, "position", position + drift, 0.16)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(_sprite, "scale", Vector2(0.18, 1.75), 0.16)\
+		.set_trans(Tween.TRANS_BACK)\
+		.set_ease(Tween.EASE_IN)
+	tween.tween_property(_sprite, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.14)
+	tween.chain().tween_callback(queue_free)
+
+
+func _hold_encounter_pause() -> void:
+	if _encounter_pause_held:
+		return
+	_encounter_pause_held = true
+	GameState.begin_field_battle_pause()
+
+
+func _release_encounter_pause() -> void:
+	if not _encounter_pause_held:
+		return
+	_encounter_pause_held = false
+	GameState.end_field_battle_pause()
+
+
+func _shake_player_camera() -> void:
+	var player: Node2D = _player
+	if player == null or not is_instance_valid(player):
+		player = _find_player()
+	if player and player.has_method("shake_camera"):
+		player.shake_camera(5.0, 0.3)
+
+
+## Expanding white ring + radial spikes at the contact point. Parented to the
+## enemy root (not self) so it outlives the enemy's own vanish.
+func _spawn_encounter_burst() -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	var burst := Node2D.new()
+	burst.name = "EncounterBurst"
+	burst.z_index = 60
+	burst.scale = Vector2.ONE * 0.45
+
+	var ring := Line2D.new()
+	ring.width = 2.5
+	ring.default_color = Color(1.0, 1.0, 1.0, 1.0)
+	var segments: int = 22
+	for i in segments + 1:
+		var angle: float = TAU * float(i) / float(segments)
+		ring.add_point(Vector2(cos(angle), sin(angle)) * 11.0)
+	burst.add_child(ring)
+
+	for i in 8:
+		var spike := Polygon2D.new()
+		spike.polygon = PackedVector2Array([
+			Vector2(0.0, -1.8),
+			Vector2(13.0, 0.0),
+			Vector2(0.0, 1.8),
+		])
+		spike.color = Color(1.0, 0.95, 0.62, 1.0)
+		spike.rotation = TAU * float(i) / 8.0
+		burst.add_child(spike)
+
+	parent.add_child(burst)
+	burst.global_position = global_position
+
+	var tween: Tween = burst.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(burst, "scale", Vector2.ONE * 1.75, 0.24)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_OUT)
+	tween.tween_property(burst, "modulate:a", 0.0, 0.24)\
+		.set_trans(Tween.TRANS_QUAD)\
+		.set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(burst.queue_free)

@@ -7,6 +7,7 @@ extends Node2D
 const SETTLEMENT_REPORT_SCENE: PackedScene = preload("res://scenes/settlement_report.tscn")
 const TOWN_SCENE: PackedScene = preload("res://scenes/town.tscn")
 const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
+const STORY_EVENT_WINDOW_SCRIPT: Script = preload("res://scripts/runtime/story_event_window.gd")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
 ## The run starts with the leader alone. Companions are recruited via
@@ -23,6 +24,8 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 var _settlement_report: SettlementReport
 var _town: CanvasLayer
 var _game_over: GameOver
+var _story_event_window: CanvasLayer
+var _story_event_tile: Node
 var _is_manually_paused: bool = false
 var _story_notice_layer: CanvasLayer
 
@@ -76,12 +79,39 @@ func _on_field_loop_settled(loop_num: int) -> void:
 
 
 func _on_town_entered(_tile: Node) -> void:
+	if GameState.story_should_play_mage_event():
+		print("[main] story event tile entered — pausing field for mage event")
+		_show_mage_event_window(_tile)
+		return
 	print("[main] settlement tile entered — aborting active battles with no rewards")
 	_battle_manager.abort_all_battles()
 	if GameState.STORY_MODE_ENABLED:
 		_show_town("모닥불")
 		return
 	_show_settlement_report("%s 정산" % GameState.current_field_region_display_name())
+
+
+func _show_mage_event_window(tile: Node) -> void:
+	if _story_event_window and is_instance_valid(_story_event_window):
+		return
+	_set_manual_pause(false)
+	_hud.set_level_up_ui_enabled(false)
+	_story_event_tile = tile
+	_story_event_window = STORY_EVENT_WINDOW_SCRIPT.new() as CanvasLayer
+	_story_event_window.finished.connect(_on_mage_event_finished)
+	add_child(_story_event_window)
+	get_tree().paused = true
+
+
+func _on_mage_event_finished() -> void:
+	if _story_event_window and is_instance_valid(_story_event_window):
+		_story_event_window.queue_free()
+	_story_event_window = null
+	get_tree().paused = false
+	_hud.set_level_up_ui_enabled(true)
+	if _story_event_tile and is_instance_valid(_story_event_tile) and _story_event_tile.has_method("release_after_story_event"):
+		_story_event_tile.release_after_story_event()
+	_story_event_tile = null
 
 
 func _show_settlement_report(title: String = "") -> void:
@@ -133,11 +163,7 @@ func _on_town_closed(region_id: StringName = GameState.FIELD_REGION_GRASS) -> vo
 
 
 func _on_gold_changed(new_gold: int) -> void:
-	if not GameState.STORY_MODE_ENABLED:
-		return
-	if GameState.story_gold_goal_announced or GameState.story_field_index() < 2:
-		return
-	if new_gold < GameState.STORY_GOLD_GOAL:
+	if not GameState.story_should_announce_gold_goal(new_gold):
 		return
 	GameState.story_gold_goal_announced = true
 	_show_story_notice("1000골드가 모였습니다.\n이제 잠자리를 만들 수 있을 것 같습니다.")
@@ -180,6 +206,10 @@ func _show_game_over() -> void:
 		get_tree().paused = false
 		_set_run_layers_visible(true)
 		_hud.set_level_up_ui_enabled(true)
+	if _story_event_window and is_instance_valid(_story_event_window):
+		_story_event_window.queue_free()
+		_story_event_window = null
+		get_tree().paused = false
 	_game_over = GAME_OVER_SCENE.instantiate()
 	_game_over.try_again_pressed.connect(_on_try_again_pressed)
 	add_child(_game_over)
@@ -219,7 +249,7 @@ func _play_opening_sequence() -> void:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layer.add_child(label)
 
-	for line in ["마왕이 점령한 세계.", "용사는 너무 늦게 움직인다."]:
+	for line in GameState.story_opening_lines():
 		label.text = line
 		label.modulate.a = 0.0
 		var tween := create_tween()
@@ -287,7 +317,8 @@ func _set_manual_pause(is_paused: bool) -> void:
 func _can_toggle_manual_pause() -> bool:
 	return not (_settlement_report and is_instance_valid(_settlement_report)) \
 		and not (_town and is_instance_valid(_town)) \
-		and not (_game_over and is_instance_valid(_game_over))
+		and not (_game_over and is_instance_valid(_game_over)) \
+		and not (_story_event_window and is_instance_valid(_story_event_window))
 
 
 ## F1 = instant settlement (skip combat to test the upgrade tree)
