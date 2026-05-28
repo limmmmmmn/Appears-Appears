@@ -28,6 +28,13 @@ func _load_all() -> void:
 	_by_id.clear()
 	_register(_node(&"root", "자동 전투", "자동", 2, "필드 적과 닿으면 전투창이 열리고 파티가 자동으로 공격합니다.", Vector2i(0, 0), 0))
 
+	# Right-panel PARTY: early, readable stat bumps.
+	_register(_node(&"party_hp", "체력 훈련", "HP", 1, "파티원의 최대 HP가 오르고 즉시 회복됩니다.", Vector2i(-1, 1), 4, [&"root"], "res://data/modifiers/prototype/hp_up.tres", {}, 5))
+	_register(_node(&"party_atk", "무기 연마", "AT", 1, "파티원의 공격력이 오릅니다.", Vector2i(-1, 2), 6, [&"root"], "res://data/modifiers/prototype/atk_up.tres", {}, 5))
+	_register(_node(&"party_agi", "발놀림", "AG", 1, "파티원의 행동 속도가 오릅니다.", Vector2i(-1, 3), 8, [&"party_atk"], "res://data/modifiers/prototype/agi_up.tres", {}, 5))
+	_register(_node(&"party_defense", "방어 자세", "DF", 1, "파티원의 방어력이 레벨마다 1 오릅니다.", Vector2i(-1, 4), 12, [&"party_agi"], "", {"def_flat": 1}, 5))
+	_register(_node(&"hero_heavy_strike", "강타 훈련", "강", 1, "용사의 기본 공격이 더 강해집니다.", Vector2i(-1, 5), 22, [&"party_defense"], "res://data/modifiers/prototype/heavy_strike.tres", {}, 5))
+
 	# North: enemies and field scale.
 	_register(_node(&"more_slimes", "슬라임 증가", "슬라임", 1, "필드에 등장하는 기본 적 수가 1마리 늘어납니다.", Vector2i(0, -2), 3, [&"root"], "", {"field_enemy_count_bonus": 1}))
 	_register(_node(&"more_slimes_2", "슬라임 무리", "무리", 1, "필드에 등장하는 기본 적 수가 2마리 더 늘어납니다.", Vector2i(1, -2), 80, [&"more_slimes"], "", {"field_enemy_count_bonus": 2}))
@@ -52,6 +59,8 @@ func _load_all() -> void:
 	_register(_node(&"battle_movement", "이동속도", "이동", 2, "전투창이 떠 있어도 움직일 수 있고 레벨마다 속도가 오릅니다.", Vector2i(0, 2), 10, [&"root"], "", {"battle_movement_enabled": true, "move_speed_flat": 6}, 5))
 	_register(_node(&"window_bash", "창 강타", "강타", 1, "파티가 전투창을 밀면 창 안의 적에게 피해를 줍니다.", Vector2i(0, 3), 90, [&"battle_movement"], "res://data/modifiers/prototype/bump_attack.tres"))
 	_register(_node(&"window_push", "창 충돌", "충돌", 2, "전투창끼리 부딪히면 양쪽 창 안의 적들이 피해를 받습니다.", Vector2i(0, 4), 140, [&"window_bash"], "res://data/modifiers/prototype/window_crash.tres", {"window_push_enabled": true}))
+	_register(_node(&"window_blessing", "창 축복", "회복", 1, "파티가 전투창을 밀 때 가장 다친 동료가 회복됩니다.", Vector2i(0, 5), 180, [&"window_push"], "res://data/modifiers/prototype/bump_blessing.tres"))
+	_register(_node(&"window_echo", "메아리 창", "복제", 2, "필드 적과 닿을 때 추가 전투창이 하나 더 생깁니다.", Vector2i(0, 6), 260, [&"window_blessing"], "", {"extra_windows_flat": 1}, 3))
 
 	# East: rewards and home base.
 	_register(_node(&"gold", "골드", "골드", 2, "적을 처치하면 필드에 골드 픽업이 떨어집니다.", Vector2i(2, 0), 1, [&"root"]))

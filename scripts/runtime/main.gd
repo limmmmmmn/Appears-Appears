@@ -47,7 +47,7 @@ func _ready() -> void:
 
 
 func _start_run() -> void:
-	if GameState.STORY_MODE_ENABLED:
+	if GameState.STORY_MODE_ENABLED and GameState.OPENING_SEQUENCE_ENABLED:
 		_set_run_layers_visible(false)
 		await _play_opening_sequence()
 		_set_run_layers_visible(true)

@@ -34,7 +34,9 @@ z_index = -99
 offset_right = 640.0
 offset_bottom = 360.0
 mouse_filter = 2
-stretch_mode = 6
+clip_contents = true
+texture_filter = 1
+stretch_mode = 0
 
 [node name="Decorations" type="Node2D" parent="." unique_id=193672294]
 y_sort_enabled = true
@@ -57,12 +59,9 @@ layer = 8
 [node name="MessagePanel" type="Panel" parent="MessageLayer"]
 unique_name_in_owner = true
 visible = false
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -136.0
+offset_left = 104.0
 offset_top = 34.0
-offset_right = 136.0
+offset_right = 376.0
 offset_bottom = 62.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBox_message")

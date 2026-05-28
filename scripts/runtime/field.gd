@@ -23,7 +23,7 @@ const COMBO_ATTACK_TEXTURE: Texture2D = preload("res://assets/sprites/skeleton_s
 const COMBO_SKELETON_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
 
 ## Base world-map size. Starts as one camera-sized field; nodes expand it.
-const FIELD_SIZE: Vector2 = Vector2(640, 360)
+const FIELD_SIZE: Vector2 = Vector2(480, 360)
 const TILE_SIZE: int = 16
 const SPAWN_MARGIN: float = 24.0
 ## Don't drop slimes within this radius of the player on field-loop start.
@@ -122,6 +122,7 @@ func _ready() -> void:
 	EventBus.field_loop_finish_requested.connect(_on_field_loop_finish_requested)
 	EventBus.enemy_encountered.connect(_on_enemy_encountered_for_story)
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
+	EventBus.skill_node_purchase_succeeded.connect(_on_skill_node_purchase_succeeded)
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
@@ -302,7 +303,7 @@ func _trigger_combo_attack(targets: Array[FieldEnemy]) -> void:
 func _play_combo_skeleton(targets: Array[FieldEnemy], combo_batch_id: int) -> void:
 	const REST_Y: float = 186.0
 	const HIDDEN_Y: float = 560.0
-	const SKULL_X: float = 320.0
+	const SKULL_X: float = 240.0
 
 	var layer := CanvasLayer.new()
 	layer.name = "ComboSkeletonLayer"
@@ -332,7 +333,7 @@ func _play_combo_skeleton(targets: Array[FieldEnemy], combo_batch_id: int) -> vo
 	laugh.add_theme_color_override("font_outline_color", Color(0.05, 0.01, 0.08, 1.0))
 	laugh.add_theme_constant_override("outline_size", 6)
 	laugh.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	laugh.position = Vector2(354.0, 60.0)
+	laugh.position = Vector2(274.0, 60.0)
 	laugh.pivot_offset = Vector2(48.0, 22.0)
 	laugh.scale = Vector2(0.3, 0.3)
 	laugh.modulate = Color(1.0, 1.0, 1.0, 0.0)
@@ -964,6 +965,9 @@ func _apply_field_size() -> void:
 	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
 	_background.size = _field_size
 	_background_texture.size = _field_size
+	_background_texture.clip_contents = true
+	_background_texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_background_texture.stretch_mode = TextureRect.STRETCH_KEEP
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 
@@ -1090,3 +1094,14 @@ func _check_refill_after_battles() -> void:
 		return
 	if _active_field_enemy_count() == 0:
 		_refill_enemy_population(spawn_batch_size)
+
+
+func _on_skill_node_purchase_succeeded(_node) -> void:
+	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
+		return
+	_apply_field_size()
+	_apply_field_background()
+	_apply_diorama()
+	if _loop_complete:
+		return
+	_refill_enemy_population(spawn_batch_size + GameState.field_spawn_batch_bonus())

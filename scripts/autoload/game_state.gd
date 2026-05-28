@@ -64,6 +64,7 @@ const FIELD_REGION_MILESTONES: Array[Dictionary] = [
 ]
 
 const STORY_MODE_ENABLED: bool = true
+const OPENING_SEQUENCE_ENABLED: bool = false
 const STORY_GOLD_GOAL: int = 1000
 const STORY_OPENING_LINES: PackedStringArray = [
 	"마왕이 점령한 세계.",
@@ -1314,21 +1315,21 @@ func effective_attack(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat")
+	return party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat") + skill_effect_int_sum("atk_flat")
 
 
 func effective_defense(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].defense + _level_bonus(index, "def") + _equipment_bonus(index, "defense_bonus") + _stacked_int_effect_for_character(character_id, "def_flat")
+	return party[index].defense + _level_bonus(index, "def") + _equipment_bonus(index, "defense_bonus") + _stacked_int_effect_for_character(character_id, "def_flat") + skill_effect_int_sum("def_flat")
 
 
 func effective_agility(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].agility + _level_bonus(index, "agi") + _equipment_bonus(index, "agility_bonus") + _stacked_int_effect_for_character(character_id, "agi_flat")
+	return party[index].agility + _level_bonus(index, "agi") + _equipment_bonus(index, "agility_bonus") + _stacked_int_effect_for_character(character_id, "agi_flat") + skill_effect_int_sum("agi_flat")
 
 
 func effective_move_speed(base_speed: float) -> float:
@@ -1422,7 +1423,7 @@ func effective_max_hp(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat")
+	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat") + skill_effect_int_sum("hp_flat")
 
 
 func _equipment_bonus(index: int, property_name: StringName) -> int:

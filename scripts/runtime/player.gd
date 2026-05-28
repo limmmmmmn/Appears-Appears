@@ -7,6 +7,7 @@ extends CharacterBody2D
 @export var speed: float = 60.0
 ## Godot's built-in Camera2D follow lag. Higher = snappier, lower = floatier.
 @export var camera_smoothing_speed: float = 5.0
+@export var camera_screen_offset: Vector2 = Vector2(80.0, 0.0)
 
 @onready var _visual: CharacterVisual = $Visual
 @onready var _camera: Camera2D = $Camera2D
@@ -50,7 +51,7 @@ func _apply_character_layout() -> void:
 	if _pending_data == null:
 		return
 	if _camera:
-		_camera.position = _pending_data.visual_center_local()
+		_camera.position = _pending_data.visual_center_local() + camera_screen_offset
 	if _collision_shape:
 		var rect_shape := _collision_shape.shape as RectangleShape2D
 		if rect_shape == null:

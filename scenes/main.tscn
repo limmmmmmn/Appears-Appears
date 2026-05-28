@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cqf6bpvn7qq6m"]
+[gd_scene load_steps=9 format=3 uid="uid://cqf6bpvn7qq6m"]
 
 [ext_resource type="Script" uid="uid://c6lq6ty8adwon" path="res://scripts/runtime/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://3bdh8ubp16k5" path="res://scenes/field.tscn" id="2_field"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="4_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/low_health_overlay.tscn" id="5_low_hp"]
 [ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
+[ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
 font = ExtResource("6_font")
@@ -43,3 +44,11 @@ offset_bottom = -16.0
 text = "||"
 label_settings = SubResource("LabelSettings_pause_mark")
 horizontal_alignment = 1
+
+[node name="RightPanelLayer" type="CanvasLayer" parent="."]
+layer = 12
+
+[node name="RightUpgradePanel" parent="RightPanelLayer" instance=ExtResource("7_upgrade_panel")]
+offset_left = 480.0
+offset_right = 640.0
+offset_bottom = 360.0

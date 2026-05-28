@@ -27,6 +27,7 @@ const SETTLE_INTERVAL: float = 0.08
 const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 0.85
 const PARTY_COLLISION_DAMAGE_COOLDOWN: float = 0.45
 const MODAL_WINDOW_SIZE_MULTIPLIER: float = 1.0
+const PLAY_AREA_WIDTH: float = 480.0
 
 var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
 var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 world velocity.
@@ -110,7 +111,7 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 
 
 func _centered_modal_position(window_size: Vector2) -> Vector2:
-	var visible_rect: Rect2 = _visible_world_rect()
+	var visible_rect: Rect2 = _play_area_visible_world_rect()
 	return visible_rect.get_center() - window_size * 0.5
 
 
@@ -122,7 +123,7 @@ func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, at_sour
 		return source.global_position - window_size * 0.5
 	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
+		return _play_area_visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
 	var source_position: Vector2 = source.global_position
 	var direction: Vector2 = source_position - player_position
 	if direction.length_squared() < 1.0:
@@ -136,7 +137,7 @@ func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, at_sour
 func _random_spawn_position(window_size: Vector2) -> Vector2:
 	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
+		return _play_area_visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
 	var candidates: Array[Vector2] = [
 		player_position + Vector2(-window_size.x * 0.5, -SPAWN_DISTANCE - window_size.y),
 		player_position + Vector2(-window_size.x * 0.5, SPAWN_DISTANCE),
@@ -439,6 +440,18 @@ func _visible_world_rect() -> Rect2:
 	if camera == null:
 		return Rect2(Vector2.ZERO, viewport_size)
 	return Rect2(camera.get_screen_center_position() - viewport_size * 0.5, viewport_size)
+
+
+func _play_area_visible_world_rect() -> Rect2:
+	var camera := get_viewport().get_camera_2d()
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var play_width: float = minf(viewport_size.x, PLAY_AREA_WIDTH)
+	var play_size := Vector2(maxf(1.0, play_width), viewport_size.y)
+	if camera == null:
+		return Rect2(Vector2.ZERO, play_size)
+	var visible_size: Vector2 = viewport_size * camera.zoom
+	var play_world_size: Vector2 = play_size * camera.zoom
+	return Rect2(camera.get_screen_center_position() - visible_size * 0.5, play_world_size)
 
 
 func _player_world_position() -> Vector2:
