@@ -13,14 +13,7 @@ extends Panel
 ## injected. That keeps it portable to non-HUD contexts (preview screens,
 ## etc.) where GameState's per-index data may not be relevant.
 
-const LEVEL_UP_MARK_SCENE: PackedScene = preload("res://scenes/ui/level_up_mark.tscn")
-## Reused name so a flurry of level-ups doesn't stack visible badges on the
-## same portrait — one persistent "+" until the player clicks it.
-const LEVEL_UP_MARK_NODE_NAME: StringName = &"LevelUpMark"
-const LEVEL_UP_MARK_SIZE: Vector2 = Vector2(20, 20)
-const LEVEL_UP_MARK_Y: float = -18.0
-
-signal level_up_mark_pressed(index: int)
+const BOX_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
 
 @onready var _portrait: CharacterPortrait = %Portrait
 @onready var _name_label: Label = %NameLabel
@@ -31,6 +24,10 @@ signal level_up_mark_pressed(index: int)
 var party_index: int = -1
 var character: CharacterData
 var _pending_setup: bool = false
+## Lazily-created "쓰러짐" overlay tag, shown while this member is downed.
+var _downed_tag: Label
+## Lazily-created armor badge ("방N"), reflecting the party's equipped armor.
+var _armor_badge: Label
 
 
 ## Inject the slot's identity. Safe to call before the node is in the tree.
@@ -55,6 +52,47 @@ func set_hp(hp: int, max_hp: int) -> void:
 	_hp_bar.set_label("%d/%d" % [hp, max_hp])
 	_hp_bar.set_ratio(_safe_ratio(hp, max_hp))
 	_refresh_tooltip()
+
+
+## Downed state: dim the whole box and overlay a "쓰러짐" tag. The HP bar keeps
+## filling (the "쫘라락" recovery) underneath until the member auto-stands.
+func set_downed(is_down: bool) -> void:
+	modulate = Color(0.55, 0.55, 0.62, 1.0) if is_down else Color(1, 1, 1, 1)
+	if _downed_tag == null:
+		_downed_tag = Label.new()
+		_downed_tag.text = "쓰러짐"
+		_downed_tag.add_theme_font_override("font", BOX_FONT)
+		_downed_tag.add_theme_font_size_override("font_size", 9)
+		_downed_tag.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45, 1.0))
+		_downed_tag.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+		_downed_tag.add_theme_constant_override("shadow_offset_x", 1)
+		_downed_tag.add_theme_constant_override("shadow_offset_y", 1)
+		_downed_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_downed_tag.set_anchors_preset(Control.PRESET_CENTER)
+		_downed_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_downed_tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		add_child(_downed_tag)
+	_downed_tag.visible = is_down
+
+
+## Equipped armor reflection (top-right "방N" badge). Armor is a party-wide
+## survival axis, so every member shows it. level 1 = no armor → hidden.
+func set_armor(level: int, armor_name: String) -> void:
+	if _armor_badge == null:
+		_armor_badge = Label.new()
+		_armor_badge.add_theme_font_override("font", BOX_FONT)
+		_armor_badge.add_theme_font_size_override("font_size", 8)
+		_armor_badge.add_theme_color_override("font_color", Color(0.66, 0.86, 0.9, 1.0))
+		_armor_badge.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+		_armor_badge.add_theme_constant_override("shadow_offset_x", 1)
+		_armor_badge.add_theme_constant_override("shadow_offset_y", 1)
+		_armor_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_armor_badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		_armor_badge.position = Vector2(-22.0, 1.0)
+		add_child(_armor_badge)
+	_armor_badge.text = "방%d" % level
+	_armor_badge.tooltip_text = armor_name
+	_armor_badge.visible = level > 1
 
 
 func set_exp_ratio(ratio: float) -> void:
@@ -90,52 +128,7 @@ func clear_equip_slots() -> void:
 			(child as EquipSlot).clear()
 
 
-## Spawn (or surface the existing) persistent level-up badge over the
-## portrait. Returns the mark so callers can connect `dismissed` for
-## follow-up UI (e.g. opening a stat-allocation panel) without this widget
-## needing to know about that flow.
-func show_level_up_mark() -> LevelUpMark:
-	var existing: Node = _portrait.get_node_or_null(NodePath(String(LEVEL_UP_MARK_NODE_NAME)))
-	if existing:
-		_position_level_up_mark(existing as LevelUpMark)
-		return existing as LevelUpMark
-	var mark: LevelUpMark = LEVEL_UP_MARK_SCENE.instantiate()
-	mark.name = LEVEL_UP_MARK_NODE_NAME
-	mark.mode = LevelUpMark.Mode.PERSISTENT
-	_position_level_up_mark(mark)
-	_portrait.add_child(mark)
-	mark.dismissed.connect(_on_level_up_mark_dismissed)
-	call_deferred("_position_level_up_mark", mark)
-	return mark
-
-
-func set_level_up_mark_visible(is_visible: bool) -> void:
-	var existing: Node = _portrait.get_node_or_null(NodePath(String(LEVEL_UP_MARK_NODE_NAME)))
-	if existing:
-		existing.visible = is_visible
-
-
-func clear_level_up_mark() -> void:
-	var existing: Node = _portrait.get_node_or_null(NodePath(String(LEVEL_UP_MARK_NODE_NAME)))
-	if existing:
-		existing.queue_free()
-
-
 # ─── Internal ─────────────────────────────────────────────────────────
-func _on_level_up_mark_dismissed() -> void:
-	level_up_mark_pressed.emit(party_index)
-
-
-func _position_level_up_mark(mark: LevelUpMark) -> void:
-	if not is_instance_valid(mark):
-		return
-	mark.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	mark.custom_minimum_size = LEVEL_UP_MARK_SIZE
-	mark.size = LEVEL_UP_MARK_SIZE
-	mark.position = Vector2((_portrait.size.x - LEVEL_UP_MARK_SIZE.x) * 0.5, LEVEL_UP_MARK_Y)
-	mark.z_index = 20
-
-
 func _apply() -> void:
 	if character == null:
 		_name_label.text = "—"
@@ -152,6 +145,7 @@ func _apply() -> void:
 	set_hp(hp, max_hp)
 	set_exp_ratio(GameState.party_xp_ratio(party_index))
 	set_level(GameState.party_level(party_index))
+	set_armor(GameState.armor_level, GameState.current_armor_name())
 	set_equipment(GameState.equipment_for_member(party_index))
 	_refresh_tooltip()
 

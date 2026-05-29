@@ -5,9 +5,7 @@ extends Node2D
 ## Battle window spawning lives in BattleManager.
 
 const SETTLEMENT_REPORT_SCENE: PackedScene = preload("res://scenes/settlement_report.tscn")
-const TOWN_SCENE: PackedScene = preload("res://scenes/town.tscn")
 const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
-const STORY_EVENT_WINDOW_SCRIPT: Script = preload("res://scripts/runtime/story_event_window.gd")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
 ## The run starts with the leader alone. Companions are recruited via
@@ -22,10 +20,7 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 @onready var _pause_overlay: CanvasLayer = $PauseOverlay
 
 var _settlement_report: SettlementReport
-var _town: CanvasLayer
 var _game_over: GameOver
-var _story_event_window: CanvasLayer
-var _story_event_tile: Node
 var _is_manually_paused: bool = false
 var _story_notice_layer: CanvasLayer
 
@@ -41,7 +36,6 @@ func _ready() -> void:
 	_setup_default_party()
 	EventBus.party_wiped.connect(_on_party_wiped)
 	EventBus.field_loop_settled.connect(_on_field_loop_settled)
-	EventBus.town_entered.connect(_on_town_entered)
 	EventBus.gold_changed.connect(_on_gold_changed)
 	await _start_run()
 
@@ -78,52 +72,18 @@ func _on_field_loop_settled(loop_num: int) -> void:
 	_show_settlement_report("%s 정산" % GameState.current_field_region_display_name())
 
 
-func _on_town_entered(_tile: Node) -> void:
-	if GameState.story_should_play_mage_event():
-		print("[main] story event tile entered — pausing field for mage event")
-		_show_mage_event_window(_tile)
-		return
-	print("[main] settlement tile entered — aborting active battles with no rewards")
-	_battle_manager.abort_all_battles()
-	if GameState.STORY_MODE_ENABLED:
-		_show_town("모닥불")
-		return
-	_show_settlement_report("%s 정산" % GameState.current_field_region_display_name())
-
-
-func _show_mage_event_window(tile: Node) -> void:
-	if _story_event_window and is_instance_valid(_story_event_window):
-		return
-	_set_manual_pause(false)
-	_hud.set_level_up_ui_enabled(false)
-	_story_event_tile = tile
-	_story_event_window = STORY_EVENT_WINDOW_SCRIPT.new() as CanvasLayer
-	_story_event_window.finished.connect(_on_mage_event_finished)
-	add_child(_story_event_window)
-	get_tree().paused = true
-
-
-func _on_mage_event_finished() -> void:
-	if _story_event_window and is_instance_valid(_story_event_window):
-		_story_event_window.queue_free()
-	_story_event_window = null
-	get_tree().paused = false
-	_hud.set_level_up_ui_enabled(true)
-	if _story_event_tile and is_instance_valid(_story_event_tile) and _story_event_tile.has_method("release_after_story_event"):
-		_story_event_tile.release_after_story_event()
-	_story_event_tile = null
-
-
 func _show_settlement_report(title: String = "") -> void:
 	if _settlement_report and is_instance_valid(_settlement_report):
 		return
 	_set_manual_pause(false)
-	_hud.set_level_up_ui_enabled(false)
 	_set_run_layers_visible(false)
 	_settlement_report = SETTLEMENT_REPORT_SCENE.instantiate()
 	_settlement_report.setup(title, GameStats.current_field_loop_report_lines(), GameState.gold)
 	_settlement_report.continue_requested.connect(_on_settlement_continue_requested)
-	_settlement_report.town_requested.connect(_on_settlement_town_requested)
+	# Town flow has been removed (no more campfire tile / town scene); route
+	# the legacy "back to base" button to the same continue path so debug
+	# settlements don't get stuck.
+	_settlement_report.town_requested.connect(_on_settlement_continue_requested)
 	add_child(_settlement_report)
 	get_tree().paused = true
 
@@ -132,34 +92,7 @@ func _on_settlement_continue_requested() -> void:
 	_settlement_report = null
 	get_tree().paused = false
 	_set_run_layers_visible(true)
-	_hud.set_level_up_ui_enabled(true)
 	GameState.start_next_field_loop(GameState.FIELD_REGION_GRASS)
-
-
-func _on_settlement_town_requested() -> void:
-	_settlement_report = null
-	_show_town("%s 본거지" % GameState.current_field_region_display_name())
-
-
-func _show_town(title: String = "") -> void:
-	if _town and is_instance_valid(_town):
-		return
-	_set_manual_pause(false)
-	_hud.set_level_up_ui_enabled(false)
-	_town = TOWN_SCENE.instantiate()
-	_town.setup(title)
-	_town.closed.connect(_on_town_closed)
-	add_child(_town)
-	_set_run_layers_visible(false)
-	get_tree().paused = true
-
-
-func _on_town_closed(region_id: StringName = GameState.FIELD_REGION_GRASS) -> void:
-	_town = null
-	get_tree().paused = false
-	_set_run_layers_visible(true)
-	_hud.set_level_up_ui_enabled(true)
-	GameState.start_next_field_loop(region_id)
 
 
 func _on_gold_changed(new_gold: int) -> void:
@@ -199,17 +132,6 @@ func _show_game_over() -> void:
 	if _settlement_report and is_instance_valid(_settlement_report):
 		_settlement_report.queue_free()
 		_settlement_report = null
-	# Close the base screen if it happens to be up (defensive — shouldn't be).
-	if _town and is_instance_valid(_town):
-		_town.queue_free()
-		_town = null
-		get_tree().paused = false
-		_set_run_layers_visible(true)
-		_hud.set_level_up_ui_enabled(true)
-	if _story_event_window and is_instance_valid(_story_event_window):
-		_story_event_window.queue_free()
-		_story_event_window = null
-		get_tree().paused = false
 	_game_over = GAME_OVER_SCENE.instantiate()
 	_game_over.try_again_pressed.connect(_on_try_again_pressed)
 	add_child(_game_over)
@@ -316,9 +238,7 @@ func _set_manual_pause(is_paused: bool) -> void:
 
 func _can_toggle_manual_pause() -> bool:
 	return not (_settlement_report and is_instance_valid(_settlement_report)) \
-		and not (_town and is_instance_valid(_town)) \
-		and not (_game_over and is_instance_valid(_game_over)) \
-		and not (_story_event_window and is_instance_valid(_story_event_window))
+		and not (_game_over and is_instance_valid(_game_over))
 
 
 ## F1 = instant settlement (skip combat to test the upgrade tree)

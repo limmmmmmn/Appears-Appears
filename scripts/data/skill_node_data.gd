@@ -15,3 +15,6 @@ extends Resource
 @export var prerequisite_ids: Array[StringName] = []
 @export var linked_modifier: ModifierData
 @export var effect_data: Dictionary = {}
+## Optional 16-24px pixel icon for the HUD upgrade panel. When null, the panel
+## falls back to drawing the first two glyphs of `short_label`.
+@export var icon_texture: Texture2D

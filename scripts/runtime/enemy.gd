@@ -138,16 +138,19 @@ func _refresh_tooltip() -> void:
 func _spawn_hit_effect(texture: Texture2D, is_crit: bool) -> void:
 	if texture == null:
 		return
+	# SPEED axis (weapon shop) is visible here: each weapon tier bumps the hit
+	# effect up a notch, so stronger weapons land visibly bigger.
+	var weapon_scale: float = clampf(1.0 + float(GameState.max_weapon_level() - 1) * 0.06, 1.0, 1.8)
 	var effect := Sprite2D.new()
 	effect.texture = texture
 	effect.centered = true
 	effect.z_index = 8
 	effect.position = Vector2(randf_range(-3, 3), randf_range(-5, 1))
-	effect.scale = Vector2.ONE * 0.75
+	effect.scale = Vector2.ONE * 0.75 * weapon_scale
 	effect.rotation = randf_range(-0.25, 0.25)
 	effect.modulate = Color(1, 1, 1, 0.95)
 	add_child(effect)
-	var target_scale: Vector2 = Vector2.ONE * (1.45 if is_crit else 1.15)
+	var target_scale: Vector2 = Vector2.ONE * (1.45 if is_crit else 1.15) * weapon_scale
 	var tween: Tween = create_tween().set_parallel(true)
 	tween.tween_property(effect, "scale", target_scale, hit_flash_duration * 1.6)\
 		.set_trans(Tween.TRANS_BACK)\

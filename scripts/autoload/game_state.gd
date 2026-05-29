@@ -21,6 +21,15 @@ var party_hp: Array[int] = []
 var party_mp: Array[int] = []
 var party_levels: Array[int] = []
 var party_xp: Array[int] = []
+## Per-member downed flag (HP hit 0). Downed members are out of combat and
+## refill in place until they auto-stand. Parallel to `party`.
+var party_downed: Array[bool] = []
+## Fractional HP-refill carry per downed member index (heals < 1 HP/frame).
+var _downed_recovery_accum: Dictionary = {}
+## Set when the WHOLE party is downed at once; movement freezes until every
+## member has fully refilled, then they resume together. (Individual members
+## still stand/rejoin combat as they fill — this only gates field movement.)
+var _party_collapsed: bool = false
 var party_equipment: Array[Array] = []
 var inventory: Array = []
 var _move_speed_drag_multiplier: float = 1.0
@@ -45,6 +54,42 @@ var purchased_skill_nodes: Dictionary = {}
 ## not stat effects — useful for run summaries and avoiding "modifiers: 0"
 ## logs after recruiting.
 var recruited_companions: Array[ModifierData] = []
+
+# ─── Incremental combat axes (WEAPONS / GREED / SCALE) ─────────────────
+## See Balance.gd for the formulas these levels feed. The combat stays
+## turn-based; these multipliers shape its emergent gold-per-second.
+## Weapons replace the old single SPEED track: one level per weapon TYPE
+## (검/지팡이/둔기/단검). A member's damage uses their weapon type's multiplier,
+## so unlocking a 지팡이 only boosts the mage, etc. type id → level (default 1).
+var weapon_levels: Dictionary = {}
+## Armor = flat party defense (the armor shop is its UI skin). Survival axis.
+## Level 1 = "맨몸" (no bonus). Shared by the whole party, like the weapon.
+var armor_level: int = 1
+## GREED = gold-per-kill multiplier.
+var greed_level: int = 1
+## Chest open-speed level (sub-upgrade under GREED). 0 = base hover duration.
+var open_speed_level: int = 0
+## SCALE = how many SCALE purchases were made; simultaneous window count =
+## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
+var scale_purchases: int = 0
+## Enemy tiers the player has unlocked. Slime is free from the start.
+var unlocked_tier_ids: Array[StringName] = [&"slime"]
+## Tiers currently toggled ON (left bar). The field spawns a random mix of
+## these. Several can be active at once; that's how the screen fills up.
+var active_tier_ids: Array[StringName] = [&"slime"]
+## Per-enemy-tier level (System 1) — grows automatically from kills, never
+## bought. tier_id → int level (default 1).
+var enemy_levels: Dictionary = {}
+## tier_id → int kills accumulated toward the next level (resets each level-up).
+var enemy_kill_progress: Dictionary = {}
+## Field buildings the player has purchased + placed (reusable structure system).
+## Persistent — a standing investment, not cleared per field loop.
+var built_buildings: Array[StringName] = []
+## Companions that met their appearance condition (등장) and can be recruited.
+var companions_appeared: Array[StringName] = []
+## Lifetime counters that drive companion appearance conditions.
+var total_enemy_kills: int = 0
+var total_party_downs: int = 0
 
 # ─── Progression ──────────────────────────────────────────────────────
 var field_loop_count: int = 0
@@ -94,7 +139,7 @@ const STORY_FIELD_CONFIGS: Dictionary = {
 }
 const STORY_FIRST_COMPANION: CharacterData = preload("res://data/characters/elf.tres")
 const MAX_CHARACTER_LEVEL: int = 20
-const PARTY_LEVELING_ENABLED: bool = false
+const PARTY_LEVELING_ENABLED: bool = true
 const ITEM_MERGING_ENABLED: bool = false
 const EQUIPMENT_SLOT_COUNT: int = 6
 const EQUIPMENT_ACCESSORY_SLOT_A: int = 4
@@ -161,6 +206,9 @@ func set_party(members: Array[CharacterData]) -> void:
 	party_levels.clear()
 	party_xp.clear()
 	party_equipment.clear()
+	party_downed.clear()
+	_downed_recovery_accum.clear()
+	_party_collapsed = false
 	inventory.clear()
 	for m: CharacterData in party:
 		party_levels.append(1)
@@ -168,6 +216,7 @@ func set_party(members: Array[CharacterData]) -> void:
 		party_equipment.append(_empty_equipment_slots())
 		party_hp.append(effective_max_hp(party_hp.size()))
 		party_mp.append(m.max_mp)
+		party_downed.append(false)
 	# A fresh party means a fresh run timer.
 	run_started_at_ms = Time.get_ticks_msec()
 	EventBus.party_changed.emit()
@@ -192,7 +241,8 @@ func is_party_wiped() -> bool:
 func damage_party_member(index: int, amount: int) -> void:
 	if index < 0 or index >= party_hp.size():
 		return
-	var was_alive: bool = party_hp[index] > 0
+	if party_downed[index]:
+		return  # already down and refilling — can't be hit further
 	var before_hp: int = party_hp[index]
 	party_hp[index] = max(0, party_hp[index] - amount)
 	var actual_damage: int = before_hp - party_hp[index]
@@ -200,8 +250,27 @@ func damage_party_member(index: int, amount: int) -> void:
 		EventBus.party_damage_taken.emit(index, actual_damage)
 	EventBus.party_member_hp_changed.emit(index, party_hp[index], effective_max_hp(index))
 	EventBus.party_hp_changed.emit()
-	if was_alive and party_hp[index] == 0 and is_party_wiped():
-		EventBus.party_wiped.emit()
+	# Death = time loss, not game over.
+	if party_hp[index] == 0:
+		if sanctuary_active():
+			# 성소 intervenes: full revive on the spot, never enters the downed
+			# state — so no slowdown and the fight doesn't collapse.
+			party_hp[index] = effective_max_hp(index)
+			party_downed[index] = false
+			_downed_recovery_accum[index] = 0.0
+			EventBus.party_member_hp_changed.emit(index, party_hp[index], effective_max_hp(index))
+			EventBus.party_hp_changed.emit()
+			EventBus.sanctuary_revived.emit(index)
+		else:
+			# No sanctuary: drop into the downed/auto-recovery cycle.
+			party_downed[index] = true
+			_downed_recovery_accum[index] = 0.0
+			total_party_downs += 1  # drives the 사제(priest) appearance condition
+			EventBus.party_member_downed.emit(index)
+			_check_companion_appearances()
+			# Full collapse → freeze field movement until everyone recovers.
+			if is_party_all_downed():
+				_party_collapsed = true
 
 
 func heal_party_member(index: int, amount: int) -> void:
@@ -278,18 +347,26 @@ func _emit_member_xp_changed(index: int) -> void:
 
 
 func _xp_required_for_level(level: int) -> int:
-	var l: int = maxi(1, level)
-	var t: int = l - 1
-	return XP_CURVE_BASE + t * XP_CURVE_LEVEL_STEP + t * t * XP_CURVE_QUADRATIC
+	return Balance.party_xp_for_level(level)
 
 
+## Level-up grants MAX HP only (kept generic for every party member, not just
+## the hero). Attack is the SPEED/weapon axis and defense is the armor axis, so
+## leveling never touches them — keeps the stat space tiny.
 func _level_bonus(index: int, key: String) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var level: int = party_level(index)
 	if level <= 1:
 		return 0
-	return _level_growth_value(party[index].id, key) * (level - 1)
+	# Level grants MAX HP (survival) + a little agility (ambush/turn order).
+	# Attack stays SPEED/weapon; defense stays armor — no stat creep.
+	match key:
+		"hp":
+			return Balance.HP_PER_LEVEL * (level - 1)
+		"agi":
+			return Balance.AGILITY_PER_LEVEL * (level - 1)
+	return 0
 
 
 func _level_growth_value(character_id: StringName, key: String) -> int:
@@ -302,6 +379,7 @@ func add_gold(amount: int) -> void:
 	gold += amount
 	if amount > 0:
 		total_gold_earned += amount
+		_check_companion_appearances()  # drives the 도적(thief) gold condition
 	EventBus.gold_changed.emit(gold)
 
 
@@ -330,7 +408,9 @@ func story_field_intro() -> String:
 
 
 func story_should_recruit_first_companion() -> bool:
-	return bool(story_field_config().get("recruit_first_companion", false)) and not story_companion_joined
+	# Disabled: companions now join via the condition→gold recruit system
+	# (Balance.COMPANIONS), not story auto-recruit. Kept so callers don't break.
+	return false
 
 
 func story_first_companion_join_message() -> String:
@@ -397,6 +477,7 @@ func story_recruit_mage_companion() -> bool:
 	party_equipment.append(_empty_equipment_slots())
 	party_hp.append(effective_max_hp(party_hp.size()))
 	party_mp.append(STORY_MAGE_COMPANION.max_mp)
+	party_downed.append(false)
 	story_mage_joined = true
 	EventBus.party_changed.emit()
 	return true
@@ -429,6 +510,7 @@ func story_recruit_first_companion() -> bool:
 	party_equipment.append(_empty_equipment_slots())
 	party_hp.append(effective_max_hp(party_hp.size()))
 	party_mp.append(STORY_FIRST_COMPANION.max_mp)
+	party_downed.append(false)
 	story_companion_joined = true
 	EventBus.party_changed.emit()
 	return true
@@ -640,12 +722,465 @@ func pickup_range_multiplier() -> float:
 	return maxf(1.0, skill_effect_float_product("pickup_range_mult"))
 
 
+## Multi-window drift unlocks with the first SCALE purchase. (Legacy skill
+## flags kept as an OR so any older nodes still work.)
 func battle_movement_unlocked() -> bool:
-	return has_skill_node(&"battle_movement") or skill_effect_bool("battle_movement_enabled")
+	return scale_purchases > 0 or has_skill_node(&"battle_movement") or skill_effect_bool("battle_movement_enabled")
+
+
+## Max number of battle windows allowed on screen at once = the SCALE axis.
+## 0 SCALE purchases → 1 (modal, one-at-a-time). Each purchase steps the count
+## up along Balance.SCALE_STEPS (1→2→3→4→5→7→10).
+func battle_window_cap() -> int:
+	return scale_window_count()
+
+
+## True when BattleManager still has room under the cap. When false, new
+## field-enemy encounters are silently refused (player walks through without
+## triggering a new window) and player auto-move ignores enemies entirely.
+func can_accept_new_battle_window() -> bool:
+	var tree := get_tree()
+	if tree == null:
+		return true
+	var bm: Node = tree.get_first_node_in_group("battle_manager")
+	if bm == null or not bm.has_method("active_window_count"):
+		return true
+	# Anti-idle (System 2): once the unopened-chest buffer is full, refuse new
+	# fights until the player opens one. No idling your way to free gold.
+	if bm.has_method("chest_window_count") and int(bm.chest_window_count()) >= Balance.CHEST_BUFFER_MAX:
+		return false
+	return int(bm.active_window_count()) < battle_window_cap()
 
 
 func combo_attack_unlocked() -> bool:
 	return has_skill_node(&"combo_attack") or skill_effect_bool("combo_attack_enabled")
+
+
+# ─── Weapons: per-type tracks (damage axis / weapon shop) ──────────────
+func weapon_level(type_id: StringName) -> int:
+	return int(weapon_levels.get(type_id, 1))
+
+
+func weapon_attack_multiplier(type_id: StringName) -> float:
+	return Balance.effect_multiplier(weapon_level(type_id))
+
+
+## Damage multiplier for the member at `index`, from THEIR weapon type's level.
+## This is the per-member SPEED component of the gold/sec formula.
+func member_weapon_multiplier(index: int) -> float:
+	if index < 0 or index >= party.size():
+		return 1.0
+	return weapon_attack_multiplier(Balance.character_weapon_type(party[index].id))
+
+
+## Highest weapon level across types — drives the hit-effect size bump.
+func max_weapon_level() -> int:
+	var best: int = 1
+	for t: Dictionary in Balance.WEAPON_TYPES:
+		best = maxi(best, weapon_level(t["id"]))
+	return best
+
+
+func weapon_upgrade_cost(type_id: StringName) -> int:
+	return Balance.upgrade_cost(weapon_level(type_id))
+
+
+func can_upgrade_weapon(type_id: StringName) -> bool:
+	return gold >= weapon_upgrade_cost(type_id)
+
+
+## Buying a weapon type auto-equips the matching companion (그 타입 사용자) —
+## visible via the "○○ 장착!" feedback + a bigger hit effect.
+func upgrade_weapon(type_id: StringName) -> bool:
+	if not spend_gold(weapon_upgrade_cost(type_id)):
+		EventBus.combat_upgrade_failed.emit(&"weapon")
+		return false
+	weapon_levels[type_id] = weapon_level(type_id) + 1
+	EventBus.combat_upgrade_changed.emit(&"weapon")
+	EventBus.weapon_equipped.emit(current_weapon_name(type_id))
+	return true
+
+
+func current_weapon_name(type_id: StringName) -> String:
+	return Balance.weapon_name_for(type_id, weapon_level(type_id))
+
+
+func next_weapon_name(type_id: StringName) -> String:
+	return Balance.weapon_name_for(type_id, weapon_level(type_id) + 1)
+
+
+## Weapon types in use by the current party (for the shop to show only relevant
+## categories). Hero's 검 is always present.
+func owned_weapon_types() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for member: CharacterData in party:
+		var t: StringName = Balance.character_weapon_type(member.id)
+		if not out.has(t):
+			out.append(t)
+	return out
+
+
+# ─── Survival: armor axis (party defense / armor shop) ─────────────────
+## Flat defense added to EVERY party member by the equipped armor.
+func armor_defense_bonus() -> int:
+	return Balance.armor_defense_for_level(armor_level)
+
+
+func current_armor_name() -> String:
+	return Balance.armor_name_for_level(armor_level)
+
+
+func next_armor_name() -> String:
+	return Balance.armor_name_for_level(armor_level + 1)
+
+
+func armor_upgrade_cost() -> int:
+	return Balance.armor_cost(armor_level)
+
+
+func can_upgrade_armor() -> bool:
+	return gold >= armor_upgrade_cost()
+
+
+## Armor shop = survival skin: each level unlocks + auto-equips the next armor,
+## visibly bumping party defense (fewer downs → less slowdown).
+func upgrade_armor() -> bool:
+	if not spend_gold(armor_upgrade_cost()):
+		EventBus.combat_upgrade_failed.emit(&"armor")
+		return false
+	armor_level += 1
+	EventBus.combat_upgrade_changed.emit(&"armor")
+	EventBus.armor_equipped.emit(current_armor_name())
+	return true
+
+
+# ─── Field buildings (reusable structure system) ───────────────────────
+func is_building_built(id: StringName) -> bool:
+	return built_buildings.has(id)
+
+
+func building_cost(id: StringName) -> int:
+	return int(Balance.building_by_id(id).get("cost", 0))
+
+
+func can_purchase_building(id: StringName) -> bool:
+	var b: Dictionary = Balance.building_by_id(id)
+	if b.is_empty() or is_building_built(id):
+		return false
+	return gold >= int(b["cost"])
+
+
+func purchase_building(id: StringName) -> bool:
+	if not can_purchase_building(id) or not spend_gold(building_cost(id)):
+		return false
+	built_buildings.append(id)
+	EventBus.building_built.emit(id)
+	return true
+
+
+## 성소 effect: while built, downed members are revived on the spot instead of
+## entering the slow downed/recovery cycle. (A specific building's effect lives
+## here; the purchase/placement plumbing above stays generic.)
+func sanctuary_active() -> bool:
+	return is_building_built(&"sanctuary")
+
+
+# ─── Companions: appearance (등장) + recruit (영입) ─────────────────────
+func is_companion_appeared(id: StringName) -> bool:
+	return companions_appeared.has(id)
+
+
+func is_companion_recruited(id: StringName) -> bool:
+	return has_party_member(id)
+
+
+func companion_recruit_cost(id: StringName) -> int:
+	return int(Balance.companion_by_id(id).get("recruit_cost", 0))
+
+
+func can_recruit_companion(id: StringName) -> bool:
+	if not is_companion_appeared(id) or is_companion_recruited(id):
+		return false
+	if party.size() >= Balance.MAX_PARTY_SIZE:
+		return false
+	return gold >= companion_recruit_cost(id)
+
+
+func recruit_companion(id: StringName) -> bool:
+	if not can_recruit_companion(id) or not spend_gold(companion_recruit_cost(id)):
+		return false
+	var path: String = str(Balance.companion_by_id(id).get("char_res", ""))
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return false
+	var data: CharacterData = load(path) as CharacterData
+	if data == null:
+		return false
+	_add_party_member(data)
+	EventBus.companion_recruited.emit(id)
+	return true
+
+
+## Append a member to the party, keeping every parallel array in sync. Shared by
+## all recruit paths so companions never desync from party_hp/downed/etc.
+func _add_party_member(data: CharacterData) -> void:
+	party.append(data)
+	var idx: int = party.size() - 1
+	party_levels.append(1)
+	party_xp.append(0)
+	party_equipment.append(_empty_equipment_slots())
+	party_hp.append(effective_max_hp(idx))
+	party_mp.append(data.max_mp)
+	party_downed.append(false)
+	EventBus.party_changed.emit()
+
+
+## Flip any companion whose appearance condition is now met. Cheap (≤ a few
+## companions); called from the kill/down/gold counters that feed the conditions.
+func _check_companion_appearances() -> void:
+	for comp: Dictionary in Balance.COMPANIONS:
+		var id: StringName = comp["id"]
+		if companions_appeared.has(id) or is_companion_recruited(id):
+			continue
+		if _companion_condition_met(comp):
+			companions_appeared.append(id)
+			EventBus.companion_appeared.emit(id)
+
+
+func _companion_condition_met(comp: Dictionary) -> bool:
+	var ap: Dictionary = comp.get("appear", {})
+	var need: int = int(ap.get("value", 0))
+	match StringName(ap.get("type", &"")):
+		&"kills":
+			return total_enemy_kills >= need
+		&"downs":
+			return total_party_downs >= need
+		&"gold_earned":
+			return total_gold_earned >= need
+	return false
+
+
+# ─── DQ1-style ambush / initiative ─────────────────────────────────────
+## Average agility of combat-ready members (used for the ambush roll).
+func _avg_combat_ready_agility() -> float:
+	var total: int = 0
+	var n: int = 0
+	for i in party.size():
+		if is_combat_ready(i):
+			total += effective_agility(i)
+			n += 1
+	return float(total) / float(n) if n > 0 else 0.0
+
+
+## Roll initiative for a starting fight against enemies of `enemy_agility_avg`.
+## Returns +1 = 선공 (party first), -1 = 피습 (enemies first), 0 = 보통 (by agility).
+func roll_battle_initiative(enemy_agility_avg: float) -> int:
+	var diff: float = _avg_combat_ready_agility() - enemy_agility_avg
+	var preempt: float = clampf(Balance.AMBUSH_PREEMPT_BASE + diff * Balance.AMBUSH_AGILITY_WEIGHT, Balance.AMBUSH_CHANCE_MIN, Balance.AMBUSH_CHANCE_MAX)
+	var surprise: float = clampf(Balance.AMBUSH_SURPRISE_BASE - diff * Balance.AMBUSH_AGILITY_WEIGHT, Balance.AMBUSH_CHANCE_MIN, Balance.AMBUSH_CHANCE_MAX)
+	var r: float = randf()
+	if r < preempt:
+		return 1
+	if r > 1.0 - surprise:
+		return -1
+	return 0
+
+
+# ─── Incremental combat: GREED axis (gold per kill) ────────────────────
+func greed_gold_multiplier() -> float:
+	return Balance.effect_multiplier(greed_level)
+
+
+func greed_upgrade_cost() -> int:
+	return Balance.upgrade_cost(greed_level)
+
+
+func can_upgrade_greed() -> bool:
+	return gold >= greed_upgrade_cost()
+
+
+func upgrade_greed() -> bool:
+	if not spend_gold(greed_upgrade_cost()):
+		EventBus.combat_upgrade_failed.emit(&"greed")
+		return false
+	greed_level += 1
+	EventBus.combat_upgrade_changed.emit(&"greed")
+	return true
+
+
+# ─── Chest open-speed (sub-upgrade under GREED) ────────────────────────
+## Hover-to-open gauge duration; shortens as open_speed_level rises (floored).
+func chest_hover_duration() -> float:
+	return Balance.chest_open_duration(open_speed_level)
+
+
+func open_speed_upgrade_cost() -> int:
+	return Balance.chest_open_speed_cost(open_speed_level)
+
+
+func open_speed_is_maxed() -> bool:
+	return chest_hover_duration() <= Balance.CHEST_OPEN_DURATION_MIN + 0.0001
+
+
+func can_upgrade_open_speed() -> bool:
+	return not open_speed_is_maxed() and gold >= open_speed_upgrade_cost()
+
+
+func upgrade_open_speed() -> bool:
+	if open_speed_is_maxed() or not spend_gold(open_speed_upgrade_cost()):
+		EventBus.combat_upgrade_failed.emit(&"greed")
+		return false
+	open_speed_level += 1
+	EventBus.combat_upgrade_changed.emit(&"greed")
+	return true
+
+
+# ─── Incremental combat: SCALE axis (simultaneous windows) ─────────────
+func scale_window_count() -> int:
+	return Balance.scale_window_count(scale_purchases)
+
+
+func scale_upgrade_cost() -> int:
+	return Balance.scale_cost(scale_purchases)
+
+
+func scale_is_maxed() -> bool:
+	return scale_purchases >= Balance.scale_max_purchases()
+
+
+func can_upgrade_scale() -> bool:
+	return not scale_is_maxed() and gold >= scale_upgrade_cost()
+
+
+func upgrade_scale() -> bool:
+	if scale_is_maxed() or not spend_gold(scale_upgrade_cost()):
+		EventBus.combat_upgrade_failed.emit(&"scale")
+		return false
+	scale_purchases += 1
+	EventBus.combat_upgrade_changed.emit(&"scale")
+	return true
+
+
+# ─── Incremental combat: enemy tiers (global single selection) ─────────
+func is_tier_unlocked(id: StringName) -> bool:
+	return unlocked_tier_ids.has(id)
+
+
+func tier_unlock_cost(id: StringName) -> int:
+	return int(Balance.tier_by_id(id).get("unlock_cost", 0))
+
+
+func can_unlock_tier(id: StringName) -> bool:
+	var tier: Dictionary = Balance.tier_by_id(id)
+	if tier.is_empty() or is_tier_unlocked(id):
+		return false
+	return gold >= int(tier["unlock_cost"])
+
+
+func unlock_tier(id: StringName) -> bool:
+	if not can_unlock_tier(id) or not spend_gold(tier_unlock_cost(id)):
+		EventBus.combat_upgrade_failed.emit(&"tier")
+		return false
+	unlocked_tier_ids.append(id)
+	if not active_tier_ids.has(id):
+		active_tier_ids.append(id)  # auto-toggle the freshly unlocked tier ON
+	EventBus.combat_upgrade_changed.emit(&"tier")
+	return true
+
+
+func is_tier_active(id: StringName) -> bool:
+	return active_tier_ids.has(id)
+
+
+## Toggle an unlocked tier ON/OFF. Turning everything off just empties the
+## field — that's a valid player choice (the left bar is the difficulty knob).
+func toggle_tier(id: StringName) -> void:
+	if not is_tier_unlocked(id):
+		return
+	if active_tier_ids.has(id):
+		active_tier_ids.erase(id)
+	else:
+		active_tier_ids.append(id)
+	EventBus.combat_upgrade_changed.emit(&"tier")
+
+
+## The tier dict that owns a spawned enemy (resolved by its resource path), so
+## HP/gold are correct even with several tiers active. Falls back to slime.
+func tier_for_enemy_data(data: EnemyData) -> Dictionary:
+	if data != null:
+		var tier: Dictionary = Balance.tier_by_enemy_res(data.resource_path)
+		if not tier.is_empty():
+			return tier
+	return Balance.tier_by_id(&"slime")
+
+
+## A random toggled-on tier's enemy resource for the field to spawn. Returns
+## null when nothing is active (field then spawns nothing).
+func random_active_tier_enemy_data() -> EnemyData:
+	var candidates: Array[String] = []
+	for id: StringName in active_tier_ids:
+		if not is_tier_unlocked(id):
+			continue
+		var path: String = str(Balance.tier_by_id(id).get("enemy_res", ""))
+		if not path.is_empty() and ResourceLoader.exists(path):
+			candidates.append(path)
+	if candidates.is_empty():
+		return null
+	return load(candidates[randi() % candidates.size()]) as EnemyData
+
+
+func tier_id_for_enemy_data(data: EnemyData) -> StringName:
+	return StringName(tier_for_enemy_data(data).get("id", &"slime"))
+
+
+# ─── Per-enemy level (System 1: auto-growth from kills) ────────────────
+func enemy_level(tier_id: StringName) -> int:
+	return int(enemy_levels.get(tier_id, 1))
+
+
+func enemy_kill_progress_value(tier_id: StringName) -> int:
+	return int(enemy_kill_progress.get(tier_id, 0))
+
+
+func enemy_kills_to_next(tier_id: StringName) -> int:
+	return Balance.kills_for_level(enemy_level(tier_id))
+
+
+func enemy_level_progress_ratio(tier_id: StringName) -> float:
+	var req: int = enemy_kills_to_next(tier_id)
+	if req <= 0:
+		return 0.0
+	return clampf(float(enemy_kill_progress_value(tier_id)) / float(req), 0.0, 1.0)
+
+
+## How many of this tier spawn in one window (1→5, level-capped).
+func enemy_spawn_count(tier_id: StringName) -> int:
+	return Balance.spawn_count_for_level(enemy_level(tier_id))
+
+
+## Uncapped per-level kill-gold multiplier for this tier.
+func enemy_kill_gold_multiplier(tier_id: StringName) -> float:
+	return Balance.kill_gold_mult_for_level(enemy_level(tier_id))
+
+
+## Called when one enemy of `tier_id` dies. Accumulates kill progress and levels
+## the tier up (possibly multiple levels at once). Emits UI signals.
+func record_enemy_kill(tier_id: StringName) -> void:
+	if tier_id == &"":
+		return
+	total_enemy_kills += 1  # drives the 마법사(mage) appearance condition
+	_check_companion_appearances()
+	var progress: int = enemy_kill_progress_value(tier_id) + 1
+	var level: int = enemy_level(tier_id)
+	var leveled: bool = false
+	while progress >= Balance.kills_for_level(level):
+		progress -= Balance.kills_for_level(level)
+		level += 1
+		leveled = true
+	enemy_levels[tier_id] = level
+	enemy_kill_progress[tier_id] = progress
+	EventBus.enemy_progress_changed.emit(tier_id)
+	if leveled:
+		EventBus.enemy_leveled_up.emit(tier_id, level)
 
 
 func begin_field_battle_pause() -> void:
@@ -670,9 +1205,10 @@ func _purchased_skill_node_data() -> Array:
 
 
 func _ensure_default_skill_nodes() -> void:
-	for node_id: StringName in [&"root", &"gold", &"item"]:
-		if not purchased_skill_nodes.has(node_id):
-			purchased_skill_nodes[node_id] = 1
+	# Skill tree is being rebuilt and currently has no nodes, so there are no
+	# default unlocks to seed. Re-add starter node ids here once the new tree
+	# defines them.
+	pass
 
 
 func modifier_purchase_cost(mod: ModifierData) -> int:
@@ -781,6 +1317,7 @@ func _recruit_companion(mod: ModifierData) -> void:
 	party_equipment.append(_empty_equipment_slots())
 	party_hp.append(effective_max_hp(idx))
 	party_mp.append(recruited.max_mp)
+	party_downed.append(false)
 	recruited_companions.append(mod)
 	_grant_starter_skill(recruited)
 	EventBus.modifier_picked.emit(mod)
@@ -841,7 +1378,14 @@ func _validated_field_region(region_id: StringName) -> StringName:
 func scaled_enemy_max_hp(data: EnemyData) -> int:
 	if data == null:
 		return 1
-	return data.max_hp
+	# Calibrated so this enemy's tier dies in ~base_kill_time at SPEED Lv1 / full
+	# party HP. SPEED (party damage ×) then shortens kill time; the formula
+	#   처치시간 = 적HP ÷ (파티 실효 데미지)
+	# falls straight out of this. Tier is resolved per-enemy so a mix of toggled
+	# tiers all get the right HP.
+	var base_kill_time: float = float(tier_for_enemy_data(data).get("base_kill_time", Balance.SLIME_BASE_TIME))
+	var avg_hit: float = _reference_party_hit_damage()
+	return maxi(1, int(round(avg_hit * base_kill_time * Balance.PARTY_HITS_PER_SECOND)))
 
 
 func scaled_enemy_attack(data: EnemyData) -> int:
@@ -865,7 +1409,99 @@ func scaled_enemy_agility(data: EnemyData) -> int:
 func scaled_enemy_gold_reward(data: EnemyData) -> int:
 	if data == null:
 		return 0
-	return 1
+	# Gold per kill = tier base gold × GREED × tier-level × thief (도적) multiplier.
+	var tier_id: StringName = tier_id_for_enemy_data(data)
+	var kill_gold: int = int(tier_for_enemy_data(data).get("kill_gold", Balance.SLIME_BASE_GOLD))
+	return maxi(1, int(round(float(kill_gold) * greed_gold_multiplier() * enemy_kill_gold_multiplier(tier_id) * thief_gold_multiplier())))
+
+
+## Average single party hit at SPEED Lv1 (weapon-free, full HP). Used only to
+## calibrate enemy HP — combat applies SPEED/penalty on top of this.
+func _reference_party_hit_damage() -> float:
+	var total: int = 0
+	var n: int = 0
+	for i in party.size():
+		total += effective_attack(i)
+		n += 1
+	if n == 0:
+		return 4.0
+	return maxf(1.0, float(total) / float(n))
+
+
+# ─── Incremental combat: downed cycle ──────────────────────────────────
+## True while a member is knocked out (HP hit 0) and refilling in place.
+func is_downed(index: int) -> bool:
+	return index >= 0 and index < party_downed.size() and party_downed[index]
+
+
+## A member can act / be targeted only when up with HP. Downed members (even
+## mid-refill) are out of the fight — this is what slows kills when the party
+## is too weak for the tier.
+func is_combat_ready(index: int) -> bool:
+	return index >= 0 and index < party_hp.size() and party_hp[index] > 0 and not is_downed(index)
+
+
+## True when every party member is currently downed (a full collapse).
+func is_party_all_downed() -> bool:
+	if party.is_empty():
+		return false
+	for i in party.size():
+		if not party_downed[i]:
+			return false
+	return true
+
+
+## True when every member is upright and at full HP.
+func is_party_fully_recovered() -> bool:
+	for i in party.size():
+		if party_downed[i] or party_hp[i] < effective_max_hp(i):
+			return false
+	return true
+
+
+## Field movement is frozen while the whole party recovers from a full collapse.
+func is_movement_frozen() -> bool:
+	return _party_collapsed
+
+
+## Seconds to refill 0 → full while downed. A function so a future "성소"
+## building (or per-member gear) can shorten it individually.
+func downed_recovery_seconds(_index: int) -> float:
+	var secs: float = Balance.DOWNED_RECOVERY_SECONDS
+	# Support trait (사제) = the "human 성소": speeds every member's recovery.
+	var plvl: int = _trait_level(&"support")
+	if plvl > 0:
+		secs *= Balance.priest_recovery_factor(plvl)
+	return maxf(0.1, secs)
+
+
+## Drives the downed → refill → auto-stand cycle. Called every frame by the
+## BattleManager. Only downed members heal (no passive regen for the upright).
+func tick_downed_recovery(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	for i in party.size():
+		if not party_downed[i]:
+			continue
+		var maxv: int = effective_max_hp(i)
+		var per_sec: float = float(maxv) / downed_recovery_seconds(i)
+		var carry: float = float(_downed_recovery_accum.get(i, 0.0)) + per_sec * delta
+		var whole: int = int(carry)
+		_downed_recovery_accum[i] = carry - float(whole)
+		if whole >= 1:
+			party_hp[i] = mini(maxv, party_hp[i] + whole)
+			EventBus.party_member_hp_changed.emit(i, party_hp[i], maxv)
+			EventBus.party_hp_changed.emit()
+		if party_hp[i] >= maxv:
+			# Fully refilled → stand up and rejoin the fight.
+			party_hp[i] = maxv
+			party_downed[i] = false
+			_downed_recovery_accum[i] = 0.0
+			EventBus.party_member_revived.emit(i)
+	# After a full-party collapse, hold movement until EVERYONE is back to full,
+	# then release so the party resumes together.
+	if _party_collapsed and is_party_fully_recovered():
+		_party_collapsed = false
 
 
 func scaled_enemy_xp_reward(data: EnemyData) -> int:
@@ -1322,7 +1958,7 @@ func effective_defense(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].defense + _level_bonus(index, "def") + _equipment_bonus(index, "defense_bonus") + _stacked_int_effect_for_character(character_id, "def_flat") + skill_effect_int_sum("def_flat")
+	return party[index].defense + _level_bonus(index, "def") + _equipment_bonus(index, "defense_bonus") + _stacked_int_effect_for_character(character_id, "def_flat") + skill_effect_int_sum("def_flat") + armor_defense_bonus()
 
 
 func effective_agility(index: int) -> int:
@@ -1376,47 +2012,69 @@ func roll_evade(index: int) -> bool:
 	return randf() < chance
 
 
+# ─── Companion roles via TRAITS (intrinsic, scale with level — no skills) ──
+## Combat behavior keys off a member's innate TRAIT (Balance.character_trait),
+## not their id — so a future variant (e.g. a different mage with trait &"burst")
+## just slots in. Action scaling uses the ACTING member's level; passive party
+## effects (gold ×, recovery speed) use the first member carrying that trait.
+
+## Party index of a character id, or -1 if absent.
+func _member_index_by_id(id: StringName) -> int:
+	for i in party.size():
+		if party[i].id == id:
+			return i
+	return -1
+
+
+## First party index whose innate trait matches, or -1.
+func _member_index_by_trait(trait_id: StringName) -> int:
+	for i in party.size():
+		if Balance.character_trait(party[i].id) == trait_id:
+			return i
+	return -1
+
+
+## Level of the first member with this trait (0 if none present).
+func _trait_level(trait_id: StringName) -> int:
+	var i: int = _member_index_by_trait(trait_id)
+	return party_level(i) if i >= 0 else 0
+
+
+# Action scaling — driven by the ACTING member's level (passed by index).
+func member_aoe_extra_targets(index: int) -> int:
+	return Balance.mage_extra_targets(party_level(index))
+
+
+func member_aoe_damage_mult(index: int) -> float:
+	return Balance.mage_splash_damage(party_level(index))
+
+
+func member_heal_amount(index: int) -> int:
+	return Balance.priest_heal(party_level(index))
+
+
 func hero_attack_multiplier() -> float:
 	return 1.0 + _stacked_float_effect("hero_damage_bonus_mult", DAMAGE_BONUS_STACK_MULTIPLIERS)
 
 
-func mage_splash_extra_targets() -> int:
-	var extra_targets: int = 0
-	for mod: ModifierData in active_modifiers:
-		extra_targets += int(mod.effect_data.get("mage_splash_extra_targets", 0))
-	return extra_targets
-
-
-func mage_splash_damage_multiplier() -> float:
-	var mult: float = 1.0
-	for mod: ModifierData in active_modifiers:
-		if mod.effect_data.has("mage_splash_damage_mult"):
-			mult = minf(mult, float(mod.effect_data["mage_splash_damage_mult"]))
-	return mult
-
-
-func priest_heal_amount() -> int:
-	return _stacked_int_effect("priest_heal_flat")
-
-
 func priest_attack_multiplier() -> float:
-	var mult: float = 1.0
-	for mod: ModifierData in active_modifiers:
-		if mod.effect_data.has("priest_attack_mult"):
-			mult = minf(mult, float(mod.effect_data["priest_attack_mult"]))
-	return mult
+	return Balance.PRIEST_ATTACK_MULT
 
 
+## Passive party-wide gold × from any member with the &"gold" trait (도적).
+func thief_gold_multiplier() -> float:
+	var lvl: int = _trait_level(&"gold")
+	return Balance.thief_gold_mult(lvl) if lvl > 0 else 1.0
+
+
+## Steal kept inert (no skills) — the gold trait contributes via the multiplier
+## above, not per-hit theft.
 func thief_steal_chance() -> float:
-	var chance: float = _stacked_float_effect("thief_steal_chance", EFFECT_STACK_MULTIPLIERS)
-	return clampf(chance, 0.0, 0.95)
+	return 0.0
 
 
 func thief_steal_gold_amount() -> int:
-	var amount: int = 0
-	for mod: ModifierData in active_modifiers:
-		amount = maxi(amount, int(mod.effect_data.get("thief_steal_gold", 0)))
-	return amount
+	return 0
 
 
 func effective_max_hp(index: int) -> int:
@@ -1451,20 +2109,6 @@ func roll_crit() -> Dictionary:
 	total_chance = min(total_chance, 1.0)
 	var rolled: bool = randf() < total_chance
 	return { "is_crit": rolled, "mult": (max_mult if rolled else 1.0) }
-
-
-## Roll Echo Strike-style modifiers. Returns the number of *extra* windows
-## the encounter should spawn (beyond the original).
-func roll_window_duplicates() -> int:
-	var extras: int = skill_effect_int_sum("extra_windows_flat")
-	for mod: ModifierData in active_modifiers:
-		extras += int(mod.effect_data.get("extra_windows_flat", 0))
-		var chance: float = float(mod.effect_data.get("duplicate_chance", 0.0))
-		var max_dup: int = int(mod.effect_data.get("duplicate_max", 0))
-		for j in max_dup:
-			if randf() < chance:
-				extras += 1
-	return extras
 
 
 func window_collision_damage_ratio() -> float:

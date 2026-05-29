@@ -8,7 +8,6 @@ extends Node2D
 const FIELD_ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/field_enemy.tscn")
 const FIELD_DECORATION_SCENE: PackedScene = preload("res://scenes/decorations/field_decoration.tscn")
 const FIELD_ITEM_DROP_SCENE: PackedScene = preload("res://scenes/objects/field_item_drop.tscn")
-const FIELD_TOWN_TILE_SCENE: PackedScene = preload("res://scenes/tiles/field_town_tile.tscn")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
 const COMPANION_SCENE: PackedScene = preload("res://scenes/companion.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
@@ -24,21 +23,21 @@ const COMBO_SKELETON_FONT: Font = preload("res://assets/fonts/field_ui_font.tres
 
 ## Base world-map size. Starts as one camera-sized field; nodes expand it.
 const FIELD_SIZE: Vector2 = Vector2(480, 360)
+## Left edge kept clear for the enemy-toggle bar (matches LeftEnemyBar.BAR_WIDTH)
+## so the player + enemies stay out from under it.
+const LEFT_UI_INSET: float = 48.0
 const TILE_SIZE: int = 16
 const SPAWN_MARGIN: float = 24.0
 ## Don't drop slimes within this radius of the player on field-loop start.
 const PARTY_SAFE_RADIUS: float = 48.0
 const DECOR_SAFE_RADIUS: float = 104.0
-const TOWN_TILE_SAFE_RADIUS: float = 96.0
 const DROP_PLAYER_SAFE_RADIUS: float = 42.0
 const DROP_SEPARATION_RADIUS: float = 20.0
 const DROP_SCATTER_RADIUS_MIN: float = 28.0
 const DROP_SCATTER_RADIUS_MAX: float = 52.0
-const TOWN_UNLOCK_KILLS: int = 3
 const COMBO_ATTACK_KILLS: int = 5
 const COMBO_ATTACK_DAMAGE_RATIO: float = 0.35
 const COMBO_ATTACK_COOLDOWN: float = 8.0
-const TOWN_TILE_PLAYER_SAFE_RADIUS: float = 96.0
 const GRASS_FIELD_COLOR: Color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 const FOREST_FIELD_COLOR: Color = Color(0.18039216, 0.4862745, 0.23921569, 1)
 
@@ -87,21 +86,22 @@ const CLIFF_FACE_HEIGHT: float = 11.0
 @onready var _message_label: Label = %MessageLabel
 
 var _player: CharacterBody2D
+## Holds field buildings (성소 etc.). Persists across loops; re-placed on start.
+var _structures_root: Node2D
+## building id → FieldStructure node currently placed.
+var _structures: Dictionary = {}
 var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
 var _crowd_pressure: int = 0
 var _field_size: Vector2 = FIELD_SIZE
-var _town_revealed: bool = false
 var _loop_complete: bool = false
 var _active_battle_windows: int = 0
 var _chaser_spawned_this_loop: bool = false
-var _kills_toward_town: int = 0
 var _combo_kills: int = 0
 var _combo_attack_running: bool = false
 var _combo_cooldown_remaining: float = 0.0
 var _combo_attack_batch_id: int = 0
-var _town_tile: Area2D
 var _message_tween: Tween
 var _diorama_root: Node2D
 var _void_rect: ColorRect
@@ -123,6 +123,15 @@ func _ready() -> void:
 	EventBus.enemy_encountered.connect(_on_enemy_encountered_for_story)
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
 	EventBus.skill_node_purchase_succeeded.connect(_on_skill_node_purchase_succeeded)
+	EventBus.combat_upgrade_changed.connect(_on_combat_upgrade_changed)
+	EventBus.building_built.connect(_on_building_built)
+	EventBus.sanctuary_revived.connect(_on_sanctuary_revived.unbind(1))
+	EventBus.companion_appeared.connect(_on_companion_appeared)
+	EventBus.party_member_downed.connect(_on_party_member_downed_visual)
+	EventBus.party_member_revived.connect(_on_party_member_revived_visual)
+	_structures_root = Node2D.new()
+	_structures_root.name = "Structures"
+	add_child(_structures_root)
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
@@ -132,14 +141,16 @@ func _process(delta: float) -> void:
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
 	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
-	if GameState.STORY_MODE_ENABLED:
-		return
 	if GameState.is_field_battle_paused():
 		return
 	if _loop_complete:
 		return
-	if not GameState.field_spawner_enabled():
-		return
+	# Incremental model: the field continuously maintains a population of the
+	# toggled-on tiers. This used to be gated by the legacy `spawner` skill node
+	# and a `STORY_MODE_ENABLED` early-return — both now removed, since with the
+	# emptied skill tree those gates silently disabled all continuous spawning
+	# (enemies only ever spawned once at loop start, so toggling a tier ON did
+	# nothing). Killed/cleared enemies are now replenished toward the target.
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
 		return
@@ -161,7 +172,7 @@ func _setup_party_visuals() -> void:
 	_player = PLAYER_SCENE.instantiate() as CharacterBody2D
 	_player.setup(GameState.party[0])
 	if _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2.ZERO, _field_size)
+		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _field_size)
 	_player.position = start_position
 	_party_root.add_child(_player)
 	for i in range(1, GameState.party_size()):
@@ -180,8 +191,6 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_apply_field_size()
 	_apply_field_background()
 	_apply_diorama()
-	_town_revealed = false
-	_kills_toward_town = 0
 	_combo_kills = 0
 	_combo_attack_running = false
 	_combo_cooldown_remaining = 0.0
@@ -191,11 +200,11 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	EventBus.field_loop_timer_changed.emit(-1)
 	_clear_field_enemies()
 	_clear_decorations()
-	_clear_town_tile()
 	_clear_items()
 	_crowd_pressure = entry_burst_bonus
 	_recenter_party()
 	_scatter_region_decorations()
+	_place_all_buildings()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
 	if GameState.STORY_MODE_ENABLED:
@@ -209,7 +218,7 @@ func _recenter_party() -> void:
 		return
 	var center: Vector2 = _field_size * 0.5
 	if _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2.ZERO, _field_size)
+		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _field_size)
 	_player.position = center
 	# Reset camera smoothing so it doesn't pan from the old spot.
 	if _player.has_method("snap_camera"):
@@ -247,26 +256,12 @@ func _clear_items() -> void:
 		child.queue_free()
 
 
-func _clear_town_tile() -> void:
-	if _town_tile and is_instance_valid(_town_tile):
-		_town_tile.queue_free()
-	_town_tile = null
-	for child in _tiles_root.get_children():
-		if child.name == "FieldTownTile":
-			child.queue_free()
-
-
 func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
 	if _loop_complete or GameState.field_loop_count <= 0:
 		return
 	if GameState.STORY_MODE_ENABLED and GameState.story_should_recruit_first_companion():
 		if GameState.story_recruit_first_companion():
 			_show_message(GameState.story_first_companion_join_message())
-	if not _town_revealed:
-		_kills_toward_town += 1
-		var unlock_kills: int = GameState.story_campfire_unlock_kills() if GameState.STORY_MODE_ENABLED else TOWN_UNLOCK_KILLS
-		if _kills_toward_town >= unlock_kills:
-			_open_town_path()
 	if GameState.combo_attack_unlocked() and not _combo_attack_running and _combo_cooldown_remaining <= 0.0:
 		_combo_kills += 1
 		if _combo_kills >= COMBO_ATTACK_KILLS:
@@ -467,31 +462,6 @@ func _spawn_combo_scythe(world_position: Vector2) -> void:
 	tween.tween_property(sprite, "scale", Vector2(1.38, 0.32), 0.12)
 	tween.tween_property(sprite, "modulate:a", 0.0, 0.12)
 	tween.chain().tween_callback(Callable(effect, "queue_free"))
-
-
-func _open_town_path() -> void:
-	if _town_revealed:
-		return
-	_town_revealed = true
-	_spawn_town_tile()
-	_show_message("모닥불이 피어납니다." if GameState.STORY_MODE_ENABLED else "본거지로 돌아가는 길이 열렸습니다.")
-
-
-func _spawn_town_tile() -> void:
-	_clear_town_tile()
-	_town_tile = FIELD_TOWN_TILE_SCENE.instantiate() as Area2D
-	_town_tile.position = _random_town_tile_position()
-	_tiles_root.add_child(_town_tile)
-	_town_tile.reveal_with_impact()
-
-
-func _random_town_tile_position() -> Vector2:
-	var avoid: Vector2 = _player.position if _player else _field_size * 0.5
-	for attempt in 48:
-		var pos: Vector2 = _random_position()
-		if pos.distance_to(avoid) >= TOWN_TILE_PLAYER_SAFE_RADIUS:
-			return pos
-	return _clamp_field_position(avoid + Vector2(TOWN_TILE_PLAYER_SAFE_RADIUS, 0.0))
 
 
 func _show_message(text: String) -> void:
@@ -742,7 +712,7 @@ func _is_valid_decor_cell(cell: Vector2i, avoid: Vector2, occupied: Dictionary) 
 	if occupied.has(cell):
 		return false
 	var pos: Vector2 = _cell_to_world(cell)
-	return pos.distance_to(avoid) >= DECOR_SAFE_RADIUS and not _is_near_town_tile(pos)
+	return pos.distance_to(avoid) >= DECOR_SAFE_RADIUS
 
 
 func _cell_to_world(cell: Vector2i) -> Vector2:
@@ -766,6 +736,88 @@ func _grow_crowd_pressure() -> void:
 		_crowd_pressure = 0
 		return
 	_crowd_pressure = mini(max_crowd_pressure + GameState.field_crowd_cap_bonus(), _crowd_pressure + crowd_growth_per_wave)
+
+
+## Toggling/unlocking tiers (left bar) should feel instant. We clear the
+## wandering field enemies and refill with the fresh mix so a newly toggled-on
+## tier appears right away — otherwise, if the population were already full of
+## another tier, the new one wouldn't show until those died off.
+func _on_combat_upgrade_changed(axis: StringName) -> void:
+	if axis != &"tier":
+		return
+	_clear_field_enemies()
+	_spawn_timer = 0.0
+	_refill_enemy_population(_desired_enemy_count())
+
+
+# ─── Field buildings (structure system) ────────────────────────────────
+## Live purchase → place the new structure immediately.
+func _on_building_built(id: StringName) -> void:
+	_place_structure(id)
+
+
+## Re-place every owned building (called on field-loop start so they persist
+## across loops even though the field is otherwise rebuilt).
+func _place_all_buildings() -> void:
+	for child in _structures_root.get_children():
+		child.queue_free()
+	_structures.clear()
+	for id: StringName in GameState.built_buildings:
+		_place_structure(id)
+
+
+func _place_structure(id: StringName) -> void:
+	if _structures.has(id) and is_instance_valid(_structures[id]):
+		return
+	var building: Dictionary = Balance.building_by_id(id)
+	if building.is_empty():
+		return
+	var structure := FieldStructure.new()
+	structure.setup(building)
+	# Lay buildings out in a row along the top of the play area.
+	var slot: int = _structures.size()
+	structure.position = Vector2(LEFT_UI_INSET + 40.0 + float(slot) * 60.0, 58.0)
+	_structures_root.add_child(structure)
+	_structures[id] = structure
+
+
+## Sanctuary fired (someone was instantly revived) → pulse its structure.
+func _on_sanctuary_revived() -> void:
+	var s = _structures.get(&"sanctuary", null)
+	if is_instance_valid(s) and s.has_method("pulse"):
+		s.pulse()
+
+
+## A companion met its condition (등장) — announce the "만남" so the player knows
+## a recruit is now available in the shop.
+func _on_companion_appeared(id: StringName) -> void:
+	var comp: Dictionary = Balance.companion_by_id(id)
+	_show_message(str(comp.get("appear_text", "새로운 동료가 나타났다!")))
+
+
+# ─── Downed avatar pose (lie down while refilling, stand when full) ─────
+func _on_party_member_downed_visual(index: int) -> void:
+	_set_avatar_downed(index, true)
+
+
+func _on_party_member_revived_visual(index: int) -> void:
+	_set_avatar_downed(index, false)
+
+
+func _set_avatar_downed(index: int, is_down: bool) -> void:
+	var avatar: Node = _avatar_for_party_index(index)
+	if avatar and avatar.has_method("set_downed_visual"):
+		avatar.set_downed_visual(is_down)
+
+
+## Index 0 = the player avatar; index > 0 = the companion with that slot_index.
+func _avatar_for_party_index(index: int) -> Node:
+	if index == 0:
+		return _player
+	for child in _party_root.get_children():
+		if child is Companion and child.slot_index == index:
+			return child
+	return null
 
 
 func _refill_enemy_population(max_to_spawn: int) -> void:
@@ -810,10 +862,15 @@ func _desired_enemy_count() -> int:
 
 
 func _spawn_field_enemy(data: EnemyData) -> void:
+	if data == null:
+		# Every tier toggled off → nothing to spawn this tick.
+		print("[field] spawn skipped — no active tier. active_tier_ids=%s" % [GameState.active_tier_ids])
+		return  # every tier toggled off → nothing to spawn this tick
+	print("[field] spawn %s (res=%s) active_tier_ids=%s" % [data.id, data.resource_path, GameState.active_tier_ids])
 	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
 	var fe: FieldEnemy = FIELD_ENEMY_SCENE.instantiate()
 	fe.setup(data)
-	fe.wander_bounds_min = Vector2.ONE * 16.0
+	fe.wander_bounds_min = Vector2(LEFT_UI_INSET, 16.0)
 	fe.wander_bounds_max = _field_size - Vector2.ONE * 16.0
 	fe.position = _random_spawn_position_for_enemy(data, safe_origin)
 	_enemies_root.add_child(fe)
@@ -828,17 +885,10 @@ func _enemy_count_for_current_nodes() -> int:
 
 
 func _enemy_data_for_current_nodes() -> EnemyData:
-	if GameState.current_field_region_id == GameState.FIELD_REGION_FOREST:
-		if randf() < 0.45:
-			return BAT_DATA
-		if GameState.chaser_enemies_enabled() and randf() < 0.25:
-			return SLIME_CHASER_DATA
-		return SLIME_DATA
-	if not GameState.chaser_enemies_enabled():
-		return SLIME_DATA
-	if not _chaser_spawned_this_loop:
-		return SLIME_CHASER_DATA
-	return SLIME_CHASER_DATA if randf() < 0.35 else SLIME_DATA
+	# The field spawns a random mix of whichever tiers are toggled ON (left bar).
+	# Returns null when every tier is toggled off — _spawn_field_enemy guards it,
+	# so the field simply stays empty until the player re-enables something.
+	return GameState.random_active_tier_enemy_data()
 
 
 func _random_spawn_position_for_enemy(data: EnemyData, avoid: Vector2) -> Vector2:
@@ -882,7 +932,7 @@ func _random_safe_position(avoid: Vector2) -> Vector2:
 
 
 func _is_safe_enemy_spawn_position(pos: Vector2, avoid: Vector2) -> bool:
-	return pos.distance_to(avoid) >= _party_safe_radius() and not _is_near_town_tile(pos)
+	return pos.distance_to(avoid) >= _party_safe_radius()
 
 
 func _party_safe_radius() -> float:
@@ -950,10 +1000,6 @@ func _clamp_field_position(pos: Vector2) -> Vector2:
 	)
 
 
-func _is_near_town_tile(pos: Vector2) -> bool:
-	return _town_tile != null and _town_revealed and pos.distance_to(_town_tile.position) < TOWN_TILE_SAFE_RADIUS
-
-
 func _random_position() -> Vector2:
 	return Vector2(
 		randf_range(SPAWN_MARGIN, _field_size.x - SPAWN_MARGIN),
@@ -969,7 +1015,7 @@ func _apply_field_size() -> void:
 	_background_texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_background_texture.stretch_mode = TextureRect.STRETCH_KEEP
 	if _player and _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2.ZERO, _field_size)
+		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _field_size)
 
 
 func _apply_field_background() -> void:
@@ -1086,12 +1132,10 @@ func _on_field_loop_finish_requested() -> void:
 ## and combine with the field-empty check.
 func _check_refill_after_battles() -> void:
 	_active_battle_windows = 0
-	if GameState.STORY_MODE_ENABLED:
-		return
 	if _loop_complete:
 		return
-	if not GameState.field_spawner_enabled():
-		return
+	# Legacy STORY_MODE / `spawner` skill gates removed — the incremental field
+	# always tops itself back up so it never sits empty between fights.
 	if _active_field_enemy_count() == 0:
 		_refill_enemy_population(spawn_batch_size)
 

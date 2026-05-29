@@ -17,6 +17,8 @@ var slot_index: int = 1
 var _pending_data: CharacterData
 var _last_position: Vector2
 var _player_trail: Array[Vector2] = []
+## True while this companion's party member is downed (shows the lying pose).
+var _downed_visual: bool = false
 
 @onready var _visual: CharacterVisual = $Visual
 
@@ -55,7 +57,17 @@ func _physics_process(delta: float) -> void:
 	else:
 		global_position = target_position
 		_visual.set_velocity(Vector2.ZERO)
+	if _downed_visual:
+		_visual.set_velocity(Vector2.ZERO)  # lying pose: no walk animation
 	_last_position = global_position
+
+
+## Field shows this companion lying down while its party member is downed.
+func set_downed_visual(is_down: bool) -> void:
+	_downed_visual = is_down
+	if _visual:
+		_visual.rotation = deg_to_rad(90.0) if is_down else 0.0
+		_visual.modulate = Color(0.6, 0.6, 0.66, 1.0) if is_down else Color(1, 1, 1, 1)
 
 
 func current_speed() -> float:

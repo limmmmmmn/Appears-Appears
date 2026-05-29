@@ -66,7 +66,16 @@ const ENCOUNTER_FREEZE_TIME: float = 0.1
 const ENCOUNTER_FLASH_MODULATE: Color = Color(2.0, 2.0, 2.0, 1.0)
 const ENCOUNTER_SQUASH: Vector2 = Vector2(1.45, 0.6)
 
+## When the multi-window cap is full and the player keeps bumping into us,
+## scoot both apart instead of triggering an encounter. Enemy gets pushed a
+## little faster than the player so it reads as "player shoves the slime".
+const STUCK_ENEMY_PUSH_SPEED: float = 120.0
+const STUCK_PLAYER_PUSH_SPEED: float = 60.0
+const STUCK_MIN_OVERLAP_DISTANCE_SQ: float = 1.0
+
 func _ready() -> void:
+	# Player auto-move queries this group every physics frame.
+	add_to_group("field_enemy")
 	_apply_data()
 	body_entered.connect(_on_body_entered)
 	# Safety net: if we're freed mid hit-stop, don't leak the field pause.
@@ -74,6 +83,16 @@ func _ready() -> void:
 	_player = _find_player()
 	_pick_new_wander_dir()
 	_start_spawn_telegraph()
+
+
+## Treat enemies as off-limits for auto-move once they've started the
+## encounter handoff (or are despawning). Also bow out when the multi-window
+## cap is hit so the player doesn't keep bumping into an enemy that can't
+## currently spawn a battle — auto-move falls through to pickups instead.
+func is_auto_move_target() -> bool:
+	if _triggered or _despawning or _spawning:
+		return false
+	return GameState.can_accept_new_battle_window()
 
 
 ## Allow callers to inject data after instantiate().
@@ -121,6 +140,27 @@ func _physics_process(delta: float) -> void:
 		_process_chase(delta)
 	else:
 		_process_charge(delta)
+	# Cap-blocked bumps: separate from the player each frame so neither party
+	# stays locked inside the slime.
+	if not GameState.can_accept_new_battle_window():
+		_resolve_stuck_overlap(delta)
+
+
+## Push the enemy and the overlapping player apart along the line between
+## their centers. Position-based (no velocity changes) so this plays nicely
+## with the enemy's own state-machine movement and the player's auto-move
+## velocity — both just see the position get nudged a few pixels per frame.
+func _resolve_stuck_overlap(delta: float) -> void:
+	for body in get_overlapping_bodies():
+		if not (body is Player):
+			continue
+		var separation: Vector2 = global_position - body.global_position
+		if separation.length_squared() < STUCK_MIN_OVERLAP_DISTANCE_SQ:
+			# Same pixel — pick any direction so we unstick instead of stalling.
+			separation = Vector2.RIGHT.rotated(randf() * TAU)
+		var dir: Vector2 = separation.normalized()
+		global_position += dir * STUCK_ENEMY_PUSH_SPEED * delta
+		body.global_position -= dir * STUCK_PLAYER_PUSH_SPEED * delta
 
 
 func _process_wander(delta: float) -> void:
@@ -382,6 +422,11 @@ func _build_spawn_sparkle() -> Node2D:
 func _on_body_entered(body: Node) -> void:
 	if _triggered or _spawning or body is not Player:
 		return
+	# Multi-window cap: when BattleManager is already at its allowed window
+	# count, just let the player pass through. The enemy stays alive and will
+	# re-trigger once a window closes and the player walks back in.
+	if not GameState.can_accept_new_battle_window():
+		return
 	_trigger_encounter(false)
 
 
@@ -393,9 +438,12 @@ func trigger_combo_encounter(combo_batch_id: int) -> void:
 
 func _trigger_encounter(is_combo_encounter: bool, combo_batch_id: int = 0) -> void:
 	_triggered = true
-	monitoring = false
-	monitorable = false
-	_collision_shape.disabled = true
+	# Deferred: this runs inside the Area2D body_entered signal, where the
+	# physics state is locked — set_deferred avoids "Function blocked during
+	# in/out signal" / "flushing queries" errors.
+	set_deferred("monitoring", false)
+	set_deferred("monitorable", false)
+	_collision_shape.set_deferred("disabled", true)
 	_alert_bubble.visible = false
 	# Combo wipes have their own giant-skeleton spectacle — fire straight away
 	# so a dozen enemies don't each hit-stop the field.

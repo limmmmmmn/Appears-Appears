@@ -65,6 +65,29 @@ const ENEMY_TIER_BY_ID: Dictionary = {
 	&"blade_bug": 3,
 }
 
+# ─── Chest reward state (post-victory) ────────────────────────────────
+## How long the player must hover before the chest pops open.
+const CHEST_HOVER_DURATION: float = 1.0
+## Window shrinks to this fraction of its battle size when becoming a chest.
+const CHEST_SCALE: float = 0.7
+const CHEST_SHRINK_DURATION: float = 0.3
+const CHEST_OPEN_DURATION: float = 0.22
+const CHEST_REVEAL_LINGER: float = 1.2
+const CHEST_CLOSE_FADE: float = 0.32
+## How many bonus gold the victory itself grants on top of enemy drops.
+const VICTORY_GOLD_BONUS: int = 1
+const GOLD_ICON: Texture2D = preload("res://assets/sprites/icons/gold.png")
+## Reward chests float above active battle windows (which sit at z_index 0) so a
+## freshly spawned fight can never bury the box the player needs to claim.
+const CHEST_Z_INDEX: int = 50
+## Extra pixels of forgiveness around the chest box for hover detection.
+const CHEST_HOVER_PADDING: float = 6.0
+## When a party member is downed by THIS window's enemy, the fight collapses:
+## progress lost, no chest. This is the shatter/vanish animation length.
+const COLLAPSE_DURATION: float = 0.34
+
+enum ChestState { NONE, CLOSED, OPENING, REVEALED, CLOSING }
+
 var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
 var _running: bool = false
@@ -81,10 +104,21 @@ var _crash_tween: Tween
 var _log_queue: Array[String] = []
 var _pending_defeat_logs: Array[String] = []
 var _log_sequence_running: bool = false
-var _close_when_log_queue_empty: bool = false
 var _close_started: bool = false
 var _opening: bool = false
 var _open_tween: Tween
+
+# Chest state (replaces the immediate "close-after-logs" path).
+var _pending_chest: bool = false
+var _chest_state: int = ChestState.NONE
+var _chest_root: Control
+var _chest_hover_progress: float = 0.0
+var _chest_hover_bar: ProgressBar
+var _chest_tween: Tween
+## DQ1-style initiative for this fight: +1 선공 (party first), -1 피습 (enemies
+## first), 0 보통 (by agility). Applied to the FIRST turn-queue build only.
+var _initiative: int = 0
+var _initiative_pending: bool = true
 
 
 func _ready() -> void:
@@ -94,10 +128,24 @@ func _ready() -> void:
 	_turn_timer.wait_time = turn_interval * GameState.battle_turn_interval_multiplier()
 	_turn_timer.timeout.connect(_on_turn_tick)
 	_spawn_enemy()
+	_roll_initiative()
 	_rebuild_turn_queue()
 	EventBus.battle_window_opened.emit(self)
+	# Weapon (SPEED) and armor (survival) equips both surface "○○ 장착!" in any
+	# live fight + a quick celebratory pop.
+	EventBus.weapon_equipped.connect(_on_weapon_equipped)
+	EventBus.armor_equipped.connect(_on_weapon_equipped)
 	_running = true
 	_turn_timer.start()
+
+
+func _on_weapon_equipped(weapon_name: String) -> void:
+	if not _running or is_chest_active():
+		return
+	_queue_log("%s 장착!" % weapon_name)
+	var pop := create_tween()
+	pop.tween_property(self, "scale", Vector2(1.08, 1.08), 0.08).set_trans(Tween.TRANS_QUAD)
+	pop.tween_property(self, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_QUAD)
 
 
 ## Allow spawner to inject data before _ready completes.
@@ -200,7 +248,7 @@ func field_drop_position() -> Vector2:
 	return _field_drop_position
 
 
-func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash") -> int:
+func apply_window_collision_damage(ratio: float, log_prefix: String = "Window crash", silent_log: bool = false) -> int:
 	var total_dealt: int = 0
 	var effective_ratio: float = ratio * _window_collision_damage_multiplier(log_prefix)
 	for enemy: Enemy in _living_enemies():
@@ -211,7 +259,12 @@ func apply_window_collision_damage(ratio: float, log_prefix: String = "Window cr
 	if total_dealt > 0:
 		_play_crash_flash()
 		_spawn_window_damage_number(total_dealt, _window_damage_label(log_prefix))
-		_queue_log("%s!\nEnemies take %d damage." % [log_prefix, total_dealt])
+		# Bump / window-crash damage skips the text log — the floating damage
+		# number + crash flash are enough feedback for ambient collisions.
+		# Explicit skills (combo attack) still log so the player understands
+		# what they triggered.
+		if not silent_log:
+			_queue_log("%s!\nEnemies take %d damage." % [log_prefix, total_dealt])
 		_flush_pending_defeat_logs()
 	return total_dealt
 
@@ -238,12 +291,16 @@ func has_living_enemy_id(enemy_id: StringName) -> bool:
 	return false
 
 
-func show_party_bump_counter_damage(total_amount: int, _ratio: float) -> void:
-	_queue_log("Blade counter!\nParty takes %d damage." % total_amount)
+func show_party_bump_counter_damage(_total_amount: int, _ratio: float) -> void:
+	# Bump-related: log suppressed. Party damage is already visible via the
+	# party HP bars + damage numbers spawned on the party member.
+	pass
 
 
-func show_window_collision_heal(member_name: String, amount: int) -> void:
-	_queue_log("Bump blessing!\n%s recovers %d HP." % [member_name, amount])
+func show_window_collision_heal(_member_name: String, _amount: int) -> void:
+	# Bump-related: log suppressed. The heal still applies in GameState and
+	# pops up on the party member box via the existing HP-change feedback.
+	pass
 
 
 func _play_crash_flash() -> void:
@@ -374,17 +431,20 @@ func _ensure_enemy_count_planned() -> void:
 
 
 func _enemies_per_window() -> int:
-	return maxi(1, 1 + GameState.enemies_per_window_bonus())
+	# System 1: the per-window count is this tier's level-based spawn count
+	# (1→5, capped in Balance), plus any legacy skill bonus. This is what makes
+	# a leveled-up enemy come "우르르" — more bodies per window.
+	var tier_id: StringName = GameState.tier_id_for_enemy_data(enemy_data)
+	return maxi(1, GameState.enemy_spawn_count(tier_id) + GameState.enemies_per_window_bonus())
 
 
 func _plan_enemy_mix(total: int) -> Array[EnemyData]:
+	# Toggle model + per-enemy levels: a window is a homogeneous pile of the
+	# bumped tier (the field already mixes tiers across windows). The old
+	# support-enemy blending is dropped so a Lv5 slime window reads as "5 slimes".
 	var planned: Array[EnemyData] = []
 	for i in total:
-		if i == 0 or randf() < BASE_ENEMY_REPEAT_CHANCE:
-			planned.append(enemy_data)
-		else:
-			planned.append(_pick_support_enemy())
-	planned.shuffle()
+		planned.append(enemy_data)
 	return planned
 
 
@@ -461,22 +521,17 @@ func _party_attack(attacker_index: int) -> void:
 	if target_enemy == null:
 		return
 	var member: CharacterData = GameState.party[attacker_index]
-	match member.id:
-		&"hero":
+	# Behavior keys off the member's innate TRAIT, not their id — so future
+	# variants of the same class can act differently.
+	match Balance.character_trait(member.id):
+		&"aoe":
+			_mage_splash_attack(attacker_index)
+		&"support":
+			_priest_heal_attack(attacker_index, target_enemy)
+		&"single":
 			_basic_party_attack(attacker_index, target_enemy, GameState.hero_attack_multiplier())
-		&"mage":
-			if GameState.mage_splash_extra_targets() > 0:
-				_mage_splash_attack(attacker_index)
-			else:
-				_basic_party_attack(attacker_index, target_enemy)
-		&"priest":
-			if GameState.priest_heal_amount() > 0:
-				_priest_heal_attack(attacker_index, target_enemy)
-			else:
-				_basic_party_attack(attacker_index, target_enemy)
-		&"thief":
-			_thief_attack(attacker_index, target_enemy)
 		_:
+			# &"gold" (도적, gold is passive) and any other trait → basic attack.
 			_basic_party_attack(attacker_index, target_enemy)
 
 
@@ -484,7 +539,9 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	var member: CharacterData = GameState.party[attacker_index]
 	var atk: int = GameState.effective_attack(attacker_index)
 	var crit: Dictionary = GameState.roll_crit()
-	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"])))
+	# The attacker's WEAPON-TYPE multiplier scales damage here (per-member SPEED
+	# component of the gold/sec formula); base stat stays clean.
+	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
 	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], member.attack_effect)
 	var target_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
 	var crit_text := "\nCritical hit!" if crit["is_crit"] else ""
@@ -496,10 +553,10 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 func _mage_splash_attack(attacker_index: int) -> void:
 	var member: CharacterData = GameState.party[attacker_index]
 	var targets: Array[Enemy] = _living_enemies()
-	var target_count: int = mini(targets.size(), 1 + GameState.mage_splash_extra_targets())
+	var target_count: int = mini(targets.size(), 1 + GameState.member_aoe_extra_targets(attacker_index))
 	var atk: int = GameState.effective_attack(attacker_index)
 	var crit: Dictionary = GameState.roll_crit()
-	var damage: int = int(round(float(atk) * GameState.mage_splash_damage_multiplier() * float(crit["mult"])))
+	var damage: int = int(round(float(atk) * GameState.member_aoe_damage_mult(attacker_index) * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
 	var total_dealt: int = 0
 	for i in target_count:
 		total_dealt += targets[i].take_damage(damage, crit["is_crit"], member.attack_effect)
@@ -516,7 +573,7 @@ func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	if heal_target == -1:
 		return
 	var before_hp: int = GameState.party_hp[heal_target]
-	GameState.heal_party_member(heal_target, GameState.priest_heal_amount())
+	GameState.heal_party_member(heal_target, GameState.member_heal_amount(attacker_index))
 	var healed: int = GameState.party_hp[heal_target] - before_hp
 	if healed > 0:
 		_queue_log("%s prays.\n%s recovers %d HP." % [
@@ -540,7 +597,7 @@ func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
 func _enemy_attack(enemy: Enemy) -> void:
 	var alive_indices: Array[int] = []
 	for i in GameState.party_size():
-		if GameState.is_alive(i):
+		if GameState.is_combat_ready(i):
 			alive_indices.append(i)
 	if alive_indices.is_empty():
 		return
@@ -555,6 +612,10 @@ func _enemy_attack(enemy: Enemy) -> void:
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
 	_queue_log("%s attacks!\n%s takes %d damage." % [attacker_name, target.display_name, dealt])
+	# If that blow downed the member, THIS fight collapses — progress + reward
+	# lost (no chest). Only this window; the others keep rolling.
+	if GameState.is_downed(target_index):
+		_collapse_lost(target.display_name)
 
 
 # ─── Enemy callbacks ──────────────────────────────────────────────────
@@ -563,9 +624,14 @@ func _on_enemy_hp_changed(_current: int, _max_hp: int) -> void:
 
 
 func _on_enemy_died(_enemy: Enemy) -> void:
-	var drop_reward: int = _enemy.gold_reward if GameState.gold_drops_enabled() else 0
-	if GameState.gold_drops_enabled():
-		_gold_drops_total += drop_reward
+	# System 1: every kill grows that enemy tier's level (more spawns + more
+	# gold over time). Recorded before reading the reward so the count is live.
+	if _enemy.data:
+		GameState.record_enemy_kill(GameState.tier_id_for_enemy_data(_enemy.data))
+	# Gold always flows now — it's the kill reward (tier gold × GREED), claimed
+	# from the chest when the window clears. No more "gold drops" skill gate.
+	var drop_reward: int = _enemy.gold_reward
+	_gold_drops_total += drop_reward
 	if _enemy.data:
 		_earned_xp_total += GameState.scaled_enemy_xp_reward(_enemy.data)
 	_refresh_hp_label()
@@ -580,10 +646,12 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	_running = false
 	_turn_timer.stop()
 	_add_window_item_drop()
-	GameState.add_gold(1)
+	# Rewards no longer drop onto the field — they're locked inside the chest
+	# the window transforms into. Total chest gold = enemy drops + the flat
+	# victory bonus (kept so trivial wins still pay something).
+	_gold_drops_total += VICTORY_GOLD_BONUS
 	_pending_defeat_logs.append("%s is defeated!" % defeated_name)
-	_pending_defeat_logs.append("Victory!\n1 gold gained.")
-	_close_when_log_queue_empty = true
+	_pending_chest = true
 	call_deferred("_flush_pending_defeat_logs")
 
 
@@ -619,8 +687,9 @@ func _drain_log_queue() -> void:
 		_set_log(_log_queue.pop_front())
 		await get_tree().create_timer(LOG_STEP_DURATION).timeout
 	_log_sequence_running = false
-	if _close_when_log_queue_empty:
-		_close_after_log_sequence()
+	if _pending_chest and _chest_state == ChestState.NONE:
+		_pending_chest = false
+		_enter_chest_state()
 
 
 func _close_after_log_sequence() -> void:
@@ -629,6 +698,304 @@ func _close_after_log_sequence() -> void:
 	_close_started = true
 	await get_tree().process_frame
 	await get_tree().create_timer(close_delay).timeout
+	if not is_inside_tree():
+		return
+	EventBus.battle_window_closed.emit(self)
+	queue_free()
+
+
+## A party member fell mid-fight → this window is lost. Stop combat, discard all
+## accumulated reward (no chest, no gold, no XP), shatter, and close. Other
+## windows are untouched. Guarded so it fires at most once.
+func _collapse_lost(downed_name: String) -> void:
+	if _close_started or _chest_state != ChestState.NONE:
+		return
+	_close_started = true
+	_running = false
+	_pending_chest = false
+	_turn_timer.stop()
+	# Drop the spoils — being so close doesn't matter, the fight is lost.
+	_gold_drops_total = 0
+	_earned_xp_total = 0
+	_set_log("%s 쓰러짐!\n전투 와해 — 보상 없음" % downed_name)
+	# Shatter/vanish: flash red, jolt, shrink + fade so "잃었다" reads clearly.
+	pivot_offset = size * 0.5
+	if _chest_tween and _chest_tween.is_valid():
+		_chest_tween.kill()
+	modulate = Color(1.0, 0.5, 0.45, 1.0)
+	var tween := create_tween()
+	tween.tween_property(self, "rotation", randf_range(-0.18, 0.18), COLLAPSE_DURATION * 0.35) \
+		.set_trans(Tween.TRANS_BACK)
+	tween.parallel().tween_property(self, "scale", Vector2(0.62, 0.62), COLLAPSE_DURATION) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(self, "modulate:a", 0.0, COLLAPSE_DURATION) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(_finish_collapse_lost)
+
+
+func _finish_collapse_lost() -> void:
+	if not is_inside_tree():
+		return
+	EventBus.battle_window_closed.emit(self)
+	queue_free()
+
+
+# ─── Chest reward flow ───────────────────────────────────────────────
+## True while the window is sitting as a closed/opening/revealed chest. Used
+## by BattleManager to skip drift physics on chests so the hover stays stable.
+func is_chest_active() -> bool:
+	return _chest_state != ChestState.NONE
+
+
+func _enter_chest_state() -> void:
+	if _chest_state != ChestState.NONE:
+		return
+	_chest_state = ChestState.CLOSED
+	# The fight itself is over the moment we transform — let BattleManager
+	# release the modal pause (if any) and stop counting us toward the
+	# multi-window cap. Player can move again while the chest waits.
+	EventBus.battle_window_resolved.emit(self)
+	# The whole window becomes the chest — repaint Background as the body and
+	# hide the battle UI. Lid/band/lock overlay on top in _build_chest_visual.
+	_background.add_theme_stylebox_override("panel", _flat_panel_style(
+		Color(0.42, 0.27, 0.14, 1.0),  # body brown
+		Color(0.20, 0.12, 0.06, 1.0)   # rim
+	))
+	_background_image.visible = false
+	_log_panel.visible = false
+	_name_label.visible = false
+	_hp_label.visible = false
+	for child in _enemy_anchor.get_children():
+		if child is CanvasItem:
+			(child as CanvasItem).visible = false
+
+	_build_chest_visual()
+	_build_hover_progress_bar()
+	# Capture the mouse over the whole box; hover is sampled per-frame in _process
+	# against the box's local rect (robust to the chest scale, unlike the
+	# mouse_entered/exited signals which mis-fire once we shrink to CHEST_SCALE).
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	# Float above active battle windows so a newly spawned fight can't bury the
+	# reward — the player can always find and open it.
+	z_index = CHEST_Z_INDEX
+	move_to_front()
+
+	# Shrink the whole window down to chest scale around its center.
+	pivot_offset = size * 0.5
+	if _chest_tween and _chest_tween.is_valid():
+		_chest_tween.kill()
+	_chest_tween = create_tween()
+	_chest_tween.tween_property(self, "scale", Vector2(CHEST_SCALE, CHEST_SCALE), CHEST_SHRINK_DURATION) \
+		.set_trans(Tween.TRANS_BACK) \
+		.set_ease(Tween.EASE_OUT)
+
+
+func _build_chest_visual() -> void:
+	_chest_root = Control.new()
+	_chest_root.name = "ChestVisual"
+	_chest_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_chest_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_chest_root)
+
+	# The Background panel is now the chest body. Overlay the lid (darker
+	# upper band that reads as the chest's hinged top) and a gold latch band
+	# with a central lock, leaving a 4px inset so the rim shows through.
+	var inset: float = 4.0
+	var inner_w: float = size.x - inset * 2.0
+	var lid_height: float = size.y * 0.34
+
+	var lid := ColorRect.new()
+	lid.color = Color(0.32, 0.20, 0.10, 1.0)
+	lid.position = Vector2(inset, inset)
+	lid.size = Vector2(inner_w, lid_height)
+	lid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chest_root.add_child(lid)
+
+	var band := ColorRect.new()
+	band.color = Color(0.94, 0.78, 0.32, 1.0)
+	band.position = Vector2(inset, inset + lid_height - 2.0)
+	band.size = Vector2(inner_w, 6.0)
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chest_root.add_child(band)
+
+	var lock := ColorRect.new()
+	lock.color = Color(0.18, 0.10, 0.04, 1.0)
+	var lock_size: float = 7.0
+	lock.size = Vector2(lock_size, lock_size)
+	lock.position = Vector2(size.x * 0.5 - lock_size * 0.5, inset + lid_height - 1.0)
+	lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chest_root.add_child(lock)
+
+
+func _build_hover_progress_bar() -> void:
+	_chest_hover_bar = ProgressBar.new()
+	_chest_hover_bar.show_percentage = false
+	_chest_hover_bar.max_value = 1.0
+	_chest_hover_bar.value = 0.0
+	_chest_hover_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chest_hover_bar.size = Vector2(size.x * 0.52, 4.0)
+	_chest_hover_bar.position = Vector2(size.x * 0.24, size.y * 0.78)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.05, 0.05, 0.05, 0.9)
+	bg.border_color = Color(0.4, 0.3, 0.15, 1.0)
+	bg.border_width_left = 1
+	bg.border_width_top = 1
+	bg.border_width_right = 1
+	bg.border_width_bottom = 1
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = Color(1.0, 0.88, 0.4, 1.0)
+	_chest_hover_bar.add_theme_stylebox_override("background", bg)
+	_chest_hover_bar.add_theme_stylebox_override("fill", fill)
+	add_child(_chest_hover_bar)
+
+
+func _process(delta: float) -> void:
+	if _chest_state != ChestState.CLOSED:
+		return
+	# Hover = mouse anywhere over the box (plus a small pad so it's forgiving).
+	# get_local_mouse_position() already folds in the chest scale, so this stays
+	# correct after the window shrinks to CHEST_SCALE.
+	var pad: float = CHEST_HOVER_PADDING
+	var hover_rect := Rect2(Vector2(-pad, -pad), size + Vector2(pad, pad) * 2.0)
+	if not hover_rect.has_point(get_local_mouse_position()):
+		return
+	# Duration shrinks with the GREED open-speed upgrade (GameState).
+	_chest_hover_progress = clampf(_chest_hover_progress + delta / GameState.chest_hover_duration(), 0.0, 1.0)
+	if _chest_hover_bar:
+		_chest_hover_bar.value = _chest_hover_progress
+	if _chest_hover_progress >= 1.0:
+		_open_chest()
+
+
+func _open_chest() -> void:
+	if _chest_state != ChestState.CLOSED:
+		return
+	_chest_state = ChestState.OPENING
+	# At the unlock moment, force the reward to the very top so it's clearly
+	# visible even if windows spawned/overlapped while it sat closed.
+	z_index = CHEST_Z_INDEX
+	move_to_front()
+	# Apply the rewards now — claim_* zeroes the totals so we won't double-pay.
+	var gold_total: int = claim_gold_drops()
+	var items: Array[ItemData] = claim_item_drops()
+	if gold_total > 0:
+		GameState.add_gold(gold_total)
+	var collected_items: Array[ItemData] = []
+	for item: ItemData in items:
+		if item == null:
+			continue
+		if GameState.collect_item(item):
+			collected_items.append(item)
+
+	# Hide chest + hover bar, play "팡!" pulse, then reveal contents.
+	if _chest_hover_bar:
+		_chest_hover_bar.visible = false
+	if _chest_root:
+		_chest_root.visible = false
+	_spawn_open_sparkles()
+	if _chest_tween and _chest_tween.is_valid():
+		_chest_tween.kill()
+	_chest_tween = create_tween()
+	_chest_tween.tween_property(self, "scale", Vector2(CHEST_SCALE * 1.15, CHEST_SCALE * 1.15), CHEST_OPEN_DURATION * 0.4) \
+		.set_trans(Tween.TRANS_SINE) \
+		.set_ease(Tween.EASE_OUT)
+	_chest_tween.tween_property(self, "scale", Vector2(CHEST_SCALE, CHEST_SCALE), CHEST_OPEN_DURATION * 0.6) \
+		.set_trans(Tween.TRANS_BACK) \
+		.set_ease(Tween.EASE_OUT)
+	_chest_tween.tween_callback(_show_reveal.bind(gold_total, collected_items))
+
+
+func _spawn_open_sparkles() -> void:
+	# Four star glyphs radiating from the chest center for ~0.4s.
+	var center := Vector2(size.x * 0.5, size.y * 0.5)
+	for i in 6:
+		var angle: float = TAU * float(i) / 6.0 + randf_range(-0.2, 0.2)
+		var spark := Label.new()
+		spark.text = "★"
+		spark.add_theme_font_size_override("font_size", 10)
+		spark.add_theme_color_override("font_color", Color(1.0, 0.94, 0.5, 1.0))
+		spark.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.7))
+		spark.add_theme_constant_override("shadow_offset_x", 1)
+		spark.add_theme_constant_override("shadow_offset_y", 1)
+		spark.position = center
+		spark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(spark)
+		var target: Vector2 = center + Vector2(cos(angle), sin(angle)) * randf_range(16.0, 24.0)
+		var t := create_tween()
+		t.tween_property(spark, "position", target, 0.4) \
+			.set_trans(Tween.TRANS_QUAD) \
+			.set_ease(Tween.EASE_OUT)
+		t.parallel().tween_property(spark, "modulate:a", 0.0, 0.4)
+		t.tween_callback(spark.queue_free)
+
+
+func _show_reveal(gold_total: int, items: Array[ItemData]) -> void:
+	_chest_state = ChestState.REVEALED
+	var reveal := VBoxContainer.new()
+	reveal.name = "RewardReveal"
+	reveal.add_theme_constant_override("separation", 3)
+	reveal.alignment = BoxContainer.ALIGNMENT_CENTER
+	reveal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	reveal.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(reveal)
+
+	if gold_total > 0:
+		reveal.add_child(_build_reward_row(GOLD_ICON, "+%d 골드" % gold_total))
+	for item: ItemData in items:
+		var icon: Texture2D = item.icon if item else null
+		var name_text: String = "%s 획득!" % (item.display_name if item else "장비")
+		reveal.add_child(_build_reward_row(icon, name_text))
+
+	# Fade-in for the contents (modulate from 0 → 1).
+	reveal.modulate.a = 0.0
+	var t := create_tween()
+	t.tween_property(reveal, "modulate:a", 1.0, 0.18)
+	t.tween_interval(CHEST_REVEAL_LINGER)
+	t.tween_callback(_begin_chest_close)
+
+
+func _build_reward_row(icon: Texture2D, label_text: String) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if icon != null:
+		var tex := TextureRect.new()
+		tex.texture = icon
+		tex.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		tex.custom_minimum_size = Vector2(16.0, 16.0)
+		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(tex)
+	var label := Label.new()
+	label.text = label_text
+	label.add_theme_font_size_override("font_size", 10)
+	label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.78, 1.0))
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(label)
+	return row
+
+
+func _begin_chest_close() -> void:
+	if _chest_state == ChestState.CLOSING:
+		return
+	_chest_state = ChestState.CLOSING
+	if _chest_tween and _chest_tween.is_valid():
+		_chest_tween.kill()
+	_chest_tween = create_tween()
+	_chest_tween.tween_property(self, "modulate:a", 0.0, CHEST_CLOSE_FADE)
+	_chest_tween.parallel().tween_property(self, "scale", Vector2(CHEST_SCALE * 0.6, CHEST_SCALE * 0.6), CHEST_CLOSE_FADE) \
+		.set_trans(Tween.TRANS_QUAD) \
+		.set_ease(Tween.EASE_IN)
+	_chest_tween.tween_callback(_finish_chest_close)
+
+
+func _finish_chest_close() -> void:
+	if _close_started:
+		return
+	_close_started = true
 	if not is_inside_tree():
 		return
 	EventBus.battle_window_closed.emit(self)
@@ -673,7 +1040,7 @@ func _lowest_wounded_party_index() -> int:
 	var best_index: int = -1
 	var best_ratio: float = 1.1
 	for i in GameState.party_size():
-		if not GameState.is_alive(i):
+		if not GameState.is_combat_ready(i):
 			continue
 		var max_hp: int = GameState.effective_max_hp(i)
 		if max_hp <= 0 or GameState.party_hp[i] >= max_hp:
@@ -700,7 +1067,7 @@ func _next_actor() -> Dictionary:
 func _rebuild_turn_queue() -> void:
 	_turn_queue.clear()
 	for i in GameState.party_size():
-		if GameState.is_alive(i):
+		if GameState.is_combat_ready(i):
 			_turn_queue.append({
 				"type": ACTOR_PARTY,
 				"party_index": i,
@@ -715,7 +1082,12 @@ func _rebuild_turn_queue() -> void:
 				"agility": enemy.agility,
 				"tie_break": randf(),
 			})
-	_turn_queue.sort_custom(_compare_turn_actors)
+	# First round honors the ambush roll (선공/피습); afterwards, pure agility.
+	if _initiative_pending and _initiative != 0:
+		_turn_queue.sort_custom(_compare_initiative)
+	else:
+		_turn_queue.sort_custom(_compare_turn_actors)
+	_initiative_pending = false
 
 
 func _compare_turn_actors(a: Dictionary, b: Dictionary) -> bool:
@@ -726,9 +1098,36 @@ func _compare_turn_actors(a: Dictionary, b: Dictionary) -> bool:
 	return agility_a > agility_b
 
 
+## First-round ordering under ambush: one whole side acts before the other
+## (party first on 선공, enemies first on 피습); ties within a side by agility.
+func _compare_initiative(a: Dictionary, b: Dictionary) -> bool:
+	var a_party: bool = int(a["type"]) == ACTOR_PARTY
+	var b_party: bool = int(b["type"]) == ACTOR_PARTY
+	if a_party != b_party:
+		return a_party if _initiative == 1 else b_party
+	return _compare_turn_actors(a, b)
+
+
+## Roll this fight's initiative from party vs enemy agility, and log the result.
+func _roll_initiative() -> void:
+	var total: float = 0.0
+	var n: int = 0
+	for enemy: Enemy in _enemies:
+		if is_instance_valid(enemy):
+			total += float(enemy.agility)
+			n += 1
+	var enemy_avg: float = total / float(n) if n > 0 else 0.0
+	_initiative = GameState.roll_battle_initiative(enemy_avg)
+	_initiative_pending = true
+	if _initiative == 1:
+		_queue_log("선공! 먼저 공격한다!")
+	elif _initiative == -1:
+		_queue_log("기습당했다!")
+
+
 func _is_actor_alive(actor: Dictionary) -> bool:
 	if int(actor["type"]) == ACTOR_PARTY:
-		return GameState.is_alive(int(actor["party_index"]))
+		return GameState.is_combat_ready(int(actor["party_index"]))
 	var enemy := actor["enemy"] as Enemy
 	return enemy != null and is_instance_valid(enemy) and enemy.is_alive()
 

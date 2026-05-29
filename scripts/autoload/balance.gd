@@ -1,0 +1,456 @@
+extends Node
+
+## ═══════════════════════════════════════════════════════════════════════
+## CENTRAL BALANCE / TUNING — incremental combat system (v1)
+##
+## CORE PRINCIPLES (keep these true forever):
+##   • 모든 업그레이드는 화면에 보이는 변화를 동반한다 — 숫자만 바뀌는 건 금지.
+##   • 자동화(자동 개봉 등)는 늦게·약하게 등장하고, 키울 수 있게 한다.
+##   • 모든 튜닝 상수는 이 파일 한 곳에 모은다. 즉시 수정 가능.
+##
+## The on-screen combat stays turn-based and is the *staging*; the formulas
+## below are the *summary* of that combat. Tune enemy HP / party damage so the
+## emergent gold-per-second matches:
+##
+##     창당 초당골드 = (티어골드 × GREED배수) ÷ (티어처치시간 ÷ SPEED공격배수)
+##     총 초당골드   = 창당 초당골드 × 활성 창 수(SCALE)
+##
+## Three axes only — SPEED, GREED, SCALE. There is no 4th.
+## ═══════════════════════════════════════════════════════════════════════
+
+# ─── 1. Tuning constants (★ edit freely) ───────────────────────────────
+const SLIME_BASE_GOLD: int = 1
+const SLIME_BASE_TIME: float = 2.0       ## seconds to kill one base slime at SPEED Lv1
+const UPGRADE_BASE_COST: int = 10
+const COST_MULT: float = 1.5             ## SPEED, GREED shared cost growth
+const EFFECT_MULT: float = 1.4           ## SPEED, GREED shared effect growth
+const SCALE_BASE_COST: int = 200         ## first multi-window (1→2). ★tune-priority #1
+const SCALE_COST_MULT: float = 4.0       ## multi-window cost growth
+
+## SCALE window-count progression. Index = number of SCALE purchases made.
+## 0 purchases → 1 window, 1 → 2, … saturating at the final entry.
+const SCALE_STEPS: Array[int] = [1, 2, 3, 4, 5, 7, 10]
+
+## Enemy-HP calibration. HP(tier) = avg_party_hit × base_kill_time ×
+## PARTY_HITS_PER_SECOND, so at SPEED Lv1 / full HP a tier dies in ~its base
+## kill time. (turn_interval is ~0.5s → ~2 party hits/sec.)
+const PARTY_HITS_PER_SECOND: float = 2.0
+
+## Downed / auto-recovery cycle (death = time loss, never permanent).
+## In combat HP only DROPS — no passive regen. At 0 HP a member is DOWNED:
+## removed from the fight (party DPS ↓ → slower kills), HP refills fast in place
+## ("쫘라락"), and at full HP they auto-stand and rejoin. No revive button.
+## Expressed as a DURATION so a future "성소" building can shorten it per member.
+const DOWNED_RECOVERY_SECONDS: float = 2.5  ## time to refill 0 → full while downed
+
+# ─── System 1: per-enemy level (auto-growth from kills) ────────────────
+## Each enemy TYPE (tier) levels up purely from being killed — no gold cost.
+## Kills needed to go level L → L+1 = LEVEL_UP_BASE_KILLS × MULT^(L-1).
+## (10 → 15 → 23 → 34 …)
+const LEVEL_UP_BASE_KILLS: int = 10
+const LEVEL_UP_KILLS_MULT: float = 1.5
+## Effect 1 — per-window spawn count grows 1→2→3→4→5 with level, HARD-CAPPED
+## at 5 (screen/perf guard; later merge/copy mechanics push beyond this).
+const ENEMY_SPAWN_PER_WINDOW_MAX: int = 5
+## Effect 2 — kill-gold multiplier per level, UNCAPPED (the infinite-growth
+## lever). Gold ×KILL_GOLD_PER_LEVEL_MULT^(level-1).
+const KILL_GOLD_PER_LEVEL_MULT: float = 1.1
+
+# ─── System 2: treasure-chest buffer (anti-idle) ───────────────────────
+## Unopened reward chests may stack up to this many. When the buffer is full
+## new fights won't start — the player must open chests to keep production
+## rolling. Brief inattention is fine; long idling stalls income (no idle gain).
+const CHEST_BUFFER_MAX: int = 5
+
+## Chest open-speed upgrade (lives under the GREED axis). Each level shortens the
+## hover-to-open gauge time: BASE × MULT^level, floored. (1.0 → 0.8 → 0.64 …)
+const CHEST_OPEN_BASE_DURATION: float = 1.0
+const CHEST_OPEN_DURATION_MULT: float = 0.8
+const CHEST_OPEN_DURATION_MIN: float = 0.15
+const CHEST_OPEN_SPEED_BASE_COST: int = 25
+const CHEST_OPEN_SPEED_COST_MULT: float = 1.6
+
+# ─── 4. Enemy tiers ─────────────────────────────────────────────────────
+## Each tier only needs unlocking to appear. The player TOGGLES unlocked tiers
+## ON/OFF on the left bar — several can be active at once, and the field spawns
+## a random mix of whatever's toggled on. `enemy_res` supplies the sprite.
+## Every tier maps to a DISTINCT resource so HP/gold resolve per-enemy even with
+## multiple tiers active. NOTE: mage/dragon reuse existing sprites as
+## placeholders (blade_bug / slime_chaser) — swap art later.
+const TIERS: Array[Dictionary] = [
+	{"id": &"slime",  "name": "슬라임", "short": "슬", "unlock_cost": 0,     "kill_gold": 1,    "base_kill_time": 2.0,  "enemy_res": "res://data/enemies/slime.tres"},
+	{"id": &"bat",    "name": "박쥐",   "short": "박", "unlock_cost": 100,   "kill_gold": 8,    "base_kill_time": 3.5,  "enemy_res": "res://data/enemies/bat.tres"},
+	{"id": &"orc",    "name": "오크",   "short": "오", "unlock_cost": 700,   "kill_gold": 30,   "base_kill_time": 6.0,  "enemy_res": "res://data/enemies/orc.tres"},
+	{"id": &"mage",   "name": "마도사", "short": "마", "unlock_cost": 8000,  "kill_gold": 300,  "base_kill_time": 9.0,  "enemy_res": "res://data/enemies/blade_bug.tres"},
+	{"id": &"dragon", "name": "드래곤", "short": "용", "unlock_cost": 60000, "kill_gold": 2500, "base_kill_time": 15.0, "enemy_res": "res://data/enemies/slime_chaser.tres"},
+]
+
+# ─── 5. Weapon shop = SPEED axis skin (text-based, no sprites) ──────────
+## Buying the next weapon IS the SPEED upgrade. The equipped weapon's attack
+## multiplier = speed_mult(speed_level). Index by speed_level (1-based); past
+## the list we synthesize "명검 +N".
+const WEAPON_NAMES: Array[String] = [
+	"맨주먹", "낡은 단검", "청동검", "강철검", "기사검",
+	"은빛 장검", "용살검", "오리하르콘 검", "여명의 성검", "심판의 대검",
+]
+## Hero auto-buys the unlocked weapon for this fraction of its unlock cost.
+const WEAPON_AUTOBUY_COST_RATIO: float = 1.0 / 50.0
+
+# ─── Armor shop = survival skin (defense, symmetric to the weapon shop) ─
+## Buying the next armor IS the survival upgrade. Equipped armor adds flat
+## defense to the WHOLE party (mirrors how the weapon's SPEED boosts all). Index
+## by armor_level (1-based); level 1 = "맨몸" (no defense). Text-based, no sprites.
+const ARMOR_NAMES: Array[String] = [
+	"맨몸", "천 갑옷", "가죽 갑옷", "사슬 갑옷", "판금 갑옷",
+	"기사 갑옷", "미스릴 갑옷", "용비늘 갑옷", "수호의 성갑", "불멸의 판금",
+]
+const ARMOR_DEFENSE_PER_LEVEL: int = 2   ## flat defense added per armor level
+const ARMOR_BASE_COST: int = 15
+const ARMOR_COST_MULT: float = 1.55
+
+# ─── Party level-up (accumulating survival growth, auto from kills) ────
+## Per-member XP/level (shared by ALL party members, not hero-only). Levels
+## grant MAX HP only — attack stays with SPEED/weapon, defense with armor.
+const PARTY_LEVEL_BASE_XP: int = 12        ## XP to reach Lv2
+const PARTY_LEVEL_XP_MULT: float = 1.5     ## ×each level (exponential)
+const HP_PER_LEVEL: int = 6                ## max HP gained per level
+const AGILITY_PER_LEVEL: int = 1           ## agility gained per level (ambush/turn order)
+
+# ─── Party / companions ────────────────────────────────────────────────
+## Active party cap (hero + companions). Room left for a future '분대' expansion.
+const MAX_PARTY_SIZE: int = 4
+
+## Companions are pure DATA so a Suikoden-style mass roster drops in later. The
+## core 3 below are combat roles (no skills — role + level + gear only). Slots
+## `combo_group` / `building_link` are reserved for future content (leave empty).
+## Recruitment is 2-stage: meet `appear` → "등장", then pay `recruit_cost` → 영입.
+## Appear types: &"kills" (enemies slain), &"downs" (members knocked out),
+## &"gold_earned" (lifetime gold). Recruit costs are an exponential gold sink.
+const COMPANIONS: Array[Dictionary] = [
+	{
+		"id": &"mage", "name": "마법사", "role": &"mage", "short": "마",
+		"char_res": "res://data/characters/mage.tres",
+		"weapon_type": &"staff", "trait": &"aoe",
+		"recruit_cost": 300,
+		"appear": {"type": &"kills", "value": 40},
+		"appear_text": "전장의 마력에 이끌려 마법사가 나타났다!",
+		"combo_group": &"", "building_link": &"",
+	},
+	{
+		"id": &"priest", "name": "사제", "role": &"priest", "short": "사",
+		"char_res": "res://data/characters/priest.tres",
+		"weapon_type": &"blunt", "trait": &"support",
+		"recruit_cost": 1200,
+		"appear": {"type": &"downs", "value": 4},
+		"appear_text": "쓰러지는 이들을 보다 못해 사제가 나타났다!",
+		"combo_group": &"", "building_link": &"",
+	},
+	{
+		"id": &"thief", "name": "도적", "role": &"thief", "short": "도",
+		"char_res": "res://data/characters/thief.tres",
+		"weapon_type": &"dagger", "trait": &"gold",
+		"recruit_cost": 4000,
+		"appear": {"type": &"gold_earned", "value": 2500},
+		"appear_text": "금화 냄새를 맡고 도적이 나타났다!",
+		"combo_group": &"", "building_link": &"",
+	},
+]
+
+# ─── Weapon types (얕게 — identity + shop categories; effect = attack↑ only) ─
+## Unlocking a type's weapon auto-equips the matching companion (그 타입 사용자).
+## No type-specific effects — character TRAITS carry the role identity.
+const WEAPON_TYPES: Array[Dictionary] = [
+	{"id": &"sword",  "name": "검",      "short": "검"},
+	{"id": &"staff",  "name": "지팡이",  "short": "장"},
+	{"id": &"blunt",  "name": "둔기",    "short": "둔"},
+	{"id": &"dagger", "name": "단검",    "short": "비"},
+]
+const WEAPON_NAMES_BY_TYPE: Dictionary = {
+	&"sword":  ["맨손", "청동검", "강철검", "기사검", "용살검"],
+	&"staff":  ["나무 막대", "견습 지팡이", "수정 지팡이", "현자의 지팡이", "용골 지팡이"],
+	&"blunt":  ["나무 몽둥이", "철퇴", "축성 메이스", "성스러운 망치", "심판의 철퇴"],
+	&"dagger": ["녹슨 단검", "강철 단검", "비수", "그림자 단검", "월광 단검"],
+}
+
+## Innate per-character profile: weapon TYPE (auto-equip routing) + TRAIT (role
+## variant — fixed to the character, never changed by gear). Future collectible
+## variants (e.g. 버스트 마법사 with trait &"burst") just add rows; the structure
+## already supports same-class trait splits. Traits: &"single" (단일/균형),
+## &"aoe" (광역딜), &"support" (힐/부활), &"gold" (골드+).
+const HERO_WEAPON_TYPE: StringName = &"sword"
+const HERO_TRAIT: StringName = &"single"
+const TRAIT_NAMES: Dictionary = {
+	&"single": "단일딜/균형", &"aoe": "광역딜", &"support": "힐/부활", &"gold": "골드+",
+}
+
+# ─── Role scaling (grows with the member's LEVEL — no skills) ───────────
+## Mage: AoE width + power. Priest: heal + downed-recovery speed. Thief: gold ×.
+const MAGE_BASE_EXTRA_TARGETS: int = 1      ## extra enemies hit at Lv1 (so 2 total)
+const MAGE_LEVELS_PER_EXTRA_TARGET: int = 3 ## +1 target every N levels
+const MAGE_SPLASH_DMG_BASE: float = 0.6     ## splash damage mult at Lv1
+const MAGE_SPLASH_DMG_PER_LEVEL: float = 0.04
+const MAGE_SPLASH_DMG_MAX: float = 1.2
+const PRIEST_HEAL_BASE: int = 5             ## heal on the priest's turn at Lv1
+const PRIEST_HEAL_PER_LEVEL: int = 2
+const PRIEST_ATTACK_MULT: float = 0.5       ## priest is a weak attacker
+## Downed-recovery time is multiplied by this when a priest is present (faster
+## revive = the "human 성소"). Shrinks with priest level, floored.
+const PRIEST_RECOVERY_FACTOR_BASE: float = 0.6
+const PRIEST_RECOVERY_FACTOR_PER_LEVEL: float = 0.04
+const PRIEST_RECOVERY_FACTOR_MIN: float = 0.2
+const THIEF_GOLD_MULT_BASE: float = 1.15    ## party-wide gold × at Lv1 (GREED-style)
+const THIEF_GOLD_MULT_PER_LEVEL: float = 0.05
+
+# ─── DQ1-style ambush / initiative (per battle window) ─────────────────
+## At each fight's start: 선공(party acts first) / 피습(enemies first) / 보통.
+## Higher party agility vs enemy agility tilts toward 선공. Order only — no
+## bonus damage or instakill; the order itself creates the swing.
+const AMBUSH_PREEMPT_BASE: float = 0.25     ## base 선공 chance at equal agility
+const AMBUSH_SURPRISE_BASE: float = 0.15    ## base 피습 chance at equal agility
+const AMBUSH_AGILITY_WEIGHT: float = 0.015  ## per point of (party - enemy) agility
+const AMBUSH_CHANCE_MIN: float = 0.02
+const AMBUSH_CHANCE_MAX: float = 0.85
+
+# ─── Field buildings (reusable structure system; 성소 is the first) ────
+## Player-bought structures placed on the field. Generic table so 대장간 / 상점
+## etc. drop in later with no new plumbing — add a row + handle its effect.
+## Sanctuary cost is tuned to be skippable early but tempting after the down/
+## recovery slowdown bites a few times.
+const BUILDINGS: Array[Dictionary] = [
+	{
+		"id": &"sanctuary", "name": "성소", "short": "성",
+		"cost": 250,
+		"color": Color(0.55, 0.85, 1.0, 1.0),
+		"desc": "쓰러진 동료를 즉시 부활. 다운 슬로다운을 없앱니다.",
+	},
+]
+
+
+# ─── SPEED / GREED formulas (shared cost + effect curves) ──────────────
+## Cost to go from `current_level` → `current_level + 1`.
+## level 1 → 2 costs UPGRADE_BASE_COST (×COST_MULT each further level).
+func upgrade_cost(current_level: int) -> int:
+	var raw: float = float(UPGRADE_BASE_COST) * pow(COST_MULT, float(maxi(1, current_level) - 1))
+	return _round_cost(raw)
+
+
+## Effect multiplier at a given level. Level 1 = 1.0 (base).
+func effect_multiplier(level: int) -> float:
+	return pow(EFFECT_MULT, float(maxi(1, level) - 1))
+
+
+# ─── SCALE formulas (window count + cost) ──────────────────────────────
+## Cost of the next SCALE purchase given how many were already bought.
+func scale_cost(purchases_done: int) -> int:
+	var raw: float = float(SCALE_BASE_COST) * pow(SCALE_COST_MULT, float(maxi(0, purchases_done)))
+	return _round_cost(raw)
+
+
+## Simultaneous battle-window count for a given number of SCALE purchases.
+func scale_window_count(purchases_done: int) -> int:
+	var idx: int = clampi(purchases_done, 0, SCALE_STEPS.size() - 1)
+	return SCALE_STEPS[idx]
+
+
+## Max meaningful SCALE purchases (beyond this the window count is capped).
+func scale_max_purchases() -> int:
+	return SCALE_STEPS.size() - 1
+
+
+# ─── Per-enemy level curves (System 1) ─────────────────────────────────
+## Kills required to advance from `level` to `level + 1`.
+func kills_for_level(level: int) -> int:
+	return maxi(1, int(round(float(LEVEL_UP_BASE_KILLS) * pow(LEVEL_UP_KILLS_MULT, float(maxi(1, level) - 1)))))
+
+
+## How many of this enemy spawn in one window at the given level (1→5, capped).
+func spawn_count_for_level(level: int) -> int:
+	return clampi(level, 1, ENEMY_SPAWN_PER_WINDOW_MAX)
+
+
+## Uncapped kill-gold multiplier for the given level.
+func kill_gold_mult_for_level(level: int) -> float:
+	return pow(KILL_GOLD_PER_LEVEL_MULT, float(maxi(1, level) - 1))
+
+
+# ─── Chest open-speed (GREED axis upgrade) ─────────────────────────────
+## Hover-to-open gauge duration at a given open-speed level (level 0 = base).
+func chest_open_duration(level: int) -> float:
+	return maxf(CHEST_OPEN_DURATION_MIN, CHEST_OPEN_BASE_DURATION * pow(CHEST_OPEN_DURATION_MULT, float(maxi(0, level))))
+
+
+## Cost to buy the next open-speed level (from `level` → `level + 1`).
+func chest_open_speed_cost(level: int) -> int:
+	return _round_cost(float(CHEST_OPEN_SPEED_BASE_COST) * pow(CHEST_OPEN_SPEED_COST_MULT, float(maxi(0, level))))
+
+
+# ─── Tier lookups ───────────────────────────────────────────────────────
+func tier_count() -> int:
+	return TIERS.size()
+
+
+func tier_at(index: int) -> Dictionary:
+	if index < 0 or index >= TIERS.size():
+		return {}
+	return TIERS[index]
+
+
+func tier_by_id(id: StringName) -> Dictionary:
+	for tier: Dictionary in TIERS:
+		if tier["id"] == id:
+			return tier
+	return {}
+
+
+func tier_index_of(id: StringName) -> int:
+	for i in TIERS.size():
+		if TIERS[i]["id"] == id:
+			return i
+	return -1
+
+
+## Reverse lookup: which tier owns a given enemy resource path. Used to resolve
+## per-enemy HP/gold when several tiers are active at once. {} if no match.
+func tier_by_enemy_res(path: String) -> Dictionary:
+	for tier: Dictionary in TIERS:
+		if str(tier["enemy_res"]) == path:
+			return tier
+	return {}
+
+
+# ─── Building lookups (structure system) ───────────────────────────────
+func building_count() -> int:
+	return BUILDINGS.size()
+
+
+func building_at(index: int) -> Dictionary:
+	if index < 0 or index >= BUILDINGS.size():
+		return {}
+	return BUILDINGS[index]
+
+
+func building_by_id(id: StringName) -> Dictionary:
+	for b: Dictionary in BUILDINGS:
+		if b["id"] == id:
+			return b
+	return {}
+
+
+# ─── Companion lookups ─────────────────────────────────────────────────
+func companion_count() -> int:
+	return COMPANIONS.size()
+
+
+func companion_at(index: int) -> Dictionary:
+	if index < 0 or index >= COMPANIONS.size():
+		return {}
+	return COMPANIONS[index]
+
+
+func companion_by_id(id: StringName) -> Dictionary:
+	for c: Dictionary in COMPANIONS:
+		if c["id"] == id:
+			return c
+	return {}
+
+
+# ─── Weapon types + per-character profile ──────────────────────────────
+func weapon_type_count() -> int:
+	return WEAPON_TYPES.size()
+
+
+func weapon_type_at(index: int) -> Dictionary:
+	if index < 0 or index >= WEAPON_TYPES.size():
+		return {}
+	return WEAPON_TYPES[index]
+
+
+func weapon_type_by_id(id: StringName) -> Dictionary:
+	for t: Dictionary in WEAPON_TYPES:
+		if t["id"] == id:
+			return t
+	return {}
+
+
+func weapon_name_for(type_id: StringName, level: int) -> String:
+	var names: Array = WEAPON_NAMES_BY_TYPE.get(type_id, [])
+	var idx: int = maxi(1, level) - 1
+	if idx < names.size():
+		return str(names[idx])
+	var type_name: String = str(weapon_type_by_id(type_id).get("name", "무기"))
+	return "%s +%d" % [type_name, idx - names.size() + 1]
+
+
+## The weapon TYPE a character wields (auto-equip routing).
+func character_weapon_type(id: StringName) -> StringName:
+	if id == &"hero":
+		return HERO_WEAPON_TYPE
+	return StringName(companion_by_id(id).get("weapon_type", HERO_WEAPON_TYPE))
+
+
+## The character's innate TRAIT (role variant; never changed by gear).
+func character_trait(id: StringName) -> StringName:
+	if id == &"hero":
+		return HERO_TRAIT
+	return StringName(companion_by_id(id).get("trait", HERO_TRAIT))
+
+
+# ─── Role scaling curves (by member level) ─────────────────────────────
+func mage_extra_targets(level: int) -> int:
+	return MAGE_BASE_EXTRA_TARGETS + int(float(maxi(1, level) - 1) / float(maxi(1, MAGE_LEVELS_PER_EXTRA_TARGET)))
+
+
+func mage_splash_damage(level: int) -> float:
+	return minf(MAGE_SPLASH_DMG_MAX, MAGE_SPLASH_DMG_BASE + MAGE_SPLASH_DMG_PER_LEVEL * float(maxi(1, level) - 1))
+
+
+func priest_heal(level: int) -> int:
+	return PRIEST_HEAL_BASE + PRIEST_HEAL_PER_LEVEL * (maxi(1, level) - 1)
+
+
+func priest_recovery_factor(level: int) -> float:
+	return maxf(PRIEST_RECOVERY_FACTOR_MIN, PRIEST_RECOVERY_FACTOR_BASE - PRIEST_RECOVERY_FACTOR_PER_LEVEL * float(maxi(1, level) - 1))
+
+
+func thief_gold_mult(level: int) -> float:
+	return THIEF_GOLD_MULT_BASE + THIEF_GOLD_MULT_PER_LEVEL * float(maxi(1, level) - 1)
+
+
+# ─── Weapon naming (SPEED skin) ────────────────────────────────────────
+func weapon_name_for_level(level: int) -> String:
+	var idx: int = maxi(1, level) - 1
+	if idx < WEAPON_NAMES.size():
+		return WEAPON_NAMES[idx]
+	return "명검 +%d" % (idx - WEAPON_NAMES.size() + 1)
+
+
+# ─── Armor (survival skin) ─────────────────────────────────────────────
+func armor_name_for_level(level: int) -> String:
+	var idx: int = maxi(1, level) - 1
+	if idx < ARMOR_NAMES.size():
+		return ARMOR_NAMES[idx]
+	return "성갑 +%d" % (idx - ARMOR_NAMES.size() + 1)
+
+
+## Flat party defense from the equipped armor (level 1 = 0).
+func armor_defense_for_level(level: int) -> int:
+	return ARMOR_DEFENSE_PER_LEVEL * (maxi(1, level) - 1)
+
+
+## Cost to buy the next armor (from `current_level` → `current_level + 1`).
+func armor_cost(current_level: int) -> int:
+	return _round_cost(float(ARMOR_BASE_COST) * pow(ARMOR_COST_MULT, float(maxi(1, current_level) - 1)))
+
+
+# ─── Party level-up curve ──────────────────────────────────────────────
+## XP required to advance a party member from `level` to `level + 1`.
+func party_xp_for_level(level: int) -> int:
+	return maxi(1, int(round(float(PARTY_LEVEL_BASE_XP) * pow(PARTY_LEVEL_XP_MULT, float(maxi(1, level) - 1)))))
+
+
+# ─── Internal ───────────────────────────────────────────────────────────
+## Round costs up to a tidy step so the shop reads cleanly.
+func _round_cost(raw: float) -> int:
+	if raw < 100.0:
+		return maxi(1, int(ceil(raw / 5.0)) * 5)
+	return maxi(1, int(ceil(raw / 10.0)) * 10)

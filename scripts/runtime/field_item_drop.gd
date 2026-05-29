@@ -41,10 +41,35 @@ var _drop_shadow: Polygon2D
 
 
 func _ready() -> void:
+	# Player auto-move falls back to this group when no enemies are present.
+	add_to_group("field_pickup")
 	body_entered.connect(_on_body_entered)
+	# Incremental-feel pickup: hovering the mouse over a drop magnets it to the
+	# party — no click needed. TooltipArea already covers the drop sprite as a
+	# Control, so we reuse it for hover detection regardless of Area2D state.
+	if _tooltip_area:
+		_tooltip_area.mouse_entered.connect(_on_mouse_hover_pickup)
 	_collision_shape.scale = Vector2.ONE * GameState.pickup_range_multiplier()
 	_apply_item()
 	_base_y = position.y
+
+
+## True only while the drop is landed and waiting — skip it once it's been
+## consumed or has already started flying toward the party so the player
+## doesn't follow a vanishing target.
+func is_auto_move_target() -> bool:
+	return _ready_for_magnet and not _collected and not _magnet_active
+
+
+func _on_mouse_hover_pickup() -> void:
+	# Drop must have finished its landing animation and not already be flying
+	# toward the party. Same guard the proximity magnet uses.
+	if _collected or _magnet_active or not _ready_for_magnet:
+		return
+	var player := get_tree().get_first_node_in_group("player") as Node2D
+	if player == null:
+		return
+	_begin_drop_magnet(player)
 
 
 func setup(drop_item: ItemData) -> void:

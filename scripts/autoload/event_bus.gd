@@ -22,6 +22,10 @@ signal party_changed()
 # ─── Battle Window Lifecycle ──────────────────────────────────────────
 signal battle_window_opened(window: Node)
 signal battle_window_closed(window: Node)
+## Fight is over but the window is still on screen as a closed chest waiting
+## for the player to claim its reward. BattleManager releases modal pause and
+## stops counting the window toward the multi-window cap from this point on.
+signal battle_window_resolved(window: Node)
 ## All battle windows have finished — there is no active combat anywhere.
 ## Used to gate field-loop settlement so it doesn't fire while combat is running.
 signal all_battles_resolved()
@@ -51,8 +55,27 @@ signal field_gold_drop_requested(amount: int, world_position: Vector2)
 ## At least one party member changed HP. Used for "any-change" listeners.
 signal party_hp_changed()
 
-## All party members are dead. Game over.
+## All party members are dead. Game over. (Unused under the downed/auto-recovery
+## model — kept for compatibility; combat no longer ends the run.)
 signal party_wiped()
+
+## A party member hit 0 HP and is now DOWNED — out of combat, refilling in place.
+signal party_member_downed(index: int)
+## A downed party member finished refilling and stood back up (rejoined combat).
+signal party_member_revived(index: int)
+
+# ─── Field buildings (structure system) ────────────────────────────────
+## A field building was purchased + placed. The Field spawns its structure.
+signal building_built(id: StringName)
+## The Sanctuary instantly revived a member (instead of the slow downed cycle).
+## The structure plays a pulse; the member is back to full immediately.
+signal sanctuary_revived(index: int)
+
+# ─── Companions (condition → 등장, gold → 영입) ─────────────────────────
+## A companion met its appearance condition and is now recruitable (등장).
+signal companion_appeared(id: StringName)
+## A companion was recruited into the party (영입). Party also emits party_changed.
+signal companion_recruited(id: StringName)
 
 ## Actual HP removed from a party member after clamping overkill.
 signal party_damage_taken(member_index: int, amount: int)
@@ -77,3 +100,29 @@ signal modifier_picked(modifier: ModifierData)
 # ─── Skill Tree ───────────────────────────────────────────────────────
 signal skill_node_purchase_succeeded(node)
 signal skill_node_purchase_failed(node)
+
+# ─── Incremental combat (SPEED / GREED / SCALE / TIER) ─────────────────
+## A combat upgrade axis changed. `axis` is one of &"speed", &"greed",
+## &"scale", &"tier". UI refreshes and combat re-reads multipliers from this.
+signal combat_upgrade_changed(axis: StringName)
+## Hero auto-equipped a newly unlocked weapon (SPEED skin). Battle windows show
+## "○○ 장착!" and bump their hit-effect size.
+signal weapon_equipped(weapon_name: String)
+## Hero auto-equipped a newly unlocked armor (survival skin). Same "○○ 장착!"
+## feedback; party defense rises.
+signal armor_equipped(armor_name: String)
+## A combat-upgrade purchase was attempted but refused (not enough gold, maxed,
+## tier already owned, …). UI can flash the relevant control.
+signal combat_upgrade_failed(axis: StringName)
+
+# ─── Per-enemy level (System 1) ────────────────────────────────────────
+## An enemy tier's kill-progress changed (fires every kill). Left bar updates
+## that tier's Lv number + progress gauge.
+signal enemy_progress_changed(tier_id: StringName)
+## An enemy tier leveled up. Used for extra juice (icon pop, etc.).
+signal enemy_leveled_up(tier_id: StringName, level: int)
+
+# ─── Treasure-chest buffer (System 2) ──────────────────────────────────
+## The unopened-chest buffer crossed full/not-full. When full, new fights are
+## refused until the player opens a chest. HUD shows a "상자 가득! 열어주세요" banner.
+signal chest_buffer_full_changed(is_full: bool)
