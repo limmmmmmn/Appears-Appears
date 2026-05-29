@@ -265,9 +265,8 @@ func damage_party_member(index: int, amount: int) -> void:
 			# No sanctuary: drop into the downed/auto-recovery cycle.
 			party_downed[index] = true
 			_downed_recovery_accum[index] = 0.0
-			total_party_downs += 1  # drives the 사제(priest) appearance condition
+			total_party_downs += 1  # gates the 성소(sanctuary) build unlock
 			EventBus.party_member_downed.emit(index)
-			_check_companion_appearances()
 			# Full collapse → freeze field movement until everyone recovers.
 			if is_party_all_downed():
 				_party_collapsed = true
@@ -378,8 +377,7 @@ func _level_growth_value(character_id: StringName, key: String) -> int:
 func add_gold(amount: int) -> void:
 	gold += amount
 	if amount > 0:
-		total_gold_earned += amount
-		_check_companion_appearances()  # drives the 도적(thief) gold condition
+		total_gold_earned += amount  # gates gold-based building unlocks
 	EventBus.gold_changed.emit(gold)
 
 
@@ -854,20 +852,36 @@ func upgrade_armor() -> bool:
 	return true
 
 
-# ─── Field buildings (reusable structure system) ───────────────────────
+# ─── Village buildings (right-panel grid; not on the field) ────────────
 func is_building_built(id: StringName) -> bool:
 	return built_buildings.has(id)
 
 
 func building_cost(id: StringName) -> int:
-	return int(Balance.building_by_id(id).get("cost", 0))
+	return int(Balance.building_by_id(id).get("build_cost", 0))
+
+
+## Locked → buildable gate. Empty `unlock` = always buildable (the first shop).
+func is_building_unlocked(id: StringName) -> bool:
+	var cond: Dictionary = Balance.building_by_id(id).get("unlock", {})
+	if cond.is_empty():
+		return true
+	var need: int = int(cond.get("value", 0))
+	match StringName(cond.get("type", &"")):
+		&"kills":
+			return total_enemy_kills >= need
+		&"downs":
+			return total_party_downs >= need
+		&"gold_earned":
+			return total_gold_earned >= need
+	return true
 
 
 func can_purchase_building(id: StringName) -> bool:
 	var b: Dictionary = Balance.building_by_id(id)
-	if b.is_empty() or is_building_built(id):
+	if b.is_empty() or is_building_built(id) or not is_building_unlocked(id):
 		return false
-	return gold >= int(b["cost"])
+	return gold >= building_cost(id)
 
 
 func purchase_building(id: StringName) -> bool:
@@ -875,6 +889,11 @@ func purchase_building(id: StringName) -> bool:
 		return false
 	built_buildings.append(id)
 	EventBus.building_built.emit(id)
+	# Building integration: the building's owner companion now "appears" (등장).
+	var owner_id: StringName = StringName(Balance.building_by_id(id).get("owner", &""))
+	if owner_id != &"" and not companions_appeared.has(owner_id) and not is_companion_recruited(owner_id):
+		companions_appeared.append(owner_id)
+		EventBus.companion_appeared.emit(owner_id)
 	return true
 
 
@@ -932,31 +951,6 @@ func _add_party_member(data: CharacterData) -> void:
 	party_mp.append(data.max_mp)
 	party_downed.append(false)
 	EventBus.party_changed.emit()
-
-
-## Flip any companion whose appearance condition is now met. Cheap (≤ a few
-## companions); called from the kill/down/gold counters that feed the conditions.
-func _check_companion_appearances() -> void:
-	for comp: Dictionary in Balance.COMPANIONS:
-		var id: StringName = comp["id"]
-		if companions_appeared.has(id) or is_companion_recruited(id):
-			continue
-		if _companion_condition_met(comp):
-			companions_appeared.append(id)
-			EventBus.companion_appeared.emit(id)
-
-
-func _companion_condition_met(comp: Dictionary) -> bool:
-	var ap: Dictionary = comp.get("appear", {})
-	var need: int = int(ap.get("value", 0))
-	match StringName(ap.get("type", &"")):
-		&"kills":
-			return total_enemy_kills >= need
-		&"downs":
-			return total_party_downs >= need
-		&"gold_earned":
-			return total_gold_earned >= need
-	return false
 
 
 # ─── DQ1-style ambush / initiative ─────────────────────────────────────
@@ -1167,8 +1161,7 @@ func enemy_kill_gold_multiplier(tier_id: StringName) -> float:
 func record_enemy_kill(tier_id: StringName) -> void:
 	if tier_id == &"":
 		return
-	total_enemy_kills += 1  # drives the 마법사(mage) appearance condition
-	_check_companion_appearances()
+	total_enemy_kills += 1  # gates the 모닥불(campfire) build unlock
 	var progress: int = enemy_kill_progress_value(tier_id) + 1
 	var level: int = enemy_level(tier_id)
 	var leveled: bool = false

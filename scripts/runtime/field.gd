@@ -86,10 +86,6 @@ const CLIFF_FACE_HEIGHT: float = 11.0
 @onready var _message_label: Label = %MessageLabel
 
 var _player: CharacterBody2D
-## Holds field buildings (성소 etc.). Persists across loops; re-placed on start.
-var _structures_root: Node2D
-## building id → FieldStructure node currently placed.
-var _structures: Dictionary = {}
 var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
@@ -124,14 +120,9 @@ func _ready() -> void:
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
 	EventBus.skill_node_purchase_succeeded.connect(_on_skill_node_purchase_succeeded)
 	EventBus.combat_upgrade_changed.connect(_on_combat_upgrade_changed)
-	EventBus.building_built.connect(_on_building_built)
-	EventBus.sanctuary_revived.connect(_on_sanctuary_revived.unbind(1))
 	EventBus.companion_appeared.connect(_on_companion_appeared)
 	EventBus.party_member_downed.connect(_on_party_member_downed_visual)
 	EventBus.party_member_revived.connect(_on_party_member_revived_visual)
-	_structures_root = Node2D.new()
-	_structures_root.name = "Structures"
-	add_child(_structures_root)
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
@@ -204,7 +195,6 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_crowd_pressure = entry_burst_bonus
 	_recenter_party()
 	_scatter_region_decorations()
-	_place_all_buildings()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
 	if GameState.STORY_MODE_ENABLED:
@@ -750,46 +740,9 @@ func _on_combat_upgrade_changed(axis: StringName) -> void:
 	_refill_enemy_population(_desired_enemy_count())
 
 
-# ─── Field buildings (structure system) ────────────────────────────────
-## Live purchase → place the new structure immediately.
-func _on_building_built(id: StringName) -> void:
-	_place_structure(id)
-
-
-## Re-place every owned building (called on field-loop start so they persist
-## across loops even though the field is otherwise rebuilt).
-func _place_all_buildings() -> void:
-	for child in _structures_root.get_children():
-		child.queue_free()
-	_structures.clear()
-	for id: StringName in GameState.built_buildings:
-		_place_structure(id)
-
-
-func _place_structure(id: StringName) -> void:
-	if _structures.has(id) and is_instance_valid(_structures[id]):
-		return
-	var building: Dictionary = Balance.building_by_id(id)
-	if building.is_empty():
-		return
-	var structure := FieldStructure.new()
-	structure.setup(building)
-	# Lay buildings out in a row along the top of the play area.
-	var slot: int = _structures.size()
-	structure.position = Vector2(LEFT_UI_INSET + 40.0 + float(slot) * 60.0, 58.0)
-	_structures_root.add_child(structure)
-	_structures[id] = structure
-
-
-## Sanctuary fired (someone was instantly revived) → pulse its structure.
-func _on_sanctuary_revived() -> void:
-	var s = _structures.get(&"sanctuary", null)
-	if is_instance_valid(s) and s.has_method("pulse"):
-		s.pulse()
-
-
-## A companion met its condition (등장) — announce the "만남" so the player knows
-## a recruit is now available in the shop.
+# ─── Companions ────────────────────────────────────────────────────────
+## A companion appeared (its building was built) — announce the "만남" so the
+## player knows a recruit is now available in the panel.
 func _on_companion_appeared(id: StringName) -> void:
 	var comp: Dictionary = Balance.companion_by_id(id)
 	_show_message(str(comp.get("appear_text", "새로운 동료가 나타났다!")))

@@ -132,27 +132,24 @@ const COMPANIONS: Array[Dictionary] = [
 		"char_res": "res://data/characters/mage.tres",
 		"weapon_type": &"staff", "trait": &"aoe",
 		"recruit_cost": 300,
-		"appear": {"type": &"kills", "value": 40},
 		"appear_text": "전장의 마력에 이끌려 마법사가 나타났다!",
-		"combo_group": &"", "building_link": &"",
+		"combo_group": &"", "building_link": &"campfire",
 	},
 	{
 		"id": &"priest", "name": "사제", "role": &"priest", "short": "사",
 		"char_res": "res://data/characters/priest.tres",
 		"weapon_type": &"blunt", "trait": &"support",
 		"recruit_cost": 1200,
-		"appear": {"type": &"downs", "value": 4},
 		"appear_text": "쓰러지는 이들을 보다 못해 사제가 나타났다!",
-		"combo_group": &"", "building_link": &"",
+		"combo_group": &"", "building_link": &"sanctuary",
 	},
 	{
 		"id": &"thief", "name": "도적", "role": &"thief", "short": "도",
 		"char_res": "res://data/characters/thief.tres",
 		"weapon_type": &"dagger", "trait": &"gold",
 		"recruit_cost": 4000,
-		"appear": {"type": &"gold_earned", "value": 2500},
 		"appear_text": "금화 냄새를 맡고 도적이 나타났다!",
-		"combo_group": &"", "building_link": &"",
+		"combo_group": &"", "building_link": &"thieves_guild",
 	},
 ]
 
@@ -216,12 +213,49 @@ const AMBUSH_CHANCE_MAX: float = 0.85
 ## etc. drop in later with no new plumbing — add a row + handle its effect.
 ## Sanctuary cost is tuned to be skippable early but tempting after the down/
 ## recovery slowdown bites a few times.
+## Buildings live only in the right-panel village grid (NOT on the field).
+## Each building: a cheap one-time `build_cost`, an `unlock` condition gating the
+## locked→buildable state, an optional `owner` companion it unlocks (등장), and the
+## `upgrades` it hosts in the lower list. Adding a building = appending a row.
+## `unlock` types reuse the run counters: &"kills" / &"downs" / &"gold_earned".
+## upgrade kinds: &"weapons" (per owned type), &"armor", &"greed", &"scale",
+## &"open_speed", &"recruit" (param: companion).
 const BUILDINGS: Array[Dictionary] = [
 	{
-		"id": &"sanctuary", "name": "성소", "short": "성",
-		"cost": 250,
-		"color": Color(0.55, 0.85, 1.0, 1.0),
-		"desc": "쓰러진 동료를 즉시 부활. 다운 슬로다운을 없앱니다.",
+		"id": &"weapon_shop", "name": "무기점", "short": "무", "color": Color(0.95, 0.42, 0.38, 1.0),
+		"build_cost": 10, "unlock": {}, "owner": &"",
+		"upgrades": [{"kind": &"weapons"}],
+		"desc": "무기를 강화한다. 첫 건물 — 내 손으로 마을을 세운다.",
+	},
+	{
+		"id": &"armory", "name": "방어구점", "short": "방", "color": Color(0.62, 0.82, 0.86, 1.0),
+		"build_cost": 40, "unlock": {"type": &"gold_earned", "value": 40}, "owner": &"",
+		"upgrades": [{"kind": &"armor"}],
+		"desc": "방어구를 강화해 생존력을 올린다.",
+	},
+	{
+		"id": &"campfire", "name": "모닥불", "short": "불", "color": Color(1.0, 0.6, 0.3, 1.0),
+		"build_cost": 80, "unlock": {"type": &"kills", "value": 40}, "owner": &"mage",
+		"upgrades": [{"kind": &"recruit", "companion": &"mage"}, {"kind": &"open_speed"}],
+		"desc": "불 곁으로 마법사가 모인다. 더 태워볼까?",
+	},
+	{
+		"id": &"sanctuary", "name": "성소", "short": "성", "color": Color(0.55, 0.85, 1.0, 1.0),
+		"build_cost": 150, "unlock": {"type": &"downs", "value": 3}, "owner": &"priest",
+		"upgrades": [{"kind": &"recruit", "companion": &"priest"}],
+		"desc": "쓰러진 동료를 즉시 부활. 사제가 머문다.",
+	},
+	{
+		"id": &"war_council", "name": "작전회의소", "short": "작", "color": Color(0.46, 0.68, 1.0, 1.0),
+		"build_cost": 200, "unlock": {"type": &"gold_earned", "value": 500}, "owner": &"",
+		"upgrades": [{"kind": &"scale"}],
+		"desc": "동시에 여는 전투창 수를 늘린다.",
+	},
+	{
+		"id": &"thieves_guild", "name": "도둑길드", "short": "도", "color": Color(0.92, 0.82, 0.55, 1.0),
+		"build_cost": 120, "unlock": {"type": &"gold_earned", "value": 800}, "owner": &"thief",
+		"upgrades": [{"kind": &"recruit", "companion": &"thief"}, {"kind": &"greed"}],
+		"desc": "골드 수급을 늘리고 도둑을 끌어들인다.",
 	},
 ]
 
