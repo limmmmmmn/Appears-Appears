@@ -12,17 +12,18 @@ extends Node
 ## below are the *summary* of that combat. Tune enemy HP / party damage so the
 ## emergent gold-per-second matches:
 ##
-##     창당 초당골드 = (티어골드 × GREED배수) ÷ (티어처치시간 ÷ SPEED공격배수)
+##     창당 초당골드 = 티어골드 ÷ (티어처치시간 ÷ SPEED공격배수)
 ##     총 초당골드   = 창당 초당골드 × 활성 창 수(SCALE)
 ##
-## Three axes only — SPEED, GREED, SCALE. There is no 4th.
+## Axes — SPEED (kill faster), LUCK (jackpot 빈도↑, NOT a gold multiplier),
+## SCALE (more windows). Gold is no longer multiplied by an upgrade.
 ## ═══════════════════════════════════════════════════════════════════════
 
 # ─── 1. Tuning constants (★ edit freely) ───────────────────────────────
 const SLIME_BASE_GOLD: int = 1
 const SLIME_BASE_TIME: float = 2.0       ## seconds to kill one base slime at SPEED Lv1
 const UPGRADE_BASE_COST: int = 10
-const COST_MULT: float = 1.5             ## SPEED, GREED shared cost growth
+const COST_MULT: float = 1.6             ## SPEED, GREED cost growth — kept ABOVE effect (1.4) so gold can't pile up
 const EFFECT_MULT: float = 1.4           ## SPEED, GREED shared effect growth
 const SCALE_BASE_COST: int = 200         ## first multi-window (1→2). ★tune-priority #1
 const SCALE_COST_MULT: float = 4.0       ## multi-window cost growth
@@ -56,6 +57,28 @@ const ENEMY_SPAWN_PER_WINDOW_MAX: int = 5
 ## lever). Gold ×KILL_GOLD_PER_LEVEL_MULT^(level-1).
 const KILL_GOLD_PER_LEVEL_MULT: float = 1.1
 
+# ─── Kill-gold variance (each kill = a mini "상자 개봉") ─────────────────
+## Per-kill gold = tier average × a RANDOM multiplier. Mean is ≈1.0 so TOTAL
+## income is unchanged — most kills wobble inside [MIN,MAX] (avg <1), rare
+## JACKPOTs pull the average back up. The amount is floored at 1 gold so a kill
+## is never a total 꽝 (the "꽝" feeling is just a small roll). Tuned mean:
+##   0.03×5 + 0.97×(0.4+1.35)/2 ≈ 1.00
+const KILL_GOLD_MIN_MULT: float = 0.4
+const KILL_GOLD_MAX_MULT: float = 1.35
+const KILL_GOLD_JACKPOT_CHANCE: float = 0.03   ## ~1 in 33 kills
+const KILL_GOLD_JACKPOT_MULT: float = 5.0
+## Rolls below this multiplier read as "적게 나옴" (작고 시무룩한 피드백).
+const KILL_GOLD_LOW_MULT_THRESHOLD: float = 0.8
+
+# ─── 운(Luck): raises the kill-gold JACKPOT CHANCE (frequency, not size) ──
+## Luck NEVER multiplies gold (that's what exploded). It only makes the 팡팡팡
+## jackpot fire more OFTEN — the jackpot MULTIPLIER stays fixed (KILL_GOLD_
+## JACKPOT_MULT). Chance grows ADDITIVELY (+per-level) while the upgrade cost
+## grows exponentially, so income rises gently — no multiplicative blow-up.
+## Lv1 = the base rate, each level adds a flat % up to a hard cap.
+const LUCK_JACKPOT_CHANCE_PER_LEVEL: float = 0.02   ## +2%p per level
+const LUCK_JACKPOT_CHANCE_MAX: float = 0.45         ## cap so it never trivializes
+
 # ─── System 2: treasure-chest buffer (anti-idle) ───────────────────────
 ## Unopened reward chests may stack up to this many. When the buffer is full
 ## new fights won't start — the player must open chests to keep production
@@ -71,18 +94,22 @@ const CHEST_OPEN_SPEED_BASE_COST: int = 25
 const CHEST_OPEN_SPEED_COST_MULT: float = 1.6
 
 # ─── 4. Enemy tiers ─────────────────────────────────────────────────────
-## Each tier only needs unlocking to appear. The player TOGGLES unlocked tiers
-## ON/OFF on the left bar — several can be active at once, and the field spawns
-## a random mix of whatever's toggled on. `enemy_res` supplies the sprite.
-## Every tier maps to a DISTINCT resource so HP/gold resolve per-enemy even with
-## multiple tiers active. NOTE: mage/dragon reuse existing sprites as
-## placeholders (blade_bug / slime_chaser) — swap art later.
+## Tiers unlock by CUMULATIVE EARNED GOLD (`unlock_at` = lifetime total_gold_earned,
+## unaffected by spending). Below the threshold a tier is HIDDEN from the dock.
+## Once reached it becomes claimable; the player clicks to unlock it (free — the
+## milestone IS the cost), then TOGGLES it ON/OFF. Several can be active at once;
+## the field spawns a random mix of whatever's toggled on. Thresholds climb hard
+## (tune later). `enemy_res` supplies the sprite; mage/dragon reuse placeholders.
+## `unlock_at` climbs geometrically with an ESCALATING ratio (×10→×12→×10) so the
+## late tiers (mage/dragon) stay far off. `base_kill_time` = tier toughness (HP);
+## `atk_mult` scales the enemy's base attack per tier so orc+ actually threaten a
+## party-wipe. Both ramp hard from orc onward — that's the "강화해야 넘는 벽".
 const TIERS: Array[Dictionary] = [
-	{"id": &"slime",  "name": "슬라임", "short": "슬", "unlock_cost": 0,     "kill_gold": 1,    "base_kill_time": 2.0,  "enemy_res": "res://data/enemies/slime.tres"},
-	{"id": &"bat",    "name": "박쥐",   "short": "박", "unlock_cost": 100,   "kill_gold": 8,    "base_kill_time": 3.5,  "enemy_res": "res://data/enemies/bat.tres"},
-	{"id": &"orc",    "name": "오크",   "short": "오", "unlock_cost": 700,   "kill_gold": 30,   "base_kill_time": 6.0,  "enemy_res": "res://data/enemies/orc.tres"},
-	{"id": &"mage",   "name": "마도사", "short": "마", "unlock_cost": 8000,  "kill_gold": 300,  "base_kill_time": 9.0,  "enemy_res": "res://data/enemies/blade_bug.tres"},
-	{"id": &"dragon", "name": "드래곤", "short": "용", "unlock_cost": 60000, "kill_gold": 2500, "base_kill_time": 15.0, "enemy_res": "res://data/enemies/slime_chaser.tres"},
+	{"id": &"slime",  "name": "슬라임", "short": "슬", "unlock_at": 0,      "kill_gold": 1,    "base_kill_time": 2.0,  "atk_mult": 1.0, "enemy_res": "res://data/enemies/slime.tres"},
+	{"id": &"bat",    "name": "박쥐",   "short": "박", "unlock_at": 60,     "kill_gold": 8,    "base_kill_time": 4.5,  "atk_mult": 1.2, "enemy_res": "res://data/enemies/bat.tres"},
+	{"id": &"orc",    "name": "오크",   "short": "오", "unlock_at": 600,    "kill_gold": 30,   "base_kill_time": 10.0, "atk_mult": 1.8, "enemy_res": "res://data/enemies/orc.tres"},
+	{"id": &"mage",   "name": "마도사", "short": "마", "unlock_at": 7000,   "kill_gold": 300,  "base_kill_time": 18.0, "atk_mult": 2.8, "enemy_res": "res://data/enemies/blade_bug.tres"},
+	{"id": &"dragon", "name": "드래곤", "short": "용", "unlock_at": 70000,  "kill_gold": 2500, "base_kill_time": 32.0, "atk_mult": 4.5, "enemy_res": "res://data/enemies/slime_chaser.tres"},
 ]
 
 # ─── 5. Weapon shop = SPEED axis skin (text-based, no sprites) ──────────
@@ -117,41 +144,64 @@ const HP_PER_LEVEL: int = 6                ## max HP gained per level
 const AGILITY_PER_LEVEL: int = 1           ## agility gained per level (ambush/turn order)
 
 # ─── Party / companions ────────────────────────────────────────────────
-## Active party cap (hero + companions). Room left for a future '분대' expansion.
-const MAX_PARTY_SIZE: int = 4
+## Active party cap. hero + 4 owners (기사/도둑/마법사/사제) = 5. '분대' 확장 여지.
+const MAX_PARTY_SIZE: int = 5
+## Upgrade purchases of a category needed to recruit its count-owner companion.
+const COMPANION_RECRUIT_UPGRADE_COUNT: int = 5
 
-## Companions are pure DATA so a Suikoden-style mass roster drops in later. The
-## core 3 below are combat roles (no skills — role + level + gear only). Slots
-## `combo_group` / `building_link` are reserved for future content (leave empty).
-## Recruitment is 2-stage: meet `appear` → "등장", then pay `recruit_cost` → 영입.
-## Appear types: &"kills" (enemies slain), &"downs" (members knocked out),
-## &"gold_earned" (lifetime gold). Recruit costs are an exponential gold sink.
+## Companions are pure DATA so a Suikoden-style roster drops in later. They join
+## as a RESULT of their building (no gold recruit): count-owners (기사/도둑) join
+## after N purchases of the building's trigger upgrade; build-owners (마법사/사제)
+## join the instant their building is constructed. `building_link` = the owner's
+## building. `appear_text` is shown when the companion appears (등장).
 const COMPANIONS: Array[Dictionary] = [
+	{
+		"id": &"knight", "name": "기사", "role": &"knight", "short": "기",
+		"char_res": "res://data/characters/knight.tres",
+		"weapon_type": &"sword", "trait": &"single",
+		"appear_text": "방패를 든 기사가 합류를 청한다!",
+		"combo_group": &"", "building_link": &"armory",
+	},
+	{
+		"id": &"thief", "name": "도적", "role": &"thief", "short": "도",
+		"char_res": "res://data/characters/thief.tres",
+		"weapon_type": &"dagger", "trait": &"gold",
+		"appear_text": "금화 냄새를 맡고 도적이 나타났다!",
+		"combo_group": &"", "building_link": &"thieves_guild",
+	},
 	{
 		"id": &"mage", "name": "마법사", "role": &"mage", "short": "마",
 		"char_res": "res://data/characters/mage.tres",
 		"weapon_type": &"staff", "trait": &"aoe",
-		"recruit_cost": 300,
-		"appear_text": "전장의 마력에 이끌려 마법사가 나타났다!",
+		"appear_text": "모닥불 곁으로 마법사가 다가온다!",
 		"combo_group": &"", "building_link": &"campfire",
 	},
 	{
 		"id": &"priest", "name": "사제", "role": &"priest", "short": "사",
 		"char_res": "res://data/characters/priest.tres",
 		"weapon_type": &"blunt", "trait": &"support",
-		"recruit_cost": 1200,
-		"appear_text": "쓰러지는 이들을 보다 못해 사제가 나타났다!",
+		"appear_text": "성소에 사제가 머물기 시작한다!",
 		"combo_group": &"", "building_link": &"sanctuary",
 	},
+]
+
+# ─── Field tiles (placed physically on the map; left panel "타일 탭") ────
+## Tiles are the LEFT panel's domain: things put down on the field + their
+## upgrades (vs the right panel's abstract stat buildings). Pricey by design.
+## Campfire = a proximity HP-regen outpost; placing it the first time recruits
+## the mage. Data-driven so more tiles/outposts drop in later.
+const TILES: Array[Dictionary] = [
 	{
-		"id": &"thief", "name": "도적", "role": &"thief", "short": "도",
-		"char_res": "res://data/characters/thief.tres",
-		"weapon_type": &"dagger", "trait": &"gold",
-		"recruit_cost": 4000,
-		"appear_text": "금화 냄새를 맡고 도적이 나타났다!",
-		"combo_group": &"", "building_link": &"thieves_guild",
+		"id": &"campfire", "name": "모닥불", "short": "불", "color": Color(1.0, 0.6, 0.3, 1.0),
+		"place_cost": 300, "owner": &"mage",
+		"desc": "필드에 놓는 회복 거점. 근처 파티원만 HP가 차오른다.",
 	},
 ]
+const CAMPFIRE_REGEN_RADIUS: float = 72.0       ## only party within this regen
+const CAMPFIRE_REGEN_BASE_RATE: float = 0.6     ## HP/sec at level 1 (very weak)
+const CAMPFIRE_REGEN_PER_LEVEL: float = 0.7     ## +HP/sec per upgrade
+const CAMPFIRE_UPGRADE_BASE_COST: int = 120
+const CAMPFIRE_UPGRADE_COST_MULT: float = 1.6
 
 # ─── Weapon types (얕게 — identity + shop categories; effect = attack↑ only) ─
 ## Unlocking a type's weapon auto-equips the matching companion (그 타입 사용자).
@@ -213,49 +263,46 @@ const AMBUSH_CHANCE_MAX: float = 0.85
 ## etc. drop in later with no new plumbing — add a row + handle its effect.
 ## Sanctuary cost is tuned to be skippable early but tempting after the down/
 ## recovery slowdown bites a few times.
-## Buildings live only in the right-panel village grid (NOT on the field).
-## Each building: a cheap one-time `build_cost`, an `unlock` condition gating the
-## locked→buildable state, an optional `owner` companion it unlocks (등장), and the
-## `upgrades` it hosts in the lower list. Adding a building = appending a row.
-## `unlock` types reuse the run counters: &"kills" / &"downs" / &"gold_earned".
-## upgrade kinds: &"weapons" (per owned type), &"armor", &"greed", &"scale",
-## &"open_speed", &"recruit" (param: companion).
+## Buildings live only in the right-panel village grid (NOT on the field). They
+## are the RESULT of upgrades, not a purchase target:
+##   • mode &"auto"   — pops into the grid the first time its `trigger` upgrade is
+##                      bought. Owner (if any) appears then, and joins after
+##                      COMPANION_RECRUIT_UPGRADE_COUNT purchases of `trigger`.
+##   • mode &"direct" — the exception: built by clicking the tile (gold) once its
+##                      `unlock` condition is met. Owner joins on construction.
+## upgrade kinds (the list cards): &"weapons" / &"armor" / &"luck" / &"scale" /
+## &"open_speed". Tiles also act as filter tabs for the lower list.
 const BUILDINGS: Array[Dictionary] = [
 	{
 		"id": &"weapon_shop", "name": "무기점", "short": "무", "color": Color(0.95, 0.42, 0.38, 1.0),
-		"build_cost": 10, "unlock": {}, "owner": &"",
+		"mode": &"auto", "trigger": &"weapons", "owner": &"", "recruit_at": 0,
 		"upgrades": [{"kind": &"weapons"}],
-		"desc": "무기를 강화한다. 첫 건물 — 내 손으로 마을을 세운다.",
+		"desc": "무기를 강화하면 세워진다. 내 손으로 세운 첫 마을.",
 	},
 	{
 		"id": &"armory", "name": "방어구점", "short": "방", "color": Color(0.62, 0.82, 0.86, 1.0),
-		"build_cost": 40, "unlock": {"type": &"gold_earned", "value": 40}, "owner": &"",
+		"mode": &"auto", "trigger": &"armor", "owner": &"knight", "recruit_at": 5,
 		"upgrades": [{"kind": &"armor"}],
-		"desc": "방어구를 강화해 생존력을 올린다.",
-	},
-	{
-		"id": &"campfire", "name": "모닥불", "short": "불", "color": Color(1.0, 0.6, 0.3, 1.0),
-		"build_cost": 80, "unlock": {"type": &"kills", "value": 40}, "owner": &"mage",
-		"upgrades": [{"kind": &"recruit", "companion": &"mage"}, {"kind": &"open_speed"}],
-		"desc": "불 곁으로 마법사가 모인다. 더 태워볼까?",
-	},
-	{
-		"id": &"sanctuary", "name": "성소", "short": "성", "color": Color(0.55, 0.85, 1.0, 1.0),
-		"build_cost": 150, "unlock": {"type": &"downs", "value": 3}, "owner": &"priest",
-		"upgrades": [{"kind": &"recruit", "companion": &"priest"}],
-		"desc": "쓰러진 동료를 즉시 부활. 사제가 머문다.",
-	},
-	{
-		"id": &"war_council", "name": "작전회의소", "short": "작", "color": Color(0.46, 0.68, 1.0, 1.0),
-		"build_cost": 200, "unlock": {"type": &"gold_earned", "value": 500}, "owner": &"",
-		"upgrades": [{"kind": &"scale"}],
-		"desc": "동시에 여는 전투창 수를 늘린다.",
+		"desc": "방어구를 강화하면 세워진다. 기사가 모인다.",
 	},
 	{
 		"id": &"thieves_guild", "name": "도둑길드", "short": "도", "color": Color(0.92, 0.82, 0.55, 1.0),
-		"build_cost": 120, "unlock": {"type": &"gold_earned", "value": 800}, "owner": &"thief",
-		"upgrades": [{"kind": &"recruit", "companion": &"thief"}, {"kind": &"greed"}],
-		"desc": "골드 수급을 늘리고 도둑을 끌어들인다.",
+		"mode": &"auto", "trigger": &"luck", "owner": &"thief", "recruit_at": 5,
+		"upgrades": [{"kind": &"luck"}],
+		"desc": "운을 끌어올리면 세워진다. 도둑이 모인다.",
+	},
+	{
+		"id": &"war_council", "name": "작전회의소", "short": "작", "color": Color(0.46, 0.68, 1.0, 1.0),
+		"mode": &"auto", "trigger": &"scale", "owner": &"", "recruit_at": 0,
+		"upgrades": [{"kind": &"scale"}],
+		"desc": "전투창 수를 늘리면 세워진다.",
+	},
+	{
+		"id": &"sanctuary", "name": "성소", "short": "성", "color": Color(0.55, 0.85, 1.0, 1.0),
+		"mode": &"direct", "build_cost": 150, "unlock": {"type": &"downs", "value": 3},
+		"owner": &"priest", "recruit_at": 0,
+		"upgrades": [],
+		"desc": "직접 세운다. 쓰러진 동료를 즉시 부활 — 사제 합류.",
 	},
 ]
 
@@ -368,6 +415,49 @@ func building_by_id(id: StringName) -> Dictionary:
 		if b["id"] == id:
 			return b
 	return {}
+
+
+## The auto-appear building whose trigger matches this upgrade category (or "").
+func building_for_trigger(category: StringName) -> StringName:
+	for b: Dictionary in BUILDINGS:
+		if StringName(b.get("mode", &"")) == &"auto" and StringName(b.get("trigger", &"")) == category:
+			return b["id"]
+	return &""
+
+
+## The building that hosts a given upgrade kind (for the list filter mapping).
+func building_for_upgrade_kind(kind: StringName) -> StringName:
+	for b: Dictionary in BUILDINGS:
+		for desc: Dictionary in b.get("upgrades", []):
+			if StringName(desc.get("kind", &"")) == kind:
+				return b["id"]
+	return &""
+
+
+# ─── Field tiles (left panel) ──────────────────────────────────────────
+func tile_count() -> int:
+	return TILES.size()
+
+
+func tile_at(index: int) -> Dictionary:
+	if index < 0 or index >= TILES.size():
+		return {}
+	return TILES[index]
+
+
+func tile_by_id(id: StringName) -> Dictionary:
+	for t: Dictionary in TILES:
+		if t["id"] == id:
+			return t
+	return {}
+
+
+func campfire_regen_rate(level: int) -> float:
+	return CAMPFIRE_REGEN_BASE_RATE + CAMPFIRE_REGEN_PER_LEVEL * float(maxi(1, level) - 1)
+
+
+func campfire_upgrade_cost(level: int) -> int:
+	return _round_cost(float(CAMPFIRE_UPGRADE_BASE_COST) * pow(CAMPFIRE_UPGRADE_COST_MULT, float(maxi(1, level) - 1)))
 
 
 # ─── Companion lookups ─────────────────────────────────────────────────

@@ -4,5 +4,5 @@
 [ext_resource type="FontFile" uid="uid://db63wk4sagp0h" path="res://assets/fonts/neodgm.ttf" id="2_korean_pixel"]
 
 [resource]
-fallbacks = Array[Font]([ExtResource("2_korean_pixel")])
-base_font = ExtResource("1_pixel")
+fallbacks = Array[Font]([ExtResource("1_pixel")])
+base_font = ExtResource("2_korean_pixel")

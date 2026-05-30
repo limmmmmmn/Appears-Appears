@@ -1,39 +1,66 @@
 class_name LeftEnemyBar
-extends PanelContainer
+extends Control
 
-## Left zone of the ㄷ-shaped layout: the enemy toggle bar — the player's
-## difficulty / farming-stage knob.
-##   • Unlocked + ON   → glowing accent border (this tier spawns on the field)
-##   • Unlocked + OFF  → gray (won't spawn)
-##   • Locked          → lock glyph + unlock cost (click to buy)
-## Click a locked icon to unlock it (auto-toggles ON); click an unlocked icon to
-## toggle it ON/OFF. Several tiers can be ON at once — that's how the screen
-## fills with windows.
+## Left dock — styled like the macOS dock.
+##   • A smooth translucent rounded panel floats off the left edge (the field
+##     shows through). Rendered at native resolution via the project's
+##     `canvas_items` stretch, so corners/translucency are crisp, not pixelated.
+##   • The ICONS are 16-ish px pixel-art (nearest filter) — sharp pixels on a
+##     smooth tray, the macOS contrast.
+##   • Hover magnification (distance falloff to neighbors) + tooltip.
+##   • Active dot beside toggled-ON enemies (the "running" dot).
+## Behavior is UNCHANGED — same toggle / unlock / place / upgrade calls.
 
-const BAR_WIDTH: float = 46.0
-const ICON_SIZE: Vector2 = Vector2(38.0, 38.0)
 const PANEL_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
+const DOCK_MARGIN_LEFT: float = 5.0
+const DOCK_TOP_MARGIN: float = 6.0   ## top-aligned (matches the right panel's top)
+const DOCK_PAD: float = 7.0
+const ICON_BASE: float = 18.0      ## resting display size
+const ICON_MAG: float = 30.0       ## magnified size under the cursor
+const SLOT: float = 24.0           ## fixed vertical slot per icon
+const SLOT_SPACING: float = 3.0
+const MAG_RANGE: float = 54.0      ## vertical falloff distance of magnification
+const DIVIDER_H: float = 8.0
+const SCALE_LERP: float = 16.0     ## magnification smoothing
 
-## tier id → {"button": Button, "glyph": Label, "cost": Label}
-var _icons: Dictionary = {}
+## Each item: {id, kind(&"enemy"/&"tile"), slot:Control, icon:Control, dot:Control,
+##             center_y:float (in self-space), tier/tile dict}
+var _items: Array[Dictionary] = []
+## The enemy tier ids currently built into the dock (visible ones only). When the
+## visible set grows — a tier crosses its cumulative-gold milestone — we rebuild.
+var _built_enemy_ids: Array[StringName] = []
+var _pulse_t: float = 0.0
+var _dock_panel: Panel
+## Custom macOS-style tooltip (pill + left tail) shown to the RIGHT of the
+## hovered icon. Drawn on the smooth UI layer.
+var _tooltip: Control
+var _tooltip_pill: Panel
+var _tooltip_label: Label
+var _tooltip_tail: Polygon2D
+const TOOLTIP_FONT: int = 9
+const TOOLTIP_PAD: float = 5.0
+const TOOLTIP_GAP: float = 3.0      ## space between icon and tail tip
+const TOOLTIP_TAIL_W: float = 5.0
+const TOOLTIP_TAIL_H: float = 8.0
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = Vector2.ZERO
-	custom_minimum_size = Vector2(BAR_WIDTH, 360.0)
+	custom_minimum_size = Vector2(50.0, 360.0)
 	offset_left = 0.0
 	offset_top = 0.0
-	offset_right = BAR_WIDTH
+	offset_right = 50.0
 	offset_bottom = 360.0
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	add_theme_stylebox_override("panel", _panel_style())
+	mouse_filter = Control.MOUSE_FILTER_IGNORE  # only the dock slots catch input
+	clip_contents = false
 	_build()
 	EventBus.gold_changed.connect(_on_changed.unbind(1))
 	EventBus.combat_upgrade_changed.connect(_on_changed.unbind(1))
-	# Kill progress fires often — update only the cheap Lv/gauge, not styleboxes.
-	EventBus.enemy_progress_changed.connect(_on_progress_changed.unbind(1))
-	EventBus.enemy_leveled_up.connect(_on_progress_changed.unbind(2))
+	EventBus.enemy_progress_changed.connect(_on_changed.unbind(1))
+	EventBus.enemy_leveled_up.connect(_on_changed.unbind(2))
+	EventBus.campfire_placed.connect(_on_changed)
+	set_process(true)
 	_refresh()
 
 
@@ -41,156 +68,306 @@ func _on_changed() -> void:
 	_refresh()
 
 
-func _on_progress_changed() -> void:
-	for id in _icons.keys():
-		_update_icon_progress(id)
-
-
-func _update_icon_progress(id: StringName) -> void:
-	if not _icons.has(id):
-		return
-	var refs: Dictionary = _icons[id]
-	var unlocked: bool = GameState.is_tier_unlocked(id)
-	refs["lv"].visible = unlocked
-	refs["prog"].visible = unlocked
-	if unlocked:
-		refs["lv"].text = "Lv%d" % GameState.enemy_level(id)
-		refs["prog"].value = GameState.enemy_level_progress_ratio(id)
+# ─── Build the dock ────────────────────────────────────────────────────
+## Only VISIBLE enemy tiers get a slot (locked-below-threshold tiers are blank /
+## absent). Tiles (campfire) are always shown.
+func _visible_enemy_tiers() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for i in Balance.tier_count():
+		var tier: Dictionary = Balance.tier_at(i)
+		if GameState.is_tier_visible(tier["id"]):
+			out.append(tier)
+	return out
 
 
 func _build() -> void:
-	var col := VBoxContainer.new()
-	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.add_theme_constant_override("separation", 5)
-	col.alignment = BoxContainer.ALIGNMENT_BEGIN
-	add_child(col)
+	var enemy_tiers: Array[Dictionary] = _visible_enemy_tiers()
+	_built_enemy_ids.clear()
+	for tier: Dictionary in enemy_tiers:
+		_built_enemy_ids.append(tier["id"])
+	var enemy_n: int = enemy_tiers.size()
+	var tile_n: int = Balance.tile_count()
+	var total: int = enemy_n + tile_n
+	var divider: float = DIVIDER_H if (tile_n > 0 and enemy_n > 0) else 0.0
+	var height: float = DOCK_PAD * 2.0 + total * SLOT + maxf(0.0, total - 1) * SLOT_SPACING + divider
+	var dock_w: float = SLOT + DOCK_PAD * 2.0
+	var y0: float = DOCK_TOP_MARGIN  # top-aligned with the right panel
 
-	for i in Balance.tier_count():
-		var tier: Dictionary = Balance.tier_at(i)
-		col.add_child(_make_icon(tier))
+	_dock_panel = Panel.new()
+	_dock_panel.add_theme_stylebox_override("panel", _dock_style())
+	_dock_panel.position = Vector2(DOCK_MARGIN_LEFT, y0)
+	_dock_panel.size = Vector2(dock_w, height)
+	_dock_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dock_panel.clip_contents = false
+	add_child(_dock_panel)
 
-
-func _make_icon(tier: Dictionary) -> Control:
-	var id: StringName = tier["id"]
-
-	var button := Button.new()
-	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = ICON_SIZE
-	button.text = ""
-	button.tooltip_text = str(tier["name"])
-	button.pressed.connect(_on_icon_pressed.bind(id))
-
-	var glyph := _make_label(str(tier.get("short", "?")), 14, Color.WHITE)
-	glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	button.add_child(glyph)
-
-	var cost := _make_label("", 7, Color(1.0, 0.92, 0.6, 1.0))
-	cost.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	cost.offset_top = -9.0
-	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	button.add_child(cost)
-
-	# System 1 growth, made visible: a tiny "Lv N" badge (top-left) + a thin
-	# kill-progress gauge along the bottom edge, so accumulation is felt.
-	var lv := _make_label("", 7, Color(0.75, 1.0, 0.85, 1.0))
-	lv.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	lv.position = Vector2(2.0, 1.0)
-	button.add_child(lv)
-
-	var prog := ProgressBar.new()
-	prog.show_percentage = false
-	prog.max_value = 1.0
-	prog.value = 0.0
-	prog.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	prog.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	prog.offset_top = -3.0
-	prog.offset_left = 2.0
-	prog.offset_right = -2.0
-	prog.add_theme_stylebox_override("background", _prog_bg_style())
-	prog.add_theme_stylebox_override("fill", _prog_fill_style())
-	button.add_child(prog)
-
-	_icons[id] = {"button": button, "glyph": glyph, "cost": cost, "lv": lv, "prog": prog}
-	return button
+	var cx: float = dock_w * 0.5
+	var cy: float = DOCK_PAD
+	for tier: Dictionary in enemy_tiers:
+		_add_item(&"enemy", tier, Vector2(cx, cy + SLOT * 0.5), _tier_texture(tier), y0)
+		cy += SLOT + SLOT_SPACING
+	if tile_n > 0:
+		if enemy_n > 0:
+			_add_divider(Vector2(cx, cy + divider * 0.5), dock_w)
+			cy += divider
+		for i in tile_n:
+			var tile: Dictionary = Balance.tile_at(i)
+			_add_item(&"tile", tile, Vector2(cx, cy + SLOT * 0.5), null, y0)
+			cy += SLOT + SLOT_SPACING
+	_build_tooltip()
 
 
-func _refresh() -> void:
-	for i in Balance.tier_count():
-		var tier: Dictionary = Balance.tier_at(i)
-		var id: StringName = tier["id"]
-		if not _icons.has(id):
-			continue
-		var refs: Dictionary = _icons[id]
-		var button: Button = refs["button"]
-		var glyph: Label = refs["glyph"]
-		var cost: Label = refs["cost"]
-		var unlocked: bool = GameState.is_tier_unlocked(id)
-		var active: bool = GameState.is_tier_active(id)
-		var state: int = 2 if (unlocked and active) else (1 if unlocked else 0)
-
-		button.add_theme_stylebox_override("normal", _icon_style(state))
-		button.add_theme_stylebox_override("hover", _icon_style(state, true))
-		button.add_theme_stylebox_override("pressed", _icon_style(state))
-		button.add_theme_stylebox_override("disabled", _icon_style(state))
-
-		match state:
-			2:  # unlocked + ON
-				glyph.text = str(tier.get("short", "?"))
-				glyph.add_theme_color_override("font_color", Color.WHITE)
-				cost.text = ""
-				button.disabled = false
-				button.tooltip_text = "%s — ON (필드에 등장 중)\n클릭하면 끄기" % tier["name"]
-			1:  # unlocked + OFF
-				glyph.text = str(tier.get("short", "?"))
-				glyph.add_theme_color_override("font_color", Color(0.55, 0.57, 0.6, 1.0))
-				cost.text = ""
-				button.disabled = false
-				button.tooltip_text = "%s — OFF\n클릭하면 켜기" % tier["name"]
-			_:  # locked — show the glyph dimmed (pixel font has no emoji) + cost
-				glyph.text = str(tier.get("short", "?"))
-				glyph.add_theme_color_override("font_color", Color(0.42, 0.4, 0.36, 1.0))
-				var unlock_cost: int = int(tier["unlock_cost"])
-				cost.text = _short_cost(unlock_cost)
-				var affordable: bool = GameState.gold >= unlock_cost
-				button.disabled = false
-				button.modulate = Color(1, 1, 1, 1) if affordable else Color(0.7, 0.7, 0.74, 1.0)
-				button.tooltip_text = "%s — 잠김\n해금 비용 %dG (처치 골드 %d)" % [tier["name"], unlock_cost, int(tier["kill_gold"])]
-		if state != 0:
-			button.modulate = Color(1, 1, 1, 1)
-		# Lv badge + kill-progress gauge (System 1).
-		_update_icon_progress(id)
+## Tear the dock down and rebuild it — used when a tier crosses its milestone and
+## a new slot must appear (the slot list is positioned in one pass in _build).
+func _rebuild() -> void:
+	if _dock_panel != null:
+		_dock_panel.queue_free()
+		_dock_panel = null
+	if _tooltip != null:
+		_tooltip.queue_free()
+		_tooltip = null
+	_items.clear()
+	_build()
 
 
-func _on_icon_pressed(id: StringName) -> void:
-	if GameState.is_tier_unlocked(id):
-		GameState.toggle_tier(id)
+func _add_divider(center: Vector2, dock_w: float) -> void:
+	var line := ColorRect.new()
+	line.color = Color(1, 1, 1, 0.14)
+	line.size = Vector2(dock_w * 0.55, 1.0)
+	line.position = center - line.size * 0.5
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dock_panel.add_child(line)
+
+
+func _add_item(kind: StringName, data: Dictionary, center: Vector2, texture: Texture2D, y0: float) -> void:
+	var id: StringName = data["id"]
+	var slot := Control.new()
+	slot.size = Vector2(SLOT, SLOT)
+	slot.position = center - slot.size * 0.5
+	slot.mouse_filter = Control.MOUSE_FILTER_STOP
+	slot.clip_contents = false
+	slot.gui_input.connect(_on_item_input.bind(kind, id))
+	_dock_panel.add_child(slot)
+
+	var icon: Control
+	if texture != null:
+		var tr := TextureRect.new()
+		tr.texture = texture
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST  # crisp pixel art
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.size = Vector2(ICON_BASE, ICON_BASE)
+		tr.position = (slot.size - tr.size) * 0.5
+		tr.pivot_offset = tr.size * 0.5
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(tr)
+		icon = tr
 	else:
-		GameState.unlock_tier(id)
+		var lb := _make_label(str(data.get("short", "?")), 13, data.get("color", Color.WHITE))
+		lb.size = Vector2(ICON_BASE, ICON_BASE)
+		lb.position = (slot.size - lb.size) * 0.5
+		lb.pivot_offset = lb.size * 0.5
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		slot.add_child(lb)
+		icon = lb
+
+	# Active "running" dot — a small round pip OUTSIDE the icon's left (screen-edge
+	# side), exactly where macOS puts its running indicator.
+	var dot := Panel.new()
+	dot.add_theme_stylebox_override("panel", _dot_style(Color(1.0, 1.0, 0.95, 1.0)))  # bright — pops on the green tray
+	dot.size = Vector2(4.0, 4.0)
+	dot.position = Vector2(-3.0, SLOT * 0.5 - 2.0)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dot.visible = false
+	slot.add_child(dot)
+
+	# Tiles (campfire) show their gold price pinned to the bottom edge of the
+	# slot — like the right-panel cards — so you can see what it costs to place.
+	var price: Label = null
+	if kind == &"tile":
+		price = _make_label("", 6, Color(1.0, 0.92, 0.55, 1.0))
+		price.size = Vector2(SLOT, 7.0)
+		price.position = Vector2(0.0, SLOT - 1.0)  # tucked into the bottom pad, below the glyph
+		price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		price.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		slot.add_child(price)
+
+	_items.append({
+		"id": id, "kind": kind, "slot": slot, "icon": icon, "dot": dot, "price": price,
+		"center_y": y0 + slot.position.y + SLOT * 0.5,
+		"right_x": DOCK_MARGIN_LEFT + center.x + SLOT * 0.5,  # tooltip anchor (icon right)
+		"data": data,
+	})
 
 
-# ─── Styles / helpers ──────────────────────────────────────────────────
-func _icon_style(state: int, hover: bool = false) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.corner_radius_top_left = 3
-	style.corner_radius_top_right = 3
-	style.corner_radius_bottom_left = 3
-	style.corner_radius_bottom_right = 3
-	style.set_border_width_all(2)
-	match state:
-		2:  # ON — glowing accent
-			style.bg_color = Color(0.18, 0.26, 0.2, 1.0)
-			style.border_color = Color(0.55, 1.0, 0.66, 1.0)
-		1:  # OFF — gray
-			style.bg_color = Color(0.12, 0.13, 0.14, 1.0)
-			style.border_color = Color(0.34, 0.36, 0.38, 1.0)
-		_:  # locked — dark
-			style.bg_color = Color(0.08, 0.085, 0.09, 1.0)
-			style.border_color = Color(0.24, 0.2, 0.16, 1.0)
-	if hover:
-		style.bg_color = style.bg_color.lightened(0.12)
-	return style
+# ─── Magnification + tooltip (macOS dock) ──────────────────────────────
+func _process(delta: float) -> void:
+	_pulse_t += delta
+	var pulse: float = (sin(_pulse_t * 5.0) + 1.0) * 0.5  # 0..1 glow for claimable
+	var mouse: Vector2 = get_local_mouse_position()
+	var over: bool = _dock_panel != null and Rect2(_dock_panel.position, _dock_panel.size).grow(14.0).has_point(mouse)
+	var grow: float = ICON_MAG / ICON_BASE
+	var hovered: Dictionary = {}
+	for item: Dictionary in _items:
+		var target: float = 1.0
+		if over:
+			var t: float = maxf(0.0, 1.0 - absf(mouse.y - float(item["center_y"])) / MAG_RANGE)
+			target = lerpf(1.0, grow, t * t)  # eased falloff
+			# The icon whose fixed slot the cursor is in owns the tooltip.
+			if _slot_rect(item).has_point(mouse):
+				hovered = item
+		var icon: Control = item["icon"]
+		var cur: float = icon.scale.x
+		icon.scale = Vector2.ONE * lerpf(cur, target, clampf(delta * SCALE_LERP, 0.0, 1.0))
+		# Pulse claimable ("해금!") icons so the new unlock is unmissable.
+		if item.get("claimable", false):
+			icon.modulate = Color(1.0, 0.9, 0.45, 1.0).lerp(Color(1.0, 1.0, 0.8, 1.0), pulse)
+	if hovered.is_empty():
+		_tooltip.visible = false
+	else:
+		_show_tooltip(hovered)
+
+
+## A slot's rect in self-space (slots live inside _dock_panel).
+func _slot_rect(item: Dictionary) -> Rect2:
+	var slot: Control = item["slot"]
+	return Rect2(_dock_panel.position + slot.position, slot.size)
+
+
+# ─── Custom tooltip (pill + left tail, frosted bright) ─────────────────
+func _build_tooltip() -> void:
+	_tooltip = Control.new()
+	_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip.z_index = 50  # above icons
+	_tooltip.visible = false
+	add_child(_tooltip)
+	# Left-pointing tail (tip at _tooltip origin).
+	_tooltip_tail = Polygon2D.new()
+	_tooltip_tail.polygon = PackedVector2Array([
+		Vector2(0, 0),
+		Vector2(TOOLTIP_TAIL_W, -TOOLTIP_TAIL_H * 0.5),
+		Vector2(TOOLTIP_TAIL_W, TOOLTIP_TAIL_H * 0.5),
+	])
+	_tooltip_tail.color = Color(0.95, 0.96, 0.99, 0.86)
+	_tooltip.add_child(_tooltip_tail)
+	# Pill (bright translucent rounded — frosted look over the dark field).
+	_tooltip_pill = Panel.new()
+	_tooltip_pill.add_theme_stylebox_override("panel", _pill_style())
+	_tooltip_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip.add_child(_tooltip_pill)
+	_tooltip_label = _make_label("", TOOLTIP_FONT, Color(0.09, 0.1, 0.13, 1.0))
+	_tooltip_label.remove_theme_color_override("font_shadow_color")
+	_tooltip_label.add_theme_color_override("font_shadow_color", Color(1, 1, 1, 0.4))
+	_tooltip_pill.add_child(_tooltip_label)
+
+
+func _show_tooltip(item: Dictionary) -> void:
+	var name_text: String = str(item["data"].get("name", "?"))
+	# Claimable tiers prompt the unlock click right in the tooltip.
+	if item["kind"] == &"enemy" and GameState.is_tier_unlock_available(item["id"]):
+		name_text = "%s 해금!" % name_text
+	_tooltip_label.text = name_text
+	var text_w: float = PANEL_FONT.get_string_size(name_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, TOOLTIP_FONT).x
+	var pill_w: float = text_w + TOOLTIP_PAD * 2.0
+	var pill_h: float = float(TOOLTIP_FONT) + TOOLTIP_PAD * 1.6
+	_tooltip.position = Vector2(float(item["right_x"]) + TOOLTIP_GAP, float(item["center_y"]))
+	_tooltip_pill.position = Vector2(TOOLTIP_TAIL_W - 0.5, -pill_h * 0.5)
+	_tooltip_pill.size = Vector2(pill_w, pill_h)
+	_tooltip_label.position = Vector2(TOOLTIP_PAD, (pill_h - float(TOOLTIP_FONT)) * 0.5 - 1.0)
+	_tooltip.visible = true
+
+
+# ─── Click — toggle a tier ON/OFF (unlock first if needed) ─────────────
+func _on_item_input(event: InputEvent, kind: StringName, id: StringName) -> void:
+	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	if kind == &"enemy":
+		if GameState.is_tier_unlocked(id):
+			GameState.toggle_tier(id)
+		else:
+			GameState.unlock_tier(id)
+	elif kind == &"tile" and id == &"campfire":
+		if GameState.campfire_placed:
+			GameState.upgrade_campfire()
+		else:
+			GameState.place_campfire()
+
+
+# ─── Refresh (state visuals + tooltips) ────────────────────────────────
+func _refresh() -> void:
+	# A tier crossing its cumulative-gold milestone changes which slots exist →
+	# rebuild from scratch so the new icon slots into place.
+	var desired: Array[StringName] = []
+	for tier: Dictionary in _visible_enemy_tiers():
+		desired.append(tier["id"])
+	if desired != _built_enemy_ids:
+		_rebuild()
+		return
+	for item: Dictionary in _items:
+		if item["kind"] == &"enemy":
+			_refresh_enemy(item)
+		else:
+			_refresh_tile(item)
+
+
+func _refresh_enemy(item: Dictionary) -> void:
+	# Visual state only — the name lives in the custom tooltip (_show_tooltip).
+	# Three states: claimable(해금 가능, gold) / unlocked-ON / unlocked-OFF.
+	var id: StringName = item["id"]
+	var icon: Control = item["icon"]
+	var dot: Control = item["dot"]
+	var unlocked: bool = GameState.is_tier_unlocked(id)
+	var claimable: bool = GameState.is_tier_unlock_available(id)
+	item["claimable"] = claimable
+	if claimable:
+		# "해금!" — bright gold, gold pip; _process pulses it to draw the eye.
+		icon.modulate = Color(1.0, 0.92, 0.5, 1.0)
+		dot.add_theme_stylebox_override("panel", _dot_style(Color(1.0, 0.85, 0.3, 1.0)))
+		dot.visible = true
+		return
+	var active: bool = GameState.is_tier_active(id)
+	dot.add_theme_stylebox_override("panel", _dot_style(Color(1.0, 1.0, 0.95, 1.0)))
+	dot.visible = active
+	if active:
+		icon.modulate = Color(1, 1, 1, 1)
+	else:
+		icon.modulate = Color(0.78, 0.8, 0.82, 1.0)  # off: muted
+
+
+func _refresh_tile(item: Dictionary) -> void:
+	var id: StringName = item["id"]
+	var icon: Control = item["icon"]
+	var dot: Panel = item["dot"]
+	var price: Label = item.get("price", null)
+	if id != &"campfire":
+		return
+	var placed: bool = GameState.campfire_placed
+	dot.visible = placed
+	dot.add_theme_stylebox_override("panel", _dot_style(Color(1.0, 0.7, 0.35, 1.0)))  # warm fire pip
+	# Price + affordability: placed → upgrade cost, else → place cost. Bright when
+	# you can afford it, dim when you can't (so you see why it won't drop yet).
+	var cost: int = GameState.campfire_upgrade_cost() if placed else GameState.campfire_place_cost()
+	var affordable: bool = GameState.gold >= cost
+	if price != null:
+		price.text = "%dG" % cost
+		price.add_theme_color_override("font_color",
+			Color(1.0, 0.92, 0.55, 1.0) if affordable else Color(0.6, 0.55, 0.45, 0.85))
+	if placed:
+		icon.modulate = Color(1, 1, 1, 1)
+	elif affordable:
+		icon.modulate = Color(1, 1, 1, 1)
+	else:
+		icon.modulate = Color(0.5, 0.48, 0.45, 0.7)  # can't afford: dimmed
+
+
+# ─── Helpers / styles ──────────────────────────────────────────────────
+func _tier_texture(tier: Dictionary) -> Texture2D:
+	var path: String = str(tier.get("enemy_res", ""))
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	var ed := load(path) as EnemyData
+	return ed.sprite if ed != null else null
 
 
 func _make_label(text: String, pt: int, color: Color) -> Label:
@@ -206,31 +383,34 @@ func _make_label(text: String, pt: int, color: Color) -> Label:
 	return label
 
 
-func _short_cost(c: int) -> String:
-	if c >= 1000:
-		return "%.0fk" % (float(c) / 1000.0)
-	return str(c)
-
-
-func _prog_bg_style() -> StyleBoxFlat:
+## Bold COLORED floating tray — vivid green, fully OPAQUE, no shadow (matches the
+## right-panel cards' punchy fill). Sprite icons read on top.
+func _dock_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.05, 0.06, 0.05, 0.9)
+	style.bg_color = Color(0.2, 0.62, 0.34, 1.0)
+	style.set_corner_radius_all(11)
+	style.set_border_width_all(1)
+	style.border_color = Color(0.75, 1.0, 0.82, 0.55)
 	return style
 
 
-func _prog_fill_style() -> StyleBoxFlat:
+## Round running-indicator pip.
+func _dot_style(color: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.55, 1.0, 0.66, 1.0)
+	style.bg_color = color
+	style.set_corner_radius_all(3)  # ≥ half of the 4px dot → circle
 	return style
 
 
-func _panel_style() -> StyleBoxFlat:
+## Bright translucent "frosted" pill (rounded, soft border + shadow). Real
+## gaussian blur would need a backbuffer shader; the bright translucency over the
+## dark field reads as frosted glass and stays smooth at native resolution.
+func _pill_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.035, 0.038, 0.045, 1.0)
-	style.border_width_right = 1
-	style.border_color = Color(0.78, 0.86, 0.72, 1.0)
-	style.content_margin_left = 4
-	style.content_margin_top = 5
-	style.content_margin_right = 4
-	style.content_margin_bottom = 5
+	style.bg_color = Color(0.95, 0.96, 0.99, 0.86)
+	style.set_corner_radius_all(7)
+	style.set_border_width_all(1)
+	style.border_color = Color(1, 1, 1, 0.55)
+	style.shadow_color = Color(0, 0, 0, 0.35)
+	style.shadow_size = 4
 	return style

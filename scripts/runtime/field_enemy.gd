@@ -40,6 +40,8 @@ extends Area2D
 @onready var _alert_bubble: Control = $AlertBubble
 @onready var _collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var _tooltip_area: Control = $TooltipArea
+@onready var _hp_bar: ProgressBar = $HPBar
+@onready var _level_label: Label = $LevelLabel
 
 var _player: Node2D
 var _target: Node2D
@@ -116,7 +118,21 @@ func _apply_data() -> void:
 	charge_speed = data.field_charge_speed
 	charge_duration = data.field_charge_duration
 	charge_cooldown = data.field_charge_cooldown
+	_refresh_level_and_hp()
 	_refresh_tooltip()
+
+
+## Field enemies are full-HP wanderers (combat resolves in the battle window),
+## so the bar reads full here — it's an at-a-glance vitality + tier cue. The
+## level number sits below the sprite so it never overlaps the art.
+func _refresh_level_and_hp() -> void:
+	if data == null:
+		return
+	var tier_id: StringName = GameState.tier_id_for_enemy_data(data)
+	if _level_label != null:
+		_level_label.text = "Lv %d" % GameState.enemy_level(tier_id)
+	if _hp_bar != null:
+		_hp_bar.value = 1.0
 
 
 func _refresh_tooltip() -> void:
@@ -344,6 +360,10 @@ func _start_spawn_telegraph() -> void:
 	_collision_shape.disabled = true
 	_alert_bubble.visible = false
 	_sprite.visible = false
+	if _hp_bar != null:
+		_hp_bar.visible = false
+	if _level_label != null:
+		_level_label.visible = false
 	var sparkle: Node2D = _build_spawn_sparkle()
 	add_child(sparkle)
 	var tween: Tween = create_tween().set_loops(3)
@@ -358,6 +378,10 @@ func _start_spawn_telegraph() -> void:
 		return
 	sparkle.queue_free()
 	_sprite.visible = true
+	if _hp_bar != null:
+		_hp_bar.visible = true
+	if _level_label != null:
+		_level_label.visible = true
 	_sprite.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	var reveal: Tween = create_tween()
 	reveal.tween_property(_sprite, "modulate", Color.WHITE, 0.16)
@@ -445,6 +469,10 @@ func _trigger_encounter(is_combo_encounter: bool, combo_batch_id: int = 0) -> vo
 	set_deferred("monitorable", false)
 	_collision_shape.set_deferred("disabled", true)
 	_alert_bubble.visible = false
+	if _hp_bar != null:
+		_hp_bar.visible = false
+	if _level_label != null:
+		_level_label.visible = false
 	# Combo wipes have their own giant-skeleton spectacle — fire straight away
 	# so a dozen enemies don't each hit-stop the field.
 	if is_combo_encounter:

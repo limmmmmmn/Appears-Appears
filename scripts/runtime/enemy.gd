@@ -18,6 +18,7 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _hp_bar: ProgressBar = $HPBar
+@onready var _level_label: Label = $LevelLabel
 @onready var _tooltip_area: Control = $TooltipArea
 
 var current_hp: int = 0
@@ -26,6 +27,9 @@ var attack: int = 0
 var defense: int = 0
 var agility: int = 0
 var gold_reward: int = 0
+## Luck tier of this kill's rolled reward (&"low"/&"normal"/&"jackpot") — drives
+## the death-time floating-gold feedback (작게 vs 팡팡팡).
+var _gold_tier: StringName = &"normal"
 var _base_position: Vector2
 var _base_scale: Vector2
 var _hit_tween: Tween
@@ -56,7 +60,10 @@ func _apply_data() -> void:
 	attack = GameState.scaled_enemy_attack(data)
 	defense = GameState.scaled_enemy_defense(data)
 	agility = GameState.scaled_enemy_agility(data)
-	gold_reward = GameState.scaled_enemy_gold_reward(data)
+	# Roll this kill's reward like a mini chest (mean = the tier average).
+	var roll: Dictionary = GameState.roll_kill_gold(GameState.scaled_enemy_gold_reward(data))
+	gold_reward = int(roll["amount"])
+	_gold_tier = roll["tier"]
 	current_hp = max_hp
 	_dying = false
 	_stolen_from = false
@@ -65,6 +72,8 @@ func _apply_data() -> void:
 	modulate = Color.WHITE
 	if data.sprite and _sprite:
 		_sprite.texture = data.sprite
+	if _level_label != null:
+		_level_label.text = "Lv %d" % GameState.enemy_level(GameState.tier_id_for_enemy_data(data))
 	_refresh_hp_bar()
 	_refresh_tooltip()
 	hp_changed.emit(current_hp, max_hp)
@@ -191,5 +200,20 @@ func _die() -> void:
 	_death_tween.tween_property(self, "position", _base_position + Vector2(0, 10), death_fade_duration)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_IN)
+	_spawn_gold_roll_number()
 	died.emit()
 	EventBus.enemy_defeated.emit(self, gold_reward, global_position)
+
+
+## Reveal the kill's rolled gold as a floating popup sized to its luck tier.
+## Parented to OUR parent (not self) so the enemy's death-fade doesn't dim it.
+func _spawn_gold_roll_number() -> void:
+	if gold_reward <= 0:
+		return
+	var parent: Node = get_parent()
+	if parent == null:
+		return
+	var num: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
+	parent.add_child(num)
+	num.global_position = global_position + Vector2(0, -8)
+	num.setup_gold_roll(gold_reward, _gold_tier)

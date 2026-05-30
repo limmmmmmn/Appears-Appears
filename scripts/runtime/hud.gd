@@ -39,6 +39,15 @@ var _income_marker: int = 0
 var _income_per_sec: int = 0
 ## "상자 가득! 열어주세요" banner shown when the chest buffer is full (System 2).
 var _chest_full_banner: PanelContainer
+## Always-on big gold readout, pinned top-center (gold is the #1 info — must be
+## visible no matter which side of the screen you're looking at).
+var _gold_center: PanelContainer
+var _gold_center_label: Label
+## Big centered "○○ 해금!" popup with the enemy sprite (tier unlock moment).
+var _unlock_popup: PanelContainer
+var _unlock_sprite: TextureRect
+var _unlock_label: Label
+var _unlock_tween: Tween
 
 
 func _ready() -> void:
@@ -56,8 +65,16 @@ func _ready() -> void:
 	_debug_gold_button.pressed.connect(_on_debug_gold_button_pressed)
 	_debug_finish_button.pressed.connect(_on_debug_finish_button_pressed)
 	EventBus.chest_buffer_full_changed.connect(_on_chest_buffer_full_changed)
+	EventBus.tier_unlocked.connect(_on_tier_unlocked)
+	# Compact top-bar fonts (centralized in UITheme).
+	for lbl in [_gold_label, _field_label, _countdown_label]:
+		lbl.add_theme_font_size_override("font_size", UITheme.FONT_HUD)
+	# Gold now lives only in the right panel (no duplicate over the field).
+	_gold_label.visible = false
 	_income_marker = GameState.total_gold_earned
+	_build_gold_center()
 	_build_chest_full_banner()
+	_build_unlock_popup()
 	_refresh_gold()
 	_refresh_field_label()
 	_build_inventory_slots()
@@ -168,6 +185,81 @@ func _on_chest_buffer_full_changed(is_full: bool) -> void:
 		_chest_full_banner.visible = is_full
 
 
+# ─── Tier-unlock popup (big sprite + "○○ 해금!") ───────────────────────
+func _build_unlock_popup() -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.09, 0.12, 0.94)
+	style.set_border_width_all(2)
+	style.border_color = Color(1.0, 0.85, 0.35, 1.0)  # gold frame
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 12
+	style.content_margin_bottom = 10
+	style.shadow_color = Color(0, 0, 0, 0.5)
+	style.shadow_size = 6
+	_unlock_popup = PanelContainer.new()
+	_unlock_popup.add_theme_stylebox_override("panel", style)
+	_unlock_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_unlock_popup.add_child(col)
+	_unlock_sprite = TextureRect.new()
+	_unlock_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST  # crisp big pixels
+	_unlock_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_unlock_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_unlock_sprite.custom_minimum_size = Vector2(48, 48)
+	_unlock_sprite.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_unlock_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(_unlock_sprite)
+	_unlock_label = Label.new()
+	_unlock_label.add_theme_font_override("font", HUD_FONT)
+	_unlock_label.add_theme_font_size_override("font_size", 13)
+	_unlock_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
+	_unlock_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	_unlock_label.add_theme_constant_override("shadow_offset_x", 1)
+	_unlock_label.add_theme_constant_override("shadow_offset_y", 1)
+	_unlock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_unlock_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(_unlock_label)
+	add_child(_unlock_popup)
+	_unlock_popup.visible = false
+
+
+func _on_tier_unlocked(tier_id: StringName) -> void:
+	if _unlock_popup == null:
+		return
+	var tier: Dictionary = Balance.tier_by_id(tier_id)
+	_unlock_label.text = "%s 해금!" % str(tier.get("name", "?"))
+	_unlock_sprite.texture = _tier_sprite(tier)
+	_unlock_popup.visible = true
+	_unlock_popup.modulate = Color(1, 1, 1, 1)
+	_unlock_popup.scale = Vector2.ONE
+	# Center over the play field (between the left dock and the right panel), upper third.
+	await get_tree().process_frame  # let it size to content first
+	var field_center_x: float = (46.0 + UITheme.right_panel_left()) * 0.5
+	_unlock_popup.pivot_offset = _unlock_popup.size * 0.5
+	_unlock_popup.position = Vector2(field_center_x, 120.0) - _unlock_popup.size * 0.5
+	if _unlock_tween != null and _unlock_tween.is_valid():
+		_unlock_tween.kill()
+	_unlock_popup.scale = Vector2(0.6, 0.6)
+	_unlock_tween = create_tween()
+	_unlock_tween.tween_property(_unlock_popup, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_unlock_tween.tween_interval(1.4)
+	_unlock_tween.tween_property(_unlock_popup, "modulate:a", 0.0, 0.5)
+	_unlock_tween.tween_callback(func() -> void: _unlock_popup.visible = false)
+
+
+func _tier_sprite(tier: Dictionary) -> Texture2D:
+	var path: String = str(tier.get("enemy_res", ""))
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	var ed := load(path) as EnemyData
+	return ed.sprite if ed != null else null
+
+
 func _build_inventory_slots() -> void:
 	for child in _inventory_grid.get_children():
 		child.queue_free()
@@ -205,10 +297,56 @@ func _on_field_loop_timer_changed(remaining_seconds: int) -> void:
 
 
 func _refresh_gold() -> void:
+	var text: String
 	if _income_per_sec > 0:
-		_gold_label.text = "Gold %d   +%d/s" % [GameState.gold, _income_per_sec]
+		text = "Gold %d   +%d/s" % [GameState.gold, _income_per_sec]
 	else:
-		_gold_label.text = "Gold %d" % GameState.gold
+		text = "Gold %d" % GameState.gold
+	_gold_label.text = text
+	if _gold_center_label != null:
+		_gold_center_label.text = text
+		_reposition_gold_center()
+
+
+# ─── Top-center gold readout (always visible) ──────────────────────────
+func _build_gold_center() -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.1, 0.09, 0.04, 0.9)
+	style.set_border_width_all(1)
+	style.border_color = Color(1.0, 0.84, 0.3, 0.85)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	style.shadow_color = Color(0, 0, 0, 0.4)
+	style.shadow_size = 4
+	_gold_center = PanelContainer.new()
+	_gold_center.add_theme_stylebox_override("panel", style)
+	_gold_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gold_center_label = Label.new()
+	_gold_center_label.add_theme_font_override("font", HUD_FONT)
+	_gold_center_label.add_theme_font_size_override("font_size", 16)  # big — top priority
+	_gold_center_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 1.0))
+	_gold_center_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	_gold_center_label.add_theme_constant_override("shadow_offset_x", 1)
+	_gold_center_label.add_theme_constant_override("shadow_offset_y", 1)
+	_gold_center_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gold_center_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gold_center.add_child(_gold_center_label)
+	add_child(_gold_center)
+	_gold_center.position = Vector2(280.0, 6.0)
+
+
+## Keep the pill centered on the play field as its width changes with the number.
+func _reposition_gold_center() -> void:
+	if _gold_center == null:
+		return
+	await get_tree().process_frame
+	if _gold_center == null:
+		return
+	var center_x: float = (46.0 + UITheme.right_panel_left()) * 0.5
+	_gold_center.position = Vector2(center_x - _gold_center.size.x * 0.5, 6.0)
 
 
 func _on_debug_gold_button_pressed() -> void:

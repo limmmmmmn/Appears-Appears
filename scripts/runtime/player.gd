@@ -26,6 +26,18 @@ var _field_bounds := Rect2(Vector2.ZERO, Vector2(960, 540))
 var _camera_shake_tween: Tween
 ## True while this avatar's party member is downed (shows the lying pose).
 var _downed_visual: bool = false
+## One-time scripted walk target (campfire mage event). Overrides auto-move.
+var _forced_target_active: bool = false
+var _forced_target: Vector2 = Vector2.ZERO
+
+
+func set_forced_move_target(pos: Vector2) -> void:
+	_forced_target = pos
+	_forced_target_active = true
+
+
+func clear_forced_move_target() -> void:
+	_forced_target_active = false
 
 
 func _ready() -> void:
@@ -95,7 +107,13 @@ func _physics_process(_delta: float) -> void:
 		Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
 	)
 	var move_dir: Vector2 = manual_dir
-	if move_dir.length() < MANUAL_INPUT_THRESHOLD and auto_move_to_enemies:
+	if move_dir.length() < MANUAL_INPUT_THRESHOLD and _forced_target_active:
+		# Scripted walk (campfire mage event) overrides enemy-seeking until the
+		# field clears the target on arrival.
+		var to_fire: Vector2 = _forced_target - global_position
+		if to_fire.length() > 1.0:
+			move_dir = to_fire.normalized()
+	elif move_dir.length() < MANUAL_INPUT_THRESHOLD and auto_move_to_enemies:
 		# No WASD pressed → drift toward the nearest field enemy. Touching one
 		# triggers the encounter automatically via FieldEnemy.body_entered.
 		# When no enemies remain on the field, fall back to chasing the nearest

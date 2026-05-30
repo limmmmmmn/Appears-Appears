@@ -77,6 +77,11 @@ signal companion_appeared(id: StringName)
 ## A companion was recruited into the party (영입). Party also emits party_changed.
 signal companion_recruited(id: StringName)
 
+# ─── Field tiles ───────────────────────────────────────────────────────
+## The campfire tile was just placed (paid for). The Field spawns it at a random
+## spot, records its position, and runs the one-time mage-arrival event.
+signal campfire_placed()
+
 ## Actual HP removed from a party member after clamping overkill.
 signal party_damage_taken(member_index: int, amount: int)
 
@@ -101,9 +106,9 @@ signal modifier_picked(modifier: ModifierData)
 signal skill_node_purchase_succeeded(node)
 signal skill_node_purchase_failed(node)
 
-# ─── Incremental combat (SPEED / GREED / SCALE / TIER) ─────────────────
-## A combat upgrade axis changed. `axis` is one of &"speed", &"greed",
-## &"scale", &"tier". UI refreshes and combat re-reads multipliers from this.
+# ─── Incremental combat (SPEED / LUCK / SCALE / TIER) ──────────────────
+## A combat upgrade axis changed. `axis` is one of &"speed", &"luck",
+## &"scale", &"tier", &"open_speed". UI refreshes + combat re-read off this.
 signal combat_upgrade_changed(axis: StringName)
 ## Hero auto-equipped a newly unlocked weapon (SPEED skin). Battle windows show
 ## "○○ 장착!" and bump their hit-effect size.
@@ -114,6 +119,10 @@ signal armor_equipped(armor_name: String)
 ## A combat-upgrade purchase was attempted but refused (not enough gold, maxed,
 ## tier already owned, …). UI can flash the relevant control.
 signal combat_upgrade_failed(axis: StringName)
+
+## An enemy tier was just unlocked (cumulative-gold milestone reached + claimed).
+## HUD shows a big "○○ 해금!" popup with the enemy sprite.
+signal tier_unlocked(tier_id: StringName)
 
 # ─── Per-enemy level (System 1) ────────────────────────────────────────
 ## An enemy tier's kill-progress changed (fires every kill). Left bar updates

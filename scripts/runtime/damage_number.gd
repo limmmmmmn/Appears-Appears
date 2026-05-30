@@ -9,6 +9,9 @@ extends Node2D
 
 @onready var _label: Label = $Label
 
+## When > 0, the popup punches in from this scale (jackpot juice).
+var _spawn_scale_pop: float = 0.0
+
 
 func setup(amount: int, is_crit: bool = false) -> void:
 	_label.text = str(amount)
@@ -77,6 +80,41 @@ func setup_gold(amount: int) -> void:
 	duration = 0.75
 
 
+## Kill reward reveal, sized to luck. low = 작고 시무룩("피용"), normal = 보통,
+## jackpot = 화려하게("팡팡팡!", 큰 숫자 + scale 펀치).
+func setup_gold_roll(amount: int, tier: StringName) -> void:
+	_label.offset_left = -48.0
+	_label.offset_top = -12.0
+	_label.offset_right = 48.0
+	_label.offset_bottom = 8.0
+	var ls: LabelSettings = _label.label_settings.duplicate()
+	match tier:
+		&"jackpot":
+			_label.text = "팡팡팡! +%d G" % amount
+			ls.font_color = Color(1.0, 0.86, 0.2, 1.0)
+			ls.font_size = 14
+			ls.outline_size = 4
+			ls.outline_color = Color(0.5, 0.18, 0.0, 1.0)
+			rise_pixels = 26.0
+			duration = 1.05
+			_spawn_scale_pop = 0.45
+		&"low":
+			_label.text = "피용.. +%d G" % amount
+			ls.font_color = Color(0.74, 0.7, 0.55, 1.0)  # muted, 시무룩
+			ls.font_size = 6
+			ls.outline_size = 2
+			rise_pixels = 7.0
+			duration = 0.5
+		_:
+			_label.text = "+%d G" % amount
+			ls.font_color = Color(1.0, 0.82, 0.24, 1.0)
+			ls.font_size = 9
+			ls.outline_size = 3
+			rise_pixels = 16.0
+			duration = 0.72
+	_label.label_settings = ls
+
+
 func setup_text(text: String, text_color: Color = Color.WHITE) -> void:
 	_label.text = text
 	_label.offset_left = -42.0
@@ -102,4 +140,9 @@ func _start_float() -> void:
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(self, "modulate:a", 0.0, duration * 0.6)\
 		.set_delay(duration * 0.4)
+	# Jackpot punch: snap in from small with a BACK overshoot that settles to 1.
+	if _spawn_scale_pop > 0.0:
+		scale = Vector2.ONE * _spawn_scale_pop
+		tween.tween_property(self, "scale", Vector2.ONE, duration * 0.35)\
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.chain().tween_callback(queue_free)

@@ -55,7 +55,7 @@ var purchased_skill_nodes: Dictionary = {}
 ## logs after recruiting.
 var recruited_companions: Array[ModifierData] = []
 
-# ─── Incremental combat axes (WEAPONS / GREED / SCALE) ─────────────────
+# ─── Incremental combat axes (WEAPONS / LUCK / SCALE) ──────────────────
 ## See Balance.gd for the formulas these levels feed. The combat stays
 ## turn-based; these multipliers shape its emergent gold-per-second.
 ## Weapons replace the old single SPEED track: one level per weapon TYPE
@@ -65,9 +65,10 @@ var weapon_levels: Dictionary = {}
 ## Armor = flat party defense (the armor shop is its UI skin). Survival axis.
 ## Level 1 = "맨몸" (no bonus). Shared by the whole party, like the weapon.
 var armor_level: int = 1
-## GREED = gold-per-kill multiplier.
-var greed_level: int = 1
-## Chest open-speed level (sub-upgrade under GREED). 0 = base hover duration.
+## LUCK = kill-gold JACKPOT CHANCE (frequency only — never a gold multiplier).
+## Replaces the old GREED ×gold track, which compounded into a money explosion.
+var luck_level: int = 1
+## Chest open-speed level. 0 = base hover duration.
 var open_speed_level: int = 0
 ## SCALE = how many SCALE purchases were made; simultaneous window count =
 ## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
@@ -87,6 +88,14 @@ var enemy_kill_progress: Dictionary = {}
 var built_buildings: Array[StringName] = []
 ## Companions that met their appearance condition (등장) and can be recruited.
 var companions_appeared: Array[StringName] = []
+## How many times each upgrade category was bought (drives auto-building spawn +
+## count-based companion recruit). category → count.
+var upgrade_counts: Dictionary = {}
+## Campfire field tile (left panel): a placed HP-regen outpost.
+var campfire_placed: bool = false
+var campfire_level: int = 1
+var campfire_position: Vector2 = Vector2.ZERO
+var _campfire_regen_accum: Dictionary = {}
 ## Lifetime counters that drive companion appearance conditions.
 var total_enemy_kills: int = 0
 var total_party_downs: int = 0
@@ -796,6 +805,7 @@ func upgrade_weapon(type_id: StringName) -> bool:
 	weapon_levels[type_id] = weapon_level(type_id) + 1
 	EventBus.combat_upgrade_changed.emit(&"weapon")
 	EventBus.weapon_equipped.emit(current_weapon_name(type_id))
+	register_upgrade_purchase(&"weapons")
 	return true
 
 
@@ -849,10 +859,11 @@ func upgrade_armor() -> bool:
 	armor_level += 1
 	EventBus.combat_upgrade_changed.emit(&"armor")
 	EventBus.armor_equipped.emit(current_armor_name())
+	register_upgrade_purchase(&"armor")
 	return true
 
 
-# ─── Village buildings (right-panel grid; not on the field) ────────────
+# ─── Village buildings (right-panel grid; buildings are a RESULT of upgrades) ─
 func is_building_built(id: StringName) -> bool:
 	return built_buildings.has(id)
 
@@ -861,7 +872,7 @@ func building_cost(id: StringName) -> int:
 	return int(Balance.building_by_id(id).get("build_cost", 0))
 
 
-## Locked → buildable gate. Empty `unlock` = always buildable (the first shop).
+## Direct-build (모닥불/성소) locked → buildable gate. Empty `unlock` = always.
 func is_building_unlocked(id: StringName) -> bool:
 	var cond: Dictionary = Balance.building_by_id(id).get("unlock", {})
 	if cond.is_empty():
@@ -877,29 +888,146 @@ func is_building_unlocked(id: StringName) -> bool:
 	return true
 
 
+## Only DIRECT buildings (모닥불/성소) are purchasable by clicking the tile. Auto
+## buildings appear as a side effect of buying their upgrade.
 func can_purchase_building(id: StringName) -> bool:
 	var b: Dictionary = Balance.building_by_id(id)
-	if b.is_empty() or is_building_built(id) or not is_building_unlocked(id):
+	if b.is_empty() or StringName(b.get("mode", &"")) != &"direct":
+		return false
+	if is_building_built(id) or not is_building_unlocked(id):
 		return false
 	return gold >= building_cost(id)
 
 
+## Build a DIRECT building. Its owner companion joins immediately (모닥불→마법사,
+## 성소→사제).
 func purchase_building(id: StringName) -> bool:
 	if not can_purchase_building(id) or not spend_gold(building_cost(id)):
 		return false
+	_raise_building(id)
+	_join_building_owner(id)  # direct owners join the moment the building is up
+	return true
+
+
+## Mark a building as present + make its owner companion appear (등장). Shared by
+## the direct-build path and the auto-appear-on-upgrade path.
+func _raise_building(id: StringName) -> void:
+	if is_building_built(id):
+		return
 	built_buildings.append(id)
 	EventBus.building_built.emit(id)
-	# Building integration: the building's owner companion now "appears" (등장).
 	var owner_id: StringName = StringName(Balance.building_by_id(id).get("owner", &""))
 	if owner_id != &"" and not companions_appeared.has(owner_id) and not is_companion_recruited(owner_id):
 		companions_appeared.append(owner_id)
 		EventBus.companion_appeared.emit(owner_id)
+
+
+## ★ The inverted causality: every upgrade purchase calls this with its category.
+## First purchase of a category raises its auto-building; reaching the building's
+## recruit_at count joins the owner companion.
+func register_upgrade_purchase(category: StringName) -> void:
+	upgrade_counts[category] = int(upgrade_counts.get(category, 0)) + 1
+	var bid: StringName = Balance.building_for_trigger(category)
+	if bid == &"":
+		return
+	_raise_building(bid)
+	var b: Dictionary = Balance.building_by_id(bid)
+	var recruit_at: int = int(b.get("recruit_at", 0))
+	if recruit_at > 0 and int(upgrade_counts.get(category, 0)) >= recruit_at:
+		_join_building_owner(bid)
+
+
+func _join_building_owner(building_id: StringName) -> void:
+	join_companion(StringName(Balance.building_by_id(building_id).get("owner", &"")))
+
+
+## Join a companion into the party (no gold). No-op if absent / already in / the
+## party is full. Used by building owners and the campfire mage event.
+func join_companion(id: StringName) -> void:
+	if id == &"" or is_companion_recruited(id):
+		return
+	if party.size() >= Balance.MAX_PARTY_SIZE:
+		return
+	var path: String = str(Balance.companion_by_id(id).get("char_res", ""))
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return
+	var data: CharacterData = load(path) as CharacterData
+	if data == null:
+		return
+	if not companions_appeared.has(id):
+		companions_appeared.append(id)
+	_add_party_member(data)
+	EventBus.companion_recruited.emit(id)
+
+
+# ─── Campfire tile (field-placed HP-regen outpost; left panel) ─────────
+func campfire_place_cost() -> int:
+	return int(Balance.tile_by_id(&"campfire").get("place_cost", 0))
+
+
+func can_place_campfire() -> bool:
+	return not campfire_placed and gold >= campfire_place_cost()
+
+
+## Pay for the campfire. The Field spawns it + runs the mage event (signal).
+func place_campfire() -> bool:
+	if not can_place_campfire() or not spend_gold(campfire_place_cost()):
+		return false
+	campfire_placed = true
+	EventBus.campfire_placed.emit()
 	return true
 
 
+func set_campfire_position(pos: Vector2) -> void:
+	campfire_position = pos
+
+
+func campfire_regen_radius() -> float:
+	return Balance.CAMPFIRE_REGEN_RADIUS
+
+
+func campfire_regen_rate() -> float:
+	return Balance.campfire_regen_rate(campfire_level)
+
+
+func campfire_upgrade_cost() -> int:
+	return Balance.campfire_upgrade_cost(campfire_level)
+
+
+func can_upgrade_campfire() -> bool:
+	return campfire_placed and gold >= campfire_upgrade_cost()
+
+
+func upgrade_campfire() -> bool:
+	if not campfire_placed or not spend_gold(campfire_upgrade_cost()):
+		return false
+	campfire_level += 1
+	EventBus.combat_upgrade_changed.emit(&"campfire")
+	return true
+
+
+## Heal the given (in-radius, combat-ready) member indices. Field passes who's
+## near the campfire each frame; only those regen — never global.
+func tick_campfire_regen(indices: Array, delta: float) -> void:
+	if not campfire_placed or delta <= 0.0:
+		return
+	var rate: float = campfire_regen_rate()
+	for i in indices:
+		if not is_combat_ready(i):
+			continue
+		var maxv: int = effective_max_hp(i)
+		if party_hp[i] >= maxv:
+			_campfire_regen_accum[i] = 0.0
+			continue
+		var carry: float = float(_campfire_regen_accum.get(i, 0.0)) + rate * delta
+		var whole: int = int(carry)
+		_campfire_regen_accum[i] = carry - float(whole)
+		if whole >= 1:
+			heal_party_member(i, whole)
+
+
 ## 성소 effect: while built, downed members are revived on the spot instead of
-## entering the slow downed/recovery cycle. (A specific building's effect lives
-## here; the purchase/placement plumbing above stays generic.)
+## entering the slow downed/recovery cycle.
 func sanctuary_active() -> bool:
 	return is_building_built(&"sanctuary")
 
@@ -979,29 +1107,43 @@ func roll_battle_initiative(enemy_agility_avg: float) -> int:
 	return 0
 
 
-# ─── Incremental combat: GREED axis (gold per kill) ────────────────────
-func greed_gold_multiplier() -> float:
-	return Balance.effect_multiplier(greed_level)
+# ─── Incremental combat: LUCK axis (kill-gold jackpot CHANCE) ──────────
+## Jackpot chance at a given luck level. Lv1 = the base rate; each level adds a
+## flat % (additive, capped). Never touches the jackpot MULTIPLIER.
+func luck_jackpot_chance_for_level(level: int) -> float:
+	var steps: int = maxi(0, level - 1)
+	var chance: float = Balance.KILL_GOLD_JACKPOT_CHANCE + float(steps) * Balance.LUCK_JACKPOT_CHANCE_PER_LEVEL
+	return minf(chance, Balance.LUCK_JACKPOT_CHANCE_MAX)
 
 
-func greed_upgrade_cost() -> int:
-	return Balance.upgrade_cost(greed_level)
+## Current kill-gold jackpot chance (used by roll_kill_gold).
+func luck_jackpot_chance() -> float:
+	return luck_jackpot_chance_for_level(luck_level)
 
 
-func can_upgrade_greed() -> bool:
-	return gold >= greed_upgrade_cost()
+func luck_is_maxed() -> bool:
+	return luck_jackpot_chance() >= Balance.LUCK_JACKPOT_CHANCE_MAX - 0.0001
 
 
-func upgrade_greed() -> bool:
-	if not spend_gold(greed_upgrade_cost()):
-		EventBus.combat_upgrade_failed.emit(&"greed")
+func luck_upgrade_cost() -> int:
+	return Balance.upgrade_cost(luck_level)
+
+
+func can_upgrade_luck() -> bool:
+	return not luck_is_maxed() and gold >= luck_upgrade_cost()
+
+
+func upgrade_luck() -> bool:
+	if luck_is_maxed() or not spend_gold(luck_upgrade_cost()):
+		EventBus.combat_upgrade_failed.emit(&"luck")
 		return false
-	greed_level += 1
-	EventBus.combat_upgrade_changed.emit(&"greed")
+	luck_level += 1
+	EventBus.combat_upgrade_changed.emit(&"luck")
+	register_upgrade_purchase(&"luck")
 	return true
 
 
-# ─── Chest open-speed (sub-upgrade under GREED) ────────────────────────
+# ─── Chest open-speed (independent relic upgrade) ──────────────────────
 ## Hover-to-open gauge duration; shortens as open_speed_level rises (floored).
 func chest_hover_duration() -> float:
 	return Balance.chest_open_duration(open_speed_level)
@@ -1021,10 +1163,11 @@ func can_upgrade_open_speed() -> bool:
 
 func upgrade_open_speed() -> bool:
 	if open_speed_is_maxed() or not spend_gold(open_speed_upgrade_cost()):
-		EventBus.combat_upgrade_failed.emit(&"greed")
+		EventBus.combat_upgrade_failed.emit(&"open_speed")
 		return false
 	open_speed_level += 1
-	EventBus.combat_upgrade_changed.emit(&"greed")
+	EventBus.combat_upgrade_changed.emit(&"open_speed")
+	register_upgrade_purchase(&"open_speed")
 	return true
 
 
@@ -1051,32 +1194,46 @@ func upgrade_scale() -> bool:
 		return false
 	scale_purchases += 1
 	EventBus.combat_upgrade_changed.emit(&"scale")
+	register_upgrade_purchase(&"scale")
 	return true
 
 
-# ─── Incremental combat: enemy tiers (global single selection) ─────────
+# ─── Incremental combat: enemy tiers (cumulative-gold unlock + toggle) ──
 func is_tier_unlocked(id: StringName) -> bool:
 	return unlocked_tier_ids.has(id)
 
 
-func tier_unlock_cost(id: StringName) -> int:
-	return int(Balance.tier_by_id(id).get("unlock_cost", 0))
+## Lifetime earned-gold milestone this tier unlocks at (spending never lowers it).
+func tier_unlock_threshold(id: StringName) -> int:
+	return int(Balance.tier_by_id(id).get("unlock_at", 0))
 
 
-func can_unlock_tier(id: StringName) -> bool:
-	var tier: Dictionary = Balance.tier_by_id(id)
-	if tier.is_empty() or is_tier_unlocked(id):
-		return false
-	return gold >= int(tier["unlock_cost"])
+## Has the player earned enough (lifetime) for this tier to be claimable yet?
+func tier_threshold_reached(id: StringName) -> bool:
+	return total_gold_earned >= tier_unlock_threshold(id)
 
 
+## Shown in the dock at all? Unlocked tiers always; locked tiers only once their
+## cumulative-gold milestone is reached (below that they're hidden = blank).
+func is_tier_visible(id: StringName) -> bool:
+	return is_tier_unlocked(id) or tier_threshold_reached(id)
+
+
+## Reached the milestone but not yet claimed → the dock shows a "해금" button.
+func is_tier_unlock_available(id: StringName) -> bool:
+	return not is_tier_unlocked(id) and tier_threshold_reached(id)
+
+
+## Claim a tier whose milestone is reached. FREE — the lifetime-earned milestone
+## is the gate, so spending gold never costs you an unlock. Fires the popup.
 func unlock_tier(id: StringName) -> bool:
-	if not can_unlock_tier(id) or not spend_gold(tier_unlock_cost(id)):
+	if not is_tier_unlock_available(id):
 		EventBus.combat_upgrade_failed.emit(&"tier")
 		return false
 	unlocked_tier_ids.append(id)
 	if not active_tier_ids.has(id):
-		active_tier_ids.append(id)  # auto-toggle the freshly unlocked tier ON
+		active_tier_ids.append(id)  # freshly unlocked tier starts ON
+	EventBus.tier_unlocked.emit(id)
 	EventBus.combat_upgrade_changed.emit(&"tier")
 	return true
 
@@ -1085,8 +1242,9 @@ func is_tier_active(id: StringName) -> bool:
 	return active_tier_ids.has(id)
 
 
-## Toggle an unlocked tier ON/OFF. Turning everything off just empties the
-## field — that's a valid player choice (the left bar is the difficulty knob).
+## Toggle an unlocked tier ON/OFF. OFF only stops NEW spawns of that tier —
+## enemies already wandering the field stay until killed. (The field watches
+## active_tier_ids for its continuous spawn mix; it never culls on toggle.)
 func toggle_tier(id: StringName) -> void:
 	if not is_tier_unlocked(id):
 		return
@@ -1108,7 +1266,7 @@ func tier_for_enemy_data(data: EnemyData) -> Dictionary:
 
 
 ## A random toggled-on tier's enemy resource for the field to spawn. Returns
-## null when nothing is active (field then spawns nothing).
+## null when nothing is active (field then spawns nothing new).
 func random_active_tier_enemy_data() -> EnemyData:
 	var candidates: Array[String] = []
 	for id: StringName in active_tier_ids:
@@ -1384,7 +1542,24 @@ func scaled_enemy_max_hp(data: EnemyData) -> int:
 func scaled_enemy_attack(data: EnemyData) -> int:
 	if data == null:
 		return 1
-	return data.attack
+	# Per-tier attack ramp (Balance TIERS.atk_mult) so orc+ hit hard enough to
+	# actually threaten a wipe — the source of mid/late "위기".
+	var atk_mult: float = float(tier_for_enemy_data(data).get("atk_mult", 1.0))
+	return maxi(1, int(round(float(data.attack) * atk_mult)))
+
+
+## Each kill is a mini chest-open: the base (average) reward × a random roll.
+## Returns {"amount": int, "tier": &"low"/&"normal"/&"jackpot"} so the feedback
+## can be sized to the luck. Mean ≈ 1.0 (Balance), so total income is unchanged.
+func roll_kill_gold(base_reward: int) -> Dictionary:
+	if base_reward <= 0:
+		return {"amount": 0, "tier": &"normal"}
+	# LUCK raises the jackpot CHANCE (frequency); the MULTIPLIER stays fixed.
+	if randf() < luck_jackpot_chance():
+		return {"amount": maxi(1, int(round(float(base_reward) * Balance.KILL_GOLD_JACKPOT_MULT))), "tier": &"jackpot"}
+	var mult: float = randf_range(Balance.KILL_GOLD_MIN_MULT, Balance.KILL_GOLD_MAX_MULT)
+	var tier: StringName = &"low" if mult < Balance.KILL_GOLD_LOW_MULT_THRESHOLD else &"normal"
+	return {"amount": maxi(1, int(round(float(base_reward) * mult))), "tier": tier}  # min 1 — never a total 꽝
 
 
 func scaled_enemy_defense(data: EnemyData) -> int:
@@ -1402,10 +1577,12 @@ func scaled_enemy_agility(data: EnemyData) -> int:
 func scaled_enemy_gold_reward(data: EnemyData) -> int:
 	if data == null:
 		return 0
-	# Gold per kill = tier base gold × GREED × tier-level × thief (도적) multiplier.
+	# Gold per kill = tier base gold × tier-level × thief (도적) multiplier.
+	# (No GREED multiplier — it was removed; LUCK raises jackpot CHANCE instead,
+	# applied later in roll_kill_gold, not here.)
 	var tier_id: StringName = tier_id_for_enemy_data(data)
 	var kill_gold: int = int(tier_for_enemy_data(data).get("kill_gold", Balance.SLIME_BASE_GOLD))
-	return maxi(1, int(round(float(kill_gold) * greed_gold_multiplier() * enemy_kill_gold_multiplier(tier_id) * thief_gold_multiplier())))
+	return maxi(1, int(round(float(kill_gold) * enemy_kill_gold_multiplier(tier_id) * thief_gold_multiplier())))
 
 
 ## Average single party hit at SPEED Lv1 (weapon-free, full HP). Used only to
@@ -2149,6 +2326,10 @@ func reset_run() -> void:
 	total_gold_earned = 0
 	enemies_killed = 0
 	biggest_hit = 0
+	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock
+	active_tier_ids = [&"slime"]
+	enemy_levels.clear()
+	enemy_kill_progress.clear()
 	active_modifiers.clear()
 	recruited_companions.clear()
 	_move_speed_drag_multiplier = 1.0

@@ -86,6 +86,9 @@ const CLIFF_FACE_HEIGHT: float = 11.0
 @onready var _message_label: Label = %MessageLabel
 
 var _player: CharacterBody2D
+## Campfire field tile: visual node + the one-time "party walks over → 마법사" event.
+var _campfire_node: Node2D
+var _campfire_event_pending: bool = false
 var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
@@ -121,8 +124,10 @@ func _ready() -> void:
 	EventBus.skill_node_purchase_succeeded.connect(_on_skill_node_purchase_succeeded)
 	EventBus.combat_upgrade_changed.connect(_on_combat_upgrade_changed)
 	EventBus.companion_appeared.connect(_on_companion_appeared)
+	EventBus.companion_recruited.connect(_on_companion_recruited)
 	EventBus.party_member_downed.connect(_on_party_member_downed_visual)
 	EventBus.party_member_revived.connect(_on_party_member_revived_visual)
+	EventBus.campfire_placed.connect(_on_campfire_placed)
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
@@ -131,17 +136,16 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
+	_tick_campfire(delta)  # proximity regen + first-place mage event (runs always)
 	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
 	if GameState.is_field_battle_paused():
 		return
 	if _loop_complete:
 		return
 	# Incremental model: the field continuously maintains a population of the
-	# toggled-on tiers. This used to be gated by the legacy `spawner` skill node
-	# and a `STORY_MODE_ENABLED` early-return — both now removed, since with the
-	# emptied skill tree those gates silently disabled all continuous spawning
-	# (enemies only ever spawned once at loop start, so toggling a tier ON did
-	# nothing). Killed/cleared enemies are now replenished toward the target.
+	# toggled-on tiers. Killed/cleared enemies are replenished toward the target.
+	# Toggling a tier OFF just stops it joining the spawn mix (random_active_tier
+	# _enemy_data drops it) — existing wanderers are never culled.
 	_spawn_timer -= delta
 	if _spawn_timer > 0.0:
 		return
@@ -728,14 +732,15 @@ func _grow_crowd_pressure() -> void:
 	_crowd_pressure = mini(max_crowd_pressure + GameState.field_crowd_cap_bonus(), _crowd_pressure + crowd_growth_per_wave)
 
 
-## Toggling/unlocking tiers (left bar) should feel instant. We clear the
-## wandering field enemies and refill with the fresh mix so a newly toggled-on
-## tier appears right away — otherwise, if the population were already full of
-## another tier, the new one wouldn't show until those died off.
+## A tier was toggled (left bar). Turning one ON should feel instant, so we top
+## up the population right away — but this only ADDS toward the target count and
+## NEVER clears. So toggling a tier OFF leaves its existing wanderers alive; they
+## simply stop being respawned (random_active_tier_enemy_data drops the tier).
 func _on_combat_upgrade_changed(axis: StringName) -> void:
 	if axis != &"tier":
 		return
-	_clear_field_enemies()
+	if GameState.field_loop_count <= 0 or _loop_complete:
+		return
 	_spawn_timer = 0.0
 	_refill_enemy_population(_desired_enemy_count())
 
@@ -746,6 +751,73 @@ func _on_combat_upgrade_changed(axis: StringName) -> void:
 func _on_companion_appeared(id: StringName) -> void:
 	var comp: Dictionary = Balance.companion_by_id(id)
 	_show_message(str(comp.get("appear_text", "새로운 동료가 나타났다!")))
+
+
+## A companion actually joined the party (영입 완료).
+func _on_companion_recruited(id: StringName) -> void:
+	var comp: Dictionary = Balance.companion_by_id(id)
+	_show_message("%s이(가) 합류했다!" % str(comp.get("name", "동료")))
+
+
+# ─── Campfire tile (field-placed HP-regen outpost) ─────────────────────
+## Player paid for the campfire → drop it at a random spot, point the party at it
+## for the one-time mage-arrival event.
+func _on_campfire_placed() -> void:
+	if is_instance_valid(_campfire_node):
+		return
+	var pos: Vector2 = _random_campfire_position()
+	GameState.set_campfire_position(pos)
+	_campfire_node = FieldStructure.new()
+	_campfire_node.setup(Balance.tile_by_id(&"campfire"))
+	_campfire_node.position = pos
+	_decorations_root.add_child(_campfire_node)
+	# First placement: party auto-walks to the fire, then 마법사 appears + joins.
+	_campfire_event_pending = true
+	if _player and _player.has_method("set_forced_move_target"):
+		_player.set_forced_move_target(pos)
+	_show_message("모닥불을 피웠다. 더 태워볼까…?")
+
+
+func _random_campfire_position() -> Vector2:
+	var x: float = _decor_rng.randf_range(LEFT_UI_INSET + 50.0, _field_size.x - 50.0)
+	var y: float = _decor_rng.randf_range(70.0, _field_size.y - 50.0)
+	return Vector2(x, y)
+
+
+## Per-frame: heal party members standing near the campfire; trigger the mage
+## event once the party reaches it the first time.
+func _tick_campfire(delta: float) -> void:
+	if not GameState.campfire_placed or not is_instance_valid(_campfire_node):
+		return
+	var center: Vector2 = _campfire_node.position
+	var radius: float = GameState.campfire_regen_radius()
+	# Collect in-range party member indices for proximity regen.
+	var in_range: Array[int] = []
+	for child in _party_root.get_children():
+		var idx: int = _party_member_index_of(child)
+		if idx < 0:
+			continue
+		if (child as Node2D).position.distance_to(center) <= radius:
+			in_range.append(idx)
+	GameState.tick_campfire_regen(in_range, delta)
+	# One-time mage event: party reached the fire.
+	if _campfire_event_pending and _player and _player.position.distance_to(center) <= radius:
+		_campfire_event_pending = false
+		if _player.has_method("clear_forced_move_target"):
+			_player.clear_forced_move_target()
+		if _campfire_node.has_method("pulse"):
+			_campfire_node.pulse()
+		GameState.join_companion(&"mage")  # 마법사 즉시 영입 (emits join message)
+
+
+## Map a party-visual node back to its GameState party index. Player = 0,
+## companions carry slot_index. -1 if it's not a party member.
+func _party_member_index_of(node: Node) -> int:
+	if node == _player:
+		return 0
+	if "slot_index" in node:
+		return int(node.slot_index)
+	return -1
 
 
 # ─── Downed avatar pose (lie down while refilling, stand when full) ─────
@@ -816,10 +888,7 @@ func _desired_enemy_count() -> int:
 
 func _spawn_field_enemy(data: EnemyData) -> void:
 	if data == null:
-		# Every tier toggled off → nothing to spawn this tick.
-		print("[field] spawn skipped — no active tier. active_tier_ids=%s" % [GameState.active_tier_ids])
 		return  # every tier toggled off → nothing to spawn this tick
-	print("[field] spawn %s (res=%s) active_tier_ids=%s" % [data.id, data.resource_path, GameState.active_tier_ids])
 	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
 	var fe: FieldEnemy = FIELD_ENEMY_SCENE.instantiate()
 	fe.setup(data)
@@ -840,7 +909,7 @@ func _enemy_count_for_current_nodes() -> int:
 func _enemy_data_for_current_nodes() -> EnemyData:
 	# The field spawns a random mix of whichever tiers are toggled ON (left bar).
 	# Returns null when every tier is toggled off — _spawn_field_enemy guards it,
-	# so the field simply stays empty until the player re-enables something.
+	# so the field simply stops adding new enemies (existing ones stay alive).
 	return GameState.random_active_tier_enemy_data()
 
 
@@ -1087,8 +1156,6 @@ func _check_refill_after_battles() -> void:
 	_active_battle_windows = 0
 	if _loop_complete:
 		return
-	# Legacy STORY_MODE / `spawner` skill gates removed — the incremental field
-	# always tops itself back up so it never sits empty between fights.
 	if _active_field_enemy_count() == 0:
 		_refill_enemy_population(spawn_batch_size)
 

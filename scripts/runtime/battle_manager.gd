@@ -27,11 +27,15 @@ const SETTLE_INTERVAL: float = 0.08
 const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 0.85
 const PARTY_COLLISION_DAMAGE_COOLDOWN: float = 0.45
 const MODAL_WINDOW_SIZE_MULTIPLIER: float = 1.0
-const PLAY_AREA_WIDTH: float = 480.0
-## Width of the left enemy-toggle bar. The play area is inset by this on the
-## left so battle windows never spawn/drift underneath it (matches
-## LeftEnemyBar.BAR_WIDTH in the ㄷ-shaped layout).
+## Width of the left dock. The play area is inset by this on the left so battle
+## windows never spawn/drift underneath it.
 const LEFT_BAR_WIDTH: float = 46.0
+
+
+## Play area right edge = viewport minus the right panel. Read at runtime from
+## UITheme so narrowing the panel automatically widens the field.
+func _play_area_right_edge() -> float:
+	return 640.0 - UITheme.RIGHT_PANEL_WIDTH
 
 var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
 var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 world velocity.
@@ -534,9 +538,8 @@ func _visible_world_rect() -> Rect2:
 func _play_area_visible_world_rect() -> Rect2:
 	var camera := get_viewport().get_camera_2d()
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	# Usable width = viewport minus the right shop panel (PLAY_AREA_WIDTH caps the
-	# right edge) minus the left enemy-toggle bar.
-	var play_width: float = minf(viewport_size.x, PLAY_AREA_WIDTH) - LEFT_BAR_WIDTH
+	# Usable width = viewport minus the right shop panel minus the left dock.
+	var play_width: float = minf(viewport_size.x, _play_area_right_edge()) - LEFT_BAR_WIDTH
 	var play_size := Vector2(maxf(1.0, play_width), viewport_size.y)
 	if camera == null:
 		return Rect2(Vector2(LEFT_BAR_WIDTH, 0.0), play_size)
