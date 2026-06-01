@@ -29,6 +29,11 @@ var _items: Array[Dictionary] = []
 ## The enemy tier ids currently built into the dock (visible ones only). When the
 ## visible set grows — a tier crosses its cumulative-gold milestone — we rebuild.
 var _built_enemy_ids: Array[StringName] = []
+## Whether the dock was built in the post-world-start layout (enemies + campfire)
+## vs the opening layout (just the grass tile). Rebuild when it flips.
+var _built_world_started: bool = false
+## Whether the dock was built with the name already entered (grass tile shows).
+var _built_name_entered: bool = false
 var _pulse_t: float = 0.0
 var _dock_panel: Panel
 ## Custom macOS-style tooltip (pill + left tail) shown to the RIGHT of the
@@ -60,6 +65,8 @@ func _ready() -> void:
 	EventBus.enemy_progress_changed.connect(_on_changed.unbind(1))
 	EventBus.enemy_leveled_up.connect(_on_changed.unbind(2))
 	EventBus.campfire_placed.connect(_on_changed)
+	EventBus.world_started.connect(_on_changed)
+	EventBus.player_named.connect(_on_changed.unbind(1))
 	set_process(true)
 	_refresh()
 
@@ -73,6 +80,8 @@ func _on_changed() -> void:
 ## absent). Tiles (campfire) are always shown.
 func _visible_enemy_tiers() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
+	if not GameState.world_started:
+		return out  # opening: no enemies until the grass is laid
 	for i in Balance.tier_count():
 		var tier: Dictionary = Balance.tier_at(i)
 		if GameState.is_tier_visible(tier["id"]):
@@ -80,13 +89,31 @@ func _visible_enemy_tiers() -> Array[Dictionary]:
 	return out
 
 
+## Tiles below the enemy roster: before the world starts → ONLY the grass
+## world-start tile; after → the campfire (and future) tiles.
+func _dock_tiles() -> Array[Dictionary]:
+	if not GameState.world_started:
+		# Opening: nothing until the hero is named, then ONLY the grass tile.
+		if not GameState.name_entered:
+			return []
+		return [{"id": &"grass", "name": "초원", "short": "초",
+			"color": Color(0.55, 0.85, 0.42, 1.0), "kind": &"grass"}]
+	var out: Array[Dictionary] = []
+	for i in Balance.tile_count():
+		out.append(Balance.tile_at(i))
+	return out
+
+
 func _build() -> void:
+	_built_world_started = GameState.world_started
+	_built_name_entered = GameState.name_entered
 	var enemy_tiers: Array[Dictionary] = _visible_enemy_tiers()
 	_built_enemy_ids.clear()
 	for tier: Dictionary in enemy_tiers:
 		_built_enemy_ids.append(tier["id"])
+	var tiles: Array[Dictionary] = _dock_tiles()
 	var enemy_n: int = enemy_tiers.size()
-	var tile_n: int = Balance.tile_count()
+	var tile_n: int = tiles.size()
 	var total: int = enemy_n + tile_n
 	var divider: float = DIVIDER_H if (tile_n > 0 and enemy_n > 0) else 0.0
 	var height: float = DOCK_PAD * 2.0 + total * SLOT + maxf(0.0, total - 1) * SLOT_SPACING + divider
@@ -110,9 +137,9 @@ func _build() -> void:
 		if enemy_n > 0:
 			_add_divider(Vector2(cx, cy + divider * 0.5), dock_w)
 			cy += divider
-		for i in tile_n:
-			var tile: Dictionary = Balance.tile_at(i)
-			_add_item(&"tile", tile, Vector2(cx, cy + SLOT * 0.5), null, y0)
+		for tile: Dictionary in tiles:
+			var tk: StringName = StringName(tile.get("kind", &"tile"))
+			_add_item(tk, tile, Vector2(cx, cy + SLOT * 0.5), null, y0)
 			cy += SLOT + SLOT_SPACING
 	_build_tooltip()
 
@@ -264,9 +291,15 @@ func _build_tooltip() -> void:
 
 func _show_tooltip(item: Dictionary) -> void:
 	var name_text: String = str(item["data"].get("name", "?"))
-	# Claimable tiers prompt the unlock click right in the tooltip.
-	if item["kind"] == &"enemy" and GameState.is_tier_unlock_available(item["id"]):
-		name_text = "%s 해금!" % name_text
+	var kind: StringName = item["kind"]
+	var id: StringName = item["id"]
+	if kind == &"grass":
+		name_text = "초원 깔기"
+	elif kind == &"enemy":
+		if GameState.is_tier_unlock_available(id):
+			name_text = "%s 해금!" % name_text
+		elif GameState.is_tier_unlocked(id):
+			name_text = "%s  %dG" % [name_text, GameState.tier_place_cost(id)]  # 배치 비용
 	_tooltip_label.text = name_text
 	var text_w: float = PANEL_FONT.get_string_size(name_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, TOOLTIP_FONT).x
 	var pill_w: float = text_w + TOOLTIP_PAD * 2.0
@@ -278,15 +311,17 @@ func _show_tooltip(item: Dictionary) -> void:
 	_tooltip.visible = true
 
 
-# ─── Click — toggle a tier ON/OFF (unlock first if needed) ─────────────
+# ─── Click — grass starts the world; enemy click PLACES one (claim first) ──
 func _on_item_input(event: InputEvent, kind: StringName, id: StringName) -> void:
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
-	if kind == &"enemy":
+	if kind == &"grass":
+		GameState.start_world()  # opening: lay the first grass → hero moves, enemies appear
+	elif kind == &"enemy":
 		if GameState.is_tier_unlocked(id):
-			GameState.toggle_tier(id)
+			GameState.place_enemy(id)   # click-to-place: -place_cost gold → 1 spawns
 		else:
-			GameState.unlock_tier(id)
+			GameState.unlock_tier(id)   # claim the milestone-reached tier first
 	elif kind == &"tile" and id == &"campfire":
 		if GameState.campfire_placed:
 			GameState.upgrade_campfire()
@@ -296,8 +331,11 @@ func _on_item_input(event: InputEvent, kind: StringName, id: StringName) -> void
 
 # ─── Refresh (state visuals + tooltips) ────────────────────────────────
 func _refresh() -> void:
-	# A tier crossing its cumulative-gold milestone changes which slots exist →
-	# rebuild from scratch so the new icon slots into place.
+	# Name-entry (empty → grass tile) and world-start (grass → enemy roster) both
+	# flip the whole layout; a tier crossing its milestone changes enemy slots.
+	if _built_name_entered != GameState.name_entered or _built_world_started != GameState.world_started:
+		_rebuild()
+		return
 	var desired: Array[StringName] = []
 	for tier: Dictionary in _visible_enemy_tiers():
 		desired.append(tier["id"])
@@ -312,12 +350,11 @@ func _refresh() -> void:
 
 
 func _refresh_enemy(item: Dictionary) -> void:
-	# Visual state only — the name lives in the custom tooltip (_show_tooltip).
-	# Three states: claimable(해금 가능, gold) / unlocked-ON / unlocked-OFF.
+	# Visual state only — name/price live in the custom tooltip (_show_tooltip).
+	# States: claimable(해금 가능, gold pulse) / placeable(밝게) / 못 사면(어둡게).
 	var id: StringName = item["id"]
 	var icon: Control = item["icon"]
 	var dot: Control = item["dot"]
-	var unlocked: bool = GameState.is_tier_unlocked(id)
 	var claimable: bool = GameState.is_tier_unlock_available(id)
 	item["claimable"] = claimable
 	if claimable:
@@ -326,13 +363,12 @@ func _refresh_enemy(item: Dictionary) -> void:
 		dot.add_theme_stylebox_override("panel", _dot_style(Color(1.0, 0.85, 0.3, 1.0)))
 		dot.visible = true
 		return
-	var active: bool = GameState.is_tier_active(id)
-	dot.add_theme_stylebox_override("panel", _dot_style(Color(1.0, 1.0, 0.95, 1.0)))
-	dot.visible = active
-	if active:
+	# Unlocked → click-to-place: bright when you can afford it, dim when too poor.
+	dot.visible = false
+	if GameState.can_place_enemy(id):
 		icon.modulate = Color(1, 1, 1, 1)
 	else:
-		icon.modulate = Color(0.78, 0.8, 0.82, 1.0)  # off: muted
+		icon.modulate = Color(0.45, 0.45, 0.5, 0.7)  # can't afford the place cost
 
 
 func _refresh_tile(item: Dictionary) -> void:

@@ -128,9 +128,44 @@ func _ready() -> void:
 	EventBus.party_member_downed.connect(_on_party_member_downed_visual)
 	EventBus.party_member_revived.connect(_on_party_member_revived_visual)
 	EventBus.campfire_placed.connect(_on_campfire_placed)
+	EventBus.enemy_place_requested.connect(_on_enemy_place_requested)
+	EventBus.world_started.connect(_on_world_started)
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
+	_apply_world_visibility()  # opening: black field + hero only until grass is laid
+
+
+# ─── Opening: black field until the grass is laid ──────────────────────
+## Before world_started, hide the terrain/decorations/diorama and paint the base
+## black — only the hero stands in the void. Laying grass reveals it all.
+func _apply_world_visibility() -> void:
+	var started: bool = GameState.world_started
+	if _decorations_root != null:
+		_decorations_root.visible = started
+	if _diorama_root != null:
+		_diorama_root.visible = started
+	if not started:
+		if _background_texture != null:
+			_background_texture.visible = false
+		if _background != null:
+			_background.color = Color(0.035, 0.04, 0.05, 1.0)  # near-black void
+
+
+func _on_world_started() -> void:
+	# Reveal the world the player just "laid": restore the grass background +
+	# decorations + island diorama, fading them in over the void.
+	_apply_field_background()
+	_apply_diorama()
+	if _decorations_root != null:
+		_decorations_root.visible = true
+	if _diorama_root != null:
+		_diorama_root.visible = true
+	for node: CanvasItem in [_background_texture, _decorations_root, _diorama_root]:
+		if node == null:
+			continue
+		node.modulate.a = 0.0
+		create_tween().tween_property(node, "modulate:a", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
 
 
 func _process(delta: float) -> void:
@@ -201,6 +236,7 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_scatter_region_decorations()
 	_spawn_timer = spawn_interval
 	_refill_enemy_population(_desired_enemy_count())
+	_apply_world_visibility()  # keep the field black until the grass is laid
 	if GameState.STORY_MODE_ENABLED:
 		_show_message(GameState.story_field_intro())
 
@@ -884,6 +920,15 @@ func debug_spawn_all_enemy_types() -> int:
 
 func _desired_enemy_count() -> int:
 	return _enemy_count_for_current_nodes() + _crowd_pressure
+
+
+## Player clicked an enemy in the dock (already paid). Drop ONE at a random spot.
+func _on_enemy_place_requested(tier_id: StringName) -> void:
+	if GameState.field_loop_count <= 0:
+		return
+	var data: EnemyData = GameState.tier_enemy_data(tier_id)
+	if data != null:
+		_spawn_field_enemy(data)
 
 
 func _spawn_field_enemy(data: EnemyData) -> void:

@@ -25,6 +25,10 @@ const KIND_COLOR: Dictionary = {
 
 var _selected_building: StringName = &""   ## "" = show all
 var _gold_label: Label
+## Floating group panels — shown progressively (opening sequence). Gold is always
+## up; 강화 reveals after the first reward; 마을 reveals when a building exists.
+var _village_group: PanelContainer
+var _upgrade_group: PanelContainer
 var _grid: GridContainer
 var _grid_tiles: Dictionary = {}            ## building id → {button, glyph, tag}
 var _cards: Array[Dictionary] = []          ## upgrade cards (flat, fixed order)
@@ -102,7 +106,9 @@ func _build_layout() -> void:
 	gold_box.add_child(_gold_label)
 
 	# 마을 group — the village grid (buildings appear as a result of upgrades).
+	# Hidden until at least one building exists (sequential opening reveal).
 	var village_box: VBoxContainer = _add_group(col)
+	_village_group = village_box.get_parent() as PanelContainer
 	village_box.add_child(_make_label("마을", UITheme.FONT_SECTION, Color(0.78, 0.82, 0.74, 0.5)))
 	_grid = GridContainer.new()
 	_grid.columns = GRID_COLUMNS
@@ -112,8 +118,10 @@ func _build_layout() -> void:
 	for i in Balance.building_count():
 		_add_grid_tile(Balance.building_at(i))
 
-	# 강화 group — the upgrade list (the protagonist; buyable from the start).
+	# 강화 group — the upgrade list. Hidden until the FIRST reward is earned, so
+	# the opening screen stays minimal (it appears after the first battle).
 	var upgrade_box: VBoxContainer = _add_group(col)
+	_upgrade_group = upgrade_box.get_parent() as PanelContainer
 	upgrade_box.add_child(_make_label("강화", UITheme.FONT_SECTION, Color(0.78, 0.82, 0.74, 0.5)))
 	var list := VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -356,6 +364,24 @@ func _refresh() -> void:
 	_update_gold_text()
 	_refresh_grid()
 	_refresh_cards()
+	_refresh_group_visibility()
+
+
+## Sequential opening reveal: Gold pill always; 강화 once the first reward lands;
+## 마을 once at least one building tile is shown.
+func _refresh_group_visibility() -> void:
+	if _upgrade_group != null:
+		_upgrade_group.visible = GameState.total_gold_earned > 0
+	if _village_group != null:
+		_village_group.visible = _any_grid_tile_visible()
+
+
+func _any_grid_tile_visible() -> bool:
+	for id in _grid_tiles:
+		var tile: Button = _grid_tiles[id]["button"]
+		if tile != null and tile.visible:
+			return true
+	return false
 
 
 # ─── Styles / helpers ──────────────────────────────────────────────────

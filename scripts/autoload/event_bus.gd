@@ -82,6 +82,19 @@ signal companion_recruited(id: StringName)
 ## spot, records its position, and runs the one-time mage-arrival event.
 signal campfire_placed()
 
+## The player clicked an enemy in the dock (paid place_cost). The Field spawns ONE
+## of that tier at a random spot. (Direct click-to-place — the toggle/auto-spawn
+## path is preserved separately for future automation.)
+signal enemy_place_requested(tier_id: StringName)
+
+## The opening "lay the grass" step was taken — the world begins: the hero starts
+## moving and the dock swaps the grass tile for the enemy roster.
+signal world_started()
+
+## The player named the hero in the opening. The hero's display name updates
+## everywhere (party panel, battle log, tooltips) and the grass tile appears.
+signal player_named(hero_name: String)
+
 ## Actual HP removed from a party member after clamping overkill.
 signal party_damage_taken(member_index: int, amount: int)
 
@@ -130,8 +143,3 @@ signal tier_unlocked(tier_id: StringName)
 signal enemy_progress_changed(tier_id: StringName)
 ## An enemy tier leveled up. Used for extra juice (icon pop, etc.).
 signal enemy_leveled_up(tier_id: StringName, level: int)
-
-# ─── Treasure-chest buffer (System 2) ──────────────────────────────────
-## The unopened-chest buffer crossed full/not-full. When full, new fights are
-## refused until the player opens a chest. HUD shows a "상자 가득! 열어주세요" banner.
-signal chest_buffer_full_changed(is_full: bool)

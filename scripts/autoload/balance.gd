@@ -79,12 +79,6 @@ const KILL_GOLD_LOW_MULT_THRESHOLD: float = 0.8
 const LUCK_JACKPOT_CHANCE_PER_LEVEL: float = 0.02   ## +2%p per level
 const LUCK_JACKPOT_CHANCE_MAX: float = 0.45         ## cap so it never trivializes
 
-# ─── System 2: treasure-chest buffer (anti-idle) ───────────────────────
-## Unopened reward chests may stack up to this many. When the buffer is full
-## new fights won't start — the player must open chests to keep production
-## rolling. Brief inattention is fine; long idling stalls income (no idle gain).
-const CHEST_BUFFER_MAX: int = 5
-
 ## Chest open-speed upgrade (lives under the GREED axis). Each level shortens the
 ## hover-to-open gauge time: BASE × MULT^level, floored. (1.0 → 0.8 → 0.64 …)
 const CHEST_OPEN_BASE_DURATION: float = 1.0
@@ -104,12 +98,14 @@ const CHEST_OPEN_SPEED_COST_MULT: float = 1.6
 ## late tiers (mage/dragon) stay far off. `base_kill_time` = tier toughness (HP);
 ## `atk_mult` scales the enemy's base attack per tier so orc+ actually threaten a
 ## party-wipe. Both ramp hard from orc onward — that's the "강화해야 넘는 벽".
+## `place_cost` = gold spent per CLICK-PLACEMENT (the default way enemies appear:
+## click the dock icon → -place_cost gold → 1 spawns). Slime is 1G (the opening).
 const TIERS: Array[Dictionary] = [
-	{"id": &"slime",  "name": "슬라임", "short": "슬", "unlock_at": 0,      "kill_gold": 1,    "base_kill_time": 2.0,  "atk_mult": 1.0, "enemy_res": "res://data/enemies/slime.tres"},
-	{"id": &"bat",    "name": "박쥐",   "short": "박", "unlock_at": 60,     "kill_gold": 8,    "base_kill_time": 4.5,  "atk_mult": 1.2, "enemy_res": "res://data/enemies/bat.tres"},
-	{"id": &"orc",    "name": "오크",   "short": "오", "unlock_at": 600,    "kill_gold": 30,   "base_kill_time": 10.0, "atk_mult": 1.8, "enemy_res": "res://data/enemies/orc.tres"},
-	{"id": &"mage",   "name": "마도사", "short": "마", "unlock_at": 7000,   "kill_gold": 300,  "base_kill_time": 18.0, "atk_mult": 2.8, "enemy_res": "res://data/enemies/blade_bug.tres"},
-	{"id": &"dragon", "name": "드래곤", "short": "용", "unlock_at": 70000,  "kill_gold": 2500, "base_kill_time": 32.0, "atk_mult": 4.5, "enemy_res": "res://data/enemies/slime_chaser.tres"},
+	{"id": &"slime",  "name": "슬라임", "short": "슬", "unlock_at": 0,      "place_cost": 1,    "kill_gold": 1,    "base_kill_time": 2.0,  "atk_mult": 1.0, "enemy_res": "res://data/enemies/slime.tres"},
+	{"id": &"bat",    "name": "박쥐",   "short": "박", "unlock_at": 60,     "place_cost": 30,   "kill_gold": 8,    "base_kill_time": 4.5,  "atk_mult": 1.2, "enemy_res": "res://data/enemies/bat.tres"},
+	{"id": &"orc",    "name": "오크",   "short": "오", "unlock_at": 600,    "place_cost": 150,  "kill_gold": 30,   "base_kill_time": 10.0, "atk_mult": 1.8, "enemy_res": "res://data/enemies/orc.tres"},
+	{"id": &"mage",   "name": "마도사", "short": "마", "unlock_at": 7000,   "place_cost": 800,  "kill_gold": 300,  "base_kill_time": 18.0, "atk_mult": 2.8, "enemy_res": "res://data/enemies/blade_bug.tres"},
+	{"id": &"dragon", "name": "드래곤", "short": "용", "unlock_at": 70000,  "place_cost": 4000, "kill_gold": 2500, "base_kill_time": 32.0, "atk_mult": 4.5, "enemy_res": "res://data/enemies/slime_chaser.tres"},
 ]
 
 # ─── 5. Weapon shop = SPEED axis skin (text-based, no sprites) ──────────

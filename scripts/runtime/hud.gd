@@ -37,8 +37,6 @@ var _timer_pulse_time: float = 0.0
 var _income_timer: float = 0.0
 var _income_marker: int = 0
 var _income_per_sec: int = 0
-## "상자 가득! 열어주세요" banner shown when the chest buffer is full (System 2).
-var _chest_full_banner: PanelContainer
 ## Always-on big gold readout, pinned top-center (gold is the #1 info — must be
 ## visible no matter which side of the screen you're looking at).
 var _gold_center: PanelContainer
@@ -48,6 +46,9 @@ var _unlock_popup: PanelContainer
 var _unlock_sprite: TextureRect
 var _unlock_label: Label
 var _unlock_tween: Tween
+## Opening name prompt — "이름을 입력하세요" overlay shown before anything else.
+var _name_overlay: Control
+var _name_line_edit: LineEdit
 
 
 func _ready() -> void:
@@ -64,7 +65,6 @@ func _ready() -> void:
 	EventBus.field_loop_timer_changed.connect(_on_field_loop_timer_changed)
 	_debug_gold_button.pressed.connect(_on_debug_gold_button_pressed)
 	_debug_finish_button.pressed.connect(_on_debug_finish_button_pressed)
-	EventBus.chest_buffer_full_changed.connect(_on_chest_buffer_full_changed)
 	EventBus.tier_unlocked.connect(_on_tier_unlocked)
 	# Compact top-bar fonts (centralized in UITheme).
 	for lbl in [_gold_label, _field_label, _countdown_label]:
@@ -73,8 +73,9 @@ func _ready() -> void:
 	_gold_label.visible = false
 	_income_marker = GameState.total_gold_earned
 	_build_gold_center()
-	_build_chest_full_banner()
 	_build_unlock_popup()
+	if not GameState.name_entered:
+		_build_name_overlay()
 	_refresh_gold()
 	_refresh_field_label()
 	_build_inventory_slots()
@@ -153,38 +154,6 @@ func _on_inventory_changed() -> void:
 	_refresh_inventory()
 
 
-# ─── Chest-buffer banner (System 2) ───────────────────────────────────
-func _build_chest_full_banner() -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.5, 0.1, 0.08, 0.92)
-	style.set_border_width_all(1)
-	style.border_color = Color(1.0, 0.85, 0.4, 1.0)
-	style.set_corner_radius_all(3)
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 3
-	style.content_margin_bottom = 3
-	_chest_full_banner = PanelContainer.new()
-	_chest_full_banner.add_theme_stylebox_override("panel", style)
-	_chest_full_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var label := Label.new()
-	label.text = "상자 가득! 열어주세요"
-	label.add_theme_font_override("font", HUD_FONT)
-	label.add_theme_font_size_override("font_size", 11)
-	label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7, 1.0))
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_chest_full_banner.add_child(label)
-	add_child(_chest_full_banner)
-	# Centered over the field zone (between the left bar and right shop), near top.
-	_chest_full_banner.position = Vector2(196.0, 30.0)
-	_chest_full_banner.visible = false
-
-
-func _on_chest_buffer_full_changed(is_full: bool) -> void:
-	if _chest_full_banner:
-		_chest_full_banner.visible = is_full
-
-
 # ─── Tier-unlock popup (big sprite + "○○ 해금!") ───────────────────────
 func _build_unlock_popup() -> void:
 	var style := StyleBoxFlat.new()
@@ -258,6 +227,107 @@ func _tier_sprite(tier: Dictionary) -> Texture2D:
 		return null
 	var ed := load(path) as EnemyData
 	return ed.sprite if ed != null else null
+
+
+# ─── Opening: name the hero ────────────────────────────────────────────
+func _build_name_overlay() -> void:
+	_name_overlay = Control.new()
+	_name_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_name_overlay.mouse_filter = Control.MOUSE_FILTER_STOP  # block the world behind
+	add_child(_name_overlay)
+	var backdrop := ColorRect.new()
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.color = Color(0, 0, 0, 0.45)  # dim, but the lone hero still shows through
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_name_overlay.add_child(backdrop)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_name_overlay.add_child(center)
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.09, 0.1, 0.13, 0.98)
+	style.set_border_width_all(2)
+	style.border_color = Color(1.0, 0.85, 0.35, 0.9)
+	style.set_corner_radius_all(7)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", style)
+	center.add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 7)
+	panel.add_child(col)
+
+	var title := Label.new()
+	title.text = "이름을 입력하세요"
+	title.add_theme_font_override("font", HUD_FONT)
+	title.add_theme_font_size_override("font_size", 13)
+	title.add_theme_color_override("font_color", Color(1.0, 0.95, 0.7, 1.0))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+
+	_name_line_edit = LineEdit.new()
+	_name_line_edit.custom_minimum_size = Vector2(160.0, 22.0)
+	_name_line_edit.placeholder_text = "용사"
+	_name_line_edit.max_length = 10
+	_name_line_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_line_edit.add_theme_font_override("font", HUD_FONT)
+	_name_line_edit.add_theme_font_size_override("font_size", 12)
+	_name_line_edit.text_submitted.connect(_on_name_submitted)
+	col.add_child(_name_line_edit)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(row)
+	row.add_child(_make_name_button("확인", Color(1.0, 0.85, 0.35, 1.0), _on_name_confirm))
+	row.add_child(_make_name_button("랜덤", Color(0.6, 0.78, 0.95, 1.0), _on_name_random))
+
+	_name_line_edit.call_deferred("grab_focus")
+
+
+func _make_name_button(text: String, accent: Color, handler: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(56.0, 22.0)
+	b.add_theme_font_override("font", HUD_FONT)
+	b.add_theme_font_size_override("font_size", 11)
+	for st in ["font_color", "font_hover_color", "font_pressed_color"]:
+		b.add_theme_color_override(st, Color(0.08, 0.07, 0.05, 1.0))
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = accent
+	normal.set_corner_radius_all(3)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = accent.lightened(0.18)
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", hover)
+	b.pressed.connect(handler)
+	return b
+
+
+func _on_name_submitted(_text: String) -> void:
+	_on_name_confirm()
+
+
+func _on_name_confirm() -> void:
+	GameState.set_player_name(_name_line_edit.text if _name_line_edit != null else "")
+	_dismiss_name_overlay()
+
+
+func _on_name_random() -> void:
+	if _name_line_edit != null:
+		_name_line_edit.text = GameState.random_hero_name()  # fill so the player sees it
+
+
+func _dismiss_name_overlay() -> void:
+	if _name_overlay != null:
+		_name_overlay.queue_free()
+		_name_overlay = null
 
 
 func _build_inventory_slots() -> void:

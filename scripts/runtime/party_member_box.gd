@@ -42,9 +42,20 @@ func setup(index: int, data: CharacterData) -> void:
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
+	# Keep the stat tooltip current when upgrades land (weapon/armor/luck/scale).
+	# Previously it only refreshed on HP/XP/equipment changes, so buying a weapon
+	# left the tooltip showing the pre-upgrade numbers until the next combat tick.
+	EventBus.combat_upgrade_changed.connect(_on_stat_source_changed.unbind(1))
+	EventBus.weapon_equipped.connect(_on_stat_source_changed.unbind(1))
+	EventBus.armor_equipped.connect(_on_stat_source_changed.unbind(1))
 	if _pending_setup or character != null:
 		_pending_setup = false
 		_apply()
+
+
+func _on_stat_source_changed() -> void:
+	if character != null:
+		_refresh_tooltip()
 
 
 # ─── Live setters (called by the HUD root) ────────────────────────────

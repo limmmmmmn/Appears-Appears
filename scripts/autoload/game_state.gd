@@ -42,7 +42,7 @@ const FIELD_REGION_GRASS: StringName = &"grass"
 const FIELD_REGION_FOREST: StringName = &"forest"
 
 # ─── Economy ──────────────────────────────────────────────────────────
-const STARTING_GOLD: int = 0
+const STARTING_GOLD: int = 1  # enough to click-place the first slime (place_cost 1)
 
 var gold: int = STARTING_GOLD
 ## Stat-affecting modifiers picked this run.
@@ -73,11 +73,22 @@ var open_speed_level: int = 0
 ## SCALE = how many SCALE purchases were made; simultaneous window count =
 ## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
 var scale_purchases: int = 0
-## Enemy tiers the player has unlocked. Slime is free from the start.
+## Enemy tiers the player has unlocked. Slime is free from the start (its dock
+## icon is click-PLACEABLE once the world has started).
 var unlocked_tier_ids: Array[StringName] = [&"slime"]
-## Tiers currently toggled ON (left bar). The field spawns a random mix of
-## these. Several can be active at once; that's how the screen fills up.
-var active_tier_ids: Array[StringName] = [&"slime"]
+## Tiers toggled ON for AUTO-SPAWN. Empty by default — click-to-place is the
+## default; the toggle/auto-spawn path is dormant (future automation lever).
+var active_tier_ids: Array[StringName] = []
+## Opening gate: the world hasn't begun until the player lays the first grass.
+## Until then the hero stands frozen and the dock shows only the grass tile.
+var world_started: bool = false
+## Opening step 0 — the player names the hero before anything else appears.
+var player_name: String = ""
+var name_entered: bool = false
+## Random-name pool for the "랜덤" button in the name prompt.
+const RANDOM_HERO_NAMES: PackedStringArray = [
+	"아서", "레온", "카이", "유노", "리나", "도윤", "세라", "타이로", "미르", "하늘",
+]
 ## Per-enemy-tier level (System 1) — grows automatically from kills, never
 ## bought. tier_id → int level (default 1).
 var enemy_levels: Dictionary = {}
@@ -742,9 +753,11 @@ func battle_window_cap() -> int:
 	return scale_window_count()
 
 
-## True when BattleManager still has room under the cap. When false, new
-## field-enemy encounters are silently refused (player walks through without
-## triggering a new window) and player auto-move ignores enemies entirely.
+## True when BattleManager still has room under the SIMULTANEOUS-FIGHT cap (a perf
+## guard on concurrent active windows — NOT chests). When false, new field-enemy
+## encounters are silently refused until a fight resolves.
+## (The old chest-buffer cap was removed: click-to-place + multi-window already
+## pace the player, so stacking unopened chests no longer blocks new fights.)
 func can_accept_new_battle_window() -> bool:
 	var tree := get_tree()
 	if tree == null:
@@ -752,10 +765,6 @@ func can_accept_new_battle_window() -> bool:
 	var bm: Node = tree.get_first_node_in_group("battle_manager")
 	if bm == null or not bm.has_method("active_window_count"):
 		return true
-	# Anti-idle (System 2): once the unopened-chest buffer is full, refuse new
-	# fights until the player opens one. No idling your way to free gold.
-	if bm.has_method("chest_window_count") and int(bm.chest_window_count()) >= Balance.CHEST_BUFFER_MAX:
-		return false
 	return int(bm.active_window_count()) < battle_window_cap()
 
 
@@ -1226,18 +1235,51 @@ func is_tier_unlock_available(id: StringName) -> bool:
 
 ## Claim a tier whose milestone is reached. FREE — the lifetime-earned milestone
 ## is the gate, so spending gold never costs you an unlock. Fires the popup.
+## Unlocking only makes the tier CLICK-PLACEABLE; it does NOT auto-toggle it ON
+## (toggle/auto-spawn is the dormant future-automation path).
 func unlock_tier(id: StringName) -> bool:
 	if not is_tier_unlock_available(id):
 		EventBus.combat_upgrade_failed.emit(&"tier")
 		return false
 	unlocked_tier_ids.append(id)
-	if not active_tier_ids.has(id):
-		active_tier_ids.append(id)  # freshly unlocked tier starts ON
 	EventBus.tier_unlocked.emit(id)
 	EventBus.combat_upgrade_changed.emit(&"tier")
 	return true
 
 
+# ─── CLICK-TO-PLACE: the default way enemies appear (click → -gold → 1 spawns) ──
+## Gold spent to drop one of this tier on the field.
+func tier_place_cost(id: StringName) -> int:
+	return int(Balance.tier_by_id(id).get("place_cost", 0))
+
+
+## Can place one now? (Unlocked + can afford the place cost.)
+func can_place_enemy(id: StringName) -> bool:
+	return is_tier_unlocked(id) and gold >= tier_place_cost(id)
+
+
+## Spend the place cost and ask the Field to spawn one. Returns false (and flashes
+## the dock) when too poor.
+func place_enemy(id: StringName) -> bool:
+	if not can_place_enemy(id) or not spend_gold(tier_place_cost(id)):
+		EventBus.combat_upgrade_failed.emit(&"tier")
+		return false
+	EventBus.enemy_place_requested.emit(id)
+	return true
+
+
+## A tier's enemy resource (loaded fresh per spawn). Null if missing.
+func tier_enemy_data(id: StringName) -> EnemyData:
+	var path: String = str(Balance.tier_by_id(id).get("enemy_res", ""))
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return load(path) as EnemyData
+
+
+# ─── Toggle / auto-spawn (DORMANT — preserved for future automation) ───
+## Kept intact so a later "automation" purchase can flip a tier to auto-spawn
+## (toggle ON → the field's continuous-spawn path picks it up). Not wired to the
+## dock click anymore; click now PLACES instead.
 func is_tier_active(id: StringName) -> bool:
 	return active_tier_ids.has(id)
 
@@ -1631,7 +1673,38 @@ func is_party_fully_recovered() -> bool:
 
 ## Field movement is frozen while the whole party recovers from a full collapse.
 func is_movement_frozen() -> bool:
-	return _party_collapsed
+	return _party_collapsed or not world_started
+
+
+# ─── Opening: name the hero → lay the first grass → the world begins ───
+## Set the hero's name. We duplicate party[0]'s CharacterData so the new name
+## shows EVERYWHERE that reads it (party panel, battle log, tooltips) without
+## mutating the shared .tres resource.
+func set_player_name(new_name: String) -> void:
+	var clean: String = new_name.strip_edges()
+	if clean.is_empty():
+		clean = random_hero_name()
+	player_name = clean
+	name_entered = true
+	if party.size() > 0 and party[0] != null:
+		var hero: CharacterData = party[0].duplicate() as CharacterData
+		hero.display_name = clean
+		party[0] = hero
+		EventBus.party_changed.emit()  # HUD rebuilds boxes with the new name
+	EventBus.player_named.emit(clean)
+
+
+func random_hero_name() -> String:
+	if RANDOM_HERO_NAMES.is_empty():
+		return "용사"
+	return RANDOM_HERO_NAMES[randi() % RANDOM_HERO_NAMES.size()]
+
+
+func start_world() -> void:
+	if world_started:
+		return
+	world_started = true
+	EventBus.world_started.emit()
 
 
 ## Seconds to refill 0 → full while downed. A function so a future "성소"
@@ -1806,19 +1879,32 @@ func party_member_stat_tooltip(index: int) -> String:
 	var max_hp: int = effective_max_hp(index)
 	var hp: int = party_hp[index] if index < party_hp.size() else max_hp
 	var mp: int = party_mp[index] if index < party_mp.size() else member.max_mp
+	# 공격력은 전투에서 무기 배수(SPEED)가 곱해진다 — 그게 실제 강함이라 여기서 합쳐
+	# 보여준다(예전 툴팁은 기본 ATK만 보여줘 무기 강화가 안 보였음).
+	var base_atk: int = effective_attack(index)
+	var wmult: float = member_weapon_multiplier(index)
+	var combat_atk: int = int(round(float(base_atk) * wmult))
+	var wtype: StringName = Balance.character_weapon_type(member.id)
+	var wname: String = current_weapon_name(wtype)
 	var lines: PackedStringArray = []
 	lines.append("%s  Lv %d" % [member.display_name, party_level(index)])
 	lines.append("HP %d/%d   MP %d/%d" % [hp, max_hp, mp, member.max_mp])
-	lines.append("ATK %d   DEF %d   AGI %d" % [
-		effective_attack(index),
+	lines.append("공격 %d   방어 %d   민첩 %d" % [
+		combat_atk,
 		effective_defense(index),
 		effective_agility(index),
 	])
+	# 무기 배수 = 킬 속도 레버. 강화하면 ×배수와 공격 수치가 같이 오른다.
+	lines.append("  └ 무기 %s ×%.2f  (기본 공격 %d · 킬속도)" % [wname, wmult, base_atk])
+	if armor_level > 1:
+		lines.append("  └ 방어구 %s  방어 +%d" % [current_armor_name(), armor_defense_bonus()])
+	# 운: 파티 공통 — 킬 보상 대박(팡팡팡) 확률.
+	lines.append("운  대박 %.0f%%" % (luck_jackpot_chance() * 100.0))
 	lines.append("XP %d/%d" % [
 		party_xp[index] if index < party_xp.size() else 0,
 		party_xp_to_next(index),
 	])
-	lines.append("Gear  %s" % _member_gear_stat_line(index))
+	lines.append("장비  %s" % _member_gear_stat_line(index))
 	return "\n".join(lines)
 
 
@@ -2327,7 +2413,10 @@ func reset_run() -> void:
 	enemies_killed = 0
 	biggest_hit = 0
 	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock
-	active_tier_ids = [&"slime"]
+	active_tier_ids = []             # toggle/auto-spawn dormant (click-place default)
+	world_started = false            # opening replays: lay grass again to begin
+	name_entered = false             # …and re-prompt for the hero's name
+	player_name = ""
 	enemy_levels.clear()
 	enemy_kill_progress.clear()
 	active_modifiers.clear()

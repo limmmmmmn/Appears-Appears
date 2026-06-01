@@ -39,9 +39,6 @@ func _play_area_right_edge() -> float:
 
 var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
 var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 world velocity.
-## Tracks the last-broadcast chest-buffer-full state (System 2) to avoid
-## re-emitting chest_buffer_full_changed every frame.
-var _chest_buffer_full: bool = false
 var _modal_windows: Dictionary = {}  ## BattleWindow -> true for pre-movement modal battles.
 var _collision_cooldowns: Dictionary = {}  ## window pair key -> remaining seconds.
 var _party_collision_cooldowns: Dictionary = {}  ## battle window id -> remaining seconds.
@@ -85,28 +82,6 @@ func active_window_count() -> int:
 	return count
 
 
-## How many unopened reward chests are currently lingering (System 2 buffer).
-func chest_window_count() -> int:
-	var count: int = 0
-	for window in _window_rects.keys():
-		if not is_instance_valid(window):
-			continue
-		if window.has_method("is_chest_active") and window.is_chest_active():
-			count += 1
-	return count
-
-
-## Recompute the chest buffer and broadcast full/not-full transitions so the HUD
-## can show/hide the "상자 가득! 열어주세요" banner. Cheap; called on chest
-## create/close.
-func _update_chest_buffer_state() -> void:
-	var is_full: bool = chest_window_count() >= Balance.CHEST_BUFFER_MAX
-	if is_full == _chest_buffer_full:
-		return
-	_chest_buffer_full = is_full
-	EventBus.chest_buffer_full_changed.emit(is_full)
-
-
 ## Fight inside `window` just ended (window is becoming a chest). Release the
 ## modal-battle pause (if applicable) so the player can move again, and clear
 ## it from `_modal_windows` so the eventual `_on_battle_window_closed` doesn't
@@ -115,8 +90,6 @@ func _on_battle_window_resolved(window: Node) -> void:
 	if _modal_windows.has(window):
 		_modal_windows.erase(window)
 		GameState.end_field_battle_pause()
-	# A new chest just appeared — it counts toward the anti-idle buffer.
-	_update_chest_buffer_state()
 
 
 # ─── Spawning ─────────────────────────────────────────────────────────
@@ -601,8 +574,6 @@ func _on_battle_window_closed(window: Node) -> void:
 	# the *first* window closing is rarely the last one.
 	if _window_rects.is_empty():
 		EventBus.all_battles_resolved.emit()
-	# A chest may have just been opened/removed — re-open the production gate.
-	_update_chest_buffer_state()
 
 
 func _drop_gold_from_window(window: BattleWindow) -> void:

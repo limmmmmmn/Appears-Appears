@@ -34,7 +34,7 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
 
-const BASE_WINDOW_SIZE: Vector2 = Vector2(128.0, 96.0)
+const BASE_WINDOW_SIZE: Vector2 = Vector2(176.0, 132.0)
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -120,20 +120,6 @@ var _chest_tween: Tween
 var _initiative: int = 0
 var _initiative_pending: bool = true
 
-# ─── Click-to-advance (전투창 클릭 = 그 창 턴 빨리감기) ──────────────────
-## Combat stays fully automatic; clicking only HURRIES this window's pacing
-## (skip the current message / fire the next turn now). Detection mirrors the
-## chest-hover model: each window polls the mouse itself in _process, so a click
-## on the OVERLAP of stacked windows advances every window under the point.
-var _was_mouse_pressed: bool = false
-var _log_skip_requested: bool = false
-## Blinking "▼" (JRPG "tap to continue"). Shown only while a tap can advance.
-var _advance_indicator: Polygon2D
-var _advance_blink_t: float = 0.0
-## Brief hide right after a beat advances, so it reads as 진행중(숨김) → 대기(반짝).
-var _advance_hide_timer: float = 0.0
-
-
 func _ready() -> void:
 	_name_label.hide()
 	_hp_label.hide()
@@ -144,7 +130,6 @@ func _ready() -> void:
 	_spawn_enemy()
 	_roll_initiative()
 	_rebuild_turn_queue()
-	_build_advance_indicator()
 	EventBus.battle_window_opened.emit(self)
 	# Weapon (SPEED) and armor (survival) equips both surface "○○ 장착!" in any
 	# live fight + a quick celebratory pop.
@@ -514,65 +499,7 @@ func _encounter_display_name() -> String:
 	return " / ".join(parts)
 
 
-# ─── Turn loop ────────────────────────────────────────────────────────
-# ─── Click-to-advance (turn fast-forward) ──────────────────────────────
-## Per-frame: blink the ▼ and detect a click landing on THIS window (overlap of
-## stacked windows → each one self-detects → all advance). Polling Input (not a
-## consumed gui event) is what lets every overlapping window react, exactly like
-## the chest-hover intersection fill.
-func _process_battle_input(delta: float) -> void:
-	_advance_hide_timer = maxf(0.0, _advance_hide_timer - delta)
-	_update_advance_indicator(delta)
-	var pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
-	var just_clicked: bool = pressed and not _was_mouse_pressed
-	_was_mouse_pressed = pressed
-	if just_clicked and _click_within_window():
-		_advance_turn_now()
-
-
-## Mouse over this window's rect right now (local space folds in position/scale).
-func _click_within_window() -> bool:
-	return Rect2(Vector2.ZERO, size).has_point(get_local_mouse_position())
-
-
-## Hurry this window only — never changes the outcome, just the pacing. If a
-## message is showing, skip it; otherwise fire the next turn immediately and
-## reset the auto-cadence so it doesn't double-fire on top of the manual one.
-func _advance_turn_now() -> void:
-	if not _running or is_chest_active():
-		return
-	_advance_hide_timer = 0.16  # blink off briefly → reads as "진행 중"
-	if _is_log_busy():
-		_log_skip_requested = true
-	else:
-		_on_turn_tick()
-		if _turn_timer:
-			_turn_timer.start()
-
-
-func _build_advance_indicator() -> void:
-	_advance_indicator = Polygon2D.new()
-	_advance_indicator.polygon = PackedVector2Array([Vector2(-5, -3), Vector2(5, -3), Vector2(0, 5)])
-	_advance_indicator.color = Color(1.0, 1.0, 1.0, 0.9)
-	_advance_indicator.z_index = 6  # above the battle UI
-	_advance_indicator.visible = false
-	add_child(_advance_indicator)
-
-
-## Pin to bottom-center and blink, unless we just advanced (brief hide).
-func _update_advance_indicator(delta: float) -> void:
-	if _advance_indicator == null:
-		return
-	if _advance_hide_timer > 0.0:
-		_advance_indicator.visible = false
-		return
-	_advance_indicator.visible = true
-	_advance_indicator.position = Vector2(size.x * 0.5, size.y - 8.0)
-	_advance_blink_t += delta
-	var pulse: float = 0.45 + 0.55 * (0.5 + 0.5 * sin(_advance_blink_t * 6.5))
-	_advance_indicator.color.a = pulse
-
-
+# ─── Turn loop (fully automatic) ───────────────────────────────────────
 func _on_turn_tick() -> void:
 	if not _running:
 		return
@@ -616,9 +543,10 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	# component of the gold/sec formula); base stat stays clean.
 	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
 	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], member.attack_effect)
-	var target_name: String = target_enemy.data.display_name if target_enemy.data else "Enemy"
-	var crit_text := "\nCritical hit!" if crit["is_crit"] else ""
-	_queue_log("%s attacks!%s\n%s takes %d damage." % [member.display_name, crit_text, target_name, dealt])
+	# Show the EQUIPPED WEAPON in the log so upgrades read live (강철검으로 42 데미지!).
+	var weapon: String = GameState.current_weapon_name(Balance.character_weapon_type(member.id))
+	var crit_text := "  치명타!" if crit["is_crit"] else ""
+	_queue_log("%s의 %s 공격!\n%d 데미지!%s" % [member.display_name, weapon, dealt, crit_text])
 	_flush_pending_defeat_logs()
 	return dealt
 
@@ -633,8 +561,9 @@ func _mage_splash_attack(attacker_index: int) -> void:
 	var total_dealt: int = 0
 	for i in target_count:
 		total_dealt += targets[i].take_damage(damage, crit["is_crit"], member.attack_effect)
-	var crit_text := "\nCritical hit!" if crit["is_crit"] else ""
-	_queue_log("%s casts a spell!%s\nx%d take %d damage." % [member.display_name, crit_text, target_count, total_dealt])
+	var weapon: String = GameState.current_weapon_name(Balance.character_weapon_type(member.id))
+	var crit_text := "  치명타!" if crit["is_crit"] else ""
+	_queue_log("%s의 %s 마법!\nx%d  %d 데미지!%s" % [member.display_name, weapon, target_count, total_dealt, crit_text])
 	_flush_pending_defeat_logs()
 
 
@@ -758,23 +687,11 @@ func _drain_log_queue() -> void:
 	_log_sequence_running = true
 	while not _log_queue.is_empty() and is_inside_tree():
 		_set_log(_log_queue.pop_front())
-		await _wait_log_step()
+		await get_tree().create_timer(LOG_STEP_DURATION).timeout
 	_log_sequence_running = false
 	if _pending_chest and _chest_state == ChestState.NONE:
 		_pending_chest = false
 		_enter_chest_state()
-
-
-## Hold a message for LOG_STEP_DURATION, but cut it short the instant the player
-## clicks this window (or the overlap it's under) — the "탁탁 넘기는" feel.
-func _wait_log_step() -> void:
-	var elapsed: float = 0.0
-	while elapsed < LOG_STEP_DURATION and is_inside_tree():
-		if _log_skip_requested:
-			_log_skip_requested = false
-			return
-		await get_tree().process_frame
-		elapsed += get_process_delta_time()
 
 
 func _close_after_log_sequence() -> void:
@@ -935,12 +852,6 @@ func _build_hover_progress_bar() -> void:
 
 
 func _process(delta: float) -> void:
-	# Battle phase: blinking ▼ + click-to-advance (overlap-aware, per-window).
-	if _running and not is_chest_active() and not _opening:
-		_process_battle_input(delta)
-		return
-	if _advance_indicator and _advance_indicator.visible:
-		_advance_indicator.visible = false
 	if _chest_state != ChestState.CLOSED:
 		return
 	# Hover = mouse anywhere over the box (plus a small pad so it's forgiving).
