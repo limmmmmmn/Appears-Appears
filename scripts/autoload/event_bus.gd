@@ -49,7 +49,7 @@ signal party_equipment_changed(index: int)
 signal inventory_changed()
 
 ## Field should spawn an item pickup at this world position.
-signal field_item_drop_requested(item: ItemData, world_position: Vector2)
+signal field_item_drop_requested(item: ItemData, world_position: Vector2, level: int)
 signal field_gold_drop_requested(amount: int, world_position: Vector2)
 
 ## At least one party member changed HP. Used for "any-change" listeners.
@@ -94,6 +94,11 @@ signal world_started()
 ## The player named the hero in the opening. The hero's display name updates
 ## everywhere (party panel, battle log, tooltips) and the grass tile appears.
 signal player_named(hero_name: String)
+
+## Gold hit 0 with nothing in progress (no enemies/fights/loot) → a free "rescue
+## slime" is offered in the dock so the run can't deadlock. The Field flashes a
+## short "[저런..]" overlord-intervention line.
+signal rescue_offered()
 
 ## Actual HP removed from a party member after clamping overkill.
 signal party_damage_taken(member_index: int, amount: int)

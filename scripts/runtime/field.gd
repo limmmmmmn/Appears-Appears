@@ -22,7 +22,11 @@ const COMBO_ATTACK_TEXTURE: Texture2D = preload("res://assets/sprites/skeleton_s
 const COMBO_SKELETON_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
 
 ## Base world-map size. Starts as one camera-sized field; nodes expand it.
-const FIELD_SIZE: Vector2 = Vector2(480, 360)
+## Spans the full 640 viewport width so the field center == the true viewport
+## center → the hero sits dead-center, with the side panels just overlaying the
+## edges. Player/enemy movement is capped to the visible play area (_play_right)
+## so nothing wanders under the right panel.
+const FIELD_SIZE: Vector2 = Vector2(640, 360)
 ## Left edge kept clear for the enemy-toggle bar (matches LeftEnemyBar.BAR_WIDTH)
 ## so the player + enemies stay out from under it.
 const LEFT_UI_INSET: float = 48.0
@@ -130,6 +134,7 @@ func _ready() -> void:
 	EventBus.campfire_placed.connect(_on_campfire_placed)
 	EventBus.enemy_place_requested.connect(_on_enemy_place_requested)
 	EventBus.world_started.connect(_on_world_started)
+	EventBus.rescue_offered.connect(_on_rescue_offered)
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
@@ -202,7 +207,7 @@ func _setup_party_visuals() -> void:
 	_player = PLAYER_SCENE.instantiate() as CharacterBody2D
 	_player.setup(GameState.party[0])
 	if _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _field_size)
+		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _play_bounds_max())
 	_player.position = start_position
 	_party_root.add_child(_player)
 	for i in range(1, GameState.party_size()):
@@ -243,15 +248,29 @@ func _on_field_loop_started(_loop_num: int) -> void:
 
 ## Teleport the whole party back to the field center for a fresh start.
 ## Without this, party would drift further and further from spawn each loop.
+## Right edge of the VISIBLE play area in world x. The field fills 640 but the
+## right panel overlays its far edge, so player/enemy movement caps here so the
+## hero never wanders behind the panel.
+func _play_right() -> float:
+	return minf(_field_size.x, UITheme.right_panel_left())
+
+
+## Movement bounds max — visible play area (not the full background width).
+func _play_bounds_max() -> Vector2:
+	return Vector2(_play_right(), _field_size.y)
+
+
 func _recenter_party() -> void:
 	if _player == null:
 		return
 	var center: Vector2 = _field_size * 0.5
 	if _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _field_size)
+		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _play_bounds_max())
 	_player.position = center
-	# Reset camera smoothing so it doesn't pan from the old spot.
-	if _player.has_method("snap_camera"):
+	# Center the fixed camera on the field center → hero at true viewport center.
+	if _player.has_method("recenter_camera"):
+		_player.recenter_camera(center)
+	elif _player.has_method("snap_camera"):
 		_player.snap_camera()
 	for child in _party_root.get_children():
 		if child.is_in_group("party_member") and child != _player:
@@ -509,6 +528,12 @@ func _show_message(text: String) -> void:
 	_message_tween.tween_callback(_hide_message)
 
 
+## Gold hit 0 with nothing in progress → the dock offers a free rescue slime.
+## Flash the overlord's intervention line (a seed for later narrative).
+func _on_rescue_offered() -> void:
+	_show_message("[저런..]")
+
+
 func _hide_message() -> void:
 	if _message_panel:
 		_message_panel.visible = false
@@ -754,7 +779,7 @@ func _min_grid_index() -> int:
 
 
 func _max_grid_x() -> int:
-	return floori((_field_size.x - SPAWN_MARGIN) / float(TILE_SIZE)) - 1
+	return floori((_play_right() - SPAWN_MARGIN) / float(TILE_SIZE)) - 1
 
 
 func _max_grid_y() -> int:
@@ -938,7 +963,7 @@ func _spawn_field_enemy(data: EnemyData) -> void:
 	var fe: FieldEnemy = FIELD_ENEMY_SCENE.instantiate()
 	fe.setup(data)
 	fe.wander_bounds_min = Vector2(LEFT_UI_INSET, 16.0)
-	fe.wander_bounds_max = _field_size - Vector2.ONE * 16.0
+	fe.wander_bounds_max = _play_bounds_max() - Vector2.ONE * 16.0
 	fe.position = _random_spawn_position_for_enemy(data, safe_origin)
 	_enemies_root.add_child(fe)
 	if data == SLIME_CHASER_DATA:
@@ -1006,15 +1031,15 @@ func _party_safe_radius() -> float:
 	return PARTY_SAFE_RADIUS
 
 
-func _on_field_item_drop_requested(item: ItemData, world_position: Vector2) -> void:
+func _on_field_item_drop_requested(item: ItemData, world_position: Vector2, level: int = 1) -> void:
 	if item == null:
 		return
-	_spawn_item_drop(item, world_position)
+	_spawn_item_drop(item, world_position, level)
 
 
-func _spawn_item_drop(item: ItemData, world_position: Vector2) -> void:
+func _spawn_item_drop(item: ItemData, world_position: Vector2, level: int = 1) -> void:
 	var drop := FIELD_ITEM_DROP_SCENE.instantiate() as FieldItemDrop
-	drop.setup(item)
+	drop.setup(item, level)
 	drop.position = _drop_position_near(world_position)
 	_items_root.add_child(drop)
 	drop.reveal_with_pop()
@@ -1062,14 +1087,14 @@ func _is_valid_drop_position(pos: Vector2) -> bool:
 
 func _clamp_field_position(pos: Vector2) -> Vector2:
 	return Vector2(
-		clampf(pos.x, 16.0, _field_size.x - 16.0),
+		clampf(pos.x, 16.0, _play_right() - 16.0),
 		clampf(pos.y, 16.0, _field_size.y - 16.0)
 	)
 
 
 func _random_position() -> Vector2:
 	return Vector2(
-		randf_range(SPAWN_MARGIN, _field_size.x - SPAWN_MARGIN),
+		randf_range(SPAWN_MARGIN, _play_right() - SPAWN_MARGIN),
 		randf_range(SPAWN_MARGIN, _field_size.y - SPAWN_MARGIN),
 	)
 
@@ -1082,7 +1107,7 @@ func _apply_field_size() -> void:
 	_background_texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_background_texture.stretch_mode = TextureRect.STRETCH_KEEP
 	if _player and _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _field_size)
+		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _play_bounds_max())
 
 
 func _apply_field_background() -> void:

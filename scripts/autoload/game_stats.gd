@@ -124,7 +124,7 @@ func _on_field_gold_drop_requested(amount: int, _world_position: Vector2) -> voi
 	_current_loop_gold_drops += maxi(0, amount)
 
 
-func _on_field_item_drop_requested(_item: ItemData, _world_position: Vector2) -> void:
+func _on_field_item_drop_requested(_item: ItemData, _world_position: Vector2, _level: int = 1) -> void:
 	_current_loop_item_drops += 1
 
 

@@ -565,10 +565,10 @@ func _on_battle_window_closed(window: Node) -> void:
 		var xp_reward: int = battle_window.claim_xp_reward()
 		if xp_reward > 0:
 			GameState.add_party_xp(xp_reward)
-		# Gold and items no longer drop onto the field — the chest reveal
-		# inside the window applies them directly to GameState before close.
-		# _drop_gold_from_window / _drop_items_from_window kept for now in
-		# case we want to bring back optional field drops via a skill node.
+		# Loot drops onto the field at the encounter spot — the player clicks the
+		# gold/items to pick them up (no chest, no hover open).
+		_drop_gold_from_window(battle_window)
+		_drop_items_from_window(battle_window)
 	# Tell anyone who cares (Field, etc.) when the last fight ends. This is
 	# the gate Field uses before declaring field_loop_settled — Echo Strike means
 	# the *first* window closing is rarely the last one.
@@ -580,11 +580,8 @@ func _drop_gold_from_window(window: BattleWindow) -> void:
 	var amount: int = window.claim_gold_drops()
 	if amount <= 0:
 		return
-	var base_pos: Vector2 = _drop_base_position(window)
-	for i in amount:
-		var angle: float = TAU * float(i) / float(maxi(1, amount))
-		var radius: float = 10.0 if amount > 1 else 0.0
-		EventBus.field_gold_drop_requested.emit(1, base_pos + Vector2(cos(angle), sin(angle)) * radius)
+	# One gold pile worth the whole reward → a single click grabs it all.
+	EventBus.field_gold_drop_requested.emit(amount, _drop_base_position(window))
 
 
 func _drop_items_from_window(window: BattleWindow) -> void:
@@ -595,7 +592,9 @@ func _drop_items_from_window(window: BattleWindow) -> void:
 	for i in drops.size():
 		var angle: float = TAU * float(i) / float(maxi(1, drops.size()))
 		var radius: float = 10.0 if drops.size() > 1 else 0.0
-		EventBus.field_item_drop_requested.emit(drops[i], base_pos + Vector2(cos(angle), sin(angle)) * radius)
+		# Drop quality = the loot level for the item's category (manual equip).
+		var level: int = GameState.loot_level_for_item(drops[i])
+		EventBus.field_item_drop_requested.emit(drops[i], base_pos + Vector2(cos(angle), sin(angle)) * radius, level)
 
 
 func _drop_base_position(window: BattleWindow) -> Vector2:

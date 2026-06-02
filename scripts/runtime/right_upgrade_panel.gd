@@ -14,14 +14,30 @@ extends PanelContainer
 const PANEL_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
 const GRID_COLUMNS: int = 3
 
-## Bold per-category colors — the WHOLE card is filled with these.
+## macOS-window EXPERIMENT — each upgrade is a little desktop window: a category-
+## colored title bar (Resurrect 64 palette) + close pip, rounded corners, dark
+## neutral interior so the color pops. Buyable = lit color, locked/too-poor = grey.
+## Title-bar colors (Resurrect 64).
 const KIND_COLOR: Dictionary = {
-	&"weapons": Color(0.86, 0.24, 0.22, 1.0),    # 검 = red
-	&"armor": Color(0.26, 0.5, 0.92, 1.0),       # 방어 = blue
-	&"luck": Color(0.93, 0.77, 0.16, 1.0),       # 운 = yellow (fortune/gold)
-	&"scale": Color(0.34, 0.46, 0.9, 1.0),       # 전투창 = blue (indigo)
-	&"open_speed": Color(0.95, 0.54, 0.16, 1.0), # 보상 = orange
+	&"weapons": Color(0.910, 0.231, 0.231, 1.0),   # 검 = #e83b3b red
+	&"armor": Color(0.302, 0.396, 0.706, 1.0),     # 방어 = #4d65b4 blue
+	&"luck": Color(0.984, 1.0, 0.525, 1.0),        # 운 = #fbff86 yellow
+	&"scale": Color(0.055, 0.686, 0.608, 1.0),     # 전투창 = #0eaf9b teal
+	&"open_speed": Color(0.902, 0.565, 0.306, 1.0),# 보상 = #e6904e orange
+	&"auto_pickup": Color(0.412, 0.792, 0.353, 1.0),# 자동줍기 = #69ca5a green
 }
+## 16×16 dot icons per category (fall back to an accent dot when missing).
+const KIND_ICON: Dictionary = {
+	&"weapons": "res://assets/sprites/icons/hero_sword.png",
+	&"armor": "res://assets/sprites/icons/shield.png",
+	&"luck": "res://assets/sprites/icons/gold.png",
+	&"scale": "",
+	&"open_speed": "res://assets/sprites/icons/gold.png",
+	&"auto_pickup": "res://assets/sprites/icons/gold.png",
+}
+const WINDOW_BG: Color = Color(0.180, 0.133, 0.184, 1.0)    # #2e222f dark neutral
+const LOCKED_GREY: Color = Color(0.384, 0.333, 0.396, 1.0)  # #625565 locked/too-poor
+const WINDOW_CORNER: int = 5
 
 var _selected_building: StringName = &""   ## "" = show all
 var _gold_label: Label
@@ -29,6 +45,7 @@ var _gold_label: Label
 ## up; 강화 reveals after the first reward; 마을 reveals when a building exists.
 var _village_group: PanelContainer
 var _upgrade_group: PanelContainer
+var _town_button: Button                    ## opens the big 마을 modal (shops/stats)
 var _grid: GridContainer
 var _grid_tiles: Dictionary = {}            ## building id → {button, glyph, tag}
 var _cards: Array[Dictionary] = []          ## upgrade cards (flat, fixed order)
@@ -105,15 +122,28 @@ func _build_layout() -> void:
 	_gold_label = _make_label("Gold 0", UITheme.FONT_GOLD, Color(1.0, 0.91, 0.48, 1.0))
 	gold_box.add_child(_gold_label)
 
-	# 마을 group — the village grid (buildings appear as a result of upgrades).
-	# Hidden until at least one building exists (sequential opening reveal).
+	# 마을 group — now just the 마을 button that opens the big town modal (shops +
+	# stats live in there). The building grid is kept (hidden) so the building /
+	# companion system + _refresh_grid keep working; its UI moved into the window.
 	var village_box: VBoxContainer = _add_group(col)
 	_village_group = village_box.get_parent() as PanelContainer
-	village_box.add_child(_make_label("마을", UITheme.FONT_SECTION, Color(0.78, 0.82, 0.74, 0.5)))
+	_town_button = Button.new()
+	_town_button.text = "마을 들어가기"
+	_town_button.focus_mode = Control.FOCUS_NONE
+	_town_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_town_button.add_theme_font_override("font", PANEL_FONT)
+	_town_button.add_theme_font_size_override("font_size", UITheme.FONT_CARD_NAME)
+	_town_button.add_theme_stylebox_override("normal", _town_button_style(Color(0.055, 0.686, 0.608, 1.0)))
+	_town_button.add_theme_stylebox_override("hover", _town_button_style(Color(0.13, 0.78, 0.7, 1.0)))
+	_town_button.add_theme_stylebox_override("pressed", _town_button_style(Color(0.04, 0.55, 0.49, 1.0)))
+	_town_button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	_town_button.pressed.connect(_open_town)
+	village_box.add_child(_town_button)
 	_grid = GridContainer.new()
 	_grid.columns = GRID_COLUMNS
 	_grid.add_theme_constant_override("h_separation", 3)
 	_grid.add_theme_constant_override("v_separation", 3)
+	_grid.visible = false  # building UI moved to the town window
 	village_box.add_child(_grid)
 	for i in Balance.building_count():
 		_add_grid_tile(Balance.building_at(i))
@@ -127,14 +157,15 @@ func _build_layout() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list.add_theme_constant_override("separation", UITheme.LIST_SEPARATION)
 	upgrade_box.add_child(list)
-	# Fixed card order: weapons (per type) → armor → luck → scale → open_speed.
-	for t in Balance.weapon_type_count():
-		_add_card(list, &"weapons", Balance.weapon_type_at(t)["id"], &"weapon_shop")
+	# Card order: weapon-loot → armor-loot → luck → scale → open_speed. Weapon is
+	# now ONE card (raises the loot level for ALL weapon types, not per-type).
+	_add_card(list, &"weapons", &"", &"weapon_shop")
 	_add_card(list, &"armor", &"", &"armory")
 	_add_card(list, &"luck", &"", &"thieves_guild")
 	_add_card(list, &"scale", &"", &"war_council")
-	# Abstract relic (no dedicated building) — always shown in 전체보기.
+	# Abstract relics (no dedicated building) — always shown in 전체보기.
 	_add_card(list, &"open_speed", &"", &"")
+	_add_card(list, &"auto_pickup", &"", &"")
 
 
 ## Create one floating opaque group panel (content-sized) and return its inner
@@ -224,56 +255,92 @@ func _refresh_grid() -> void:
 # ─── Layer 2: upgrade cards ────────────────────────────────────────────
 func _add_card(parent: VBoxContainer, kind: StringName, param: StringName, building: StringName) -> void:
 	var accent: Color = KIND_COLOR.get(kind, Color.WHITE)
-	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", _card_style(accent))
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
-	# Card is filled with the category color → text must contrast (dark on bright,
-	# light on dark) for readability.
-	var tc: Color = _text_on(accent)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 0)
-	card.add_child(box)
-	# Name row: NAME (base size, prominent) + current value (smaller, dim).
-	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 3)
-	box.add_child(name_row)
-	var name_lbl := _make_label("", UITheme.FONT_CARD_NAME, tc)
+	# ── The window frame (dark interior, rounded, content flush to the edges).
+	var window := PanelContainer.new()
+	window.add_theme_stylebox_override("panel", _window_style())
+	window.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	window.clip_contents = true  # keep the title bar's color inside the rounded frame
+	parent.add_child(window)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	window.add_child(col)
+
+	# ── Title bar (category color) — icon + name + macOS close pip.
+	var titlebar := PanelContainer.new()
+	titlebar.add_theme_stylebox_override("panel", _titlebar_style(accent))
+	titlebar.mouse_filter = Control.MOUSE_FILTER_STOP
+	col.add_child(titlebar)
+	var bar_row := HBoxContainer.new()
+	bar_row.add_theme_constant_override("separation", 3)
+	titlebar.add_child(bar_row)
+	var icon: Control = _make_card_icon(kind, accent)
+	bar_row.add_child(icon)
+	var name_lbl := _make_label("", UITheme.FONT_CARD_NAME, _text_on(accent))
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.clip_text = true  # never overrun into the value
-	name_row.add_child(name_lbl)
-	var value_lbl := _make_label("", UITheme.FONT_CARD_VALUE, Color(tc.r, tc.g, tc.b, 0.82))
-	value_lbl.size_flags_horizontal = Control.SIZE_SHRINK_END
-	value_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	name_row.add_child(value_lbl)
+	name_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	name_lbl.clip_text = true
+	bar_row.add_child(name_lbl)
+	var close_btn := _make_close_button()
+	bar_row.add_child(close_btn)
+
+	# ── Body (dark interior shows through) — value + buy button. Hides on minimize.
+	var body := MarginContainer.new()
+	body.add_theme_constant_override("margin_left", 4)
+	body.add_theme_constant_override("margin_right", 4)
+	body.add_theme_constant_override("margin_top", 2)
+	body.add_theme_constant_override("margin_bottom", 3)
+	col.add_child(body)
+	var body_col := VBoxContainer.new()
+	body_col.add_theme_constant_override("separation", 2)
+	body.add_child(body_col)
+	var value_lbl := _make_label("", UITheme.FONT_CARD_VALUE, Color(0.86, 0.84, 0.88, 1.0))
+	value_lbl.clip_text = true  # long text clips instead of widening the window
+	body_col.add_child(value_lbl)
 	var button := Button.new()
 	button.focus_mode = Control.FOCUS_NONE
 	button.custom_minimum_size = Vector2(0.0, UITheme.CARD_BUTTON_HEIGHT)
+	button.clip_text = true  # FIXED width — text never forces the window wider
 	button.add_theme_font_override("font", PANEL_FONT)
 	button.add_theme_font_size_override("font_size", UITheme.FONT_CARD_BUTTON)
-	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
-		button.add_theme_color_override(state, tc)
-	button.add_theme_stylebox_override("normal", _card_button_style(tc, false))
-	button.add_theme_stylebox_override("hover", _card_button_style(tc, true))
-	button.add_theme_stylebox_override("pressed", _card_button_style(tc, false))
-	button.add_theme_stylebox_override("disabled", _card_button_style(tc, false))
 	button.pressed.connect(_on_card_pressed.bind(kind, param))
-	box.add_child(button)
-	_cards.append({"kind": kind, "param": param, "building": building, "card": card, "name": name_lbl, "value": value_lbl, "button": button})
+	body_col.add_child(button)
+
+	var card: Dictionary = {
+		"kind": kind, "param": param, "building": building,
+		"window": window, "titlebar": titlebar, "icon": icon, "name": name_lbl,
+		"value": value_lbl, "button": button, "body": body, "accent": accent, "minimized": false,
+	}
+	_cards.append(card)
+	close_btn.pressed.connect(_toggle_card_minimize.bind(card))
+	titlebar.gui_input.connect(_on_titlebar_input.bind(card))
+
+
+## macOS minimize: collapse the body to just the colored title bar; click the bar
+## (or the pip) again to expand. Pure presentation — no game state involved.
+func _toggle_card_minimize(card: Dictionary) -> void:
+	card["minimized"] = not bool(card["minimized"])
+	card["body"].visible = not bool(card["minimized"])
+
+
+func _on_titlebar_input(event: InputEvent, card: Dictionary) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_toggle_card_minimize(card)
 
 
 func _on_card_pressed(kind: StringName, param: StringName) -> void:
 	match kind:
 		&"weapons":
-			GameState.upgrade_weapon(param)
+			GameState.upgrade_weapon_loot()
 		&"armor":
-			GameState.upgrade_armor()
+			GameState.upgrade_armor_loot()
 		&"luck":
 			GameState.upgrade_luck()
 		&"scale":
 			GameState.upgrade_scale()
 		&"open_speed":
 			GameState.upgrade_open_speed()
+		&"auto_pickup":
+			GameState.unlock_auto_pickup()
 
 
 func _refresh_cards() -> void:
@@ -284,17 +351,14 @@ func _refresh_cards() -> void:
 		var available: bool = _card_available(kind, param)
 		var passes_filter: bool = _selected_building == &"" or _selected_building == building
 		var vis: bool = available and passes_filter
-		card["card"].visible = vis
+		card["window"].visible = vis
 		if vis:
 			_fill_card(card)
 
 
 ## Whether this upgrade is purchasable at all (independent of the filter).
-func _card_available(kind: StringName, param: StringName) -> bool:
-	match kind:
-		&"weapons":
-			return GameState.owned_weapon_types().has(param)
-	return true  # armor / luck / scale / open_speed buyable from the start
+func _card_available(_kind: StringName, _param: StringName) -> bool:
+	return true  # all upgrades buyable from the start
 
 
 ## Sets NAME (prominent) + current VALUE (small) + buy button (next + cost, small).
@@ -308,19 +372,15 @@ func _fill_card(card: Dictionary) -> void:
 	var maxed: bool = false
 	match card["kind"]:
 		&"weapons":
-			var p: StringName = card["param"]
-			var tname: String = str(Balance.weapon_type_by_id(p).get("name", "무기"))
-			name_lbl.text = "%s·%s" % [tname, GameState.current_weapon_name(p)]
-			value_lbl.text = "×%s" % _fmt_mult(GameState.weapon_attack_multiplier(p))
-			var nm: float = Balance.effect_multiplier(GameState.weapon_level(p) + 1)
-			affordable = GameState.can_upgrade_weapon(p)
-			_set_buy_button(button, "%s ×%s  %dG" % [GameState.next_weapon_name(p), _fmt_mult(nm), GameState.weapon_upgrade_cost(p)], affordable)
+			name_lbl.text = "무기 루팅"
+			value_lbl.text = "Lv%d 장비 드롭" % GameState.weapon_loot_level
+			affordable = GameState.can_upgrade_weapon_loot()
+			_set_buy_button(button, "%dG  Lv%d" % [GameState.weapon_loot_cost(), GameState.weapon_loot_level + 1], affordable)
 		&"armor":
-			name_lbl.text = "방어구"
-			value_lbl.text = "Lv%d 방어+%d" % [GameState.armor_level, GameState.armor_defense_bonus()]
-			var nd: int = Balance.armor_defense_for_level(GameState.armor_level + 1)
-			affordable = GameState.can_upgrade_armor()
-			_set_buy_button(button, "%s 방어+%d  %dG" % [GameState.next_armor_name(), nd, GameState.armor_upgrade_cost()], affordable)
+			name_lbl.text = "방어 루팅"
+			value_lbl.text = "Lv%d 장비 드롭" % GameState.armor_loot_level
+			affordable = GameState.can_upgrade_armor_loot()
+			_set_buy_button(button, "%dG  Lv%d" % [GameState.armor_loot_cost(), GameState.armor_loot_level + 1], affordable)
 		&"luck":
 			name_lbl.text = "운"
 			value_lbl.text = "대박 %.0f%%" % (GameState.luck_jackpot_chance() * 100.0)
@@ -330,17 +390,17 @@ func _fill_card(card: Dictionary) -> void:
 			else:
 				var nc: float = GameState.luck_jackpot_chance_for_level(GameState.luck_level + 1)
 				affordable = GameState.can_upgrade_luck()
-				_set_buy_button(button, "대박 %.0f%%  %dG" % [nc * 100.0, GameState.luck_upgrade_cost()], affordable)
+				_set_buy_button(button, "%dG  %.0f%%" % [GameState.luck_upgrade_cost(), nc * 100.0], affordable)
 		&"scale":
-			name_lbl.text = "전투창"
-			value_lbl.text = "%d개" % GameState.scale_window_count()
+			name_lbl.text = "멀티 전투창"
 			if GameState.scale_is_maxed():
+				value_lbl.text = "무제한"
 				maxed = true
-				_set_buy_button(button, "최대", false)
+				_set_buy_button(button, "멀티 ON", false)
 			else:
-				var nc: int = Balance.scale_window_count(GameState.scale_purchases + 1)
+				value_lbl.text = "1개"
 				affordable = GameState.can_upgrade_scale()
-				_set_buy_button(button, "+창 → %d개  %dG" % [nc, GameState.scale_upgrade_cost()], affordable)
+				_set_buy_button(button, "%dG  멀티 열기" % GameState.scale_upgrade_cost(), affordable)
 		&"open_speed":
 			name_lbl.text = "보상 개봉"
 			value_lbl.text = "%.2fs" % GameState.chest_hover_duration()
@@ -350,10 +410,34 @@ func _fill_card(card: Dictionary) -> void:
 			else:
 				var no: float = Balance.chest_open_duration(GameState.open_speed_level + 1)
 				affordable = GameState.can_upgrade_open_speed()
-				_set_buy_button(button, "개봉↑ %.2fs  %dG" % [no, GameState.open_speed_upgrade_cost()], affordable)
-	# 돈 모자라서 못 사는 카드 = 확 어둡게(전체 모듈레이트). 최대치 카드는 그대로 밝게.
+				_set_buy_button(button, "%dG  %.2fs" % [GameState.open_speed_upgrade_cost(), no], affordable)
+		&"auto_pickup":
+			name_lbl.text = "자동 줍기"
+			if GameState.auto_pickup_unlocked:
+				value_lbl.text = "자동"
+				maxed = true
+				_set_buy_button(button, "자동 ON", false)
+			else:
+				value_lbl.text = "수동(호버)"
+				affordable = GameState.can_unlock_auto_pickup()
+				_set_buy_button(button, "%dG  자동 줍기" % GameState.auto_pickup_cost(), affordable)
+	# Window state: lit (buyable or maxed) → category color; locked/too-poor → grey.
 	var lit: bool = affordable or maxed
-	card["card"].modulate = Color(1, 1, 1, 1) if lit else Color(0.34, 0.34, 0.4, 1.0)
+	var accent: Color = card["accent"]
+	var bar_color: Color = accent if lit else LOCKED_GREY
+	var tc: Color = _text_on(bar_color)
+	card["titlebar"].add_theme_stylebox_override("panel", _titlebar_style(bar_color))
+	card["name"].add_theme_color_override("font_color", tc)
+	card["icon"].modulate = Color(1, 1, 1, 1) if lit else Color(0.62, 0.6, 0.66, 1.0)
+	# Buy button: accent CTA when affordable, grey when not (still readable).
+	var btn_bg: Color = accent if affordable else LOCKED_GREY
+	var btn_tc: Color = _text_on(btn_bg)
+	button.add_theme_stylebox_override("normal", _buy_button_style(btn_bg, false))
+	button.add_theme_stylebox_override("hover", _buy_button_style(btn_bg, true))
+	button.add_theme_stylebox_override("pressed", _buy_button_style(btn_bg, false))
+	button.add_theme_stylebox_override("disabled", _buy_button_style(btn_bg, false))
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
+		button.add_theme_color_override(st, btn_tc)
 
 
 # ─── Refresh ───────────────────────────────────────────────────────────
@@ -372,8 +456,26 @@ func _refresh() -> void:
 func _refresh_group_visibility() -> void:
 	if _upgrade_group != null:
 		_upgrade_group.visible = GameState.total_gold_earned > 0
+	# 마을 button reveals with the first reward (you need gold/loot to shop).
 	if _village_group != null:
-		_village_group.visible = _any_grid_tile_visible()
+		_village_group.visible = GameState.total_gold_earned > 0
+
+
+## Open the big 마을 modal (looked up by group so the panel stays decoupled).
+func _open_town() -> void:
+	var tw: Node = get_tree().get_first_node_in_group("town_window")
+	if tw != null and tw.has_method("open"):
+		tw.call("open")
+
+
+func _town_button_style(bg: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.set_corner_radius_all(4)
+	s.set_content_margin_all(4)
+	s.shadow_color = Color(0, 0, 0, 0.3)
+	s.shadow_size = 2
+	return s
 
 
 func _any_grid_tile_visible() -> bool:
@@ -433,37 +535,93 @@ func _group_style() -> StyleBoxFlat:
 	return style
 
 
-## Whole card filled with the category color (bold).
-func _card_style(accent: Color) -> StyleBoxFlat:
+# ─── macOS-window styling ──────────────────────────────────────────────
+## The window frame: dark neutral interior, rounded, soft shadow. content_margin
+## 0 so the title bar fills edge-to-edge.
+func _window_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = accent
-	style.set_corner_radius_all(4)
+	style.bg_color = WINDOW_BG
+	style.set_corner_radius_all(WINDOW_CORNER)
 	style.set_border_width_all(1)
-	style.border_color = accent.darkened(0.35)
-	style.content_margin_left = UITheme.CARD_MARGIN_H
-	style.content_margin_top = UITheme.CARD_MARGIN_V
-	style.content_margin_right = UITheme.CARD_MARGIN_H
-	style.content_margin_bottom = UITheme.CARD_MARGIN_V
+	style.border_color = Color(1, 1, 1, 0.12)
+	style.shadow_color = Color(0, 0, 0, 0.38)
+	style.shadow_size = 3
 	return style
 
 
-## Contrast text color for a filled background: dark BROWN on bright cards
-## (yellow/orange), bright white on dark cards (red/blue).
+## The title bar: category (or grey) color, rounded TOP corners only so it nests
+## against the window's rounded top; square bottom meets the body.
+func _titlebar_style(color: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.corner_radius_top_left = WINDOW_CORNER
+	style.corner_radius_top_right = WINDOW_CORNER
+	style.corner_radius_bottom_left = 0
+	style.corner_radius_bottom_right = 0
+	style.content_margin_left = 4
+	style.content_margin_right = 3
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	return style
+
+
+## Buy button on the dark interior — solid accent CTA (grey when locked).
+func _buy_button_style(bg: Color, hover: bool) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg.lightened(0.12) if hover else bg
+	style.set_corner_radius_all(3)
+	return style
+
+
+## macOS-style close/minimize pip. A light circle with a dark outline so it reads
+## on ANY title-bar color (red/blue/yellow/teal/orange); reddens on hover.
+func _make_close_button() -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(9.0, 9.0)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.tooltip_text = "최소화"
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.96, 0.94, 0.9, 1.0)
+	normal.set_corner_radius_all(5)
+	normal.set_border_width_all(1)
+	normal.border_color = Color(0, 0, 0, 0.55)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.95, 0.3, 0.28, 1.0)  # macOS red on hover
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", hover)
+	return b
+
+
+## 16×16 pixel icon for a category, or a small accent dot if none is mapped.
+func _make_card_icon(kind: StringName, accent: Color) -> Control:
+	var path: String = str(KIND_ICON.get(kind, ""))
+	if not path.is_empty() and ResourceLoader.exists(path):
+		var tr := TextureRect.new()
+		tr.texture = load(path)
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		tr.custom_minimum_size = Vector2(16.0, 16.0)
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return tr
+	var dot := Panel.new()
+	dot.custom_minimum_size = Vector2(11.0, 11.0)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var dot_style := StyleBoxFlat.new()
+	dot_style.bg_color = accent
+	dot_style.set_corner_radius_all(6)
+	dot.add_theme_stylebox_override("panel", dot_style)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return dot
+
+
+## Contrast text color for a filled background: dark on bright (yellow/teal),
+## bright white on dark (red/blue/grey).
 func _text_on(bg: Color) -> Color:
 	var lum: float = bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114
 	return Color(0.13, 0.07, 0.02, 1.0) if lum > 0.55 else Color(0.99, 0.99, 1.0, 1.0)
-
-
-## Buy-button inset on a colored card. Contrasts the card so the button reads:
-## light inset under dark text, dark inset under light text.
-func _card_button_style(tc: Color, hover: bool) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	if tc.r < 0.5:  # dark text → bright card → light button
-		style.bg_color = Color(1, 1, 1, 0.6 if hover else 0.42)
-	else:           # light text → dark card → dark button
-		style.bg_color = Color(0, 0, 0, 0.42 if hover else 0.28)
-	style.set_corner_radius_all(3)
-	return style
 
 
 ## Grid tile background. state: 1 buildable / 2 built.

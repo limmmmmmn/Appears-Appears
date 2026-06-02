@@ -16,6 +16,12 @@ var _last_item_id: StringName = &""
 var _last_level: int = 0
 var _has_item_state: bool = false
 var _burst_tween: Tween
+## Drag-drop role: &"inventory" (drag source) / &"equip" (drop target) / &"none".
+var drag_role: StringName = &"none"
+var inv_index: int = -1          ## inventory slots: index into GameState.inventory
+var member_index: int = -1       ## equip slots: party member
+var equip_slot_index: int = -1   ## equip slots: 0=Weapon … 5=Acc B
+var _entry = null                ## current item entry (for drag + compare)
 
 
 func _ready() -> void:
@@ -36,6 +42,7 @@ func set_empty_label(label: String) -> void:
 ## Drop the slot back to the empty state. Convenience for "unequip" /
 ## "rebuild on party change" paths.
 func clear() -> void:
+	_entry = null
 	color = EMPTY_COLOR
 	_icon.texture = null
 	_icon.hide()
@@ -49,7 +56,22 @@ func set_paint(c: Color) -> void:
 	color = c
 
 
+## Show a NON-item icon (the shop/tier weapon, which has no ItemData) — looks
+## equipped but carries no entry, so it isn't draggable/sellable. A real looted
+## item dropped here overrides it via set_item.
+func set_virtual(texture: Texture2D, level: int, tip: String) -> void:
+	_entry = null
+	color = FILLED_COLOR
+	_icon.texture = texture
+	_icon.visible = texture != null
+	_level_label.text = str(level)
+	_level_label.show()
+	tooltip_text = tip
+	_remember_item_state(&"__virtual__", level)
+
+
 func set_item(entry) -> void:
+	_entry = entry
 	var item: ItemData = GameState.item_entry_data(entry)
 	if item == null:
 		clear()
@@ -62,9 +84,47 @@ func set_item(entry) -> void:
 	_level_label.text = str(level)
 	_level_label.show()
 	tooltip_text = GameState.item_entry_tooltip(entry)
+	# Hover comparison vs the currently equipped item (inventory items only).
+	if drag_role == &"inventory":
+		var cmp: String = GameState.item_compare_line(item, level)
+		if not cmp.is_empty():
+			tooltip_text += "\n" + cmp
 	_remember_item_state(item.id, level)
 	if not burst_text.is_empty():
 		_play_burst(burst_text, burst_text.begins_with("MERGE"))
+
+
+# ─── Drag-to-equip ─────────────────────────────────────────────────────
+## Inventory slot → start a drag carrying the item + its inventory index.
+func _get_drag_data(_at_position: Vector2) -> Variant:
+	if drag_role != &"inventory":
+		return null
+	var item: ItemData = GameState.item_entry_data(_entry)
+	if item == null:
+		return null
+	var preview := TextureRect.new()
+	preview.texture = item.icon
+	preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	preview.custom_minimum_size = Vector2(18, 18)
+	preview.size = Vector2(18, 18)
+	preview.modulate = Color(1, 1, 1, 0.85)
+	set_drag_preview(preview)
+	return {"source": &"inventory", "inv_index": inv_index, "item": item}
+
+
+## Party equip slot → accept an inventory item whose type fits THIS slot.
+func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+	if drag_role != &"equip":
+		return false
+	if typeof(data) != TYPE_DICTIONARY or data.get("source") != &"inventory":
+		return false
+	return GameState.can_equip_to_slot(data.get("item"), member_index, equip_slot_index)
+
+
+func _drop_data(_at_position: Vector2, data: Variant) -> void:
+	if not _can_drop_data(_at_position, data):
+		return
+	GameState.equip_inventory_item_to(int(data["inv_index"]), member_index, equip_slot_index)
 
 
 func _empty_tooltip() -> String:

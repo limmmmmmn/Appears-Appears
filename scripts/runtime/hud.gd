@@ -13,6 +13,9 @@ const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.
 const EQUIP_SLOT_SCENE: PackedScene = preload("res://scenes/ui/equip_slot.tscn")
 const HUD_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
 const INVENTORY_SLOT_COUNT: int = 12
+## Design viewport width (canvas_items stretch) — used to center HUD elements on
+## the TRUE viewport center, ignoring the side panels.
+const VIEWPORT_DESIGN_WIDTH: float = 640.0
 const TIMER_NORMAL_COLOR: Color = Color(1.0, 1.0, 1.0, 1.0)
 const TIMER_URGENT_COLOR: Color = Color(1.0, 0.16, 0.10, 1.0)
 const TIMER_URGENT_PULSE_COLOR: Color = Color(1.0, 0.82, 0.24, 1.0)
@@ -30,6 +33,10 @@ const TIMER_URGENT_PULSE_COLOR: Color = Color(1.0, 0.82, 0.24, 1.0)
 ## or wipe shifts the party array.
 var _member_boxes: Array[PartyMemberBox] = []
 var _inventory_slots: Array[EquipSlot] = []
+## macOS-style inventory window (bottom-right): dropped gear stacks here; drag a
+## slot onto a party member's equip slots to wear it. Scrolls when full.
+var _inventory_window: PanelContainer
+var _inv_grid: GridContainer
 var _timer_urgent: bool = false
 var _timer_pulse_time: float = 0.0
 ## Measured gold income per second (sampled from total_gold_earned each 1s),
@@ -78,9 +85,8 @@ func _ready() -> void:
 		_build_name_overlay()
 	_refresh_gold()
 	_refresh_field_label()
-	_build_inventory_slots()
+	_build_inventory_window()
 	_rebuild_member_boxes()
-	_refresh_inventory()
 
 
 func _process(delta: float) -> void:
@@ -151,7 +157,7 @@ func _on_party_equipment_changed(index: int) -> void:
 
 
 func _on_inventory_changed() -> void:
-	_refresh_inventory()
+	_refresh_inventory_window()
 
 
 # ─── Tier-unlock popup (big sprite + "○○ 해금!") ───────────────────────
@@ -206,11 +212,11 @@ func _on_tier_unlocked(tier_id: StringName) -> void:
 	_unlock_popup.visible = true
 	_unlock_popup.modulate = Color(1, 1, 1, 1)
 	_unlock_popup.scale = Vector2.ONE
-	# Center over the play field (between the left dock and the right panel), upper third.
+	# Centered on the true viewport center (panels just overlay the edges).
 	await get_tree().process_frame  # let it size to content first
-	var field_center_x: float = (46.0 + UITheme.right_panel_left()) * 0.5
+	var center_x: float = VIEWPORT_DESIGN_WIDTH * 0.5
 	_unlock_popup.pivot_offset = _unlock_popup.size * 0.5
-	_unlock_popup.position = Vector2(field_center_x, 120.0) - _unlock_popup.size * 0.5
+	_unlock_popup.position = Vector2(center_x, 120.0) - _unlock_popup.size * 0.5
 	if _unlock_tween != null and _unlock_tween.is_valid():
 		_unlock_tween.kill()
 	_unlock_popup.scale = Vector2(0.6, 0.6)
@@ -330,22 +336,82 @@ func _dismiss_name_overlay() -> void:
 		_name_overlay = null
 
 
-func _build_inventory_slots() -> void:
-	for child in _inventory_grid.get_children():
+# ─── Inventory window (macOS style, bottom-right) ──────────────────────
+func _build_inventory_window() -> void:
+	# Hide the legacy scene panel — this code-built window replaces it.
+	var legacy := get_node_or_null("InventoryPanel")
+	if legacy:
+		legacy.visible = false
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.180, 0.133, 0.184, 1.0)  # #2e222f dark interior
+	style.set_corner_radius_all(5)
+	style.set_border_width_all(1)
+	style.border_color = Color(1, 1, 1, 0.12)
+	style.shadow_color = Color(0, 0, 0, 0.4)
+	style.shadow_size = 3
+	_inventory_window = PanelContainer.new()
+	_inventory_window.add_theme_stylebox_override("panel", style)
+	_inventory_window.clip_contents = true
+	_inventory_window.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	# Bottom-LEFT corner (just right of the left dock), above the party strip.
+	_inventory_window.offset_left = 6.0
+	_inventory_window.offset_top = -120.0
+	_inventory_window.offset_right = 98.0
+	_inventory_window.offset_bottom = -46.0
+	add_child(_inventory_window)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 0)
+	_inventory_window.add_child(col)
+
+	# Title bar (Resurrect 64 teal) — matches the strengthen windows.
+	var tbar_style := StyleBoxFlat.new()
+	tbar_style.bg_color = Color(0.055, 0.686, 0.608, 1.0)  # #0eaf9b teal
+	tbar_style.corner_radius_top_left = 5
+	tbar_style.corner_radius_top_right = 5
+	tbar_style.content_margin_left = 5
+	tbar_style.content_margin_right = 4
+	tbar_style.content_margin_top = 2
+	tbar_style.content_margin_bottom = 2
+	var titlebar := PanelContainer.new()
+	titlebar.add_theme_stylebox_override("panel", tbar_style)
+	col.add_child(titlebar)
+	var title := Label.new()
+	title.text = "인벤토리"
+	title.add_theme_font_override("font", HUD_FONT)
+	title.add_theme_font_size_override("font_size", 9)
+	title.add_theme_color_override("font_color", Color(0.05, 0.08, 0.07, 1.0))
+	titlebar.add_child(title)
+
+	# Scrollable grid — fills up, scrolls when there's no room.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(scroll)
+	_inv_grid = GridContainer.new()
+	_inv_grid.columns = 4
+	_inv_grid.add_theme_constant_override("h_separation", 2)
+	_inv_grid.add_theme_constant_override("v_separation", 2)
+	_inv_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_inv_grid)
+	_refresh_inventory_window()
+
+
+func _refresh_inventory_window() -> void:
+	if _inv_grid == null:
+		return
+	for child in _inv_grid.get_children():
 		child.queue_free()
-	_inventory_slots.clear()
-	for i in INVENTORY_SLOT_COUNT:
-		var slot: EquipSlot = EQUIP_SLOT_SCENE.instantiate()
-		slot.custom_minimum_size = Vector2(14, 14)
-		_inventory_grid.add_child(slot)
-		slot.set_empty_label("Inventory %d" % (i + 1))
-		_inventory_slots.append(slot)
-
-
-func _refresh_inventory() -> void:
 	var items: Array = GameState.inventory_items()
-	for i in _inventory_slots.size():
-		_inventory_slots[i].set_item(items[i] if i < items.size() else null)
+	var count: int = maxi(items.size() + 4, 12)  # items + spare empties, ScrollContainer scrolls
+	for i in count:
+		var slot: EquipSlot = EQUIP_SLOT_SCENE.instantiate()
+		slot.custom_minimum_size = Vector2(18, 18)
+		slot.drag_role = &"inventory"
+		slot.inv_index = i
+		_inv_grid.add_child(slot)
+		slot.set_empty_label("빈 칸")
+		slot.set_item(items[i] if i < items.size() else null)
 
 
 # ─── Top bar ──────────────────────────────────────────────────────────
@@ -415,7 +481,7 @@ func _reposition_gold_center() -> void:
 	await get_tree().process_frame
 	if _gold_center == null:
 		return
-	var center_x: float = (46.0 + UITheme.right_panel_left()) * 0.5
+	var center_x: float = VIEWPORT_DESIGN_WIDTH * 0.5  # true viewport center
 	_gold_center.position = Vector2(center_x - _gold_center.size.x * 0.5, 6.0)
 
 

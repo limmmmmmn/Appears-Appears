@@ -34,6 +34,11 @@ var _built_enemy_ids: Array[StringName] = []
 var _built_world_started: bool = false
 ## Whether the dock was built with the name already entered (grass tile shows).
 var _built_name_entered: bool = false
+## Deadlock state: gold 0, no enemies / fights / loot left → the run can't make
+## money. When true the dock offers ONE free "rescue slime" at the top. Polled in
+## _process; flipping it rebuilds the dock (show/hide the rescue slot).
+var _was_deadlocked: bool = false
+var _built_deadlocked: bool = false
 var _pulse_t: float = 0.0
 var _dock_panel: Panel
 ## Custom macOS-style tooltip (pill + left tail) shown to the RIGHT of the
@@ -107,16 +112,21 @@ func _dock_tiles() -> Array[Dictionary]:
 func _build() -> void:
 	_built_world_started = GameState.world_started
 	_built_name_entered = GameState.name_entered
+	_built_deadlocked = _was_deadlocked
 	var enemy_tiers: Array[Dictionary] = _visible_enemy_tiers()
 	_built_enemy_ids.clear()
 	for tier: Dictionary in enemy_tiers:
 		_built_enemy_ids.append(tier["id"])
 	var tiles: Array[Dictionary] = _dock_tiles()
+	var rescue: bool = _was_deadlocked
+	var rescue_n: int = 1 if rescue else 0
 	var enemy_n: int = enemy_tiers.size()
 	var tile_n: int = tiles.size()
-	var total: int = enemy_n + tile_n
-	var divider: float = DIVIDER_H if (tile_n > 0 and enemy_n > 0) else 0.0
-	var height: float = DOCK_PAD * 2.0 + total * SLOT + maxf(0.0, total - 1) * SLOT_SPACING + divider
+	var total: int = rescue_n + enemy_n + tile_n
+	# One divider between each pair of adjacent non-empty sections (rescue|enemies|tiles).
+	var sections: int = (1 if rescue_n > 0 else 0) + (1 if enemy_n > 0 else 0) + (1 if tile_n > 0 else 0)
+	var dividers: int = maxi(0, sections - 1)
+	var height: float = DOCK_PAD * 2.0 + total * SLOT + maxf(0.0, total - 1) * SLOT_SPACING + dividers * DIVIDER_H
 	var dock_w: float = SLOT + DOCK_PAD * 2.0
 	var y0: float = DOCK_TOP_MARGIN  # top-aligned with the right panel
 
@@ -130,17 +140,29 @@ func _build() -> void:
 
 	var cx: float = dock_w * 0.5
 	var cy: float = DOCK_PAD
-	for tier: Dictionary in enemy_tiers:
-		_add_item(&"enemy", tier, Vector2(cx, cy + SLOT * 0.5), _tier_texture(tier), y0)
+	var placed_section: bool = false
+	# Rescue slime — pinned at the TOP so the way out is the first thing you see.
+	if rescue:
+		_add_item(&"rescue", _rescue_data(), Vector2(cx, cy + SLOT * 0.5), _slime_texture(), y0)
 		cy += SLOT + SLOT_SPACING
+		placed_section = true
+	if enemy_n > 0:
+		if placed_section:
+			_add_divider(Vector2(cx, cy + DIVIDER_H * 0.5), dock_w)
+			cy += DIVIDER_H
+		for tier: Dictionary in enemy_tiers:
+			_add_item(&"enemy", tier, Vector2(cx, cy + SLOT * 0.5), _tier_texture(tier), y0)
+			cy += SLOT + SLOT_SPACING
+		placed_section = true
 	if tile_n > 0:
-		if enemy_n > 0:
-			_add_divider(Vector2(cx, cy + divider * 0.5), dock_w)
-			cy += divider
+		if placed_section:
+			_add_divider(Vector2(cx, cy + DIVIDER_H * 0.5), dock_w)
+			cy += DIVIDER_H
 		for tile: Dictionary in tiles:
 			var tk: StringName = StringName(tile.get("kind", &"tile"))
 			_add_item(tk, tile, Vector2(cx, cy + SLOT * 0.5), null, y0)
 			cy += SLOT + SLOT_SPACING
+		placed_section = true
 	_build_tooltip()
 
 
@@ -250,10 +272,60 @@ func _process(delta: float) -> void:
 		# Pulse claimable ("해금!") icons so the new unlock is unmissable.
 		if item.get("claimable", false):
 			icon.modulate = Color(1.0, 0.9, 0.45, 1.0).lerp(Color(1.0, 1.0, 0.8, 1.0), pulse)
+		# The rescue slime pulses a hopeful green so the way out stands out.
+		elif item["kind"] == &"rescue":
+			icon.modulate = Color(0.55, 1.0, 0.5, 1.0).lerp(Color(0.95, 1.0, 0.85, 1.0), pulse)
 	if hovered.is_empty():
 		_tooltip.visible = false
 	else:
 		_show_tooltip(hovered)
+	_check_deadlock()
+
+
+# ─── Deadlock rescue ("구제 슬라임") ─────────────────────────────────────
+## True when the run is stuck: world running, gold can't even buy the cheapest
+## enemy (slime), and nothing is in progress to earn more (no live enemies, no
+## active fights, no uncollected loot). Polled cheaply each frame.
+func _is_deadlocked() -> bool:
+	if not GameState.world_started:
+		return false
+	if GameState.gold >= GameState.tier_place_cost(&"slime"):
+		return false  # can still afford to place → not stuck
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return false
+	if not tree.get_nodes_in_group("field_enemy").is_empty():
+		return false  # something alive to kill → gold incoming
+	if not tree.get_nodes_in_group("field_pickup").is_empty():
+		return false  # loot on the ground → gold within reach
+	var bm: Node = tree.get_first_node_in_group("battle_manager")
+	if bm != null and bm.has_method("active_window_count") and int(bm.active_window_count()) > 0:
+		return false  # a fight is still resolving
+	return true
+
+
+## Detect deadlock onset/clear each frame; rebuild the dock so the rescue slot
+## appears/disappears, and flash the "[저런..]" intervention line on onset.
+func _check_deadlock() -> void:
+	var dl: bool = _is_deadlocked()
+	if dl == _was_deadlocked:
+		return
+	_was_deadlocked = dl
+	if dl:
+		EventBus.rescue_offered.emit()  # Field flashes "[저런..]"
+	_rebuild()
+
+
+## The synthetic dock entry for the free rescue slime.
+func _rescue_data() -> Dictionary:
+	return {"id": &"slime", "name": "구제 슬라임", "short": "슬",
+		"color": Color(0.7, 1.0, 0.55, 1.0), "kind": &"rescue",
+		"enemy_res": str(Balance.tier_by_id(&"slime").get("enemy_res", ""))}
+
+
+## The slime sprite, reused for the rescue icon.
+func _slime_texture() -> Texture2D:
+	return _tier_texture(Balance.tier_by_id(&"slime"))
 
 
 ## A slot's rect in self-space (slots live inside _dock_panel).
@@ -295,6 +367,8 @@ func _show_tooltip(item: Dictionary) -> void:
 	var id: StringName = item["id"]
 	if kind == &"grass":
 		name_text = "초원 깔기"
+	elif kind == &"rescue":
+		name_text = "구제 슬라임  무료"
 	elif kind == &"enemy":
 		if GameState.is_tier_unlock_available(id):
 			name_text = "%s 해금!" % name_text
@@ -317,6 +391,8 @@ func _on_item_input(event: InputEvent, kind: StringName, id: StringName) -> void
 		return
 	if kind == &"grass":
 		GameState.start_world()  # opening: lay the first grass → hero moves, enemies appear
+	elif kind == &"rescue":
+		GameState.place_rescue_slime()  # free slime → field_enemy appears → deadlock clears
 	elif kind == &"enemy":
 		if GameState.is_tier_unlocked(id):
 			GameState.place_enemy(id)   # click-to-place: -place_cost gold → 1 spawns

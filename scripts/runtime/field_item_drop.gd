@@ -18,9 +18,14 @@ const DROP_MAGNET_DURATION_MAX: float = 0.46
 const DROP_MAGNET_ARC_HEIGHT: float = 12.0
 const DROP_MAGNET_SIDE_SWAY: float = 5.0
 const DROP_SHADOW_ALPHA: float = 0.28
+## Hover-pickup reach (world px ≈ screen px). The mouse must actually be ON the
+## drop — small radius, NOT a magnet. Scales with the pickup-range upgrade.
+const HOVER_PICKUP_RADIUS: float = 12.0
 
 @export var item: ItemData
 @export var gold_amount: int = 0
+## Loot level the item dropped at — it enters the inventory at this entry level.
+var _level: int = 1
 
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _collision_shape: CollisionShape2D = $CollisionShape2D
@@ -41,40 +46,38 @@ var _drop_shadow: Polygon2D
 
 
 func _ready() -> void:
-	# Player auto-move falls back to this group when no enemies are present.
 	add_to_group("field_pickup")
-	body_entered.connect(_on_body_entered)
-	# Incremental-feel pickup: hovering the mouse over a drop magnets it to the
-	# party — no click needed. TooltipArea already covers the drop sprite as a
-	# Control, so we reuse it for hover detection regardless of Area2D state.
+	# HOVER-TO-PICKUP via a per-frame MOUSE-POSITION check (not a GUI event), so a
+	# drop is collected even when it lands UNDER a HUD panel that would otherwise
+	# eat the input. The TooltipArea must NOT block anything.
 	if _tooltip_area:
-		_tooltip_area.mouse_entered.connect(_on_mouse_hover_pickup)
+		_tooltip_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_collision_shape.scale = Vector2.ONE * GameState.pickup_range_multiplier()
 	_apply_item()
 	_base_y = position.y
 
 
-## True only while the drop is landed and waiting — skip it once it's been
-## consumed or has already started flying toward the party so the player
-## doesn't follow a vanishing target.
+## Manual mode → hover-only (hero ignores loot). After the 자동 줍기 unlock → the
+## hero auto-walks to drops and grabs them.
 func is_auto_move_target() -> bool:
-	return _ready_for_magnet and not _collected and not _magnet_active
+	return GameState.auto_pickup_unlocked and _ready_for_magnet and not _collected and not _magnet_active
 
 
-func _on_mouse_hover_pickup() -> void:
-	# Drop must have finished its landing animation and not already be flying
-	# toward the party. Same guard the proximity magnet uses.
-	if _collected or _magnet_active or not _ready_for_magnet:
+## Collect when the cursor is actually ON the drop (small reach; HUD-proof since
+## it polls the mouse position rather than relying on input events).
+func _check_hover_collect() -> void:
+	if _collected:
 		return
-	var player := get_tree().get_first_node_in_group("player") as Node2D
-	if player == null:
-		return
-	_begin_drop_magnet(player)
+	var reach: float = HOVER_PICKUP_RADIUS * GameState.pickup_range_multiplier()
+	if global_position.distance_to(get_global_mouse_position()) <= reach:
+		_collected = true
+		call_deferred("_finish_collect")
 
 
-func setup(drop_item: ItemData) -> void:
+func setup(drop_item: ItemData, level: int = 1) -> void:
 	item = drop_item
 	gold_amount = 0
+	_level = maxi(1, level)  # loot level → equips at this level (scaled stats)
 	if is_inside_tree():
 		_apply_item()
 
@@ -119,7 +122,9 @@ func _process(delta: float) -> void:
 	if _ready_for_magnet:
 		_bob_time += delta
 		position.y = _base_y + sin(_bob_time * 5.0) * 1.5
-		_try_begin_drop_magnet()
+		_check_hover_collect()  # manual cursor-on-drop pickup (always, HUD-proof)
+		if GameState.auto_pickup_unlocked:
+			_try_begin_drop_magnet()  # after unlock: hero passing nearby sweeps it up
 		return
 	if _collected:
 		return
@@ -161,7 +166,7 @@ func _finish_collect() -> void:
 		_collect_gold()
 		return
 	var equipped: bool = GameState.can_equip_item(item)
-	if not GameState.collect_item(item):
+	if not GameState.collect_item(item, _level):
 		_collected = false
 		_set_pickup_collision_enabled(true)
 		return
@@ -271,7 +276,7 @@ func _finish_magnet_collect() -> void:
 		queue_free()
 		return
 	var equipped: bool = GameState.can_equip_item(item)
-	if GameState.collect_item(item):
+	if GameState.collect_item(item, _level):
 		_spawn_pickup_popup(equipped)
 		queue_free()
 		return
@@ -364,4 +369,4 @@ func _refresh_tooltip() -> void:
 	if gold_amount > 0:
 		_tooltip_area.tooltip_text = "Gold\nAmount %dG" % gold_amount
 	else:
-		_tooltip_area.tooltip_text = GameState.item_entry_tooltip({"item": item, "level": 1})
+		_tooltip_area.tooltip_text = GameState.item_entry_tooltip({"item": item, "level": _level})

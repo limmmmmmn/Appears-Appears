@@ -29,6 +29,15 @@ var _downed_tag: Label
 ## Lazily-created armor badge ("방N"), reflecting the party's equipped armor.
 var _armor_badge: Label
 
+## The shop/tier weapon has no ItemData icon, so map the member's weapon TYPE to a
+## representative sprite shown in the weapon slot (slot 0).
+const WEAPON_TYPE_ICONS: Dictionary = {
+	&"sword": preload("res://assets/sprites/icons/hero_sword.png"),
+	&"staff": preload("res://assets/sprites/icons/mage_staff.png"),
+	&"blunt": preload("res://assets/sprites/icons/priest_staff.png"),
+	&"dagger": preload("res://assets/sprites/icons/thief_sword.png"),
+}
+
 
 ## Inject the slot's identity. Safe to call before the node is in the tree.
 func setup(index: int, data: CharacterData) -> void:
@@ -53,9 +62,14 @@ func _ready() -> void:
 		_apply()
 
 
+## A combat-upgrade landed (weapon/armor/luck/scale). Re-sync the visible gear
+## badges so a shop purchase shows on the party panel immediately, not just in the
+## tooltip — this is the data↔display sync that was missing for bought weapons.
 func _on_stat_source_changed() -> void:
-	if character != null:
-		_refresh_tooltip()
+	if character == null:
+		return
+	set_armor(GameState.armor_level, GameState.current_armor_name())
+	set_equipment(GameState.equipment_for_member(party_index))  # re-paints the weapon slot
 
 
 # ─── Live setters (called by the HUD root) ────────────────────────────
@@ -127,9 +141,35 @@ func set_equipment(items: Array) -> void:
 	for i in _equip_row.get_child_count():
 		var slot: EquipSlot = _equip_slot_at(i)
 		if slot:
+			# Tag as a drag-drop EQUIP target for this member + slot.
+			slot.drag_role = &"equip"
+			slot.member_index = party_index
+			slot.equip_slot_index = i
 			slot.set_empty_label(_slot_label(i))
-			slot.set_item(items[i] if i < items.size() else null)
+			var entry = items[i] if i < items.size() else null
+			# Weapon slot (0): if no LOOTED weapon is equipped, show the bought
+			# (shop/tier) weapon there so a purchase appears in the slot, not as text.
+			if i == 0 and GameState.item_entry_data(entry) == null:
+				_show_tier_weapon_in_slot(slot)
+			else:
+				slot.set_item(entry)
 	_refresh_tooltip()
+
+
+## Paint the member's bought weapon into the (empty) weapon slot. level 1 = bare
+## hands → leave empty; level ≥ 2 → the weapon-type icon + level + name tooltip.
+func _show_tier_weapon_in_slot(slot: EquipSlot) -> void:
+	if character == null:
+		slot.set_item(null)
+		return
+	var wtype: StringName = Balance.character_weapon_type(character.id)
+	var level: int = GameState.weapon_level(wtype)
+	if level <= 1:
+		slot.set_item(null)
+		return
+	var wname: String = GameState.current_weapon_name(wtype)
+	var icon: Texture2D = WEAPON_TYPE_ICONS.get(wtype, null)
+	slot.set_virtual(icon, level, "%s  (Lv %d)\n장착 무기" % [wname, level])
 
 
 ## Reset every equipment slot to the empty state.
@@ -157,7 +197,7 @@ func _apply() -> void:
 	set_exp_ratio(GameState.party_xp_ratio(party_index))
 	set_level(GameState.party_level(party_index))
 	set_armor(GameState.armor_level, GameState.current_armor_name())
-	set_equipment(GameState.equipment_for_member(party_index))
+	set_equipment(GameState.equipment_for_member(party_index))  # incl. tier weapon in slot 0
 	_refresh_tooltip()
 
 

@@ -5,11 +5,11 @@ extends CharacterBody2D
 ## Owns the Camera2D and its CharacterVisual. Combat lives in battle_windows.
 
 @export var speed: float = 60.0
-## Camera is fixed in world space, not parented to the player's transform. This
-## world position sits the play area on the left half of the viewport and
-## leaves the right 160px for the upgrade HUD panel.
-##  - Viewport: 640x360, panel: x=480..640 (160px wide)
-##  - Field:    0..480 in world x → 0..480 on screen with camera at x=320
+## Camera is fixed in world space, not parented to the player's transform.
+## Centered on the FIELD center so the hero sits at the true viewport center
+## (the left dock / right panel just overlay the edges — they don't shift the
+## center). The Field updates this each loop via recenter_camera(). The field now
+## spans the full 640 viewport width, so its center == viewport center (320).
 @export var camera_world_position: Vector2 = Vector2(320.0, 180.0)
 ## When no WASD input is detected, auto-walk toward the nearest valid field enemy.
 @export var auto_move_to_enemies: bool = true
@@ -172,6 +172,15 @@ func _find_nearest_in_group(group: StringName) -> Node2D:
 func snap_camera() -> void:
 	if _camera:
 		_camera.position = camera_world_position
+		_camera.reset_smoothing()
+
+
+## Fix the camera on a world point (the field center) so the hero is at the true
+## viewport center regardless of the side panels.
+func recenter_camera(world_center: Vector2) -> void:
+	camera_world_position = world_center
+	if _camera:
+		_camera.position = world_center
 		_camera.reset_smoothing()
 
 

@@ -691,7 +691,33 @@ func _drain_log_queue() -> void:
 	_log_sequence_running = false
 	if _pending_chest and _chest_state == ChestState.NONE:
 		_pending_chest = false
-		_enter_chest_state()
+		_drop_rewards_and_close()
+
+
+## Reward = loot DROPPED on the field (no chest, no hover). The window bursts away
+## and the BattleManager scatters the accumulated gold/items at the encounter spot
+## on close; the player clicks them to pick up.
+func _drop_rewards_and_close() -> void:
+	if _close_started:
+		return
+	_close_started = true
+	_running = false
+	_turn_timer.stop()
+	# Fight resolved → release the modal pause / stop counting toward the cap.
+	EventBus.battle_window_resolved.emit(self)
+	pivot_offset = size * 0.5
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(self, "scale", Vector2(0.55, 0.55), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_property(self, "modulate:a", 0.0, 0.2)
+	tw.chain().tween_callback(_finish_drop_close)
+
+
+func _finish_drop_close() -> void:
+	if not is_inside_tree():
+		return
+	# BattleManager._on_battle_window_closed claims + drops the gold/items + XP.
+	EventBus.battle_window_closed.emit(self)
+	queue_free()
 
 
 func _close_after_log_sequence() -> void:
@@ -1004,8 +1030,12 @@ func _finish_chest_close() -> void:
 	queue_free()
 
 
+const ITEM_DROP_CHANCE: float = 0.4  ## per-victory gear-drop chance (tune freely)
+
 func _add_window_item_drop() -> void:
 	if not GameState.item_drops_enabled():
+		return
+	if randf() > ITEM_DROP_CHANCE:
 		return
 	var item: ItemData = ItemDB.random_drop()
 	if item:

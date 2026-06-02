@@ -65,11 +65,18 @@ var weapon_levels: Dictionary = {}
 ## Armor = flat party defense (the armor shop is its UI skin). Survival axis.
 ## Level 1 = "맨몸" (no bonus). Shared by the whole party, like the weapon.
 var armor_level: int = 1
+## LOOT LEVELS — the 무기/방어구 upgrade now raises drop QUALITY (gear that falls
+## in battle = this level), NOT direct stats. Power comes from manually equipping
+## the dropped gear. weapon_level/armor_level stay at base (no direct effect).
+var weapon_loot_level: int = 1
+var armor_loot_level: int = 1
 ## LUCK = kill-gold JACKPOT CHANCE (frequency only — never a gold multiplier).
 ## Replaces the old GREED ×gold track, which compounded into a money explosion.
 var luck_level: int = 1
 ## Chest open-speed level. 0 = base hover duration.
 var open_speed_level: int = 0
+## 자동 줍기 해금 — false = 수동 호버 줍기, true = 용사가 전리품을 자동으로 주움.
+var auto_pickup_unlocked: bool = false
 ## SCALE = how many SCALE purchases were made; simultaneous window count =
 ## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
 var scale_purchases: int = 0
@@ -721,7 +728,7 @@ func gold_drops_enabled() -> bool:
 
 
 func item_drops_enabled() -> bool:
-	return has_skill_node(&"item")
+	return true  # gear drops are core now (loot-level system) — no skill gate
 
 
 func chaser_enemies_enabled() -> bool:
@@ -738,6 +745,26 @@ func battle_turn_interval_multiplier() -> float:
 
 func pickup_range_multiplier() -> float:
 	return maxf(1.0, skill_effect_float_product("pickup_range_mult"))
+
+
+# ─── 자동 줍기 (manual hover → hero auto-collects) ──────────────────────
+## Before unlock: loot is hover-collected by the cursor. After: the hero walks to
+## drops and grabs them on the way (the preserved auto path turns back on).
+func auto_pickup_cost() -> int:
+	return Balance.AUTO_PICKUP_COST
+
+
+func can_unlock_auto_pickup() -> bool:
+	return not auto_pickup_unlocked and gold >= auto_pickup_cost()
+
+
+func unlock_auto_pickup() -> bool:
+	if auto_pickup_unlocked or not spend_gold(auto_pickup_cost()):
+		EventBus.combat_upgrade_failed.emit(&"auto_pickup")
+		return false
+	auto_pickup_unlocked = true
+	EventBus.combat_upgrade_changed.emit(&"auto_pickup")
+	return true
 
 
 ## Multi-window drift unlocks with the first SCALE purchase. (Legacy skill
@@ -870,6 +897,54 @@ func upgrade_armor() -> bool:
 	EventBus.armor_equipped.emit(current_armor_name())
 	register_upgrade_purchase(&"armor")
 	return true
+
+
+# ─── Loot levels (강화 = 드롭 장비 등급↑, NOT direct stats / auto-equip) ──
+func weapon_loot_cost() -> int:
+	return Balance.upgrade_cost(weapon_loot_level)
+
+
+func can_upgrade_weapon_loot() -> bool:
+	return gold >= weapon_loot_cost()
+
+
+func upgrade_weapon_loot() -> bool:
+	if not spend_gold(weapon_loot_cost()):
+		EventBus.combat_upgrade_failed.emit(&"weapons")
+		return false
+	weapon_loot_level += 1
+	EventBus.combat_upgrade_changed.emit(&"weapons")
+	register_upgrade_purchase(&"weapons")  # still raises the weapon shop / recruits
+	return true
+
+
+func armor_loot_cost() -> int:
+	return Balance.armor_cost(armor_loot_level)
+
+
+func can_upgrade_armor_loot() -> bool:
+	return gold >= armor_loot_cost()
+
+
+func upgrade_armor_loot() -> bool:
+	if not spend_gold(armor_loot_cost()):
+		EventBus.combat_upgrade_failed.emit(&"armor")
+		return false
+	armor_loot_level += 1
+	EventBus.combat_upgrade_changed.emit(&"armor")
+	register_upgrade_purchase(&"armor")
+	return true
+
+
+## The loot level that scales a dropped item's quality → it drops at THIS entry
+## level (so a weapon at loot Lv5 = level-5 gear = 5× its per-level stats).
+func loot_level_for_item(item: ItemData) -> int:
+	if item == null:
+		return 1
+	match item.slot:
+		ItemData.Slot.WEAPON: return weapon_loot_level
+		ItemData.Slot.SHIELD, ItemData.Slot.HELMET, ItemData.Slot.ARMOR: return armor_loot_level
+		_: return maxi(weapon_loot_level, armor_loot_level)
 
 
 # ─── Village buildings (right-panel grid; buildings are a RESULT of upgrades) ─
@@ -1268,6 +1343,13 @@ func place_enemy(id: StringName) -> bool:
 	return true
 
 
+## Deadlock rescue: spent everything, gold 0, nothing left to fight. Spawn ONE
+## slime for FREE so the economy can restart. No gold check, no spend — the dock
+## only offers this when truly stuck (see _is_deadlocked), so it can't be abused.
+func place_rescue_slime() -> void:
+	EventBus.enemy_place_requested.emit(&"slime")
+
+
 ## A tier's enemy resource (loaded fresh per spawn). Null if missing.
 func tier_enemy_data(id: StringName) -> EnemyData:
 	var path: String = str(Balance.tier_by_id(id).get("enemy_res", ""))
@@ -1629,11 +1711,14 @@ func scaled_enemy_gold_reward(data: EnemyData) -> int:
 
 ## Average single party hit at SPEED Lv1 (weapon-free, full HP). Used only to
 ## calibrate enemy HP — combat applies SPEED/penalty on top of this.
+## Enemy-HP calibration uses BASE attack (+ level-up bonus) only — NOT equipped
+## gear/modifiers. So equipping dropped gear lifts real damage ABOVE this baseline
+## → faster kills = felt progression (gear no longer auto-inflates enemy HP).
 func _reference_party_hit_damage() -> float:
 	var total: int = 0
 	var n: int = 0
 	for i in party.size():
-		total += effective_attack(i)
+		total += party[i].attack + _level_bonus(i, "atk")
 		n += 1
 	if n == 0:
 		return 4.0
@@ -1754,17 +1839,17 @@ func scaled_enemy_xp_reward(data: EnemyData) -> int:
 
 
 # ─── Equipment ────────────────────────────────────────────────────────
-func collect_item(item: ItemData) -> bool:
+func collect_item(item: ItemData, level: int = 1) -> bool:
 	if item == null:
 		return false
-	_absorb_item_entry(_make_item_entry(item, 1))
+	_absorb_item_entry(_make_item_entry(item, maxi(1, level)))
 	return true
 
 
-func add_item_to_inventory(item: ItemData) -> void:
+func add_item_to_inventory(item: ItemData, level: int = 1) -> void:
 	if item == null:
 		return
-	_absorb_item_entry(_make_item_entry(item, 1))
+	_absorb_item_entry(_make_item_entry(item, maxi(1, level)))
 
 
 func _add_item_entry_to_inventory(entry: Dictionary) -> void:
@@ -1799,6 +1884,110 @@ func _equip_item_entry(entry: Dictionary) -> bool:
 
 func can_equip_item(item: ItemData) -> bool:
 	return item != null and _equipment_target_index(item) >= 0
+
+
+# ─── Manual drag-equip (inventory → a specific party slot) ─────────────
+## Does an item of this type belong in equip slot `slot_index`?
+## 0=Weapon 1=Shield 2=Helmet 3=Armor 4/5=Accessory.
+func equip_slot_accepts(slot_index: int, item: ItemData) -> bool:
+	if item == null:
+		return false
+	match slot_index:
+		0: return item.slot == ItemData.Slot.WEAPON
+		1: return item.slot == ItemData.Slot.SHIELD
+		2: return item.slot == ItemData.Slot.HELMET
+		3: return item.slot == ItemData.Slot.ARMOR
+		EQUIPMENT_ACCESSORY_SLOT_A, EQUIPMENT_ACCESSORY_SLOT_B:
+			return item.slot == ItemData.Slot.ACCESSORY
+	return false
+
+
+## Slot-type + owner check for dropping `item` onto (member, slot).
+func can_equip_to_slot(item: ItemData, member_index: int, slot_index: int) -> bool:
+	if member_index < 0 or member_index >= party.size():
+		return false
+	if not equip_slot_accepts(slot_index, item):
+		return false
+	if item.allowed_character_id != &"" and party[member_index].id != item.allowed_character_id:
+		return false
+	return true
+
+
+## Manual equip: move inventory[inv_index] into member's slot, sending whatever was
+## there back to the bag. (Auto-equip via `_absorb_item_entry` stays for the future
+## auto-place skill — this is the player-driven drag path.)
+func equip_inventory_item_to(inv_index: int, member_index: int, slot_index: int) -> bool:
+	if inv_index < 0 or inv_index >= inventory.size():
+		return false
+	var entry = inventory[inv_index]
+	var item: ItemData = item_entry_data(entry)
+	if not can_equip_to_slot(item, member_index, slot_index):
+		return false
+	var previous = party_equipment[member_index][slot_index]
+	inventory.remove_at(inv_index)
+	party_equipment[member_index][slot_index] = entry
+	if previous != null:
+		inventory.append(previous)  # swapped-out gear returns to the bag
+	party_hp[member_index] = mini(party_hp[member_index], effective_max_hp(member_index))
+	EventBus.party_member_hp_changed.emit(member_index, party_hp[member_index], effective_max_hp(member_index))
+	EventBus.party_equipment_changed.emit(member_index)
+	EventBus.inventory_changed.emit()
+	return true
+
+
+## The fixed slot index for an item's type (for comparison lookups).
+func slot_index_for_item(item: ItemData) -> int:
+	if item == null:
+		return -1
+	match item.slot:
+		ItemData.Slot.WEAPON: return 0
+		ItemData.Slot.SHIELD: return 1
+		ItemData.Slot.HELMET: return 2
+		ItemData.Slot.ARMOR: return 3
+		ItemData.Slot.ACCESSORY: return EQUIPMENT_ACCESSORY_SLOT_A
+	return -1
+
+
+## (label, value) of an item's PRIMARY stat: weapon→공격, armor-types→방어,
+## accessory→its biggest bonus.
+func _item_primary_stat(item: ItemData, level: int) -> Dictionary:
+	var lv: int = maxi(1, level)
+	match item.slot:
+		ItemData.Slot.WEAPON:
+			return {"label": "공격", "value": item.attack_bonus * lv}
+		ItemData.Slot.SHIELD, ItemData.Slot.HELMET, ItemData.Slot.ARMOR:
+			return {"label": "방어", "value": item.defense_bonus * lv}
+		_:
+			var best_label: String = "공격"
+			var best: int = item.attack_bonus
+			if item.defense_bonus > best: best = item.defense_bonus; best_label = "방어"
+			if item.agility_bonus > best: best = item.agility_bonus; best_label = "민첩"
+			if item.max_hp_bonus > best: best = item.max_hp_bonus; best_label = "체력"
+			return {"label": best_label, "value": best * lv}
+
+
+## One-line hover comparison vs what's equipped in this item's slot (owner/hero):
+## "공격 +8 (현재 +5) ↑더 좋음".
+func item_compare_line(item: ItemData, item_level: int) -> String:
+	if item == null:
+		return ""
+	var prim: Dictionary = _item_primary_stat(item, item_level)
+	var item_val: int = int(prim["value"])
+	var member_index: int = 0
+	if item.allowed_character_id != &"":
+		var owner: int = _member_index_by_id(item.allowed_character_id)
+		if owner >= 0:
+			member_index = owner
+	var slot_index: int = slot_index_for_item(item)
+	var equipped_val: int = 0
+	if member_index >= 0 and member_index < party_equipment.size() and slot_index >= 0:
+		var eq_item: ItemData = item_entry_data(party_equipment[member_index][slot_index])
+		if eq_item != null:
+			var eq_prim: Dictionary = _item_primary_stat(eq_item, item_entry_level(party_equipment[member_index][slot_index]))
+			equipped_val = int(eq_prim["value"])
+	var delta: int = item_val - equipped_val
+	var verdict: String = "↑더 좋음" if delta > 0 else ("↓더 나쁨" if delta < 0 else "= 같음")
+	return "%s +%d (현재 +%d) %s" % [str(prim["label"]), item_val, equipped_val, verdict]
 
 
 func inventory_items() -> Array:

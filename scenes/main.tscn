@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://cqf6bpvn7qq6m"]
+[gd_scene load_steps=11 format=3 uid="uid://cqf6bpvn7qq6m"]
 
 [ext_resource type="Script" uid="uid://c6lq6ty8adwon" path="res://scripts/runtime/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://3bdh8ubp16k5" path="res://scenes/field.tscn" id="2_field"]
@@ -8,6 +8,7 @@
 [ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
 [ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/left_enemy_bar.tscn" id="8_enemy_bar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/town_window.tscn" id="9_town"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
 font = ExtResource("6_font")
@@ -62,3 +63,8 @@ offset_left = 0.0
 offset_top = 0.0
 offset_right = 46.0
 offset_bottom = 360.0
+
+[node name="TownLayer" type="CanvasLayer" parent="."]
+layer = 15
+
+[node name="TownWindow" parent="TownLayer" instance=ExtResource("9_town")]
