@@ -68,11 +68,32 @@ func _ready() -> void:
 	# group panels are visible, and they size to their content.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_stylebox_override("panel", _frame_style())
+	# OS-desktop: this is the 강화 "window" — collapsed by default into the right-edge
+	# desktop icon, opened on demand. The icon looks us up by this group.
+	add_to_group("upgrade_window")
+	visible = false
 	_build_layout()
 	_connect_events()
 	_income_marker = GameState.total_gold_earned
 	set_process(true)
 	_refresh()
+
+
+# ─── Window open/close (driven by the 강화 desktop icon / menu) ──────────
+func open() -> void:
+	visible = true
+	_refresh()
+
+
+func close() -> void:
+	visible = false
+
+
+func toggle() -> void:
+	if visible:
+		close()
+	else:
+		open()
 
 
 func _process(delta: float) -> void:

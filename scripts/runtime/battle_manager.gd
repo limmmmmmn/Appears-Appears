@@ -30,6 +30,8 @@ const MODAL_WINDOW_SIZE_MULTIPLIER: float = 1.0
 ## Width of the left dock. The play area is inset by this on the left so battle
 ## windows never spawn/drift underneath it.
 const LEFT_BAR_WIDTH: float = 46.0
+## Top inset so battle windows don't slide under the OS menu bar.
+const MENU_BAR_INSET: float = 17.0
 
 
 ## Play area right edge = viewport minus the right panel. Read at runtime from
@@ -122,15 +124,16 @@ func spawn_battle(data: EnemyData, source: Node2D = null, is_modal_battle: bool 
 
 func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false, at_source_position: bool = false) -> BattleWindow:
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
-	var field_drop_position: Vector2 = source.global_position if source != null and is_instance_valid(source) else Vector2.INF
-	window.setup(data, field_drop_position, MODAL_WINDOW_SIZE_MULTIPLIER if is_modal_battle else 1.0)
+	# WORLD encounter spot — drives the on-field loot drop AND (converted to screen
+	# inside the window) the open-zoom origin.
+	var drop_world: Vector2 = source.global_position if source != null and is_instance_valid(source) else Vector2.INF
+	window.setup(data, drop_world, MODAL_WINDOW_SIZE_MULTIPLIER if is_modal_battle else 1.0)
 	var window_size: Vector2 = window.get_expected_window_size()
-	# Modal (pre-multi-window-unlock) spawns at the meeting point of the party
-	# member and the enemy so the popup hides both. Drift mode keeps the
-	# directional offset-from-player layout.
-	var spawn_position: Vector2 = _encounter_midpoint_position(window_size, source) if is_modal_battle else _spawn_position_for_encounter(window_size, source, at_source_position)
-	# Encounter / midpoint spawns near the play-area edge can otherwise pop a
-	# window half off screen. Clamp to the visible play area.
+	# Compute the spawn in WORLD space (relative to the hero/enemy), then fold in
+	# the camera so the window opens at the matching SCREEN spot and stays there.
+	var spawn_world: Vector2 = _encounter_midpoint_position(window_size, source) if is_modal_battle else _spawn_position_for_encounter(window_size, source, at_source_position)
+	var spawn_position: Vector2 = _world_to_screen(spawn_world)
+	# Keep the whole window inside the on-screen play area (between the side panels).
 	spawn_position = _clamp_position_to_play_area(spawn_position, window_size)
 	window.position = spawn_position
 	_window_rects[window] = Rect2(spawn_position, window_size)
@@ -138,7 +141,7 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 	if is_modal_battle:
 		_modal_windows[window] = true
 		GameState.begin_field_battle_pause()
-	add_child(window)
+	_window_parent().add_child(window)
 	window.play_open_intro()
 	if not is_modal_battle:
 		_apply_window_push(0.0, true)
@@ -146,8 +149,8 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 
 
 func _centered_modal_position(window_size: Vector2) -> Vector2:
-	var visible_rect: Rect2 = _play_area_visible_world_rect()
-	return visible_rect.get_center() - window_size * 0.5
+	# WORLD center fallback (converted to screen by the caller).
+	return _visible_world_rect().get_center() - window_size * 0.5
 
 
 ## Pre-multi-window-unlock modal spawn: cover the spot where the party member
@@ -172,7 +175,7 @@ func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, at_sour
 		return source.global_position - window_size * 0.5
 	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _play_area_visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
+		return _visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
 	var source_position: Vector2 = source.global_position
 	var direction: Vector2 = source_position - player_position
 	if direction.length_squared() < 1.0:
@@ -186,7 +189,7 @@ func _spawn_position_for_encounter(window_size: Vector2, source: Node2D, at_sour
 func _random_spawn_position(window_size: Vector2) -> Vector2:
 	var player_position: Vector2 = _player_world_position()
 	if player_position == Vector2.INF:
-		return _play_area_visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
+		return _visible_world_rect().get_center() + SPAWN_CENTER_OFFSET
 	var candidates: Array[Vector2] = [
 		player_position + Vector2(-window_size.x * 0.5, -SPAWN_DISTANCE - window_size.y),
 		player_position + Vector2(-window_size.x * 0.5, SPAWN_DISTANCE),
@@ -211,7 +214,11 @@ func _is_spawn_position_valid(pos: Vector2, size: Vector2) -> bool:
 
 
 func _apply_window_push(delta: float, burst: bool = false) -> void:
-	var party_positions: Array[Vector2] = _party_world_positions()
+	# Windows are screen-space → compare against party SCREEN positions so the
+	# push-away-from-the-party effect lines up with where they appear on screen.
+	var party_positions: Array[Vector2] = []
+	for _party_world: Vector2 in _party_world_positions():
+		party_positions.append(_world_to_screen(_party_world))
 	var window_collision_enabled: bool = GameState.battle_window_push_enabled()
 	var party_collision_enabled: bool = GameState.party_window_push_enabled()
 	var windows: Array = _window_rects.keys()
@@ -508,19 +515,30 @@ func _visible_world_rect() -> Rect2:
 	return Rect2(camera.get_screen_center_position() - viewport_size * 0.5, viewport_size)
 
 
-func _play_area_visible_world_rect() -> Rect2:
-	var camera := get_viewport().get_camera_2d()
+## Battle windows live on a CanvasLayer (SCREEN space) now — the follow camera can
+## roam freely and the windows stay pinned to the viewport. This is the on-screen
+## play area: the viewport minus the left dock and the right shop panel.
+func _play_area_screen_rect() -> Rect2:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	# Usable width = viewport minus the right shop panel minus the left dock.
 	var play_width: float = minf(viewport_size.x, _play_area_right_edge()) - LEFT_BAR_WIDTH
-	var play_size := Vector2(maxf(1.0, play_width), viewport_size.y)
-	if camera == null:
-		return Rect2(Vector2(LEFT_BAR_WIDTH, 0.0), play_size)
-	var visible_size: Vector2 = viewport_size * camera.zoom
-	var play_world_size: Vector2 = play_size * camera.zoom
-	var origin: Vector2 = camera.get_screen_center_position() - visible_size * 0.5
-	origin.x += LEFT_BAR_WIDTH * camera.zoom.x
-	return Rect2(origin, play_world_size)
+	# Inset the top below the OS menu bar so windows float on the desktop work area
+	# (over the field app window), not under the menu bar.
+	var top: float = MENU_BAR_INSET
+	return Rect2(Vector2(LEFT_BAR_WIDTH, top), Vector2(maxf(1.0, play_width), maxf(1.0, viewport_size.y - top)))
+
+
+## World point → on-screen pixel (folds in the follow camera's transform), so an
+## encounter that happens at the enemy's world spot opens a window at the matching
+## place on screen.
+func _world_to_screen(world_pos: Vector2) -> Vector2:
+	return get_viewport().get_canvas_transform() * world_pos
+
+
+## The screen-space CanvasLayer windows are parented to (so they stay pinned to the
+## viewport under the follow camera). Falls back to self if the layer is missing.
+func _window_parent() -> Node:
+	var layer: Node = get_node_or_null("../BattleWindowLayer")
+	return layer if layer != null else self
 
 
 ## Clamp a window's top-left so the whole rect stays inside the visible play
@@ -528,7 +546,7 @@ func _play_area_visible_world_rect() -> Rect2:
 ## time and inside the drift loop so neither force can shove a window off
 ## screen.
 func _clamp_position_to_play_area(pos: Vector2, window_size: Vector2) -> Vector2:
-	var bounds: Rect2 = _play_area_visible_world_rect()
+	var bounds: Rect2 = _play_area_screen_rect()
 	var max_x: float = maxf(bounds.position.x, bounds.end.x - window_size.x)
 	var max_y: float = maxf(bounds.position.y, bounds.end.y - window_size.y)
 	return Vector2(

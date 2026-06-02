@@ -80,13 +80,39 @@ func _ready() -> void:
 	_gold_label.visible = false
 	_income_marker = GameState.total_gold_earned
 	_build_gold_center()
+	if _gold_center != null:
+		_gold_center.visible = false  # gold now lives in the top menu bar (OS desktop)
 	_build_unlock_popup()
 	if not GameState.name_entered:
 		_build_name_overlay()
 	_refresh_gold()
 	_refresh_field_label()
 	_build_inventory_window()
+	# OS-desktop: the inventory is an app collapsed to the 인벤 desktop icon.
+	add_to_group("inventory_window")
+	if _inventory_window != null:
+		_inventory_window.visible = false
 	_rebuild_member_boxes()
+
+
+# ─── Inventory window open/close (driven by the 인벤 desktop icon) ───────
+func open() -> void:
+	if _inventory_window != null:
+		_inventory_window.visible = true
+		_refresh_inventory_window()
+
+
+func close() -> void:
+	if _inventory_window != null:
+		_inventory_window.visible = false
+
+
+func toggle() -> void:
+	if _inventory_window != null:
+		if _inventory_window.visible:
+			close()
+		else:
+			open()
 
 
 func _process(delta: float) -> void:

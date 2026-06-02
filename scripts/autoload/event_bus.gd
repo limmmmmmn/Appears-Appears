@@ -100,6 +100,10 @@ signal player_named(hero_name: String)
 ## short "[저런..]" overlord-intervention line.
 signal rescue_offered()
 
+## A narration / story line for the always-on bottom text window (the "OS desktop"
+## persistent log). The Field also mirrors its transient field messages here.
+signal narration(text: String)
+
 ## Actual HP removed from a party member after clamping overkill.
 signal party_damage_taken(member_index: int, amount: int)
 

@@ -13,6 +13,8 @@ extends CharacterBody2D
 @export var camera_world_position: Vector2 = Vector2(320.0, 180.0)
 ## When no WASD input is detected, auto-walk toward the nearest valid field enemy.
 @export var auto_move_to_enemies: bool = true
+## How fast the follow-camera eases toward the hero (higher = snappier).
+const CAMERA_SMOOTHING_SPEED: float = 6.0
 ## Below this magnitude of input we consider the player to be idle and let
 ## auto-move take over. Just above zero so digital keys still feel snappy.
 const MANUAL_INPUT_THRESHOLD: float = 0.1
@@ -45,13 +47,12 @@ func _ready() -> void:
 	# enemies spawned on the same frame find us.
 	add_to_group("player")
 	add_to_group("party_member")
-	# Detach the camera from the player's transform — `top_level = true` makes
-	# the Camera2D ignore its parent's position, so it sits at a fixed spot in
-	# world space no matter where the player walks. Smoothing is disabled
-	# because there's nothing to ease toward anymore.
-	_camera.top_level = true
-	_camera.position_smoothing_enabled = false
-	_camera.position = camera_world_position
+	# Camera FOLLOWS the hero across the large world: it's a child of the player,
+	# so leaving top_level off keeps it locked onto us. Smoothing eases the roam.
+	_camera.top_level = false
+	_camera.position = Vector2.ZERO  # local zero → sits exactly on the hero
+	_camera.position_smoothing_enabled = true
+	_camera.position_smoothing_speed = CAMERA_SMOOTHING_SPEED
 	_camera.make_current()
 	if _pending_data:
 		_visual.setup(_pending_data)
@@ -165,22 +166,17 @@ func _find_nearest_in_group(group: StringName) -> Node2D:
 	return nearest
 
 
-## Re-pin the fixed-position camera. With smoothing disabled and `top_level`
-## on, this is a no-op in practice — kept around so existing callers (like
-## Field on loop start) don't break, and so we can cheaply force-reset the
-## camera if anything ever bumps its world position.
+## Follow-camera: cancel easing so it snaps straight onto the hero. Kept so
+## existing callers (Field on loop start) still work.
 func snap_camera() -> void:
 	if _camera:
-		_camera.position = camera_world_position
 		_camera.reset_smoothing()
 
 
-## Fix the camera on a world point (the field center) so the hero is at the true
-## viewport center regardless of the side panels.
-func recenter_camera(world_center: Vector2) -> void:
-	camera_world_position = world_center
+## Was "fix the camera on a world point"; now the camera follows the hero, so this
+## just resets smoothing (no fixed target). Param kept for call-site compatibility.
+func recenter_camera(_world_center: Vector2 = Vector2.ZERO) -> void:
 	if _camera:
-		_camera.position = world_center
 		_camera.reset_smoothing()
 
 

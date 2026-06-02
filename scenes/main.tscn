@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://cqf6bpvn7qq6m"]
+[gd_scene load_steps=15 format=3 uid="uid://cqf6bpvn7qq6m"]
 
 [ext_resource type="Script" uid="uid://c6lq6ty8adwon" path="res://scripts/runtime/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://3bdh8ubp16k5" path="res://scenes/field.tscn" id="2_field"]
@@ -9,6 +9,10 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/left_enemy_bar.tscn" id="8_enemy_bar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/town_window.tscn" id="9_town"]
+[ext_resource type="PackedScene" path="res://scenes/ui/menu_bar.tscn" id="10_menubar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/desktop_icons.tscn" id="11_icons"]
+[ext_resource type="PackedScene" path="res://scenes/ui/narration_window.tscn" id="12_narration"]
+[ext_resource type="PackedScene" path="res://scenes/ui/desktop_frame.tscn" id="13_frame"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
 font = ExtResource("6_font")
@@ -24,6 +28,22 @@ script = ExtResource("1_main")
 
 [node name="BattleManager" type="Node2D" parent="." unique_id=614174327]
 script = ExtResource("3_mgr")
+
+[node name="WallpaperLayer" type="CanvasLayer" parent="."]
+layer = -5
+
+[node name="Wallpaper" type="ColorRect" parent="WallpaperLayer"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.29, 0.47, 0.78, 1)
+
+[node name="DesktopFrameLayer" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="DesktopFrame" parent="DesktopFrameLayer" instance=ExtResource("13_frame")]
+
+[node name="BattleWindowLayer" type="CanvasLayer" parent="."]
+layer = 4
 
 [node name="HUD" parent="." unique_id=1507021759 instance=ExtResource("4_hud")]
 
@@ -68,3 +88,18 @@ offset_bottom = 360.0
 layer = 15
 
 [node name="TownWindow" parent="TownLayer" instance=ExtResource("9_town")]
+
+[node name="NarrationLayer" type="CanvasLayer" parent="."]
+layer = 3
+
+[node name="NarrationWindow" parent="NarrationLayer" instance=ExtResource("12_narration")]
+
+[node name="DesktopIconsLayer" type="CanvasLayer" parent="."]
+layer = 13
+
+[node name="DesktopIcons" parent="DesktopIconsLayer" instance=ExtResource("11_icons")]
+
+[node name="MenuBarLayer" type="CanvasLayer" parent="."]
+layer = 18
+
+[node name="MenuBar" parent="MenuBarLayer" instance=ExtResource("10_menubar")]

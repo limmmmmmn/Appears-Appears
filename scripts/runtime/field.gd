@@ -26,7 +26,21 @@ const COMBO_SKELETON_FONT: Font = preload("res://assets/fonts/field_ui_font.tres
 ## center → the hero sits dead-center, with the side panels just overlaying the
 ## edges. Player/enemy movement is capped to the visible play area (_play_right)
 ## so nothing wanders under the right panel.
-const FIELD_SIZE: Vector2 = Vector2(640, 360)
+## Large roaming world (the camera follows the hero across it). Was 640×360 (a
+## single screen, fixed camera); enlarged so walking actually travels. Placement
+## happens NEAR the hero (see _spawn_position_near_player), so the action stays
+## on-screen while the world is big.
+const FIELD_SIZE: Vector2 = Vector2(1600, 1200)
+## Plain-green backdrop is oversized this far beyond the map on every side so the
+## roaming camera never sees past it into the void.
+const BG_MARGIN: float = 1400.0
+## Player-driven placement / refill spawns land this far from the hero — kept
+## inside the inset field "app window" (the desktop frame hides the far edges).
+const SPAWN_NEAR_MIN: float = 56.0
+const SPAWN_NEAR_MAX: float = 138.0
+## Spawned enemies wander only within this half-extent of where they appeared, so
+## a fight doesn't slowly drift off the (now large) map.
+const ENEMY_WANDER_HALF_EXTENT: float = 130.0
 ## Left edge kept clear for the enemy-toggle bar (matches LeftEnemyBar.BAR_WIDTH)
 ## so the player + enemies stay out from under it.
 const LEFT_UI_INSET: float = 48.0
@@ -138,6 +152,7 @@ func _ready() -> void:
 	_hide_message()
 	# Cover the case where party was already set before this scene mounted.
 	_setup_party_visuals()
+	_apply_field_size()        # oversize the plain backdrop so the void fills the screen
 	_apply_world_visibility()  # opening: black field + hero only until grass is laid
 
 
@@ -158,19 +173,13 @@ func _apply_world_visibility() -> void:
 
 
 func _on_world_started() -> void:
-	# Reveal the world the player just "laid": restore the grass background +
-	# decorations + island diorama, fading them in over the void.
+	# Reveal the world the player just "laid": fade the plain-green field in over
+	# the opening void. (Island diorama / grass texture stay off — plain green.)
 	_apply_field_background()
-	_apply_diorama()
 	if _decorations_root != null:
 		_decorations_root.visible = true
-	if _diorama_root != null:
-		_diorama_root.visible = true
-	for node: CanvasItem in [_background_texture, _decorations_root, _diorama_root]:
-		if node == null:
-			continue
-		node.modulate.a = 0.0
-		create_tween().tween_property(node, "modulate:a", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
+		_decorations_root.modulate.a = 0.0
+		create_tween().tween_property(_decorations_root, "modulate:a", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
 
 
 func _process(delta: float) -> void:
@@ -207,7 +216,7 @@ func _setup_party_visuals() -> void:
 	_player = PLAYER_SCENE.instantiate() as CharacterBody2D
 	_player.setup(GameState.party[0])
 	if _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _play_bounds_max())
+		_player.set_field_bounds(Vector2.ZERO, _field_size)
 	_player.position = start_position
 	_party_root.add_child(_player)
 	for i in range(1, GameState.party_size()):
@@ -225,7 +234,6 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_decor_rng.randomize()
 	_apply_field_size()
 	_apply_field_background()
-	_apply_diorama()
 	_combo_kills = 0
 	_combo_attack_running = false
 	_combo_cooldown_remaining = 0.0
@@ -251,8 +259,10 @@ func _on_field_loop_started(_loop_num: int) -> void:
 ## Right edge of the VISIBLE play area in world x. The field fills 640 but the
 ## right panel overlays its far edge, so player/enemy movement caps here so the
 ## hero never wanders behind the panel.
+## Right edge of the WORLD placement area. The right panel is screen-space now
+## (battle windows handle that inset), so world placement uses the full map width.
 func _play_right() -> float:
-	return minf(_field_size.x, UITheme.right_panel_left())
+	return _field_size.x
 
 
 ## Movement bounds max — visible play area (not the full background width).
@@ -265,7 +275,7 @@ func _recenter_party() -> void:
 		return
 	var center: Vector2 = _field_size * 0.5
 	if _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _play_bounds_max())
+		_player.set_field_bounds(Vector2.ZERO, _field_size)
 	_player.position = center
 	# Center the fixed camera on the field center → hero at true viewport center.
 	if _player.has_method("recenter_camera"):
@@ -514,6 +524,8 @@ func _spawn_combo_scythe(world_position: Vector2) -> void:
 
 
 func _show_message(text: String) -> void:
+	# Mirror every field message into the always-on narration window (OS desktop).
+	EventBus.narration.emit(text)
 	if _message_panel == null or _message_label == null:
 		return
 	_message_label.text = text
@@ -840,9 +852,9 @@ func _on_campfire_placed() -> void:
 
 
 func _random_campfire_position() -> Vector2:
-	var x: float = _decor_rng.randf_range(LEFT_UI_INSET + 50.0, _field_size.x - 50.0)
-	var y: float = _decor_rng.randf_range(70.0, _field_size.y - 50.0)
-	return Vector2(x, y)
+	# Near the hero so a player-placed campfire lands on-screen on the large map.
+	var origin: Vector2 = _player.position if _player else _field_size * 0.5
+	return _spawn_position_near_player(origin)
 
 
 ## Per-frame: heal party members standing near the campfire; trigger the mage
@@ -962,9 +974,12 @@ func _spawn_field_enemy(data: EnemyData) -> void:
 	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
 	var fe: FieldEnemy = FIELD_ENEMY_SCENE.instantiate()
 	fe.setup(data)
-	fe.wander_bounds_min = Vector2(LEFT_UI_INSET, 16.0)
-	fe.wander_bounds_max = _play_bounds_max() - Vector2.ONE * 16.0
-	fe.position = _random_spawn_position_for_enemy(data, safe_origin)
+	var spawn: Vector2 = _random_spawn_position_for_enemy(data, safe_origin)
+	fe.position = spawn
+	# Wander stays local to the spawn so the fight doesn't drift off the big map.
+	var half := Vector2(ENEMY_WANDER_HALF_EXTENT, ENEMY_WANDER_HALF_EXTENT)
+	fe.wander_bounds_min = _clamp_field_position(spawn - half)
+	fe.wander_bounds_max = _clamp_field_position(spawn + half)
 	_enemies_root.add_child(fe)
 	if data == SLIME_CHASER_DATA:
 		_chaser_spawned_this_loop = true
@@ -983,12 +998,25 @@ func _enemy_data_for_current_nodes() -> EnemyData:
 	return GameState.random_active_tier_enemy_data()
 
 
-func _random_spawn_position_for_enemy(data: EnemyData, avoid: Vector2) -> Vector2:
-	if data == BAT_DATA:
-		return _random_forest_position(avoid)
-	if data == SLIME_DATA or data == SLIME_CHASER_DATA:
-		return _random_grassland_position(avoid)
-	return _random_safe_position(avoid)
+func _random_spawn_position_for_enemy(_data: EnemyData, avoid: Vector2) -> Vector2:
+	# Plain-green world → no grass/forest region split. Everything spawns in a ring
+	# around the hero so the player-driven placement always shows up on-screen.
+	return _spawn_position_near_player(avoid)
+
+
+## A point a short distance from `origin` (the hero), kept on the map and clear of
+## the party. Falls back to a clamped random offset if the ring stays blocked.
+func _spawn_position_near_player(origin: Vector2) -> Vector2:
+	for _attempt in 24:
+		var angle: float = randf() * TAU
+		var radius: float = randf_range(SPAWN_NEAR_MIN, SPAWN_NEAR_MAX)
+		var pos: Vector2 = _clamp_field_position(origin + Vector2(cos(angle), sin(angle)) * radius)
+		if _is_safe_enemy_spawn_position(pos, origin):
+			return pos
+	return _clamp_field_position(origin + Vector2(
+		randf_range(-SPAWN_NEAR_MAX, SPAWN_NEAR_MAX),
+		randf_range(-SPAWN_NEAR_MAX, SPAWN_NEAR_MAX)
+	))
 
 
 func _random_forest_position(avoid: Vector2) -> Vector2:
@@ -1101,19 +1129,19 @@ func _random_position() -> Vector2:
 
 func _apply_field_size() -> void:
 	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
-	_background.size = _field_size
-	_background_texture.size = _field_size
-	_background_texture.clip_contents = true
-	_background_texture.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_background_texture.stretch_mode = TextureRect.STRETCH_KEEP
+	# Plain-green backdrop oversized far past the map so the roaming camera always
+	# lands on green, never the void. (The grass texture / island diorama are off.)
+	_background.position = Vector2(-BG_MARGIN, -BG_MARGIN)
+	_background.size = _field_size + Vector2(BG_MARGIN, BG_MARGIN) * 2.0
+	_background_texture.visible = false
 	if _player and _player.has_method("set_field_bounds"):
-		_player.set_field_bounds(Vector2(LEFT_UI_INSET, 0.0), _play_bounds_max())
+		_player.set_field_bounds(Vector2.ZERO, _field_size)
 
 
 func _apply_field_background() -> void:
-	_background.color = _field_background_color()
-	_background_texture.texture = GRASS_FIELD_TEXTURE
-	_background_texture.visible = GameState.current_field_region_id == GameState.FIELD_REGION_GRASS
+	# Plain green grassland (decoration/grass texture deferred — see task notes).
+	_background.color = GRASS_FIELD_COLOR
+	_background_texture.visible = false
 
 
 func _field_background_color() -> Color:
@@ -1235,7 +1263,6 @@ func _on_skill_node_purchase_succeeded(_node) -> void:
 		return
 	_apply_field_size()
 	_apply_field_background()
-	_apply_diorama()
 	if _loop_complete:
 		return
 	_refill_enemy_population(spawn_batch_size + GameState.field_spawn_batch_bonus())

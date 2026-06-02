@@ -34,7 +34,9 @@ const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
 
-const BASE_WINDOW_SIZE: Vector2 = Vector2(176.0, 132.0)
+## Min window size (ratio-fit floor). Was bumped to 176×132 for the (now removed)
+## manual-combat command row; restored to the compact 4:3 the field was tuned for.
+const BASE_WINDOW_SIZE: Vector2 = Vector2(128.0, 96.0)
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -172,9 +174,12 @@ func is_opening() -> bool:
 func play_open_intro() -> void:
 	var rest_position: Vector2 = position
 	pivot_offset = size * 0.5
-	var origin: Vector2 = _field_drop_position
-	if origin == Vector2.INF:
-		origin = rest_position + size * 0.5
+	# `_field_drop_position` is a WORLD point (the encounter spot). This window lives
+	# on a screen-space CanvasLayer, so fold in the camera to zoom open from the
+	# matching on-screen spot.
+	var origin: Vector2 = rest_position + size * 0.5
+	if _field_drop_position != Vector2.INF:
+		origin = get_viewport().get_canvas_transform() * _field_drop_position
 	position = origin - size * 0.5
 	scale = Vector2(0.1, 0.1)
 	modulate.a = 0.0
