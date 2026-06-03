@@ -38,8 +38,18 @@ func _build() -> void:
 	row.add_theme_constant_override("separation", 5)
 	window.add_child(row)
 
-	var tag := _label("▸", 9, ACCENT.lightened(0.4))
-	row.add_child(tag)
+	# Compact title chip (the window "name"), then the narration text.
+	var title := PanelContainer.new()
+	var ts := StyleBoxFlat.new()
+	ts.bg_color = ACCENT
+	ts.set_corner_radius_all(OSWindow.CORNER)
+	ts.content_margin_left = 4
+	ts.content_margin_right = 4
+	ts.content_margin_top = 1
+	ts.content_margin_bottom = 1
+	title.add_theme_stylebox_override("panel", ts)
+	title.add_child(_label("이야기", 8, Color(0.95, 0.96, 0.98, 1.0)))
+	row.add_child(title)
 	_text_label = _label("…", 9, DIM)
 	_text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_text_label.clip_text = true
@@ -53,17 +63,11 @@ func _on_narration(text: String) -> void:
 
 
 func _window_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = WINDOW_BG
-	s.set_corner_radius_all(6)
-	s.set_border_width_all(1)
-	s.border_color = Color(1, 1, 1, 0.12)
-	s.content_margin_left = 7
+	var s := OSWindow.body_style(WINDOW_BG)  # unified white border + small corners
+	s.content_margin_left = 6
 	s.content_margin_right = 7
-	s.content_margin_top = 3
-	s.content_margin_bottom = 3
-	s.shadow_color = Color(0, 0, 0, 0.4)
-	s.shadow_size = 4
+	s.content_margin_top = 2
+	s.content_margin_bottom = 2
 	return s
 
 

@@ -79,9 +79,7 @@ func _ready() -> void:
 	# Gold now lives only in the right panel (no duplicate over the field).
 	_gold_label.visible = false
 	_income_marker = GameState.total_gold_earned
-	_build_gold_center()
-	if _gold_center != null:
-		_gold_center.visible = false  # gold now lives in the top menu bar (OS desktop)
+	_build_gold_center()  # prominent gold chip, top-left next to the placement dock
 	_build_unlock_popup()
 	if not GameState.name_entered:
 		_build_name_overlay()
@@ -369,12 +367,7 @@ func _build_inventory_window() -> void:
 	if legacy:
 		legacy.visible = false
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.180, 0.133, 0.184, 1.0)  # #2e222f dark interior
-	style.set_corner_radius_all(5)
-	style.set_border_width_all(1)
-	style.border_color = Color(1, 1, 1, 0.12)
-	style.shadow_color = Color(0, 0, 0, 0.4)
+	var style := OSWindow.body_style()  # unified white border + small corners
 	style.shadow_size = 3
 	_inventory_window = PanelContainer.new()
 	_inventory_window.add_theme_stylebox_override("panel", style)
@@ -390,15 +383,8 @@ func _build_inventory_window() -> void:
 	col.add_theme_constant_override("separation", 0)
 	_inventory_window.add_child(col)
 
-	# Title bar (Resurrect 64 teal) — matches the strengthen windows.
-	var tbar_style := StyleBoxFlat.new()
-	tbar_style.bg_color = Color(0.055, 0.686, 0.608, 1.0)  # #0eaf9b teal
-	tbar_style.corner_radius_top_left = 5
-	tbar_style.corner_radius_top_right = 5
-	tbar_style.content_margin_left = 5
-	tbar_style.content_margin_right = 4
-	tbar_style.content_margin_top = 2
-	tbar_style.content_margin_bottom = 2
+	# Title bar (Resurrect 64 teal) — unified white-bordered chrome.
+	var tbar_style := OSWindow.titlebar_style(Color(0.055, 0.686, 0.608, 1.0))  # #0eaf9b teal
 	var titlebar := PanelContainer.new()
 	titlebar.add_theme_stylebox_override("panel", tbar_style)
 	col.add_child(titlebar)
@@ -466,49 +452,54 @@ func _refresh_gold() -> void:
 		text = "Gold %d" % GameState.gold
 	_gold_label.text = text
 	if _gold_center_label != null:
-		_gold_center_label.text = text
+		# Coin icon already signals "gold" → show just the number (+ income).
+		if _income_per_sec > 0:
+			_gold_center_label.text = "%d  +%d/s" % [GameState.gold, _income_per_sec]
+		else:
+			_gold_center_label.text = "%d" % GameState.gold
 		_reposition_gold_center()
 
 
-# ─── Top-center gold readout (always visible) ──────────────────────────
+# ─── Gold chip — TOP-LEFT, right where gold is SPENT (the placement dock) ──
+## Gold's most-used spot is enemy placement on the left, so the readout lives there
+## (big + bright), not in a far corner. Unified white-bordered window chrome.
 func _build_gold_center() -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.09, 0.04, 0.9)
-	style.set_border_width_all(1)
-	style.border_color = Color(1.0, 0.84, 0.3, 0.85)
-	style.set_corner_radius_all(6)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-	style.shadow_color = Color(0, 0, 0, 0.4)
-	style.shadow_size = 4
+	var style := OSWindow.body_style(Color(0.1, 0.09, 0.04, 0.95))  # white border, gold-dark fill
+	style.content_margin_left = 6
+	style.content_margin_right = 7
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
 	_gold_center = PanelContainer.new()
 	_gold_center.add_theme_stylebox_override("panel", style)
 	_gold_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 3)
+	_gold_center.add_child(row)
+	var coin := TextureRect.new()
+	coin.texture = load("res://assets/sprites/icons/gold.png")
+	coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin.custom_minimum_size = Vector2(12, 12)
+	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(coin)
 	_gold_center_label = Label.new()
 	_gold_center_label.add_theme_font_override("font", HUD_FONT)
-	_gold_center_label.add_theme_font_size_override("font_size", 16)  # big — top priority
+	_gold_center_label.add_theme_font_size_override("font_size", 14)  # big — top priority
 	_gold_center_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 1.0))
 	_gold_center_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	_gold_center_label.add_theme_constant_override("shadow_offset_x", 1)
 	_gold_center_label.add_theme_constant_override("shadow_offset_y", 1)
-	_gold_center_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gold_center_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_gold_center_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_gold_center.add_child(_gold_center_label)
+	row.add_child(_gold_center_label)
 	add_child(_gold_center)
-	_gold_center.position = Vector2(280.0, 6.0)
+	_gold_center.position = Vector2(5.0, 17.0)  # top-left, below the menu bar, above the dock
 
 
-## Keep the pill centered on the play field as its width changes with the number.
+## Pinned top-left (grows rightward as the number widens).
 func _reposition_gold_center() -> void:
-	if _gold_center == null:
-		return
-	await get_tree().process_frame
-	if _gold_center == null:
-		return
-	var center_x: float = VIEWPORT_DESIGN_WIDTH * 0.5  # true viewport center
-	_gold_center.position = Vector2(center_x - _gold_center.size.x * 0.5, 6.0)
+	if _gold_center != null:
+		_gold_center.position = Vector2(5.0, 17.0)
 
 
 func _on_debug_gold_button_pressed() -> void:

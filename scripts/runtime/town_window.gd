@@ -345,22 +345,14 @@ func _on_backdrop_input(event: InputEvent) -> void:
 
 # ─── Styles ────────────────────────────────────────────────────────────
 func _window_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = WINDOW_BG
-	s.set_corner_radius_all(8)
-	s.set_border_width_all(2)
-	s.border_color = ACCENT.darkened(0.1)
-	s.shadow_color = Color(0, 0, 0, 0.55)
+	var s := OSWindow.body_style(WINDOW_BG)  # unified white border + small corners
 	s.shadow_size = 10
 	s.set_content_margin_all(0)
 	return s
 
 
 func _titlebar_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = ACCENT
-	s.corner_radius_top_left = 6
-	s.corner_radius_top_right = 6
+	var s := OSWindow.titlebar_style(ACCENT)
 	s.content_margin_left = 7
 	s.content_margin_right = 5
 	s.content_margin_top = 4

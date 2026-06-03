@@ -9,14 +9,14 @@ extends Control
 ##   Sits just above the field (layer 1) and below all the toggleable app windows.
 
 const PANEL_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
-const WALLPAPER: Color = Color(0.29, 0.47, 0.78, 1.0)    ## desktop blue (matches WallpaperLayer)
+const WALLPAPER: Color = Color(0.07, 0.08, 0.11, 1.0)    ## dark void (matches WallpaperLayer)
 const TITLEBAR: Color = Color(0.18, 0.133, 0.184, 1.0)   ## #2e222f window chrome
-const BORDER: Color = Color(0.05, 0.04, 0.06, 0.6)
-const TITLE_TEXT: Color = Color(0.93, 0.94, 0.96, 1.0)
+const BORDER: Color = Color(0.96, 0.97, 0.99, 1.0)       ## shared white window edge (OSWindow.BORDER)
+const TITLE_TEXT: Color = Color(0.96, 0.97, 0.99, 1.0)
 
-## Field "window" inset within the 640×360 desktop. Left margin clears most of the
-## tool dock; right margin holds the desktop icons; top clears the menu bar.
-const FIELD_RECT: Rect2 = Rect2(14.0, 19.0, 584.0, 326.0)
+## Field "window" — WIDE again: it fills the central area between the side panels
+## (the dynamic hero/enemy movement needs room). Cards float on top, screen-fixed.
+const FIELD_RECT: Rect2 = Rect2(126.0, 17.0, 396.0, 341.0)
 const TITLEBAR_H: float = 12.0
 const VIEWPORT: Vector2 = Vector2(640.0, 360.0)
 
@@ -35,7 +35,7 @@ func _build() -> void:
 	_band(0.0, fr.position.y, fr.position.x, fr.size.y)                         # left
 	_band(fr.end.x, fr.position.y, VIEWPORT.x - fr.end.x, fr.size.y)            # right
 	_window_border(fr)
-	_titlebar(fr)
+	# (Field titlebar / traffic lights removed — no OS chrome on the stage.)
 
 
 func _band(x: float, y: float, w: float, h: float) -> void:

@@ -8,7 +8,7 @@ extends RefCounted
 # ─── Right panel (강화 상점 / 마을 격자) ───────────────────────────────
 ## Tuned to match the left dock's small, neat feel. HIERARCHY: name = base,
 ## numbers (value/cost) are SMALLER (secondary info), section labels smallest.
-const RIGHT_PANEL_WIDTH: float = 88.0      ## ~2× the left dock — balanced, wider field
+const RIGHT_PANEL_WIDTH: float = 115.0     ## the dedicated 강화/장비 zone (525–640) — DOS tab list
 const PANEL_CONTENT_MARGIN: int = 4
 const LIST_SEPARATION: int = 3
 const FONT_GOLD: int = 10                 ## "Gold N" header

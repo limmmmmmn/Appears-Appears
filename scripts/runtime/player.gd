@@ -13,8 +13,9 @@ extends CharacterBody2D
 @export var camera_world_position: Vector2 = Vector2(320.0, 180.0)
 ## When no WASD input is detected, auto-walk toward the nearest valid field enemy.
 @export var auto_move_to_enemies: bool = true
-## How fast the follow-camera eases toward the hero (higher = snappier).
-const CAMERA_SMOOTHING_SPEED: float = 6.0
+## How fast the follow-camera eases toward the hero (higher = snappier). Kept
+## gentle so the roam doesn't feel jerky / nauseating.
+const CAMERA_SMOOTHING_SPEED: float = 4.0
 ## Below this magnitude of input we consider the player to be idle and let
 ## auto-move take over. Just above zero so digital keys still feel snappy.
 const MANUAL_INPUT_THRESHOLD: float = 0.1

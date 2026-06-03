@@ -16,15 +16,17 @@ const ACCENT: Color = Color(0.055, 0.686, 0.608, 1.0)   ## teal logo
 const BAR_HEIGHT: float = 15.0
 const VIEWPORT_W: float = 640.0
 
-## (label, target window group). Empty group = inert identity menu (Stage 1).
+## (label, target window group). Empty group = inert identity menu. The launchers
+## (강화/마을/인벤) toggle their app windows — the single launch point (no separate
+## desktop-icon column → less clutter).
 const MENUS: Array = [
 	{"text": "필드", "group": &""},
 	{"text": "강화", "group": &"upgrade_window"},
 	{"text": "마을", "group": &"town_window"},
+	{"text": "인벤", "group": &"inventory_window"},
 	{"text": "도움말", "group": &""},
 ]
 
-var _gold_label: Label
 var _level_label: Label
 
 
@@ -36,7 +38,6 @@ func _ready() -> void:
 	offset_bottom = BAR_HEIGHT
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build()
-	EventBus.gold_changed.connect(_on_gold_changed.unbind(1))
 	EventBus.party_member_xp_changed.connect(_on_any_change.unbind(4))
 	EventBus.party_changed.connect(_on_any_change)
 	_refresh_status()
@@ -64,16 +65,14 @@ func _build() -> void:
 	for menu: Dictionary in MENUS:
 		row.add_child(_menu_item(str(menu["text"]), StringName(menu["group"])))
 
-	# Right-aligned status (gold + hero level), macOS-clock style.
+	# Right-aligned status (hero level), macOS-clock style. (Gold moved to the
+	# left placement zone where it's actually spent.)
 	var push := Control.new()
 	push.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	push.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(push)
 	_level_label = _label("Lv 1", 9, TEXT)
 	row.add_child(_level_label)
-	row.add_child(_label("│", 9, Color(1, 1, 1, 0.25)))
-	_gold_label = _label("◆ 0", 9, GOLD)
-	row.add_child(_gold_label)
 	row.add_child(_spacer(4))
 
 
@@ -106,18 +105,11 @@ func _toggle_group(group: StringName) -> void:
 		w.call("open")
 
 
-func _on_gold_changed() -> void:
-	if _gold_label != null:
-		_gold_label.text = "◆ %d" % GameState.gold
-
-
 func _on_any_change() -> void:
 	_refresh_status()
 
 
 func _refresh_status() -> void:
-	if _gold_label != null:
-		_gold_label.text = "◆ %d" % GameState.gold
 	if _level_label != null and GameState.party_size() > 0:
 		_level_label.text = "Lv %d" % GameState.party_level(0)
 

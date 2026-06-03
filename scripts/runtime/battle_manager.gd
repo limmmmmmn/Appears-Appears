@@ -33,6 +33,32 @@ const LEFT_BAR_WIDTH: float = 46.0
 ## Top inset so battle windows don't slide under the OS menu bar.
 const MENU_BAR_INSET: float = 17.0
 
+## Battle windows tile into the 8 PERIMETER slots of a 3×3 grid (slot 5 = the
+## center field). New windows take a random least-occupied slot; once each holds
+## one they stack (≤ MAX_PER_SLOT) with a random nudge. Screen coords (640×360).
+const SLOT_CENTERS: Array[Vector2] = [
+	Vector2(193.0, 74.0), Vector2(324.0, 74.0), Vector2(455.0, 74.0),
+	Vector2(193.0, 187.0),                      Vector2(455.0, 187.0),
+	Vector2(193.0, 300.0), Vector2(324.0, 300.0), Vector2(455.0, 300.0),
+]
+const MAX_PER_SLOT: int = 3
+## Windows stay inside this rect (off the wider DOS side panels + menu bar).
+const WINDOW_AREA: Rect2 = Rect2(128.0, 18.0, 393.0, 338.0)
+## Stack-chain: the "파파파" stagger between sequential flips; merge bonus = this
+## fraction of the chain's total gold per EXTRA card (2 cards → +12%, 3 → +24% …).
+const CHAIN_GAP: float = 0.13
+const STACK_BONUS_PER_EXTRA: float = 0.12
+var _slot_counts: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0]
+var _window_slot: Dictionary = {}    ## BattleWindow -> slot index
+var _slot_windows: Dictionary = {}   ## slot index -> Array[BattleWindow] (bottom→top)
+var _slot_base: Array[Vector2] = []  ## per-slot MOVABLE base position (init = SLOT_CENTERS)
+## Active manual drag (whole stack moves as one).
+var _drag_slot: int = -1
+var _drag_mouse_start: Vector2 = Vector2.ZERO
+var _drag_delta: Vector2 = Vector2.ZERO
+var _drag_card_starts: Dictionary = {}  ## window -> position at grab time
+var _drag_moved: bool = false
+
 
 ## Play area right edge = viewport minus the right panel. Read at runtime from
 ## UITheme so narrowing the panel automatically widens the field.
@@ -51,6 +77,8 @@ func _ready() -> void:
 	# GameState.can_accept_new_battle_window() looks us up by group to read
 	# active_window_count() against the multi-window cap.
 	add_to_group("battle_manager")
+	for c: Vector2 in SLOT_CENTERS:
+		_slot_base.append(c)  # each slot starts at its grid center, then is movable
 	EventBus.enemy_encountered.connect(_on_enemy_encountered)
 	EventBus.combo_attack_damage_requested.connect(_on_combo_attack_damage_requested)
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
@@ -62,17 +90,19 @@ func _process(delta: float) -> void:
 	# Drive the downed → refill → auto-stand cycle every frame (runs even between
 	# fights so knocked-out members always recover). No passive regen otherwise.
 	GameState.tick_downed_recovery(delta)
-	if _window_rects.is_empty():
-		return
-	_settle_timer += delta
-	_tick_collision_cooldowns(delta)
-	_tick_party_collision_cooldowns(delta)
-	_apply_window_push(delta)
+	# Windows now sit in fixed 3×3 grid slots (no drift/push) — they stay put as
+	# stacked floating cards, so the eye stays on the content.
 
 
 ## How many battle windows the cap should treat as "fighting right now".
 ## Excludes chest windows (reward boxes) since their fight is over — they just
 ## linger until the player hovers them open.
+## All live windows (fighting OR sitting as flippable reward cards). The deadlock
+## check uses this so pending reward cards aren't mistaken for a stuck run.
+func pending_window_count() -> int:
+	return _window_rects.size()
+
+
 func active_window_count() -> int:
 	var count: int = 0
 	for window in _window_rects.keys():
@@ -92,6 +122,9 @@ func _on_battle_window_resolved(window: Node) -> void:
 	if _modal_windows.has(window):
 		_modal_windows.erase(window)
 		GameState.end_field_battle_pause()
+	# A card finished its fight → maybe its stack is now fully openable.
+	if _window_slot.has(window):
+		_update_slot_readiness(int(_window_slot[window]))
 
 
 # ─── Spawning ─────────────────────────────────────────────────────────
@@ -129,12 +162,18 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 	var drop_world: Vector2 = source.global_position if source != null and is_instance_valid(source) else Vector2.INF
 	window.setup(data, drop_world, MODAL_WINDOW_SIZE_MULTIPLIER if is_modal_battle else 1.0)
 	var window_size: Vector2 = window.get_expected_window_size()
-	# Compute the spawn in WORLD space (relative to the hero/enemy), then fold in
-	# the camera so the window opens at the matching SCREEN spot and stays there.
-	var spawn_world: Vector2 = _encounter_midpoint_position(window_size, source) if is_modal_battle else _spawn_position_for_encounter(window_size, source, at_source_position)
-	var spawn_position: Vector2 = _world_to_screen(spawn_world)
-	# Keep the whole window inside the on-screen play area (between the side panels).
-	spawn_position = _clamp_position_to_play_area(spawn_position, window_size)
+	# Drop the window into a 3×3 perimeter grid slot (random least-occupied), stacking
+	# with a random nudge once each slot has one. Screen-fixed, no drift.
+	var slot: int = _pick_slot()
+	var count: int = _slot_counts[slot]
+	_slot_counts[slot] = count + 1
+	_window_slot[window] = slot
+	if not _slot_windows.has(slot):
+		_slot_windows[slot] = []
+	_slot_windows[slot].append(window)
+	if window.has_signal("grab_started"):
+		window.grab_started.connect(_on_grab_started)
+	var spawn_position: Vector2 = _slot_position(slot, count, window_size)
 	window.position = spawn_position
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
@@ -143,9 +182,260 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 		GameState.begin_field_battle_pause()
 	_window_parent().add_child(window)
 	window.play_open_intro()
-	if not is_modal_battle:
-		_apply_window_push(0.0, true)
+	_update_slot_readiness(slot)  # a fresh fight in the slot → stack not openable yet
 	return window
+
+
+# ─── Stack = chain explosion ───────────────────────────────────────────
+## A slot's stack only opens when EVERY card in it has resolved; then only the TOP
+## card is the clickable opener (covered/fighting cards stay inert).
+func _update_slot_readiness(slot: int) -> void:
+	if slot < 0 or not _slot_windows.has(slot):
+		return
+	var ws: Array = []
+	for w in _slot_windows[slot]:
+		if is_instance_valid(w):
+			ws.append(w)
+	_slot_windows[slot] = ws
+	if ws.is_empty():
+		return
+	var all_resolved: bool = true
+	for w in ws:
+		if not (w.has_method("is_resolved") and w.is_resolved()):
+			all_resolved = false
+			break
+	var top = ws[ws.size() - 1]
+	for w in ws:
+		if w.has_method("set_chain_ready"):
+			w.set_chain_ready(w == top and all_resolved, ws.size())
+
+
+# ─── Manual drag: free move + whole-stack (solitaire) move ─────────────
+## Press a card → grab its WHOLE stack. Release without moving = click (open).
+func _on_grab_started(window: Node, screen_pos: Vector2) -> void:
+	if _drag_slot >= 0 or not _window_slot.has(window):
+		return
+	var slot: int = int(_window_slot[window])
+	if not _slot_windows.has(slot) or _slot_windows[slot].is_empty():
+		return
+	_drag_slot = slot
+	_drag_mouse_start = screen_pos
+	_drag_delta = Vector2.ZERO
+	_drag_moved = false
+	_drag_card_starts.clear()
+	for w in _slot_windows[slot]:
+		if is_instance_valid(w):
+			_drag_card_starts[w] = w.position
+			if w.get_parent() != null:
+				w.get_parent().move_child(w, -1)  # whole stack to front while moving
+
+
+func _input(event: InputEvent) -> void:
+	if _drag_slot < 0:
+		return
+	if event is InputEventMouseMotion:
+		_drag_delta = event.global_position - _drag_mouse_start
+		if _drag_delta.length() > 4.0:
+			_drag_moved = true
+		for w in _drag_card_starts:
+			if is_instance_valid(w):
+				w.position = _clamp_loose(_drag_card_starts[w] + _drag_delta, w.size)
+				_window_rects[w] = Rect2(w.position, w.size)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		_end_drag()
+
+
+func _end_drag() -> void:
+	var slot: int = _drag_slot
+	_drag_slot = -1
+	if slot < 0:
+		return
+	if not _drag_moved:
+		# A click (no movement) → open the stack if it's fully resolved.
+		if _is_slot_ready(slot):
+			_open_stack(slot)
+		return
+	# A real move. Dropped onto another stack → merge; else keep the free position
+	# (shift the slot's logical base so new cards cascade from the new spot).
+	var target: int = _find_merge_target(slot)
+	if target >= 0:
+		_merge_slots(slot, target)
+	elif slot < _slot_base.size():
+		_slot_base[slot] += _drag_delta
+
+
+## First OTHER non-empty slot whose top card overlaps the dragged stack's top.
+func _find_merge_target(from_slot: int) -> int:
+	if not _slot_windows.has(from_slot) or _slot_windows[from_slot].is_empty():
+		return -1
+	var top = _slot_windows[from_slot].back()
+	if not is_instance_valid(top):
+		return -1
+	var top_rect := Rect2(top.position, top.size)
+	for s in SLOT_CENTERS.size():
+		if s == from_slot or not _slot_windows.has(s) or _slot_windows[s].is_empty():
+			continue
+		var other = _slot_windows[s].back()
+		if is_instance_valid(other) and top_rect.intersects(Rect2(other.position, other.size)):
+			return s
+	return -1
+
+
+## Move every card of `from` onto `to` (preserving order), re-cascade, reset `from`.
+func _merge_slots(from_slot: int, to_slot: int) -> void:
+	var moving: Array = _slot_windows[from_slot].duplicate()
+	for w in moving:
+		if not is_instance_valid(w):
+			continue
+		_slot_windows[from_slot].erase(w)
+		_slot_counts[from_slot] = maxi(0, _slot_counts[from_slot] - 1)
+		_slot_windows[to_slot].append(w)
+		_slot_counts[to_slot] += 1
+		_window_slot[w] = to_slot
+		var idx: int = _slot_counts[to_slot] - 1
+		w.position = _slot_position(to_slot, idx, w.size)
+		_window_rects[w] = Rect2(w.position, w.size)
+		if w.get_parent() != null:
+			w.get_parent().move_child(w, -1)
+	if from_slot < _slot_base.size():
+		_slot_base[from_slot] = SLOT_CENTERS[from_slot]  # emptied → reset its base
+	_update_slot_readiness(from_slot)
+	_update_slot_readiness(to_slot)
+
+
+func _clamp_loose(pos: Vector2, win_size: Vector2) -> Vector2:
+	# Keep the card mostly on screen (so a moved stack can't be lost off-edge).
+	return Vector2(
+		clampf(pos.x, 8.0, 632.0 - win_size.x),
+		clampf(pos.y, 16.0, 354.0 - win_size.y)
+	)
+
+
+## Chain-flip the whole stack top→bottom ("파파파"), tally rewards, then a merge
+## bonus pop, then fade them all out together.
+func _open_stack(slot: int) -> void:
+	if not _slot_windows.has(slot):
+		return
+	var ws: Array = []
+	for w in _slot_windows[slot]:
+		if is_instance_valid(w) and w.has_method("is_resolved") and w.is_resolved():
+			ws.append(w)
+	if ws.is_empty():
+		return
+	ws.reverse()  # top (newest) first
+	var count: int = ws.size()
+	var total_gold: int = 0
+	for w in ws:
+		if not is_instance_valid(w):
+			continue
+		var reward: Dictionary = w.reveal_and_grant()
+		total_gold += int(reward.get("gold", 0))
+		await get_tree().create_timer(CHAIN_GAP).timeout
+	# Merge bonus (more stacked → bigger), popped at the slot center.
+	if count >= 2:
+		var bonus: int = int(round(float(total_gold) * STACK_BONUS_PER_EXTRA * float(count - 1)))
+		if bonus > 0:
+			GameState.add_gold(bonus)
+			_spawn_bonus_popup(SLOT_CENTERS[slot], bonus)
+	for w in ws:
+		if is_instance_valid(w):
+			w.chain_close(0.25 if count >= 2 else 0.1)
+
+
+func _spawn_bonus_popup(center: Vector2, amount: int) -> void:
+	var lbl := Label.new()
+	lbl.text = "팡!  +%d" % amount
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.32, 1.0))
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.size = Vector2(88.0, 16.0)
+	lbl.position = center - Vector2(44.0, 8.0)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.pivot_offset = Vector2(44.0, 8.0)
+	lbl.scale = Vector2(0.2, 0.2)
+	lbl.z_index = 100
+	_window_parent().add_child(lbl)
+	var t := create_tween()
+	t.tween_property(lbl, "scale", Vector2(1.4, 1.4), 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.tween_property(lbl, "scale", Vector2.ONE, 0.1)
+	t.tween_interval(0.35)
+	t.parallel().tween_property(lbl, "position:y", lbl.position.y - 14.0, 0.35)
+	t.parallel().tween_property(lbl, "modulate:a", 0.0, 0.35)
+	t.tween_callback(lbl.queue_free)
+
+
+## Pick a perimeter slot: the least-occupied one (random tiebreak); if all are at
+## MAX_PER_SLOT, just spread randomly so windows never refuse to open.
+func _pick_slot() -> int:
+	# Eligible = not full AND not already openable, so a new card NEVER joins (and
+	# re-locks) a resolved/ready stack. A slot seals once it's full (MAX) OR all its
+	# cards have resolved → new enemies start/extend a different (still-building) stack.
+	var slot: int = _least_occupied_eligible(true)
+	if slot >= 0:
+		return slot
+	# Fallback: every slot is full or ready (rare hoard) → least-occupied non-full…
+	slot = _least_occupied_eligible(false)
+	if slot >= 0:
+		return slot
+	return randi() % SLOT_CENTERS.size()  # …or random overlap if all 8 are full.
+
+
+## Least-occupied non-full slot (random tiebreak). When `skip_ready`, also skip
+## slots that are already openable (all cards resolved) so they stay clickable.
+func _least_occupied_eligible(skip_ready: bool) -> int:
+	var min_count: int = MAX_PER_SLOT + 1
+	for i in SLOT_CENTERS.size():
+		if _slot_counts[i] >= MAX_PER_SLOT:
+			continue
+		if skip_ready and _is_slot_ready(i):
+			continue
+		min_count = mini(min_count, _slot_counts[i])
+	if min_count > MAX_PER_SLOT:
+		return -1
+	var candidates: Array[int] = []
+	for i in SLOT_CENTERS.size():
+		if _slot_counts[i] >= MAX_PER_SLOT:
+			continue
+		if skip_ready and _is_slot_ready(i):
+			continue
+		if _slot_counts[i] == min_count:
+			candidates.append(i)
+	if candidates.is_empty():
+		return -1
+	return candidates[randi() % candidates.size()]
+
+
+## A slot is "ready" (openable) when it holds ≥1 card and ALL of them are resolved.
+func _is_slot_ready(slot: int) -> bool:
+	if not _slot_windows.has(slot):
+		return false
+	var has_card: bool = false
+	for w in _slot_windows[slot]:
+		if not is_instance_valid(w):
+			continue
+		has_card = true
+		if not (w.has_method("is_resolved") and w.is_resolved()):
+			return false
+	return has_card
+
+
+## Screen position for a window in `slot`. The Nth window in a slot gets a random
+## nudge (scaled by N) so the stack reads as separate floating cards.
+func _slot_position(slot: int, stack_index: int, window_size: Vector2) -> Vector2:
+	var center: Vector2 = _slot_base[slot] if slot < _slot_base.size() else SLOT_CENTERS[slot]
+	# Diagonal cascade (down-right) so the stack fans like a dealt hand — the newest
+	# card sits front + offset, older cards peek out behind it.
+	var nudge := Vector2(6.0, 6.0) * float(stack_index) + Vector2(randf_range(-1.5, 1.5), randf_range(-1.5, 1.5))
+	var pos: Vector2 = center - window_size * 0.5 + nudge
+	var max_x: float = maxf(WINDOW_AREA.position.x, WINDOW_AREA.end.x - window_size.x)
+	var max_y: float = maxf(WINDOW_AREA.position.y, WINDOW_AREA.end.y - window_size.y)
+	return Vector2(
+		clampf(pos.x, WINDOW_AREA.position.x, max_x),
+		clampf(pos.y, WINDOW_AREA.position.y, max_y)
+	)
 
 
 func _centered_modal_position(window_size: Vector2) -> Vector2:
@@ -519,12 +809,16 @@ func _visible_world_rect() -> Rect2:
 ## roam freely and the windows stay pinned to the viewport. This is the on-screen
 ## play area: the viewport minus the left dock and the right shop panel.
 func _play_area_screen_rect() -> Rect2:
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var play_width: float = minf(viewport_size.x, _play_area_right_edge()) - LEFT_BAR_WIDTH
-	# Inset the top below the OS menu bar so windows float on the desktop work area
-	# (over the field app window), not under the menu bar.
-	var top: float = MENU_BAR_INSET
-	return Rect2(Vector2(LEFT_BAR_WIDTH, top), Vector2(maxf(1.0, play_width), maxf(1.0, viewport_size.y - top)))
+	# Confine battle windows to the CENTRAL field "app window" (inside its titlebar)
+	# so all the MOVEMENT (hero + enemies + fights) stays in the center — the side
+	# panels stay calm. Mirrors DesktopFrame.FIELD_RECT.
+	var fr: Rect2 = DesktopFrame.FIELD_RECT
+	var pad: float = 3.0
+	var top: float = fr.position.y + DesktopFrame.TITLEBAR_H + pad
+	return Rect2(
+		Vector2(fr.position.x + pad, top),
+		Vector2(maxf(1.0, fr.size.x - pad * 2.0), maxf(1.0, fr.end.y - top - pad))
+	)
 
 
 ## World point → on-screen pixel (folds in the follow camera's transform), so an
@@ -575,6 +869,15 @@ func _on_battle_window_closed(window: Node) -> void:
 		return
 	_window_rects.erase(window)
 	_window_velocities.erase(window)
+	# Free the grid slot so a later window can reuse it.
+	if _window_slot.has(window):
+		var slot: int = _window_slot[window]
+		if slot >= 0 and slot < _slot_counts.size():
+			_slot_counts[slot] = maxi(0, _slot_counts[slot] - 1)
+		if _slot_windows.has(slot):
+			_slot_windows[slot].erase(window)
+			_update_slot_readiness(slot)  # a card leaving may expose a new top
+		_window_slot.erase(window)
 	if _modal_windows.has(window):
 		_modal_windows.erase(window)
 		GameState.end_field_battle_pause()

@@ -36,7 +36,7 @@ const ACTOR_ENEMY: int = 1
 
 ## Min window size (ratio-fit floor). Was bumped to 176×132 for the (now removed)
 ## manual-combat command row; restored to the compact 4:3 the field was tuned for.
-const BASE_WINDOW_SIZE: Vector2 = Vector2(128.0, 96.0)
+const BASE_WINDOW_SIZE: Vector2 = Vector2(104.0, 78.0)  ## ~20% smaller — compact, dice-like card
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -54,9 +54,9 @@ const BASE_ENEMY_REPEAT_CHANCE: float = 0.68
 const STRONGER_SUPPORT_CHANCE: float = 0.06
 const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
-const DEFAULT_WINDOW_BG: Color = Color(0.0, 0.0, 0.0, 1.0)
-const DQ_WINDOW_BG: Color = Color(0.0, 0.0, 0.0, 1.0)
-const DQ_WINDOW_BORDER: Color = Color(1.0, 1.0, 1.0, 1.0)
+const DEFAULT_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)  ## = field green
+const DQ_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)
+const DQ_WINDOW_BORDER: Color = Color(0.96, 0.97, 0.99, 1.0)     ## white window edge (still distinct)
 const DQ_WINDOW_TEXT: Color = Color(1.0, 1.0, 1.0, 1.0)
 const LOG_STEP_DURATION: float = 0.46
 const ENEMY_TIER_BY_ID: Dictionary = {
@@ -76,6 +76,9 @@ const CHEST_SHRINK_DURATION: float = 0.3
 const CHEST_OPEN_DURATION: float = 0.22
 const CHEST_REVEAL_LINGER: float = 1.2
 const CHEST_CLOSE_FADE: float = 0.32
+## Flip-to-claim card: how long the revealed reward lingers before the card fades.
+const CARD_REVEAL_LINGER: float = 0.95
+const CARD_BACK_BG: Color = Color(0.16, 0.12, 0.05, 1.0)  ## fancy dark-gold card back
 ## How many bonus gold the victory itself grants on top of enemy drops.
 const VICTORY_GOLD_BONUS: int = 1
 const GOLD_ICON: Texture2D = preload("res://assets/sprites/icons/gold.png")
@@ -113,6 +116,16 @@ var _open_tween: Tween
 # Chest state (replaces the immediate "close-after-logs" path).
 var _pending_chest: bool = false
 var _chest_state: int = ChestState.NONE
+## Flip-to-claim card state (post-victory).
+var _flippable: bool = false
+var _flipping: bool = false
+var _flip_hint: Label
+var _chain_ready: bool = false  ## TOP of a fully-resolved stack → clickable
+var _card_back: Control
+
+## The player pressed this card → BattleManager owns the gesture from here: a
+## release without movement = click (open the stack), a drag = move the whole stack.
+signal grab_started(window: BattleWindow, screen_pos: Vector2)
 var _chest_root: Control
 var _chest_hover_progress: float = 0.0
 var _chest_hover_bar: ProgressBar
@@ -123,10 +136,17 @@ var _initiative: int = 0
 var _initiative_pending: bool = true
 
 func _ready() -> void:
-	_name_label.hide()
+	_name_label.show()  # enemy name = the window's small title
 	_hp_label.hide()
 	_log_label.add_theme_font_size_override("font_size", UITheme.FONT_BATTLE_LOG)
 	_apply_card_color_chrome()
+	# The card root catches mouse (drag to move/stack, click to flip); its children
+	# pass through so the root owns the gesture.
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	for child: Node in [_background, _background_image, _name_label, _hp_label, _log_panel, _log_label]:
+		if child is Control:
+			(child as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gui_input.connect(_on_window_gui_input)
 	_turn_timer.wait_time = turn_interval * GameState.battle_turn_interval_multiplier()
 	_turn_timer.timeout.connect(_on_turn_tick)
 	_spawn_enemy()
@@ -174,12 +194,8 @@ func is_opening() -> bool:
 func play_open_intro() -> void:
 	var rest_position: Vector2 = position
 	pivot_offset = size * 0.5
-	# `_field_drop_position` is a WORLD point (the encounter spot). This window lives
-	# on a screen-space CanvasLayer, so fold in the camera to zoom open from the
-	# matching on-screen spot.
+	# Pop open in place at the assigned grid slot (the spawner placed `position`).
 	var origin: Vector2 = rest_position + size * 0.5
-	if _field_drop_position != Vector2.INF:
-		origin = get_viewport().get_canvas_transform() * _field_drop_position
 	position = origin - size * 0.5
 	scale = Vector2(0.1, 0.1)
 	modulate.a = 0.0
@@ -353,8 +369,10 @@ func _play_window_color_flash(flash_color: Color) -> void:
 func _apply_card_color_chrome() -> void:
 	_background.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
 	_log_panel.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
+	# Hide the green field-poster texture so the window reads as a distinct dark,
+	# white-bordered "app window" — not another patch of grass.
 	if _background_image:
-		_background_image.modulate = Color.WHITE
+		_background_image.visible = false
 	_apply_label_color(_log_label, DQ_WINDOW_TEXT)
 	_apply_label_color(_name_label, DQ_WINDOW_TEXT)
 	_apply_label_color(_hp_label, DQ_WINDOW_TEXT)
@@ -368,6 +386,7 @@ func _flat_panel_style(bg: Color, border: Color) -> StyleBoxFlat:
 	style.border_width_right = 1
 	style.border_width_bottom = 1
 	style.border_color = border
+	style.set_corner_radius_all(3)  # 끝만 살짝 — unified app-window corners
 	style.anti_aliasing = false
 	return style
 
@@ -696,7 +715,7 @@ func _drain_log_queue() -> void:
 	_log_sequence_running = false
 	if _pending_chest and _chest_state == ChestState.NONE:
 		_pending_chest = false
-		_drop_rewards_and_close()
+		_enter_flip_card_state()
 
 
 ## Reward = loot DROPPED on the field (no chest, no hover). The window bursts away
@@ -722,6 +741,189 @@ func _finish_drop_close() -> void:
 		return
 	# BattleManager._on_battle_window_closed claims + drops the gold/items + XP.
 	EventBus.battle_window_closed.emit(self)
+	queue_free()
+
+
+# ─── Flip-to-claim card (post-victory reward) ──────────────────────────
+## Fight won → the card sits face-up. It only OPENS once EVERY card in its stack is
+## resolved; BattleManager drives the chain (top→bottom) + the merge bonus.
+func _enter_flip_card_state() -> void:
+	if _close_started or _flippable or _flipping:
+		return
+	_running = false
+	_turn_timer.stop()
+	_flippable = true
+	# Build the hint FIRST, then announce resolve — the manager's readiness update
+	# calls set_chain_ready and needs the hint to already exist.
+	_build_flip_hint()
+	# Fight resolved → release modal pause + stop counting toward the multi cap.
+	EventBus.battle_window_resolved.emit(self)
+
+
+## Resolved (battle done) and not yet flipping/opened.
+func is_resolved() -> bool:
+	return _flippable and not _flipping
+
+
+## A small "까기" hint (direct child) shown when this card is the openable TOP of a
+## stack. Input is handled on the window root: click = flip, drag = move/stack.
+func _build_flip_hint() -> void:
+	_flip_hint = Label.new()
+	_flip_hint.text = "까기 ▸"
+	_flip_hint.add_theme_font_size_override("font_size", 7)
+	_flip_hint.add_theme_color_override("font_color", Color(1.0, 0.96, 0.6, 1.0))
+	_flip_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_flip_hint.add_theme_constant_override("shadow_offset_x", 1)
+	_flip_hint.add_theme_constant_override("shadow_offset_y", 1)
+	_flip_hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_flip_hint.offset_top = -10.0
+	_flip_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_flip_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flip_hint.visible = false
+	add_child(_flip_hint)
+
+
+## BattleManager: the TOP card of a fully-resolved stack becomes openable.
+func set_chain_ready(ready: bool, stack_count: int = 1) -> void:
+	_chain_ready = ready
+	if _flip_hint != null and not _flipping:
+		_flip_hint.text = ("%d장 까기 ▸" % stack_count) if stack_count >= 2 else "까기 ▸"
+		_flip_hint.visible = ready
+
+
+# ─── Input: press hands the gesture to BattleManager (click vs drag) ───
+func _on_window_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and not _flipping:
+		grab_started.emit(self, event.global_position)
+
+
+## Reveal + grant THIS card's reward (flip animation), returning the reward so the
+## chain can tally the merge bonus. Does NOT close — the chain calls chain_close.
+func reveal_and_grant() -> Dictionary:
+	if _flipping or not _flippable:
+		return {"gold": 0, "xp": 0, "items": []}
+	_flippable = false
+	_flipping = true
+	_close_started = true
+	if _flip_hint != null:
+		_flip_hint.queue_free()
+		_flip_hint = null
+	var reward: Dictionary = _grant_reward()
+	_build_card_back(reward)
+	pivot_offset = size * 0.5
+	var t := create_tween()
+	# Flip: squash X to a sliver (pop Y for life), swap to the back, snap open.
+	t.tween_property(self, "scale:x", 0.04, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	t.parallel().tween_property(self, "scale:y", 1.16, 0.1).set_trans(Tween.TRANS_QUAD)
+	t.tween_callback(_swap_to_back)
+	t.tween_property(self, "scale:x", 1.0, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.parallel().tween_property(self, "scale:y", 1.0, 0.16).set_trans(Tween.TRANS_BACK)
+	return reward
+
+
+## Fade out + close (the chain calls this after the reward lingers).
+func chain_close(delay: float) -> void:
+	var t := create_tween()
+	t.tween_interval(delay)
+	t.tween_property(self, "modulate:a", 0.0, 0.26)
+	t.tween_callback(_finish_flip_close)
+
+
+## Grant the accumulated reward straight into GameState (flip = reveal + claim),
+## then the claim funcs return 0/empty so BattleManager drops nothing on close.
+func _grant_reward() -> Dictionary:
+	var gold: int = claim_gold_drops()
+	var xp: int = claim_xp_reward()
+	var items: Array[ItemData] = claim_item_drops()
+	if gold > 0:
+		GameState.add_gold(gold)
+	if xp > 0:
+		GameState.add_party_xp(xp)
+	for item: ItemData in items:
+		GameState.collect_item(item, GameState.loot_level_for_item(item))
+	return {"gold": gold, "xp": xp, "items": items}
+
+
+func _swap_to_back() -> void:
+	# Hide the combat front, restyle the panel as the fancy gold card back.
+	if _enemy_anchor != null:
+		_enemy_anchor.visible = false
+	if _name_label != null:
+		_name_label.visible = false
+	if _hp_label != null:
+		_hp_label.visible = false
+	if _log_panel != null:
+		_log_panel.visible = false
+	_background.add_theme_stylebox_override("panel", _flat_panel_style(CARD_BACK_BG, DQ_WINDOW_BORDER))
+	if _card_back != null:
+		_card_back.visible = true
+
+
+func _build_card_back(reward: Dictionary) -> void:
+	_card_back = Control.new()
+	_card_back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_card_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_back.visible = false
+	add_child(_card_back)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card_back.add_child(center)
+	var vb := VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 1)
+	center.add_child(vb)
+
+	vb.add_child(_back_label("★ 보상 ★", 7, Color(0.86, 0.82, 0.6, 1.0), HORIZONTAL_ALIGNMENT_CENTER))
+	if int(reward["gold"]) > 0:
+		var gold_row := HBoxContainer.new()
+		gold_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		gold_row.add_theme_constant_override("separation", 2)
+		var coin := TextureRect.new()
+		coin.texture = GOLD_ICON
+		coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		coin.custom_minimum_size = Vector2(13, 13)
+		coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		gold_row.add_child(coin)
+		gold_row.add_child(_back_label("+%d" % int(reward["gold"]), 15, Color(1.0, 0.86, 0.34, 1.0), HORIZONTAL_ALIGNMENT_LEFT))
+		vb.add_child(gold_row)
+	var items: Array = reward["items"]
+	if not items.is_empty():
+		var item_row := HBoxContainer.new()
+		item_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		item_row.add_theme_constant_override("separation", 2)
+		for it: ItemData in items:
+			var ico := TextureRect.new()
+			ico.texture = it.icon
+			ico.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			ico.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			ico.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ico.custom_minimum_size = Vector2(14, 14)
+			ico.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			item_row.add_child(ico)
+		vb.add_child(item_row)
+	if int(reward["xp"]) > 0:
+		vb.add_child(_back_label("+%d XP" % int(reward["xp"]), 7, Color(0.6, 0.82, 1.0, 1.0), HORIZONTAL_ALIGNMENT_CENTER))
+
+
+func _back_label(text: String, size: int, color: Color, align: int = HORIZONTAL_ALIGNMENT_CENTER) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 1)
+	l.horizontal_alignment = align
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+func _finish_flip_close() -> void:
+	if not is_inside_tree():
+		return
+	EventBus.battle_window_closed.emit(self)  # claims return 0/empty → no field drop
 	queue_free()
 
 
@@ -777,7 +979,9 @@ func _finish_collapse_lost() -> void:
 ## True while the window is sitting as a closed/opening/revealed chest. Used
 ## by BattleManager to skip drift physics on chests so the hover stays stable.
 func is_chest_active() -> bool:
-	return _chest_state != ChestState.NONE
+	# Flippable / flipping cards count too → they stop counting toward the multi-
+	# window cap (so new fights still spawn) without being freed yet.
+	return _chest_state != ChestState.NONE or _flippable or _flipping
 
 
 func _enter_chest_state() -> void:

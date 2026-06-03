@@ -36,11 +36,11 @@ const FIELD_SIZE: Vector2 = Vector2(1600, 1200)
 const BG_MARGIN: float = 1400.0
 ## Player-driven placement / refill spawns land this far from the hero — kept
 ## inside the inset field "app window" (the desktop frame hides the far edges).
-const SPAWN_NEAR_MIN: float = 56.0
-const SPAWN_NEAR_MAX: float = 138.0
-## Spawned enemies wander only within this half-extent of where they appeared, so
-## a fight doesn't slowly drift off the (now large) map.
-const ENEMY_WANDER_HALF_EXTENT: float = 130.0
+const SPAWN_NEAR_MIN: float = 48.0
+const SPAWN_NEAR_MAX: float = 150.0
+## Spawned enemies wander within this half-extent of where they appeared — the
+## field is wide again so they have room to roam.
+const ENEMY_WANDER_HALF_EXTENT: float = 110.0
 ## Left edge kept clear for the enemy-toggle bar (matches LeftEnemyBar.BAR_WIDTH)
 ## so the player + enemies stay out from under it.
 const LEFT_UI_INSET: float = 48.0

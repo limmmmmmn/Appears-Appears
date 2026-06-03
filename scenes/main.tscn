@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3 uid="uid://cqf6bpvn7qq6m"]
+[gd_scene load_steps=14 format=3 uid="uid://cqf6bpvn7qq6m"]
 
 [ext_resource type="Script" uid="uid://c6lq6ty8adwon" path="res://scripts/runtime/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://3bdh8ubp16k5" path="res://scenes/field.tscn" id="2_field"]
@@ -10,7 +10,6 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/left_enemy_bar.tscn" id="8_enemy_bar"]
 [ext_resource type="PackedScene" path="res://scenes/ui/town_window.tscn" id="9_town"]
 [ext_resource type="PackedScene" path="res://scenes/ui/menu_bar.tscn" id="10_menubar"]
-[ext_resource type="PackedScene" path="res://scenes/ui/desktop_icons.tscn" id="11_icons"]
 [ext_resource type="PackedScene" path="res://scenes/ui/narration_window.tscn" id="12_narration"]
 [ext_resource type="PackedScene" path="res://scenes/ui/desktop_frame.tscn" id="13_frame"]
 
@@ -35,7 +34,7 @@ layer = -5
 [node name="Wallpaper" type="ColorRect" parent="WallpaperLayer"]
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.29, 0.47, 0.78, 1)
+color = Color(0.07, 0.08, 0.11, 1)
 
 [node name="DesktopFrameLayer" type="CanvasLayer" parent="."]
 layer = 1
@@ -93,11 +92,6 @@ layer = 15
 layer = 3
 
 [node name="NarrationWindow" parent="NarrationLayer" instance=ExtResource("12_narration")]
-
-[node name="DesktopIconsLayer" type="CanvasLayer" parent="."]
-layer = 13
-
-[node name="DesktopIcons" parent="DesktopIconsLayer" instance=ExtResource("11_icons")]
 
 [node name="MenuBarLayer" type="CanvasLayer" parent="."]
 layer = 18
