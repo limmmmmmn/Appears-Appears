@@ -11,5 +11,4 @@ sprite = ExtResource("2_sprite")
 max_hp = 38
 attack = 6
 agility = 3
-gold_reward = 1
 xp_reward = 9

@@ -44,7 +44,12 @@ func _physics_process(delta: float) -> void:
 		_last_position = global_position
 		return
 	_remember_player_position()
-	var target_position: Vector2 = _trail_target(float(slot_index) * follow_spacing)
+	# A downed member falls to the BACK of the snake (trails behind everyone) while
+	# it's knocked out; alive members keep their normal slot spacing.
+	var slots: float = float(slot_index)
+	if _downed_visual:
+		slots = float(GameState.party_size() + slot_index)
+	var target_position: Vector2 = _trail_target(slots * follow_spacing)
 	var to_target: Vector2 = target_position - global_position
 	var dist_to_target: float = to_target.length()
 	if dist_to_target > stop_distance:

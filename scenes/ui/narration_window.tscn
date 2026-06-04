@@ -1,6 +1,88 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/narration_window.gd" id="1_nw"]
+[ext_resource type="Theme" path="res://assets/themes/ui_theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="window"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 7.0
+content_margin_bottom = 2.0
+bg_color = Color(0.29, 0.42, 0.52, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0, 0, 1)
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 2
+
+[sub_resource type="StyleBoxFlat" id="title"]
+content_margin_left = 4.0
+content_margin_top = 1.0
+content_margin_right = 4.0
+content_margin_bottom = 1.0
+bg_color = Color(0.86, 0.4, 0.45, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0, 0, 1)
 
 [node name="NarrationWindow" type="Control"]
+layout_mode = 3
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 52.0
+offset_top = -30.0
+offset_right = -52.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_nw")
+
+[node name="Window" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("window")
+clip_contents = true
+
+[node name="Row" type="HBoxContainer" parent="Window"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="PanelContainer" parent="Window/Row"]
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("title")
+
+[node name="TitleLabel" type="Label" parent="Window/Row/Title"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BarLabel"
+theme_override_colors/font_color = Color(0.95, 0.96, 0.98, 1)
+theme_override_font_sizes/font_size = 8
+text = "이야기"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="Window/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"BarLabel"
+theme_override_colors/font_color = Color(0.66, 0.68, 0.72, 1)
+theme_override_font_sizes/font_size = 9
+text = "…"
+vertical_alignment = 1
+clip_text = true

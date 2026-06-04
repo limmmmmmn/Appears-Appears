@@ -1,34 +1,42 @@
 class_name LeftEnemyBar
 extends Control
 
-## Left placement panel — DOS-style list. Gold lives in the HUD chip above; this is
-## the sectioned placement list below it:
-##     ── 적 ──        [sprite] name  price   (click → place / claim)
-##     ── 이벤트 ──     [sprite] 모닥불 price   (click → place on map)
-## A free "rescue slime" row appears at the top when the run is deadlocked.
+## Left placement panel — a compact GRID of ICON-ONLY tiles (enemies + events).
+## Click an enemy tile to SPEND GOLD and drop ONE of it on the map (random spot).
+## A tile is bright when affordable and DIMMED when too poor.
+## Hovering a tile pops a tooltip beside the panel with the name / level / cost.
+##
+## LOOK = scenes/ui/left_enemy_bar.tscn (the Box panel, grid spacing, tooltip box)
+## + scenes/ui/dos_tile.tscn (one icon tile) — editable in the editor. This script
+## is LOGIC ONLY: which tiles exist, their ON/OFF brightness, the tooltip text, and
+## what clicking does.
 
 const BONFIRE_TEX: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
 const SHRINE_TEX: Texture2D = preload("res://assets/sprites/objects/shrine.png")
+const TILE_SCENE: PackedScene = preload("res://scenes/ui/dos_tile.tscn")
 
-const PANEL_X: float = 4.0
-const PANEL_TOP: float = 36.0     ## below the menu bar + gold chip (floats over the field now)
-const PANEL_W: float = UITheme.LEFT_PANEL_WIDTH   ## smaller floating dock
+## Brightness for a tile that is ON / affordable vs OFF / unaffordable.
+const TILE_ON: Color = Color(1, 1, 1, 1)
+const TILE_OFF: Color = Color(0.4, 0.42, 0.46, 1.0)
 
-var _box: PanelContainer
-var _list: VBoxContainer
-var _rows: Array[Dictionary] = []          ## {button, kind, id}
+@onready var _box: PanelContainer = %Box
+@onready var _grid: GridContainer = %Grid
+@onready var _tooltip: PanelContainer = %Tooltip
+@onready var _tip_label: Label = %TipLabel
+
+var _tiles: Array[Dictionary] = []          ## {tile, kind, id}
 var _built_signature: String = ""
 var _was_deadlocked: bool = false
+## Drag-and-drop placement (iOS/macOS icon style): clicking a tile picks it up
+## (a ghost follows the cursor, the panel tile hides); clicking the MAP drops it
+## there. Empty = not carrying.
+var _carry: Dictionary = {}
+var _ghost: TextureRect = null
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_TOP_LEFT)
-	position = Vector2.ZERO
-	custom_minimum_size = Vector2(PANEL_W + PANEL_X * 2.0, 360.0)
-	offset_right = PANEL_W + PANEL_X * 2.0
-	offset_bottom = 360.0
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_to_group("placement_panel")
+	_hide_tip()
 	_rebuild()
 	EventBus.gold_changed.connect(_on_changed.unbind(1))
 	EventBus.combat_upgrade_changed.connect(_on_changed.unbind(1))
@@ -45,6 +53,9 @@ func _on_changed() -> void:
 
 
 func _process(_delta: float) -> void:
+	# Carried tile ghost trails the cursor (screen space).
+	if _ghost != null:
+		_ghost.position = get_viewport().get_mouse_position() - _ghost.size * 0.5
 	# Cheap deadlock poll (queries the field for live enemies / fights / loot).
 	var dl: bool = _is_deadlocked()
 	if dl != _was_deadlocked:
@@ -59,101 +70,71 @@ func _refresh() -> void:
 	if _signature() != _built_signature:
 		_rebuild()
 	else:
-		_refresh_affordability()
+		_refresh_brightness()
 
 
 func _rebuild() -> void:
-	if _box != null:
-		_box.queue_free()
-	_rows.clear()
+	for child in _grid.get_children():
+		child.queue_free()
+	_tiles.clear()
 	_built_signature = _signature()
+	_hide_tip()
 
-	_box = PanelContainer.new()
-	_box.add_theme_stylebox_override("panel", DOS.box_style())
-	_box.position = Vector2(PANEL_X, PANEL_TOP)
-	_box.custom_minimum_size = Vector2(PANEL_W, 0.0)
-	_box.size = Vector2(PANEL_W, 0.0)
-	_box.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(_box)
-
-	_list = VBoxContainer.new()
-	_list.add_theme_constant_override("separation", 2)
-	_box.add_child(_list)
-
-	# Opening: just the "초원 깔기" row until the world starts.
-	if not GameState.world_started:
-		if GameState.name_entered:
-			_list.add_child(DOS.section("시작"))
-			_add_row(&"grass", &"grass", "초원 깔기", "", null, true)
+	# Wait only for the name overlay; naming auto-starts the world.
+	if not GameState.name_entered:
 		return
 
 	if _was_deadlocked:
-		_list.add_child(DOS.section("구제"))
-		_add_row(&"rescue", &"slime", "구제 슬라임", "무료", _tier_sprite(&"slime"), true)
+		_add_tile(&"rescue", &"slime", _tier_sprite(&"slime"), true)
 
-	# ── 적 ── (TOGGLE auto-spawn — hands stay free for flipping reward cards)
-	_list.add_child(DOS.section("적"))
-	var any_enemy: bool = false
+	# Enemies (toggle auto-spawn). Unlock-available tiers read as bright (claimable).
 	for i in Balance.tier_count():
 		var tier: Dictionary = Balance.tier_at(i)
 		var id: StringName = tier["id"]
 		if not GameState.is_tier_visible(id):
 			continue
-		any_enemy = true
-		if GameState.is_tier_unlock_available(id):
-			_add_row(&"enemy", id, str(tier.get("name", "?")), "해금!", _tier_sprite(id), true, Color(1.0, 0.85, 0.35, 1.0))
-		else:
-			var on: bool = GameState.is_tier_active(id)
-			_add_row(&"enemy", id, str(tier.get("name", "?")), ("● ON" if on else "○ OFF"), _tier_sprite(id), true,
-				Color(0.45, 0.85, 0.45, 1.0) if on else DOS.DIM)
-	if not any_enemy:
-		_list.add_child(DOS.label("(잠김)", DOS.DIM))
+		_add_tile(&"enemy", id, _tier_sprite(id), _tile_bright(&"enemy", id))
 
-	# ── 이벤트 ──
-	_list.add_child(DOS.section("이벤트"))
-	var fire_cost: int = GameState.campfire_upgrade_cost() if GameState.campfire_placed else GameState.campfire_place_cost()
-	var fire_label: String = "모닥불↑" if GameState.campfire_placed else "모닥불"
-	_add_row(&"campfire", &"campfire", fire_label, "%dG" % fire_cost, BONFIRE_TEX, GameState.gold >= fire_cost)
+	# Events. Once placed, a tile vanishes from the panel (it lives on the map now).
+	if not GameState.campfire_placed:
+		_add_tile(&"campfire", &"campfire", BONFIRE_TEX, _tile_bright(&"campfire", &"campfire"))
 	if GameState.is_building_unlocked(&"sanctuary") and not GameState.is_building_built(&"sanctuary"):
-		var s_cost: int = GameState.building_cost(&"sanctuary")
-		_add_row(&"sanctuary", &"sanctuary", "성소", "%dG" % s_cost, SHRINE_TEX, GameState.gold >= s_cost)
+		_add_tile(&"sanctuary", &"sanctuary", SHRINE_TEX, _tile_bright(&"sanctuary", &"sanctuary"))
+
+	# Keep the carried tile hidden if a rebuild happened mid-drag.
+	if not _carry.is_empty():
+		for t: Dictionary in _tiles:
+			if t["kind"] == _carry["kind"] and t["id"] == _carry["id"] and is_instance_valid(t["tile"]):
+				(t["tile"] as Control).visible = false
 
 
-## One DOS row: [sprite] name … tag. `affordable` dims the row when false; the
-## right-hand tag (price / ON·OFF) can take its own color.
-func _add_row(kind: StringName, id: StringName, name_text: String, price_text: String, sprite: Texture2D, affordable: bool, price_color: Color = DOS.TEXT) -> void:
-	var b := Button.new()
-	DOS.style_button(b)
-	b.custom_minimum_size = Vector2(0.0, DOS.ROW_H)
-	b.pressed.connect(_on_row_pressed.bind(kind, id))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 3)
-	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(row)
-	row.add_child(DOS.icon(sprite))
-	var name_lbl := DOS.label(name_text)
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.clip_text = true
-	row.add_child(name_lbl)
-	row.add_child(DOS.label(price_text, price_color if affordable else DOS.DIM))
-	b.modulate = Color(1, 1, 1, 1) if affordable else Color(0.6, 0.62, 0.66, 1.0)
-	_list.add_child(b)
-	_rows.append({"button": b, "kind": kind, "id": id})
+## One icon tile from the dos_tile template. `bright` lights it (ON/affordable);
+## otherwise it's dimmed (OFF/unaffordable).
+func _add_tile(kind: StringName, id: StringName, icon: Texture2D, bright: bool) -> void:
+	var tile: Button = TILE_SCENE.instantiate()
+	(tile.get_node("Icon") as TextureRect).texture = icon
+	tile.modulate = TILE_ON if bright else TILE_OFF
+	tile.pressed.connect(_on_tile_pressed.bind(kind, id))
+	tile.mouse_entered.connect(_on_tile_hover.bind(kind, id, tile))
+	tile.mouse_exited.connect(_hide_tip)
+	_grid.add_child(tile)
+	_tiles.append({"tile": tile, "kind": kind, "id": id})
 
 
-func _refresh_affordability() -> void:
-	for row: Dictionary in _rows:
-		var b: Button = row["button"]
-		if not is_instance_valid(b):
+func _refresh_brightness() -> void:
+	for t: Dictionary in _tiles:
+		var tile: Button = t["tile"]
+		if not is_instance_valid(tile):
 			continue
-		b.modulate = Color(1, 1, 1, 1) if _row_affordable(row["kind"], row["id"]) else Color(0.6, 0.62, 0.66, 1.0)
+		tile.modulate = TILE_ON if _tile_bright(t["kind"], t["id"]) else TILE_OFF
 
 
-func _row_affordable(kind: StringName, id: StringName) -> bool:
+## Bright = ON (enemy toggled on / unlockable) or affordable (event).
+func _tile_bright(kind: StringName, id: StringName) -> bool:
 	match kind:
-		&"grass", &"rescue": return true
-		&"enemy": return true  # toggle / claim — always clickable (no per-spawn cost)
+		&"rescue": return true
+		&"enemy":
+			return GameState.can_place_enemy(id)   # tier auto-unlocks on reveal → just affordability
 		&"campfire":
 			var c: int = GameState.campfire_upgrade_cost() if GameState.campfire_placed else GameState.campfire_place_cost()
 			return GameState.gold >= c
@@ -161,16 +142,108 @@ func _row_affordable(kind: StringName, id: StringName) -> bool:
 	return true
 
 
-# ─── Click handlers (unchanged placement logic) ────────────────────────
-func _on_row_pressed(kind: StringName, id: StringName) -> void:
+# ─── Tooltip (pops beside the panel, aligned with the hovered tile) ─────
+func _on_tile_hover(kind: StringName, id: StringName, tile: Button) -> void:
+	_tip_label.text = _tooltip_for(kind, id)
+	_tooltip.visible = true
+	# Right of the box, top-aligned with the hovered tile. (Root sits at the
+	# screen origin, so the tile's global y maps straight to our local y.)
+	var box_right: float = _box.position.x + _box.size.x
+	_tooltip.position = Vector2(box_right + 6.0, tile.global_position.y)
+
+
+func _hide_tip() -> void:
+	if _tooltip != null:
+		_tooltip.visible = false
+
+
+func _tooltip_for(kind: StringName, id: StringName) -> String:
 	match kind:
-		&"grass": GameState.start_world()
-		&"rescue": GameState.place_rescue_slime()
+		&"rescue":
+			return "구제 슬라임\n무료"
 		&"enemy":
-			if GameState.is_tier_unlocked(id):
-				GameState.toggle_tier(id)   # ON/OFF auto-spawn (no per-spawn cost)
-			else:
-				GameState.unlock_tier(id)
+			var name_text: String = str(Balance.tier_by_id(id).get("name", "?"))
+			var lvl: int = GameState.enemy_level(id)
+			var cost: int = GameState.tier_place_cost(id)
+			return "%s\nLv %d\n배치 %dG" % [name_text, lvl, cost]
+		&"campfire":
+			var cost: int = GameState.campfire_upgrade_cost() if GameState.campfire_placed else GameState.campfire_place_cost()
+			return "%s\n%dG" % ["모닥불 강화" if GameState.campfire_placed else "모닥불", cost]
+		&"sanctuary":
+			return "성소\n%dG" % GameState.building_cost(&"sanctuary")
+	return ""
+
+
+# ─── Click handlers — pick up the tile (drag-and-drop placement) ────────
+func _on_tile_pressed(kind: StringName, id: StringName) -> void:
+	if not _carry.is_empty():
+		return  # already carrying a tile
+	match kind:
+		&"enemy":
+			# Tiers auto-unlock the moment they appear, so a click always BUYS +
+			# spawns ONE at a random spot near the party (no claim step).
+			GameState.place_enemy(id)
+		&"rescue":
+			GameState.place_rescue_slime()
+		&"campfire", &"sanctuary":
+			# Drag-and-drop tiles: pick up → drop on the map at the clicked spot.
+			if _tile_bright(kind, id):
+				_begin_carry(kind, id)
+
+
+## Pick up: a ghost icon follows the cursor and the panel tile hides until the
+## player drops it on the map (or cancels with right-click).
+func _begin_carry(kind: StringName, id: StringName) -> void:
+	_carry = {"kind": kind, "id": id}
+	_hide_tip()
+	for t: Dictionary in _tiles:  # the panel tile vanishes while carried
+		if t["kind"] == kind and t["id"] == id and is_instance_valid(t["tile"]):
+			(t["tile"] as Control).visible = false
+	_ghost = TextureRect.new()
+	_ghost.texture = _carry_icon(kind, id)
+	_ghost.custom_minimum_size = Vector2(20, 20)
+	_ghost.size = Vector2(20, 20)
+	_ghost.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_ghost.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_ghost.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_ghost.modulate = Color(1, 1, 1, 0.85)
+	_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ghost.z_index = 100
+	add_child(_ghost)
+
+
+func _carry_icon(kind: StringName, id: StringName) -> Texture2D:
+	match kind:
+		&"campfire": return BONFIRE_TEX
+		&"sanctuary": return SHRINE_TEX
+	return _tier_sprite(id)  # enemy / rescue
+
+
+## While carrying: left-click drops the tile at the cursor's world spot, right-click
+## cancels. Uses _input (runs BEFORE GUI/background controls) so the click is always
+## caught — and consumes it so nothing else reacts. The pick-up click itself is safe:
+## at that moment _carry is still empty (it's set later in the tile button's press).
+func _input(event: InputEvent) -> void:
+	if _carry.is_empty():
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			_drop_carry_at_mouse()
+			get_viewport().set_input_as_handled()
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_cancel_carry()
+			get_viewport().set_input_as_handled()
+
+
+func _drop_carry_at_mouse() -> void:
+	var kind: StringName = _carry["kind"]
+	var id: StringName = _carry["id"]
+	var camera: Camera2D = get_viewport().get_camera_2d()
+	var world: Vector2 = camera.get_global_mouse_position() if camera != null else Vector2.ZERO
+	# Tell the Field WHERE to drop it, then trigger the existing placement. Only
+	# passive tiles (campfire / sanctuary) are drag-placed — no party reaction.
+	GameState.pending_placement_position = world
+	match kind:
 		&"campfire":
 			if GameState.campfire_placed:
 				GameState.upgrade_campfire()
@@ -179,6 +252,21 @@ func _on_row_pressed(kind: StringName, id: StringName) -> void:
 		&"sanctuary":
 			if GameState.can_purchase_building(&"sanctuary"):
 				GameState.purchase_building(&"sanctuary")
+	_end_carry()
+
+
+func _cancel_carry() -> void:
+	GameState.pending_placement_position = Vector2.INF
+	_end_carry()
+
+
+func _end_carry() -> void:
+	_carry = {}
+	GameState.pending_placement_position = Vector2.INF
+	if _ghost != null:
+		_ghost.queue_free()
+		_ghost = null
+	_rebuild()  # restores the hidden tile
 
 
 # ─── Deadlock detection (gold 0, nothing in progress) ──────────────────
@@ -201,19 +289,18 @@ func _is_deadlocked() -> bool:
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────
-## A signature of everything that changes the LIST STRUCTURE (not just prices), so
-## we only rebuild when rows appear/disappear; otherwise just re-tint affordability.
+## A signature of everything that changes the TILE SET (which tiles exist) — NOT
+## their ON/OFF brightness. So a toggle / gold tick just re-tints (no rebuild → the
+## tooltip doesn't flicker); only an appearing/disappearing tile forces a rebuild.
 func _signature() -> String:
 	var parts: PackedStringArray = []
-	parts.append("w%d" % (1 if GameState.world_started else 0))
 	parts.append("n%d" % (1 if GameState.name_entered else 0))
 	parts.append("d%d" % (1 if _was_deadlocked else 0))
-	parts.append("f%d" % (1 if GameState.campfire_placed else 0))
 	parts.append("s%d" % (1 if (GameState.is_building_unlocked(&"sanctuary") and not GameState.is_building_built(&"sanctuary")) else 0))
 	for i in Balance.tier_count():
 		var id: StringName = Balance.tier_at(i)["id"]
 		if GameState.is_tier_visible(id):
-			parts.append("%s%d%d" % [id, 1 if GameState.is_tier_unlock_available(id) else 0, 1 if GameState.is_tier_active(id) else 0])
+			parts.append(str(id))
 	return "|".join(parts)
 
 

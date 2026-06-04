@@ -20,17 +20,19 @@ const TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/tree.p
 const FOREST_TREE_TEXTURE: Texture2D = preload("res://assets/sprites/decorations/forest_tree.png")
 const COMBO_ATTACK_TEXTURE: Texture2D = preload("res://assets/sprites/skeleton_scythe.png")
 const COMBO_SKELETON_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
+## "쉰다" rest: fast heal while the party is held at the campfire + the green "+" feel.
+const REST_HEAL_RATE: float = 14.0     ## HP/sec while resting
+const HEAL_FX_INTERVAL: float = 0.32   ## seconds between green "+" pops per member
 
 ## Base world-map size. Starts as one camera-sized field; nodes expand it.
 ## Spans the full 640 viewport width so the field center == the true viewport
 ## center → the hero sits dead-center, with the side panels just overlaying the
 ## edges. Player/enemy movement is capped to the visible play area (_play_right)
 ## so nothing wanders under the right panel.
-## Large roaming world (the camera follows the hero across it). Was 640×360 (a
-## single screen, fixed camera); enlarged so walking actually travels. Placement
-## happens NEAR the hero (see _spawn_position_near_player), so the action stays
-## on-screen while the world is big.
-const FIELD_SIZE: Vector2 = Vector2(1600, 1200)
+## Bounded map ≈ 9× the camera (3×3 screens of 640×360). The follow-camera is
+## clamped to these bounds (Player.set_field_bounds → camera limits), so the map
+## has hard edges instead of an endless roam. Mouse wheel zooms in/out.
+const FIELD_SIZE: Vector2 = Vector2(1920, 1080)
 ## Plain-green backdrop is oversized this far beyond the map on every side so the
 ## roaming camera never sees past it into the void.
 const BG_MARGIN: float = 1400.0
@@ -106,7 +108,11 @@ const CLIFF_FACE_HEIGHT: float = 11.0
 var _player: CharacterBody2D
 ## Campfire field tile: visual node + the one-time "party walks over → 마법사" event.
 var _campfire_node: Node2D
+var _sanctuary_node: Node2D
 var _campfire_event_pending: bool = false
+var _resting: bool = false                ## party is resting at the campfire
+var _rest_heal_accum: Dictionary = {}     ## party index -> fractional HP carry
+var _heal_fx_accum: Dictionary = {}       ## party index -> green-"+" spawn timer
 var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
@@ -147,6 +153,8 @@ func _ready() -> void:
 	EventBus.party_member_revived.connect(_on_party_member_revived_visual)
 	EventBus.campfire_placed.connect(_on_campfire_placed)
 	EventBus.enemy_place_requested.connect(_on_enemy_place_requested)
+	EventBus.building_built.connect(_on_building_built)
+	EventBus.rest_requested.connect(_begin_rest)
 	EventBus.world_started.connect(_on_world_started)
 	EventBus.rescue_offered.connect(_on_rescue_offered)
 	_hide_message()
@@ -186,6 +194,7 @@ func _process(delta: float) -> void:
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
 	_tick_campfire(delta)  # proximity regen + first-place mage event (runs always)
+	_tick_rest(delta)      # "쉰다": walk to fire, hold, fast-heal to full (runs always)
 	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
 	if GameState.is_field_battle_paused():
 		return
@@ -838,7 +847,12 @@ func _on_companion_recruited(id: StringName) -> void:
 func _on_campfire_placed() -> void:
 	if is_instance_valid(_campfire_node):
 		return
-	var pos: Vector2 = _random_campfire_position()
+	var pos: Vector2
+	if GameState.pending_placement_position != Vector2.INF:
+		pos = _clamp_field_position(GameState.pending_placement_position)
+		GameState.pending_placement_position = Vector2.INF
+	else:
+		pos = _random_campfire_position()
 	GameState.set_campfire_position(pos)
 	_campfire_node = FieldStructure.new()
 	_campfire_node.setup(Balance.tile_by_id(&"campfire"))
@@ -849,6 +863,23 @@ func _on_campfire_placed() -> void:
 	if _player and _player.has_method("set_forced_move_target"):
 		_player.set_forced_move_target(pos)
 	_show_message("모닥불을 피웠다. 더 태워볼까…?")
+
+
+## Drag-placed buildings that live on the field (sanctuary). Spawn a structure at
+## the dropped spot so it actually shows up + is clickable.
+func _on_building_built(id: StringName) -> void:
+	if id != &"sanctuary" or is_instance_valid(_sanctuary_node):
+		return
+	var pos: Vector2
+	if GameState.pending_placement_position != Vector2.INF:
+		pos = _clamp_field_position(GameState.pending_placement_position)
+		GameState.pending_placement_position = Vector2.INF
+	else:
+		pos = _spawn_position_near_player(_player.position if _player else _field_size * 0.5)
+	_sanctuary_node = FieldStructure.new()
+	_sanctuary_node.setup(Balance.building_by_id(&"sanctuary"))
+	_sanctuary_node.position = pos
+	_decorations_root.add_child(_sanctuary_node)
 
 
 func _random_campfire_position() -> Vector2:
@@ -881,6 +912,97 @@ func _tick_campfire(delta: float) -> void:
 		if _campfire_node.has_method("pulse"):
 			_campfire_node.pulse()
 		GameState.join_companion(&"mage")  # 마법사 즉시 영입 (emits join message)
+
+
+# ─── Campfire "쉰다" (rest): walk over, hold, fast-heal to full ─────────
+func _begin_rest() -> void:
+	if not GameState.campfire_placed or not is_instance_valid(_campfire_node):
+		return
+	var bm: Node = get_tree().get_first_node_in_group("battle_manager")
+	if bm != null and bm.has_method("pending_window_count") and int(bm.pending_window_count()) > 0:
+		_show_message("전투가 끝나야 쉴 수 있다.")
+		return
+	if GameState.is_party_full_hp():
+		_show_message("이미 충분히 쉬었다.")
+		return
+	_resting = true
+	if _player and _player.has_method("set_forced_move_target"):
+		_player.set_forced_move_target(_campfire_node.position)  # walk the party over
+
+
+func _end_rest() -> void:
+	if not _resting:
+		return
+	_resting = false
+	GameState.party_resting = false
+	_rest_heal_accum.clear()
+	_heal_fx_accum.clear()
+	if _player and _player.has_method("clear_forced_move_target"):
+		_player.clear_forced_move_target()
+
+
+func _tick_rest(delta: float) -> void:
+	if not _resting:
+		return
+	if not GameState.campfire_placed or not is_instance_valid(_campfire_node):
+		_end_rest()
+		return
+	# A fight broke out → can't rest mid-battle.
+	var bm: Node = get_tree().get_first_node_in_group("battle_manager")
+	if bm != null and bm.has_method("pending_window_count") and int(bm.pending_window_count()) > 0:
+		_end_rest()
+		return
+	# Still walking over → freeze the party once they reach the fire.
+	if not GameState.party_resting:
+		if _player and _player.position.distance_to(_campfire_node.position) <= GameState.campfire_regen_radius():
+			GameState.party_resting = true  # hold still (is_movement_frozen)
+			if _player.has_method("clear_forced_move_target"):
+				_player.clear_forced_move_target()
+		return
+	_rest_heal(delta)
+	if GameState.is_party_full_hp():
+		_end_rest()
+
+
+func _rest_heal(delta: float) -> void:
+	for child in _party_root.get_children():
+		var idx: int = _party_member_index_of(child)
+		if idx < 0 or not GameState.is_combat_ready(idx):
+			continue
+		if GameState.party_hp[idx] >= GameState.effective_max_hp(idx):
+			continue
+		var carry: float = float(_rest_heal_accum.get(idx, 0.0)) + REST_HEAL_RATE * delta
+		var whole: int = int(carry)
+		_rest_heal_accum[idx] = carry - float(whole)
+		if whole >= 1:
+			GameState.heal_party_member(idx, whole)
+		# Green "+" pop above the healing member (뿅뿅뿅).
+		var fx: float = float(_heal_fx_accum.get(idx, 0.0)) + delta
+		if fx >= HEAL_FX_INTERVAL:
+			fx = 0.0
+			_spawn_heal_plus(child as Node2D)
+		_heal_fx_accum[idx] = fx
+
+
+## A small green "+" that pops above a healing avatar and floats up — retro juice.
+func _spawn_heal_plus(avatar: Node2D) -> void:
+	if avatar == null:
+		return
+	var lbl := Label.new()
+	lbl.text = "+"
+	lbl.add_theme_font_override("font", COMBO_SKELETON_FONT)
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", Color(0.36, 1.0, 0.45, 1.0))
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.position = Vector2(randf_range(-7.0, 5.0), -20.0)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	avatar.add_child(lbl)
+	var t := create_tween().set_parallel(true)
+	t.tween_property(lbl, "position:y", lbl.position.y - 12.0, 0.5).set_trans(Tween.TRANS_QUAD)
+	t.tween_property(lbl, "modulate:a", 0.0, 0.5)
+	t.chain().tween_callback(lbl.queue_free)
 
 
 ## Map a party-visual node back to its GameState party index. Player = 0,
@@ -974,7 +1096,14 @@ func _spawn_field_enemy(data: EnemyData) -> void:
 	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
 	var fe: FieldEnemy = FIELD_ENEMY_SCENE.instantiate()
 	fe.setup(data)
-	var spawn: Vector2 = _random_spawn_position_for_enemy(data, safe_origin)
+	# Drag-and-drop: if the player dropped this on a specific map spot, use it
+	# (clamped to the map); otherwise fall back to a random spot near the party.
+	var spawn: Vector2
+	if GameState.pending_placement_position != Vector2.INF:
+		spawn = _clamp_field_position(GameState.pending_placement_position)
+		GameState.pending_placement_position = Vector2.INF
+	else:
+		spawn = _random_spawn_position_for_enemy(data, safe_origin)
 	fe.position = spawn
 	# Wander stays local to the spawn so the fight doesn't drift off the big map.
 	var half := Vector2(ENEMY_WANDER_HALF_EXTENT, ENEMY_WANDER_HALF_EXTENT)

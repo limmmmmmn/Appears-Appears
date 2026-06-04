@@ -2,39 +2,38 @@ class_name RightUpgradePanel
 extends PanelContainer
 
 ## Right zone — DOS-style tabbed window. Two tabs:
-##   [업그레이드] every spend-gold upgrade as a uniform row: [icon] name  price / desc
-##   [장비]       weapon + armor shop (buy) AND inventory (equip / sell) in one place
-## Flat single-tone boxes, one font, one border — only item sprites keep their color.
+##   [강화]  every spend-gold upgrade as a uniform row: [icon] name  price / desc
+##   [장비]  weapon + armor shop (buy) AND inventory (equip / sell) in one place
+##
+## LOOK = scenes/ui/right_upgrade_panel.tscn (card position/size, tabs, scroll, the
+## panel background via the theme) + the row templates dos_upgrade_row.tscn /
+## dos_row.tscn / dos_inventory_row.tscn — all editable in the editor. This script
+## is LOGIC ONLY: which rows exist, what they cost, and what clicking does.
 
 const ICON_WEAPON: Texture2D = preload("res://assets/sprites/icons/hero_sword.png")
 const ICON_ARMOR: Texture2D = preload("res://assets/sprites/icons/shield.png")
 const ICON_GOLD: Texture2D = preload("res://assets/sprites/icons/gold.png")
 
+const UPGRADE_ROW_SCENE: PackedScene = preload("res://scenes/ui/dos_upgrade_row.tscn")
+const SHOP_ROW_SCENE: PackedScene = preload("res://scenes/ui/dos_row.tscn")
+const INVENTORY_ROW_SCENE: PackedScene = preload("res://scenes/ui/dos_inventory_row.tscn")
+
 const TAB_UPGRADE: StringName = &"upgrade"
 const TAB_GEAR: StringName = &"gear"
 
-## Floating-card height — fits the 강화 list; the 장비 list scrolls inside.
-const CARD_HEIGHT: float = 232.0
+@onready var _content: VBoxContainer = %Content
 
 var _tab_buttons: Dictionary = {}
-var _content: VBoxContainer
 var _active_tab: StringName = TAB_UPGRADE
 var _rows: Array[Dictionary] = []   ## {button, cost} — for live affordability re-tint
 
 
 func _ready() -> void:
-	# Floating card in the top-right corner, over the full-bleed field (margins on
-	# every side so green shows around it — no longer a full-height sidebar).
-	set_anchors_preset(Control.PRESET_TOP_LEFT)
-	offset_right = 640.0 - UITheme.PANEL_MARGIN
-	offset_left = offset_right - UITheme.RIGHT_PANEL_WIDTH
-	offset_top = UITheme.PANEL_TOP
-	offset_bottom = UITheme.PANEL_TOP + CARD_HEIGHT
-	size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	add_theme_stylebox_override("panel", DOS.box_style())
-	mouse_filter = Control.MOUSE_FILTER_STOP
 	add_to_group("upgrade_window")
-	_build()
+	_tab_buttons = {TAB_UPGRADE: %TabUpgrade, TAB_GEAR: %TabGear}
+	(%TabUpgrade as Button).pressed.connect(_on_tab.bind(TAB_UPGRADE))
+	(%TabGear as Button).pressed.connect(_on_tab.bind(TAB_GEAR))
+	_show_tab(_active_tab)
 	# Gold ticks only re-tint affordability (no rebuild → no flicker). Structural
 	# changes (purchases, inventory, equips) rebuild the active tab.
 	EventBus.gold_changed.connect(_refresh_afford.unbind(1))
@@ -79,43 +78,7 @@ func _refresh_afford() -> void:
 			b.disabled = not afford
 
 
-# ─── Shell ─────────────────────────────────────────────────────────────
-func _build() -> void:
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 2)
-	add_child(col)
-
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 2)
-	col.add_child(tabs)
-	_tab_buttons.clear()
-	_tab_buttons[TAB_UPGRADE] = _add_tab(tabs, "강화", TAB_UPGRADE)
-	_tab_buttons[TAB_GEAR] = _add_tab(tabs, "장비", TAB_GEAR)
-
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0.0, 120.0)
-	col.add_child(scroll)
-	_content = VBoxContainer.new()
-	_content.add_theme_constant_override("separation", 2)
-	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_content)
-	_show_tab(_active_tab)
-
-
-func _add_tab(parent: HBoxContainer, text: String, id: StringName) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.add_theme_font_override("font", DOS.FONT)
-	b.add_theme_font_size_override("font_size", DOS.FONT_SIZE)
-	DOS.style_button(b)
-	b.pressed.connect(_on_tab.bind(id))
-	parent.add_child(b)
-	return b
-
-
+# ─── Tabs ──────────────────────────────────────────────────────────────
 func _on_tab(id: StringName) -> void:
 	_active_tab = id
 	_show_tab(id)
@@ -127,7 +90,7 @@ func _show_tab(id: StringName) -> void:
 	for c in _content.get_children():
 		c.queue_free()
 	_rows.clear()
-	for tid in _tab_buttons:
+	for tid: StringName in _tab_buttons:
 		var tb: Button = _tab_buttons[tid]
 		tb.add_theme_color_override("font_color", DOS.TEXT if tid == id else DOS.DIM)
 		tb.modulate = Color(1, 1, 1, 1) if tid == id else Color(0.8, 0.82, 0.85, 1.0)
@@ -164,30 +127,18 @@ func _add_upgrade_row(u: Dictionary) -> void:
 	var maxed: bool = u["maxed"]
 	var afford: bool = u["afford"]
 	var price_text: String = "MAX" if maxed else "%dG" % int(u["price"])
-	var b := Button.new()
-	DOS.style_button(b)
-	b.disabled = maxed or not afford
-	b.pressed.connect(_on_upgrade.bind(u["kind"]))
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 0)
-	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(vb)
-	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 3)
-	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vb.add_child(top)
-	top.add_child(DOS.icon(u["icon"]))
-	var name_lbl := DOS.label(str(u["name"]))
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.clip_text = true
-	top.add_child(name_lbl)
-	top.add_child(DOS.label(price_text, DOS.TEXT if (afford or maxed) else DOS.DIM))
-	vb.add_child(DOS.label(str(u["desc"]), DOS.DIM))
-	b.modulate = Color(1, 1, 1, 1) if (afford or maxed) else Color(0.62, 0.64, 0.68, 1.0)
-	b.custom_minimum_size = Vector2(0.0, DOS.ROW_H + 9.0)
-	_content.add_child(b)
-	_rows.append({"button": b, "cost": 99999999 if maxed else int(u["price"])})
+	var row: Button = UPGRADE_ROW_SCENE.instantiate()
+	row.disabled = maxed or not afford
+	(row.get_node("VBox/Top/Icon") as TextureRect).texture = u["icon"]
+	(row.get_node("VBox/Top/Name") as Label).text = str(u["name"])
+	var price_lbl := row.get_node("VBox/Top/Price") as Label
+	price_lbl.text = price_text
+	price_lbl.add_theme_color_override("font_color", DOS.TEXT if (afford or maxed) else DOS.DIM)
+	(row.get_node("VBox/Desc") as Label).text = str(u["desc"])
+	row.modulate = Color(1, 1, 1, 1) if (afford or maxed) else Color(0.62, 0.64, 0.68, 1.0)
+	row.pressed.connect(_on_upgrade.bind(u["kind"]))
+	_content.add_child(row)
+	_rows.append({"button": row, "cost": 99999999 if maxed else int(u["price"])})
 
 
 func _on_upgrade(kind: StringName) -> void:
@@ -225,63 +176,32 @@ func _build_gear_tab() -> void:
 
 
 func _add_shop_row(icon: Texture2D, name_text: String, cost: int, afford: bool, action: Callable) -> void:
-	var b := Button.new()
-	DOS.style_button(b)
-	b.disabled = not afford
-	b.pressed.connect(action)
-	b.custom_minimum_size = Vector2(0.0, DOS.ROW_H)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 3)
-	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(row)
-	row.add_child(DOS.icon(icon))
-	var n := DOS.label(name_text)
-	n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	n.clip_text = true
-	row.add_child(n)
-	row.add_child(DOS.label("%dG" % cost, DOS.TEXT if afford else DOS.DIM))
-	b.modulate = Color(1, 1, 1, 1) if afford else Color(0.62, 0.64, 0.68, 1.0)
-	_content.add_child(b)
-	_rows.append({"button": b, "cost": cost})
+	var row: Button = SHOP_ROW_SCENE.instantiate()
+	row.disabled = not afford
+	(row.get_node("HBox/Icon") as TextureRect).texture = icon
+	(row.get_node("HBox/Name") as Label).text = name_text
+	var tag := row.get_node("HBox/Tag") as Label
+	tag.text = "%dG" % cost
+	tag.add_theme_color_override("font_color", DOS.TEXT if afford else DOS.DIM)
+	row.modulate = Color(1, 1, 1, 1) if afford else Color(0.62, 0.64, 0.68, 1.0)
+	row.pressed.connect(action)
+	_content.add_child(row)
+	_rows.append({"button": row, "cost": cost})
 
 
 ## Inventory row: [icon] name Lv  → click equips; [N] button sells.
 func _add_inventory_row(inv_index: int, entry, item: ItemData) -> void:
 	var lvl: int = GameState.item_entry_level(entry)
 	var val: int = GameState.inventory_sell_value(entry)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 2)
-	_content.add_child(row)
-
-	var equip_btn := Button.new()
-	DOS.style_button(equip_btn)
-	equip_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	equip_btn.custom_minimum_size = Vector2(0.0, DOS.ROW_H)
-	equip_btn.tooltip_text = "클릭: 장착"
+	var row: HBoxContainer = INVENTORY_ROW_SCENE.instantiate()
+	var equip_btn := row.get_node("Equip") as Button
+	(row.get_node("Equip/Inner/Icon") as TextureRect).texture = item.icon
+	(row.get_node("Equip/Inner/Name") as Label).text = "%s Lv%d" % [item.display_name, lvl]
 	equip_btn.pressed.connect(_on_equip_inventory.bind(inv_index))
-	var inner := HBoxContainer.new()
-	inner.add_theme_constant_override("separation", 3)
-	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	equip_btn.add_child(inner)
-	inner.add_child(DOS.icon(item.icon))
-	var n := DOS.label("%s Lv%d" % [item.display_name, lvl])
-	n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	n.clip_text = true
-	inner.add_child(n)
-	row.add_child(equip_btn)
-
-	var sell_btn := Button.new()
+	var sell_btn := row.get_node("Sell") as Button
 	sell_btn.text = "%dG" % val
-	sell_btn.add_theme_font_override("font", DOS.FONT)
-	sell_btn.add_theme_font_size_override("font_size", DOS.FONT_SIZE)
-	sell_btn.add_theme_color_override("font_color", DOS.TEXT)
-	DOS.style_button(sell_btn)
-	sell_btn.custom_minimum_size = Vector2(22.0, DOS.ROW_H)
-	sell_btn.tooltip_text = "팔기"
 	sell_btn.pressed.connect(_on_sell_inventory.bind(inv_index))
-	row.add_child(sell_btn)
+	_content.add_child(row)
 	_rows.append({"button": equip_btn, "cost": 0})  # equip/sell always available
 	_rows.append({"button": sell_btn, "cost": 0})
 

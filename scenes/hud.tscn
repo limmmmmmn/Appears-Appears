@@ -1,138 +1,11 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene format=3 uid="uid://w7f2ximpkfta"]
 
 [ext_resource type="Script" uid="uid://b1m4vxga6tiqb" path="res://scripts/runtime/hud.gd" id="1_hud"]
 [ext_resource type="Theme" path="res://assets/fonts/field_theme.tres" id="2_theme"]
 
-[sub_resource type="LabelSettings" id="LabelSettings_top"]
-font_size = 10
-font_color = Color(1, 1, 1, 1)
-shadow_size = 2
-shadow_color = Color(0, 0, 0, 0.7)
-shadow_offset = Vector2(1, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_inventory"]
-bg_color = Color(0.18, 0.18, 0.2, 0.72)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0, 0, 0, 0.65)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
-
-[sub_resource type="LabelSettings" id="LabelSettings_inventory"]
-font_size = 5
-font_color = Color(1, 1, 1, 0.9)
-shadow_size = 1
-shadow_color = Color(0, 0, 0, 0.8)
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_debug_button"]
-bg_color = Color(0, 0, 0, 0.82)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(1, 1, 1, 1)
-corner_radius_top_left = 1
-corner_radius_top_right = 1
-corner_radius_bottom_right = 1
-corner_radius_bottom_left = 1
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_debug_button_hover"]
-bg_color = Color(0.96, 0.68, 0.16, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(1, 1, 1, 1)
-corner_radius_top_left = 1
-corner_radius_top_right = 1
-corner_radius_bottom_right = 1
-corner_radius_bottom_left = 1
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_debug_button_pressed"]
-bg_color = Color(0.58, 0.34, 0.04, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(1, 1, 1, 1)
-corner_radius_top_left = 1
-corner_radius_top_right = 1
-corner_radius_bottom_right = 1
-corner_radius_bottom_left = 1
-
 [node name="HUD" type="CanvasLayer"]
 layer = 5
 script = ExtResource("1_hud")
-
-[node name="TopBar" type="HBoxContainer" parent="."]
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 18.0
-offset_top = 10.0
-offset_right = -178.0
-offset_bottom = 58.0
-theme = ExtResource("2_theme")
-
-[node name="FieldLabel" type="Label" parent="TopBar"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Field"
-label_settings = SubResource("LabelSettings_top")
-
-[node name="CountdownLabel" type="Label" parent="TopBar"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "20"
-label_settings = SubResource("LabelSettings_top")
-horizontal_alignment = 1
-
-[node name="GoldLabel" type="Label" parent="TopBar"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Gold 0"
-label_settings = SubResource("LabelSettings_top")
-horizontal_alignment = 2
-
-[node name="DebugButtonColumn" type="VBoxContainer" parent="TopBar"]
-layout_mode = 2
-theme_override_constants/separation = 3
-
-[node name="DebugGoldButton" type="Button" parent="TopBar/DebugButtonColumn"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(66, 19)
-layout_mode = 2
-tooltip_text = "+1000 Gold"
-focus_mode = 0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_color = Color(0, 0, 0, 1)
-theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 7
-theme_override_styles/normal = SubResource("StyleBox_debug_button")
-theme_override_styles/hover = SubResource("StyleBox_debug_button_hover")
-theme_override_styles/pressed = SubResource("StyleBox_debug_button_pressed")
-text = "+1000"
-
-[node name="DebugFinishButton" type="Button" parent="TopBar/DebugButtonColumn"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(66, 19)
-layout_mode = 2
-tooltip_text = "Force settlement"
-focus_mode = 0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_color = Color(0, 0, 0, 1)
-theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 7
-theme_override_styles/normal = SubResource("StyleBox_debug_button")
-theme_override_styles/hover = SubResource("StyleBox_debug_button_hover")
-theme_override_styles/pressed = SubResource("StyleBox_debug_button_pressed")
-text = "END"
 
 [node name="MemberRow" type="HBoxContainer" parent="."]
 unique_name_in_owner = true
@@ -142,48 +15,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 offset_top = -44.0
 offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
 theme = ExtResource("2_theme")
 theme_override_constants/separation = 8
 alignment = 1
-
-[node name="InventoryPanel" type="Panel" parent="."]
-visible = false
-anchors_preset = 3
-anchor_left = 1.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -112.0
-offset_top = -98.0
-offset_right = -12.0
-offset_bottom = -50.0
-mouse_filter = 2
-theme = ExtResource("2_theme")
-theme_override_styles/panel = SubResource("StyleBox_inventory")
-
-[node name="InventoryLabel" type="Label" parent="InventoryPanel"]
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_left = 4.0
-offset_top = 2.0
-offset_right = -4.0
-offset_bottom = 12.0
-mouse_filter = 2
-text = "Inventory"
-label_settings = SubResource("LabelSettings_inventory")
-
-[node name="InventoryGrid" type="GridContainer" parent="InventoryPanel"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 4.0
-offset_top = 14.0
-offset_right = -4.0
-offset_bottom = -4.0
-mouse_filter = 2
-columns = 6
-theme_override_constants/h_separation = 2
-theme_override_constants/v_separation = 2

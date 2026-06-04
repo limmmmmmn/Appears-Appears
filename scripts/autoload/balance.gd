@@ -206,6 +206,7 @@ const COMPANIONS: Array[Dictionary] = [
 const TILES: Array[Dictionary] = [
 	{
 		"id": &"campfire", "name": "모닥불", "short": "불", "color": Color(1.0, 0.6, 0.3, 1.0),
+		"sprite": "res://assets/sprites/objects/bonfire.png",
 		"place_cost": 300, "owner": &"mage",
 		"desc": "필드에 놓는 회복 거점. 근처 파티원만 HP가 차오른다.",
 	},
@@ -312,6 +313,7 @@ const BUILDINGS: Array[Dictionary] = [
 	},
 	{
 		"id": &"sanctuary", "name": "성소", "short": "성", "color": Color(0.55, 0.85, 1.0, 1.0),
+		"sprite": "res://assets/sprites/objects/shrine.png",
 		"mode": &"direct", "build_cost": 150, "unlock": {"type": &"downs", "value": 3},
 		"owner": &"priest", "recruit_at": 0,
 		"upgrades": [],

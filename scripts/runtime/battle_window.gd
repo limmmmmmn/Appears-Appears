@@ -49,7 +49,7 @@ const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
 const DEFAULT_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)  ## = field green
 const DQ_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)
-const DQ_WINDOW_BORDER: Color = Color(0.96, 0.97, 0.99, 1.0)     ## white window edge (still distinct)
+const DQ_WINDOW_BORDER: Color = Color(0, 0, 0, 1.0)              ## black window edge (retro)
 const DQ_WINDOW_TEXT: Color = Color(1.0, 1.0, 1.0, 1.0)
 
 # ─── Reward-color system: the card's COLOR = its reward type (shown from spawn) ──
@@ -393,7 +393,7 @@ func _flat_panel_style(bg: Color, border: Color) -> StyleBoxFlat:
 	style.border_width_right = 1
 	style.border_width_bottom = 1
 	style.border_color = border
-	style.set_corner_radius_all(3)  # 끝만 살짝 — unified app-window corners
+	style.set_corner_radius_all(0)  # 사각형 — retro, no rounded corners
 	style.anti_aliasing = false
 	return style
 
@@ -418,7 +418,7 @@ func _spawn_window_damage_number(amount: int, label_prefix: String) -> void:
 	var num: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
 	add_child(num)
 	num.position = Vector2(size.x * 0.5 + randf_range(-18.0, 18.0), 10.0 + randf_range(-2.0, 4.0))
-	num.z_index = 20
+	# z 0 (relative) → stays inside this window's layer; added last so it's on top here.
 	num.setup_window_damage(amount, label_prefix)
 
 
@@ -672,10 +672,11 @@ func _enemy_attack(enemy: Enemy) -> void:
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
 	_queue_log("%s attacks!\n%s takes %d damage." % [attacker_name, target.display_name, dealt])
-	# If that blow downed the member, THIS fight collapses — progress + reward
-	# lost (no chest). Only this window; the others keep rolling.
+	# A single down no longer collapses the fight — the window keeps rolling with the
+	# remaining members. Only a FULL party wipe closes windows (BattleManager._on_party
+	# _collapsed). The downed member just trails the party until everyone recovers.
 	if GameState.is_downed(target_index):
-		_collapse_lost(target.display_name)
+		_queue_log("%s is down!" % target.display_name)
 
 
 # ─── Enemy callbacks ──────────────────────────────────────────────────
@@ -688,8 +689,8 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	# gold over time). Recorded before reading the reward so the count is live.
 	if _enemy.data:
 		GameState.record_enemy_kill(GameState.tier_id_for_enemy_data(_enemy.data))
-	# Gold always flows now — it's the kill reward (tier gold × GREED), claimed
-	# from the chest when the window clears. No more "gold drops" skill gate.
+	# Kill gold is paid IMMEDIATELY (GameState._on_enemy_defeated). We still tally it
+	# here as the pool the 🟧 GOLD reward card pays AGAIN as a bonus on flip.
 	var drop_reward: int = _enemy.gold_reward
 	_gold_drops_total += drop_reward
 	if _enemy.data:
@@ -931,6 +932,8 @@ func _grant_reward() -> Dictionary:
 	var amount: int = 0
 	match t:
 		Reward.GOLD:
+			# BONUS gold on top of the already-paid immediate kill gold (≈ doubles
+			# this fight's gold). Tune by scaling claim_gold_drops() here.
 			amount = maxi(1, claim_gold_drops())
 			GameState.add_gold(amount)
 		Reward.XP:

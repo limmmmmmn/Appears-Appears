@@ -16,6 +16,12 @@ extends CharacterBody2D
 ## How fast the follow-camera eases toward the hero (higher = snappier). Kept
 ## gentle so the roam doesn't feel jerky / nauseating.
 const CAMERA_SMOOTHING_SPEED: float = 4.0
+## Mouse-wheel zoom range + step. zoom 1 = default; lower = see more of the map
+## (zoom out), higher = closer (zoom in). MIN ~0.4 lets you see almost the whole
+## 3×3 map at once; MAX 3 is a close-up.
+const ZOOM_MIN: float = 0.4
+const ZOOM_MAX: float = 3.0
+const ZOOM_STEP: float = 0.15
 ## Below this magnitude of input we consider the player to be idle and let
 ## auto-move take over. Just above zero so digital keys still feel snappy.
 const MANUAL_INPUT_THRESHOLD: float = 0.1
@@ -54,6 +60,7 @@ func _ready() -> void:
 	_camera.position = Vector2.ZERO  # local zero → sits exactly on the hero
 	_camera.position_smoothing_enabled = true
 	_camera.position_smoothing_speed = CAMERA_SMOOTHING_SPEED
+	_apply_zoom(GameState.field_camera_zoom)  # restore the player's last wheel zoom
 	_camera.make_current()
 	if _pending_data:
 		_visual.setup(_pending_data)
@@ -86,11 +93,28 @@ func _apply_character_layout() -> void:
 
 func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 	_field_bounds = Rect2(min_pos, max_pos - min_pos)
+	# Clamp the follow-camera to the map edges → bounded map (no endless roam).
 	if _camera:
-		_camera.limit_left = -10000000
-		_camera.limit_right = 10000000
-		_camera.limit_top = -10000000
-		_camera.limit_bottom = 10000000
+		_camera.limit_left = int(min_pos.x)
+		_camera.limit_top = int(min_pos.y)
+		_camera.limit_right = int(max_pos.x)
+		_camera.limit_bottom = int(max_pos.y)
+
+
+# ─── Mouse-wheel zoom ──────────────────────────────────────────────────
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_apply_zoom(GameState.field_camera_zoom + ZOOM_STEP)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_apply_zoom(GameState.field_camera_zoom - ZOOM_STEP)
+
+
+func _apply_zoom(z: float) -> void:
+	var clamped: float = clampf(z, ZOOM_MIN, ZOOM_MAX)
+	GameState.field_camera_zoom = clamped
+	if _camera:
+		_camera.zoom = Vector2(clamped, clamped)
 
 
 func _physics_process(_delta: float) -> void:

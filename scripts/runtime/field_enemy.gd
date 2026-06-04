@@ -484,7 +484,8 @@ func _trigger_encounter(is_combo_encounter: bool, combo_batch_id: int = 0) -> vo
 	await _play_movement_encounter_hit()
 	if not is_instance_valid(self):
 		return
-	# Window slides in as the struck enemy bursts away.
+	# Window slides in BEYOND the enemy (BattleManager places it on my far side from
+	# the hero); the struck enemy bursts away as it opens.
 	EventBus.enemy_encountered.emit(self)
 	_vanish_after_hit()
 

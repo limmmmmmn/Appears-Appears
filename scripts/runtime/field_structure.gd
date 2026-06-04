@@ -30,6 +30,26 @@ func setup(building: Dictionary) -> void:
 	_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_glow)
 
+	# Clickable hotspot over the structure (it can't be moved — click just opens its
+	# action panel). A world-space Control gets the click like the battle windows do.
+	var hotspot := Control.new()
+	hotspot.size = Vector2(22, 26)
+	hotspot.position = Vector2(-11, -20)
+	hotspot.mouse_filter = Control.MOUSE_FILTER_STOP
+	hotspot.gui_input.connect(_on_hotspot_input)
+	add_child(hotspot)
+
+	# If the building supplies a sprite, draw THAT (so the placed thing matches the
+	# panel icon exactly) and skip the generic block/label.
+	var sprite_path: String = str(building.get("sprite", ""))
+	if not sprite_path.is_empty() and ResourceLoader.exists(sprite_path):
+		var spr := Sprite2D.new()
+		spr.texture = load(sprite_path)
+		spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		spr.position = Vector2(0, -8)  # sit just above the ground point
+		add_child(spr)
+		return
+
 	# Stone base.
 	var base := ColorRect.new()
 	base.color = Color(0.28, 0.3, 0.34, 1.0)
@@ -58,6 +78,13 @@ func setup(building: Dictionary) -> void:
 	label.position = Vector2(-8, -28)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(label)
+
+
+## Click → open this structure's action panel (handled by ObjectActionPanel).
+func _on_hotspot_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		EventBus.structure_clicked.emit(building_id, global_position)
+		get_viewport().set_input_as_handled()
 
 
 ## Quick glow + scale pop — used when the building's effect fires (e.g. the

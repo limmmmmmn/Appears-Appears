@@ -10,7 +10,7 @@ border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(1, 1, 1, 1)
+border_color = Color(0, 0, 0, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_text"]
 font_size = 7
@@ -21,7 +21,7 @@ border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(1, 1, 1, 1)
+border_color = Color(0, 0, 0, 1)
 
 [node name="BattleWindow" type="Control" unique_id=395533292]
 custom_minimum_size = Vector2(128, 96)

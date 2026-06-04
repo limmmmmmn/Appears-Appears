@@ -1,51 +1,32 @@
 class_name HUD
 extends CanvasLayer
 
-## Field HUD:
-##   • Top bar:   field loop status (left) | "Gold N" (right)
-##   • Bottom bar: a row of party member boxes — portrait + name on the left
-##                 column, HP bar / EXP bar / equipment slots on the right.
-##
-## Pure presentation node. State comes from GameState, change notifications
-## come through EventBus.
+## Field HUD (slimmed). The always-on overlays that survived the OS-desktop
+## redesign:
+##   • bottom party-member boxes (HP / EXP / equipment)
+##   • top-left gold chip
+##   • tier-unlock popup ("○○ 해금!")
+##   • opening name prompt ("이름을 입력하세요")
+## The old top status bar (Field / timer / Gold label) and the +1000 / END debug
+## buttons moved to the MENU BAR; inventory now lives in the right panel's 장비 tab.
+## Pure presentation: state from GameState, change notifications via EventBus.
 
 const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.tscn")
-const EQUIP_SLOT_SCENE: PackedScene = preload("res://scenes/ui/equip_slot.tscn")
 const HUD_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
-const INVENTORY_SLOT_COUNT: int = 12
-## Design viewport width (canvas_items stretch) — used to center HUD elements on
-## the TRUE viewport center, ignoring the side panels.
+## Design viewport width (canvas_items stretch) — center the popup on the TRUE
+## viewport center, ignoring the side panels.
 const VIEWPORT_DESIGN_WIDTH: float = 640.0
-const TIMER_NORMAL_COLOR: Color = Color(1.0, 1.0, 1.0, 1.0)
-const TIMER_URGENT_COLOR: Color = Color(1.0, 0.16, 0.10, 1.0)
-const TIMER_URGENT_PULSE_COLOR: Color = Color(1.0, 0.82, 0.24, 1.0)
 
-@onready var _field_label: Label = %FieldLabel
-@onready var _countdown_label: Label = %CountdownLabel
-@onready var _gold_label: Label = %GoldLabel
-@onready var _debug_gold_button: Button = %DebugGoldButton
-@onready var _debug_finish_button: Button = %DebugFinishButton
 @onready var _member_row: HBoxContainer = %MemberRow
-@onready var _inventory_grid: GridContainer = %InventoryGrid
 
-## Live member box references, parallel to GameState.party. Rebuilt from
-## scratch on party_changed so we never have stale indices when a recruit
-## or wipe shifts the party array.
+## Live member box references, parallel to GameState.party. Rebuilt from scratch
+## on party_changed so indices never go stale after a recruit or wipe.
 var _member_boxes: Array[PartyMemberBox] = []
-var _inventory_slots: Array[EquipSlot] = []
-## macOS-style inventory window (bottom-right): dropped gear stacks here; drag a
-## slot onto a party member's equip slots to wear it. Scrolls when full.
-var _inventory_window: PanelContainer
-var _inv_grid: GridContainer
-var _timer_urgent: bool = false
-var _timer_pulse_time: float = 0.0
-## Measured gold income per second (sampled from total_gold_earned each 1s),
-## shown next to the gold total so upgrades read as a rising "+N/s".
+## Measured gold income per second (sampled each 1s), shown next to the total.
 var _income_timer: float = 0.0
 var _income_marker: int = 0
 var _income_per_sec: int = 0
-## Always-on big gold readout, pinned top-center (gold is the #1 info — must be
-## visible no matter which side of the screen you're looking at).
+## Always-on big gold readout, pinned top-left (gold is the #1 info).
 var _gold_center: PanelContainer
 var _gold_center_label: Label
 ## Big centered "○○ 해금!" popup with the enemy sprite (tier unlock moment).
@@ -53,7 +34,7 @@ var _unlock_popup: PanelContainer
 var _unlock_sprite: TextureRect
 var _unlock_label: Label
 var _unlock_tween: Tween
-## Opening name prompt — "이름을 입력하세요" overlay shown before anything else.
+## Opening name prompt — shown before anything else.
 var _name_overlay: Control
 var _name_line_edit: LineEdit
 
@@ -66,51 +47,15 @@ func _ready() -> void:
 	EventBus.party_member_revived.connect(_on_party_member_revived)
 	EventBus.party_equipment_changed.connect(_on_party_equipment_changed)
 	EventBus.armor_equipped.connect(_on_armor_equipped.unbind(1))
-	EventBus.inventory_changed.connect(_on_inventory_changed)
 	EventBus.gold_changed.connect(_on_gold_changed)
-	EventBus.field_loop_started.connect(_on_field_loop_started)
-	EventBus.field_loop_timer_changed.connect(_on_field_loop_timer_changed)
-	_debug_gold_button.pressed.connect(_on_debug_gold_button_pressed)
-	_debug_finish_button.pressed.connect(_on_debug_finish_button_pressed)
-	EventBus.tier_unlocked.connect(_on_tier_unlocked)
-	# Compact top-bar fonts (centralized in UITheme).
-	for lbl in [_gold_label, _field_label, _countdown_label]:
-		lbl.add_theme_font_size_override("font_size", UITheme.FONT_HUD)
-	# Gold now lives only in the right panel (no duplicate over the field).
-	_gold_label.visible = false
+	EventBus.tier_available.connect(_on_tier_unlocked)  # popup when the tile APPEARS
 	_income_marker = GameState.total_gold_earned
 	_build_gold_center()  # prominent gold chip, top-left next to the placement dock
 	_build_unlock_popup()
 	if not GameState.name_entered:
 		_build_name_overlay()
 	_refresh_gold()
-	_refresh_field_label()
-	_build_inventory_window()
-	# OS-desktop: the inventory is an app collapsed to the 인벤 desktop icon.
-	add_to_group("inventory_window")
-	if _inventory_window != null:
-		_inventory_window.visible = false
 	_rebuild_member_boxes()
-
-
-# ─── Inventory window open/close (driven by the 인벤 desktop icon) ───────
-func open() -> void:
-	if _inventory_window != null:
-		_inventory_window.visible = true
-		_refresh_inventory_window()
-
-
-func close() -> void:
-	if _inventory_window != null:
-		_inventory_window.visible = false
-
-
-func toggle() -> void:
-	if _inventory_window != null:
-		if _inventory_window.visible:
-			close()
-		else:
-			open()
 
 
 func _process(delta: float) -> void:
@@ -120,22 +65,17 @@ func _process(delta: float) -> void:
 		_income_marker = GameState.total_gold_earned
 		_income_timer = 0.0
 		_refresh_gold()
-	if not _timer_urgent:
-		return
-	_timer_pulse_time += delta
-	var pulse: float = (sin(_timer_pulse_time * 12.0) + 1.0) * 0.5
-	_countdown_label.modulate = TIMER_URGENT_COLOR.lerp(TIMER_URGENT_PULSE_COLOR, pulse)
 
 
-# ─── Bottom row ───────────────────────────────────────────────────────
+# ─── Bottom row (party member boxes) ───────────────────────────────────
 func _rebuild_member_boxes() -> void:
 	for box in _member_boxes:
 		if is_instance_valid(box):
 			box.queue_free()
 	_member_boxes.clear()
 	for i in GameState.party_size():
-		# Layout flags are authored on the box scene root, so each member
-		# keeps its natural size and stays pinned to the bottom row.
+		# Layout flags are authored on the box scene root, so each member keeps
+		# its natural size and stays pinned to the bottom row.
 		var box: PartyMemberBox = MEMBER_BOX_SCENE.instantiate()
 		_member_row.add_child(box)
 		box.setup(i, GameState.party[i])
@@ -148,7 +88,7 @@ func _on_party_member_hp_changed(index: int, new_hp: int, max_hp: int) -> void:
 	_member_boxes[index].set_hp(new_hp, max_hp)
 
 
-## XP gauge (party level-up, System: 레벨업). Drives the exp bar + LV label.
+## XP gauge (party level-up). Drives the exp bar + LV label.
 func _on_party_member_xp_changed(index: int, xp: int, xp_to_next: int, level: int) -> void:
 	if index < 0 or index >= _member_boxes.size():
 		return
@@ -178,10 +118,6 @@ func _on_party_equipment_changed(index: int) -> void:
 	if index < 0 or index >= _member_boxes.size():
 		return
 	_member_boxes[index].set_equipment(GameState.equipment_for_member(index))
-
-
-func _on_inventory_changed() -> void:
-	_refresh_inventory_window()
 
 
 # ─── Tier-unlock popup (big sprite + "○○ 해금!") ───────────────────────
@@ -360,109 +296,24 @@ func _dismiss_name_overlay() -> void:
 		_name_overlay = null
 
 
-# ─── Inventory window (macOS style, bottom-right) ──────────────────────
-func _build_inventory_window() -> void:
-	# Hide the legacy scene panel — this code-built window replaces it.
-	var legacy := get_node_or_null("InventoryPanel")
-	if legacy:
-		legacy.visible = false
-
-	var style := OSWindow.body_style()  # unified white border + small corners
-	style.shadow_size = 3
-	_inventory_window = PanelContainer.new()
-	_inventory_window.add_theme_stylebox_override("panel", style)
-	_inventory_window.clip_contents = true
-	_inventory_window.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	# Bottom-LEFT corner (just right of the left dock), above the party strip.
-	_inventory_window.offset_left = 6.0
-	_inventory_window.offset_top = -120.0
-	_inventory_window.offset_right = 98.0
-	_inventory_window.offset_bottom = -46.0
-	add_child(_inventory_window)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 0)
-	_inventory_window.add_child(col)
-
-	# Title bar (Resurrect 64 teal) — unified white-bordered chrome.
-	var tbar_style := OSWindow.titlebar_style(Color(0.055, 0.686, 0.608, 1.0))  # #0eaf9b teal
-	var titlebar := PanelContainer.new()
-	titlebar.add_theme_stylebox_override("panel", tbar_style)
-	col.add_child(titlebar)
-	var title := Label.new()
-	title.text = "인벤토리"
-	title.add_theme_font_override("font", HUD_FONT)
-	title.add_theme_font_size_override("font_size", 9)
-	title.add_theme_color_override("font_color", Color(0.05, 0.08, 0.07, 1.0))
-	titlebar.add_child(title)
-
-	# Scrollable grid — fills up, scrolls when there's no room.
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(scroll)
-	_inv_grid = GridContainer.new()
-	_inv_grid.columns = 4
-	_inv_grid.add_theme_constant_override("h_separation", 2)
-	_inv_grid.add_theme_constant_override("v_separation", 2)
-	_inv_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_inv_grid)
-	_refresh_inventory_window()
-
-
-func _refresh_inventory_window() -> void:
-	if _inv_grid == null:
-		return
-	for child in _inv_grid.get_children():
-		child.queue_free()
-	var items: Array = GameState.inventory_items()
-	var count: int = maxi(items.size() + 4, 12)  # items + spare empties, ScrollContainer scrolls
-	for i in count:
-		var slot: EquipSlot = EQUIP_SLOT_SCENE.instantiate()
-		slot.custom_minimum_size = Vector2(18, 18)
-		slot.drag_role = &"inventory"
-		slot.inv_index = i
-		_inv_grid.add_child(slot)
-		slot.set_empty_label("빈 칸")
-		slot.set_item(items[i] if i < items.size() else null)
-
-
-# ─── Top bar ──────────────────────────────────────────────────────────
+# ─── Gold chip — TOP-LEFT, right where gold is SPENT (the placement dock) ──
 func _on_gold_changed(_new_gold: int) -> void:
 	_refresh_gold()
 
 
-func _on_field_loop_started(_loop_num: int) -> void:
-	_refresh_field_label()
-
-
-func _on_field_loop_timer_changed(remaining_seconds: int) -> void:
-	if remaining_seconds < 0:
-		_countdown_label.text = ""
-		_set_timer_urgent(false)
-		return
-	_countdown_label.text = str(maxi(0, remaining_seconds))
-	_set_timer_urgent(remaining_seconds > 0 and remaining_seconds <= 3)
-
-
 func _refresh_gold() -> void:
-	var text: String
+	if _gold_center_label == null:
+		return
+	# Coin icon already signals "gold" → show just the number (+ income).
 	if _income_per_sec > 0:
-		text = "Gold %d   +%d/s" % [GameState.gold, _income_per_sec]
+		_gold_center_label.text = "%d  +%d/s" % [GameState.gold, _income_per_sec]
 	else:
-		text = "Gold %d" % GameState.gold
-	_gold_label.text = text
-	if _gold_center_label != null:
-		# Coin icon already signals "gold" → show just the number (+ income).
-		if _income_per_sec > 0:
-			_gold_center_label.text = "%d  +%d/s" % [GameState.gold, _income_per_sec]
-		else:
-			_gold_center_label.text = "%d" % GameState.gold
-		_reposition_gold_center()
+		_gold_center_label.text = "%d" % GameState.gold
+	_reposition_gold_center()
 
 
-# ─── Gold chip — TOP-LEFT, right where gold is SPENT (the placement dock) ──
 ## Gold's most-used spot is enemy placement on the left, so the readout lives there
-## (big + bright), not in a far corner. Unified white-bordered window chrome.
+## (big + bright). Unified white-bordered window chrome.
 func _build_gold_center() -> void:
 	var style := OSWindow.body_style(Color(0.1, 0.09, 0.04, 0.95))  # white border, gold-dark fill
 	style.content_margin_left = 6
@@ -484,7 +335,7 @@ func _build_gold_center() -> void:
 	row.add_child(coin)
 	_gold_center_label = Label.new()
 	_gold_center_label.add_theme_font_override("font", HUD_FONT)
-	_gold_center_label.add_theme_font_size_override("font_size", 14)  # big — top priority
+	_gold_center_label.add_theme_font_size_override("font_size", 9)  # small + minimal
 	_gold_center_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 1.0))
 	_gold_center_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	_gold_center_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -500,24 +351,3 @@ func _build_gold_center() -> void:
 func _reposition_gold_center() -> void:
 	if _gold_center != null:
 		_gold_center.position = Vector2(5.0, 17.0)
-
-
-func _on_debug_gold_button_pressed() -> void:
-	GameState.add_gold(1000)
-
-
-func _on_debug_finish_button_pressed() -> void:
-	EventBus.field_loop_finish_requested.emit()
-
-
-func _refresh_field_label() -> void:
-	_field_label.text = "Field %d" % maxi(1, GameState.field_loop_count)
-
-
-func _set_timer_urgent(is_urgent: bool) -> void:
-	if _timer_urgent == is_urgent:
-		return
-	_timer_urgent = is_urgent
-	_timer_pulse_time = 0.0
-	if not is_urgent:
-		_countdown_label.modulate = TIMER_NORMAL_COLOR

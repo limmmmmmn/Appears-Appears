@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://cyhcy1wpnk5ed"]
+
+[ext_resource type="Theme" uid="uid://y11tyjfd0r6c" path="res://assets/themes/ui_theme.tres" id="1_theme"]
+
+[node name="Tile" type="Button" unique_id=733484928]
+custom_minimum_size = Vector2(20, 20)
+focus_mode = 0
+theme = ExtResource("1_theme")
+
+[node name="Icon" type="TextureRect" parent="." unique_id=1367893761]
+texture_filter = 1
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 3.0
+offset_top = 3.0
+offset_right = -3.0
+offset_bottom = -3.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5

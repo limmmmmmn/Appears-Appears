@@ -120,6 +120,16 @@ var total_party_downs: int = 0
 
 # ─── Progression ──────────────────────────────────────────────────────
 var field_loop_count: int = 0
+## Mouse-wheel camera zoom on the field. 1.0 = default; >1 zoom in, <1 zoom out.
+## Persisted here so it survives the per-loop player rebuild.
+var field_camera_zoom: float = 1.0
+## True while the party is RESTING at the campfire (held still, healing to full).
+## Freezes field movement so they stay put until everyone's topped off.
+var party_resting: bool = false
+## Drag-and-drop placement target: the world spot where the NEXT placed thing
+## (enemy / campfire) should appear. Vector2.INF = none (fall back to near-player
+## random). The Field consumes + clears it when it spawns the placement.
+var pending_placement_position: Vector2 = Vector2.INF
 var current_field_region_id: StringName = FIELD_REGION_GRASS
 var story_companion_joined: bool = false
 var story_gold_goal_announced: bool = false
@@ -196,6 +206,9 @@ const DAMAGE_BONUS_STACK_MULTIPLIERS = [1.0, 0.5, 0.3, 0.2, 0.16]
 # ─── Run statistics (for the game-over summary) ───────────────────────
 var enemies_killed: int = 0
 var total_gold_earned: int = 0  ## lifetime, not affected by spending
+## Tiers whose "available" popup already fired (so it shows once when the tile
+## appears, not every gold tick). Reset per run.
+var _tier_available_announced: Array[StringName] = []
 var biggest_hit: int = 0
 var run_started_at_ms: int = 0
 
@@ -207,8 +220,13 @@ func _ready() -> void:
 	EventBus.modifier_purchase_requested.connect(_on_modifier_purchase_requested)
 
 
-func _on_enemy_defeated(_enemy: Node, _gold: int, _world_position: Vector2) -> void:
+func _on_enemy_defeated(_enemy: Node, gold: int, _world_position: Vector2) -> void:
 	enemies_killed += 1
+	# Kill gold is paid IMMEDIATELY now — the floating "Ng" on the dead enemy IS
+	# real money. The reward CARD on the window is a BONUS on top (🟧 = extra gold,
+	# 🟥/🟩/🟦 = weapon/heal/xp). See battle_window._grant_reward.
+	if gold > 0:
+		add_gold(gold)
 
 
 func _on_damage_dealt(_target: Node, amount: int, _world_position: Vector2) -> void:
@@ -407,7 +425,21 @@ func add_gold(amount: int) -> void:
 	gold += amount
 	if amount > 0:
 		total_gold_earned += amount  # gates gold-based building unlocks
+		_announce_new_tiers()        # popup fires when a new tier becomes available
 	EventBus.gold_changed.emit(gold)
+
+
+## Fire the "○○ 해금!" popup the moment a tier's cumulative-gold milestone is
+## crossed (the new tile appears in the dock) — once per tier, not on click.
+func _announce_new_tiers() -> void:
+	for i in Balance.tier_count():
+		var id: StringName = Balance.tier_at(i)["id"]
+		if is_tier_unlocked(id) or _tier_available_announced.has(id):
+			continue
+		if tier_threshold_reached(id):
+			_tier_available_announced.append(id)
+			EventBus.tier_available.emit(id)  # "○○ 해금!" popup
+			unlock_tier(id)                   # auto-claim → tile is placeable right away
 
 
 func story_field_index() -> int:
@@ -1753,7 +1785,17 @@ func is_party_fully_recovered() -> bool:
 
 ## Field movement is frozen while the whole party recovers from a full collapse.
 func is_movement_frozen() -> bool:
-	return _party_collapsed or not world_started
+	return _party_collapsed or not world_started or party_resting
+
+
+## All combat-ready members at full HP? (Downed members refill on their own.)
+func is_party_full_hp() -> bool:
+	for i in party.size():
+		if not is_combat_ready(i):
+			continue
+		if i < party_hp.size() and party_hp[i] < effective_max_hp(i):
+			return false
+	return true
 
 
 # ─── Opening: name the hero → lay the first grass → the world begins ───
@@ -1772,6 +1814,9 @@ func set_player_name(new_name: String) -> void:
 		party[0] = hero
 		EventBus.party_changed.emit()  # HUD rebuilds boxes with the new name
 	EventBus.player_named.emit(clean)
+	# Naming IS the start now — no separate "초원 깔기" step. The world begins and
+	# the placement list (slime first) is live immediately.
+	start_world()
 
 
 func random_hero_name() -> String:
@@ -1802,6 +1847,11 @@ func downed_recovery_seconds(_index: int) -> float:
 ## BattleManager. Only downed members heal (no passive regen for the upright).
 func tick_downed_recovery(delta: float) -> void:
 	if delta <= 0.0:
+		return
+	# Auto-recovery ONLY kicks in on a FULL wipe (everyone down). A partial down —
+	# one or two members — stays down (they trail the party) until the whole party
+	# collapses (then all revive together) or a 성소 revives on the spot.
+	if not _party_collapsed:
 		return
 	for i in party.size():
 		if not party_downed[i]:
@@ -2579,6 +2629,7 @@ func reset_run() -> void:
 	purchased_skill_nodes.clear()
 	_ensure_default_skill_nodes()
 	total_gold_earned = 0
+	_tier_available_announced.clear()  # re-announce tiers next run
 	enemies_killed = 0
 	biggest_hit = 0
 	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock

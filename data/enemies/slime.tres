@@ -9,7 +9,6 @@ id = &"slime"
 display_name = "Slime"
 sprite = ExtResource("2_sprite")
 max_hp = 18
-attack = 2
 agility = 5
 chases_player_on_field = false
 xp_reward = 3

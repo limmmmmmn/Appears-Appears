@@ -1,6 +1,166 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/menu_bar.gd" id="1_mb"]
+[ext_resource type="Theme" path="res://assets/themes/ui_theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="bar"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 6.0
+content_margin_bottom = 2.0
+bg_color = Color(0.32, 0.22, 0.42, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0, 0, 0, 1)
+shadow_color = Color(0, 0, 0, 0.35)
+shadow_size = 2
+
+[sub_resource type="StyleBoxEmpty" id="menu_normal"]
+
+[sub_resource type="StyleBoxFlat" id="menu_hover"]
+content_margin_left = 3.0
+content_margin_right = 3.0
+bg_color = Color(1, 1, 1, 0.12)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
 
 [node name="MenuBar" type="Control"]
+layout_mode = 3
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 15.0
+grow_horizontal = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_mb")
+
+[node name="Bar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("bar")
+
+[node name="Row" type="HBoxContainer" parent="Bar"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Logo" type="Label" parent="Bar/Row"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BarLabel"
+theme_override_colors/font_color = Color(0.244, 0.749, 0.686, 1)
+theme_override_font_sizes/font_size = 8
+text = "◆"
+vertical_alignment = 1
+
+[node name="AppName" type="Label" parent="Bar/Row"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BarLabel"
+theme_override_colors/font_color = Color(0.93, 0.94, 0.96, 1)
+theme_override_font_sizes/font_size = 8
+text = "HyperOS"
+vertical_alignment = 1
+
+[node name="Spacer1" type="Control" parent="Bar/Row"]
+custom_minimum_size = Vector2(6, 0)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="MenuField" type="Label" parent="Bar/Row"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BarLabel"
+theme_override_colors/font_color = Color(0.78, 0.8, 0.84, 0.85)
+theme_override_font_sizes/font_size = 8
+text = "필드"
+vertical_alignment = 1
+
+[node name="MenuUpgrade" type="Button" parent="Bar/Row"]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.93, 0.94, 0.96, 1)
+theme_override_colors/font_hover_color = Color(0.339, 0.78, 0.726, 1)
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("menu_normal")
+theme_override_styles/hover = SubResource("menu_hover")
+theme_override_styles/pressed = SubResource("menu_hover")
+text = "강화"
+flat = true
+
+[node name="MenuTown" type="Button" parent="Bar/Row"]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.93, 0.94, 0.96, 1)
+theme_override_colors/font_hover_color = Color(0.339, 0.78, 0.726, 1)
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("menu_normal")
+theme_override_styles/hover = SubResource("menu_hover")
+theme_override_styles/pressed = SubResource("menu_hover")
+text = "마을"
+flat = true
+
+[node name="MenuHelp" type="Label" parent="Bar/Row"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BarLabel"
+theme_override_colors/font_color = Color(0.78, 0.8, 0.84, 0.85)
+theme_override_font_sizes/font_size = 8
+text = "도움말"
+vertical_alignment = 1
+
+[node name="Push" type="Control" parent="Bar/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="DebugGold" type="Button" parent="Bar/Row"]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.78, 0.8, 0.84, 0.85)
+theme_override_colors/font_hover_color = Color(0.339, 0.78, 0.726, 1)
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("menu_normal")
+theme_override_styles/hover = SubResource("menu_hover")
+theme_override_styles/pressed = SubResource("menu_hover")
+text = "+1000"
+flat = true
+
+[node name="DebugEnd" type="Button" parent="Bar/Row"]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.78, 0.8, 0.84, 0.85)
+theme_override_colors/font_hover_color = Color(0.339, 0.78, 0.726, 1)
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("menu_normal")
+theme_override_styles/hover = SubResource("menu_hover")
+theme_override_styles/pressed = SubResource("menu_hover")
+text = "END"
+flat = true
+
+[node name="Level" type="Label" parent="Bar/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"BarLabel"
+theme_override_colors/font_color = Color(0.93, 0.94, 0.96, 1)
+theme_override_font_sizes/font_size = 8
+text = "Lv 1"
+vertical_alignment = 1
+
+[node name="Spacer2" type="Control" parent="Bar/Row"]
+custom_minimum_size = Vector2(4, 0)
+layout_mode = 2
+mouse_filter = 2
+
+[connection signal="pressed" from="Bar/Row/MenuUpgrade" to="." method="_toggle_group" binds= ["upgrade_window"]]
+[connection signal="pressed" from="Bar/Row/MenuTown" to="." method="_toggle_group" binds= ["town_window"]]
+[connection signal="pressed" from="Bar/Row/DebugGold" to="." method="_on_debug_gold"]
+[connection signal="pressed" from="Bar/Row/DebugEnd" to="." method="_on_debug_finish"]

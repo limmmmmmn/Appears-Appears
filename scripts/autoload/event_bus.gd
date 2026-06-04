@@ -92,6 +92,11 @@ signal campfire_placed()
 ## path is preserved separately for future automation.)
 signal enemy_place_requested(tier_id: StringName)
 
+## A placed field object (e.g. campfire) was clicked → open its action panel.
+signal structure_clicked(building_id: StringName, world_position: Vector2)
+## The "쉰다" button on the campfire panel was pressed.
+signal rest_requested()
+
 ## The opening "lay the grass" step was taken — the world begins: the hero starts
 ## moving and the dock swaps the grass tile for the enemy roster.
 signal world_started()
@@ -148,8 +153,13 @@ signal armor_equipped(armor_name: String)
 signal combat_upgrade_failed(axis: StringName)
 
 ## An enemy tier was just unlocked (cumulative-gold milestone reached + claimed).
-## HUD shows a big "○○ 해금!" popup with the enemy sprite.
+## Used for combat-upgrade/panel refresh (NOT the big popup anymore).
 signal tier_unlocked(tier_id: StringName)
+
+## An enemy tier just became AVAILABLE in the dock (its cumulative-gold milestone
+## was crossed) — fires once, the moment the new tile appears. HUD shows the big
+## "○○ 해금!" popup here now (not on click).
+signal tier_available(tier_id: StringName)
 
 # ─── Per-enemy level (System 1) ────────────────────────────────────────
 ## An enemy tier's kill-progress changed (fires every kill). Left bar updates

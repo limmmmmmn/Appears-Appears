@@ -1,7 +1,7 @@
-[gd_scene load_steps=4 format=3 uid="uid://3bdh8ubp16k5"]
+[gd_scene format=3 uid="uid://3bdh8ubp16k5"]
 
 [ext_resource type="Script" uid="uid://b8bhrhdxjfyt1" path="res://scripts/runtime/field.gd" id="1_field"]
-[ext_resource type="Font" path="res://assets/fonts/field_ui_font.tres" id="2_font"]
+[ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="2_font"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_message"]
 bg_color = Color(0.02, 0.04, 0.02, 0.86)
@@ -15,7 +15,6 @@ border_color = Color(0.78, 1, 0.52, 1)
 font = ExtResource("2_font")
 font_size = 10
 font_color = Color(0.9, 1, 0.82, 1)
-shadow_size = 1
 shadow_color = Color(0, 0, 0, 0.8)
 
 [node name="Field" type="Node2D" unique_id=536184698]
@@ -29,14 +28,13 @@ offset_bottom = 360.0
 mouse_filter = 2
 color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 
-[node name="BackgroundTexture" type="TextureRect" parent="."]
+[node name="BackgroundTexture" type="TextureRect" parent="." unique_id=2127068635]
 z_index = -99
+texture_filter = 1
+clip_contents = true
 offset_right = 640.0
 offset_bottom = 360.0
 mouse_filter = 2
-clip_contents = true
-texture_filter = 1
-stretch_mode = 0
 
 [node name="Decorations" type="Node2D" parent="." unique_id=193672294]
 y_sort_enabled = true
@@ -53,10 +51,10 @@ y_sort_enabled = true
 [node name="Party" type="Node2D" parent="." unique_id=1572474564]
 y_sort_enabled = true
 
-[node name="MessageLayer" type="CanvasLayer" parent="."]
+[node name="MessageLayer" type="CanvasLayer" parent="." unique_id=1898667897]
 layer = 8
 
-[node name="MessagePanel" type="Panel" parent="MessageLayer"]
+[node name="MessagePanel" type="Panel" parent="MessageLayer" unique_id=82022691]
 unique_name_in_owner = true
 visible = false
 offset_left = 104.0
@@ -66,7 +64,7 @@ offset_bottom = 62.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBox_message")
 
-[node name="MessageLabel" type="Label" parent="MessageLayer/MessagePanel"]
+[node name="MessageLabel" type="Label" parent="MessageLayer/MessagePanel" unique_id=1657832937]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -74,8 +72,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 8.0
 offset_right = -8.0
-mouse_filter = 2
-text = ""
+grow_horizontal = 2
+grow_vertical = 2
 label_settings = SubResource("LabelSettings_message")
 horizontal_alignment = 1
 vertical_alignment = 1

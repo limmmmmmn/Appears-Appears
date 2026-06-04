@@ -42,6 +42,12 @@ const SLOT_CENTERS: Array[Vector2] = [
 	Vector2(193.0, 300.0), Vector2(324.0, 300.0), Vector2(455.0, 300.0),
 ]
 const MAX_PER_SLOT: int = 3
+## Center of SLOT_CENTERS — slot positions are taken RELATIVE to this and anchored
+## to the party's world position so the windows sit on the map around the fight.
+const GRID_CENTER: Vector2 = Vector2(324.0, 187.0)
+## The battle window opens this far BEYOND the field enemy (on the side away from
+## the hero), so the line reads 용사 → 필드에너미 → 전투창 (enemy stands between).
+const WINDOW_BEHIND_ENEMY_DIST: float = 90.0
 ## Windows stay inside this rect (off the wider DOS side panels + menu bar).
 const WINDOW_AREA: Rect2 = Rect2(128.0, 18.0, 393.0, 338.0)
 ## Stack-chain: the "파파파" stagger between sequential flips; merge bonus = this
@@ -174,7 +180,7 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 	_slot_windows[slot].append(window)
 	if window.has_signal("grab_started"):
 		window.grab_started.connect(_on_grab_started)
-	var spawn_position: Vector2 = _slot_position(slot, count, window_size)
+	var spawn_position: Vector2 = _window_position_behind_enemy(source, window_size)
 	window.position = spawn_position
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
@@ -245,7 +251,9 @@ func _input(event: InputEvent) -> void:
 	if _drag_slot < 0:
 		return
 	if event is InputEventMouseMotion:
-		_drag_delta = event.global_position - _drag_mouse_start
+		# Windows are world-space now → convert the screen-pixel drag into world
+		# units by dividing out the camera zoom, so a card tracks the cursor 1:1.
+		_drag_delta = (event.global_position - _drag_mouse_start) / maxf(0.01, GameState.field_camera_zoom)
 		if _drag_delta.length() > 4.0:
 			_drag_moved = true
 		for w in _drag_card_starts:
@@ -292,34 +300,40 @@ func _find_merge_target(from_slot: int) -> int:
 	return -1
 
 
-## Move every card of `from` onto `to` (preserving order), re-cascade, reset `from`.
+## Pile every card of `from` ONTO `to`'s current top card (world space), cascading
+## down-right so they read as one neat stack — no teleport to a grid slot.
 func _merge_slots(from_slot: int, to_slot: int) -> void:
+	var to_list: Array = _slot_windows.get(to_slot, [])
 	var moving: Array = _slot_windows[from_slot].duplicate()
+	# Anchor = where the target stack already sits (its top card). Fallback: keep
+	# the dragged cards' own drop spot so nothing jumps.
+	var anchor: Vector2
+	if not to_list.is_empty() and is_instance_valid(to_list.back()):
+		anchor = (to_list.back() as Control).position
+	elif not moving.is_empty() and is_instance_valid(moving.back()):
+		anchor = (moving.back() as Control).position
+	var step: int = 0
 	for w in moving:
 		if not is_instance_valid(w):
 			continue
+		step += 1
 		_slot_windows[from_slot].erase(w)
 		_slot_counts[from_slot] = maxi(0, _slot_counts[from_slot] - 1)
 		_slot_windows[to_slot].append(w)
 		_slot_counts[to_slot] += 1
 		_window_slot[w] = to_slot
-		var idx: int = _slot_counts[to_slot] - 1
-		w.position = _slot_position(to_slot, idx, w.size)
+		w.position = anchor + Vector2(6.0, 6.0) * float(step)  # cascade onto the pile
 		_window_rects[w] = Rect2(w.position, w.size)
 		if w.get_parent() != null:
-			w.get_parent().move_child(w, -1)
-	if from_slot < _slot_base.size():
-		_slot_base[from_slot] = SLOT_CENTERS[from_slot]  # emptied → reset its base
+			w.get_parent().move_child(w, -1)  # newest cards to front
 	_update_slot_readiness(from_slot)
 	_update_slot_readiness(to_slot)
 
 
-func _clamp_loose(pos: Vector2, win_size: Vector2) -> Vector2:
-	# Keep the card mostly on screen (so a moved stack can't be lost off-edge).
-	return Vector2(
-		clampf(pos.x, 8.0, 632.0 - win_size.x),
-		clampf(pos.y, 16.0, 354.0 - win_size.y)
-	)
+func _clamp_loose(pos: Vector2, _win_size: Vector2) -> Vector2:
+	# World space now → no screen clamp; a dragged card stays where it's dropped
+	# on the map (the camera can roam to it).
+	return pos
 
 
 ## Chain-flip the whole stack top→bottom ("파파파"), tally rewards, then a merge
@@ -340,9 +354,10 @@ func _open_stack(slot: int) -> void:
 			continue
 		w.reveal_and_grant()  # each card grants its TYPED reward (color = type)
 		await get_tree().create_timer(CHAIN_GAP).timeout
-	# Combo pop at the stack's (possibly moved) spot.
+	# Combo pop at the stack's world spot (top card center).
 	if count >= 2:
-		var center: Vector2 = _slot_base[slot] if slot < _slot_base.size() else SLOT_CENTERS[slot]
+		var top_win = ws[0]
+		var center: Vector2 = (top_win.position + top_win.size * 0.5) if is_instance_valid(top_win) else _player_world_position()
 		_spawn_bonus_popup(center, "x%d 콤보!" % count)
 	for w in ws:
 		if is_instance_valid(w):
@@ -431,18 +446,31 @@ func _is_slot_ready(slot: int) -> bool:
 
 ## Screen position for a window in `slot`. The Nth window in a slot gets a random
 ## nudge (scaled by N) so the stack reads as separate floating cards.
+## Open the window on the FAR side of the field enemy from the hero, so the line
+## reads 용사 → 필드에너미 → 전투창 (the enemy stands between them, 대치). World coords.
+func _window_position_behind_enemy(source: Node2D, window_size: Vector2) -> Vector2:
+	var hero: Vector2 = _player_world_position()
+	var enemy: Vector2 = source.global_position if (source != null and is_instance_valid(source)) else hero
+	if hero == Vector2.INF:
+		hero = enemy
+	var dir: Vector2 = enemy - hero
+	if dir.length() < 1.0:
+		dir = Vector2.RIGHT  # hero & enemy overlap at contact → pick a stable axis
+	dir = dir.normalized()
+	return enemy + dir * WINDOW_BEHIND_ENEMY_DIST - window_size * 0.5
+
+
 func _slot_position(slot: int, stack_index: int, window_size: Vector2) -> Vector2:
-	var center: Vector2 = _slot_base[slot] if slot < _slot_base.size() else SLOT_CENTERS[slot]
-	# Diagonal cascade (down-right) so the stack fans like a dealt hand — the newest
-	# card sits front + offset, older cards peek out behind it.
+	# WORLD position: anchor the 3×3 slot grid to the party so windows sit ON THE
+	# MAP around the fight (zooming/panning with the camera) instead of pinned to
+	# the screen. Each slot keeps its relative place in the grid.
+	var anchor: Vector2 = _player_world_position()
+	if anchor == Vector2.INF:
+		anchor = GRID_CENTER
+	var slot_offset: Vector2 = SLOT_CENTERS[slot] - GRID_CENTER
+	# Diagonal cascade (down-right) so a stack fans like a dealt hand.
 	var nudge := Vector2(6.0, 6.0) * float(stack_index) + Vector2(randf_range(-1.5, 1.5), randf_range(-1.5, 1.5))
-	var pos: Vector2 = center - window_size * 0.5 + nudge
-	var max_x: float = maxf(WINDOW_AREA.position.x, WINDOW_AREA.end.x - window_size.x)
-	var max_y: float = maxf(WINDOW_AREA.position.y, WINDOW_AREA.end.y - window_size.y)
-	return Vector2(
-		clampf(pos.x, WINDOW_AREA.position.x, max_x),
-		clampf(pos.y, WINDOW_AREA.position.y, max_y)
-	)
+	return anchor + slot_offset - window_size * 0.5 + nudge
 
 
 func _centered_modal_position(window_size: Vector2) -> Vector2:
@@ -838,11 +866,11 @@ func _world_to_screen(world_pos: Vector2) -> Vector2:
 	return get_viewport().get_canvas_transform() * world_pos
 
 
-## The screen-space CanvasLayer windows are parented to (so they stay pinned to the
-## viewport under the follow camera). Falls back to self if the layer is missing.
+## WORLD-space parent: BattleManager is a Node2D under Main, so windows parented
+## here live ON THE MAP — they scale with camera zoom and stay anchored to their
+## world spot (no longer pinned to the screen via the old CanvasLayer).
 func _window_parent() -> Node:
-	var layer: Node = get_node_or_null("../BattleWindowLayer")
-	return layer if layer != null else self
+	return self
 
 
 ## Clamp a window's top-left so the whole rect stays inside the visible play
@@ -896,23 +924,14 @@ func _on_battle_window_closed(window: Node) -> void:
 		var xp_reward: int = battle_window.claim_xp_reward()
 		if xp_reward > 0:
 			GameState.add_party_xp(xp_reward)
-		# Loot drops onto the field at the encounter spot — the player clicks the
-		# gold/items to pick them up (no chest, no hover open).
-		_drop_gold_from_window(battle_window)
+		# Kill GOLD is paid immediately on each kill (GameState._on_enemy_defeated),
+		# so we no longer drop a gold pile on close. Items still drop on the field.
 		_drop_items_from_window(battle_window)
 	# Tell anyone who cares (Field, etc.) when the last fight ends. This is
 	# the gate Field uses before declaring field_loop_settled — Echo Strike means
 	# the *first* window closing is rarely the last one.
 	if _window_rects.is_empty():
 		EventBus.all_battles_resolved.emit()
-
-
-func _drop_gold_from_window(window: BattleWindow) -> void:
-	var amount: int = window.claim_gold_drops()
-	if amount <= 0:
-		return
-	# One gold pile worth the whole reward → a single click grabs it all.
-	EventBus.field_gold_drop_requested.emit(amount, _drop_base_position(window))
 
 
 func _drop_items_from_window(window: BattleWindow) -> void:

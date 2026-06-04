@@ -152,7 +152,8 @@ func _spawn_hit_effect(texture: Texture2D, is_crit: bool) -> void:
 	var effect := Sprite2D.new()
 	effect.texture = texture
 	effect.centered = true
-	effect.z_index = 8
+	# z stays 0 (relative) so the hit flash never floats above OTHER battle windows;
+	# it's added last → already drawn on top within this enemy via tree order.
 	effect.position = Vector2(randf_range(-3, 3), randf_range(-5, 1))
 	effect.scale = Vector2.ONE * 0.75 * weapon_scale
 	effect.rotation = randf_range(-0.25, 0.25)
