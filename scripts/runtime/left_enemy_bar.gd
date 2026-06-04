@@ -13,6 +13,7 @@ extends Control
 
 const BONFIRE_TEX: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
 const SHRINE_TEX: Texture2D = preload("res://assets/sprites/objects/shrine.png")
+const VILLAGE_TEX: Texture2D = preload("res://assets/sprites/objects/village.png")
 const TILE_SCENE: PackedScene = preload("res://scenes/ui/dos_tile.tscn")
 
 ## Brightness for a tile that is ON / affordable vs OFF / unaffordable.
@@ -95,7 +96,10 @@ func _rebuild() -> void:
 			continue
 		_add_tile(&"enemy", id, _tier_sprite(id), _tile_bright(&"enemy", id))
 
-	# Events. Once placed, a tile vanishes from the panel (it lives on the map now).
+	# Events / structures. Once placed, a tile vanishes from the panel (it lives on
+	# the map now).
+	if not GameState.is_structure_placed(&"village"):
+		_add_tile(&"village", &"village", VILLAGE_TEX, _tile_bright(&"village", &"village"))
 	if not GameState.campfire_placed:
 		_add_tile(&"campfire", &"campfire", BONFIRE_TEX, _tile_bright(&"campfire", &"campfire"))
 	if GameState.is_building_unlocked(&"sanctuary") and not GameState.is_building_built(&"sanctuary"):
@@ -139,6 +143,7 @@ func _tile_bright(kind: StringName, id: StringName) -> bool:
 			var c: int = GameState.campfire_upgrade_cost() if GameState.campfire_placed else GameState.campfire_place_cost()
 			return GameState.gold >= c
 		&"sanctuary": return GameState.gold >= GameState.building_cost(&"sanctuary")
+		&"village": return GameState.can_place_structure(&"village")
 	return true
 
 
@@ -171,6 +176,8 @@ func _tooltip_for(kind: StringName, id: StringName) -> String:
 			return "%s\n%dG" % ["모닥불 강화" if GameState.campfire_placed else "모닥불", cost]
 		&"sanctuary":
 			return "성소\n%dG" % GameState.building_cost(&"sanctuary")
+		&"village":
+			return "마을\n배치 %dG" % int(Balance.tile_by_id(&"village").get("place_cost", 0))
 	return ""
 
 
@@ -185,7 +192,7 @@ func _on_tile_pressed(kind: StringName, id: StringName) -> void:
 			GameState.place_enemy(id)
 		&"rescue":
 			GameState.place_rescue_slime()
-		&"campfire", &"sanctuary":
+		&"campfire", &"sanctuary", &"village":
 			# Drag-and-drop tiles: pick up → drop on the map at the clicked spot.
 			if _tile_bright(kind, id):
 				_begin_carry(kind, id)
@@ -216,6 +223,7 @@ func _carry_icon(kind: StringName, id: StringName) -> Texture2D:
 	match kind:
 		&"campfire": return BONFIRE_TEX
 		&"sanctuary": return SHRINE_TEX
+		&"village": return VILLAGE_TEX
 	return _tier_sprite(id)  # enemy / rescue
 
 
@@ -252,6 +260,8 @@ func _drop_carry_at_mouse() -> void:
 		&"sanctuary":
 			if GameState.can_purchase_building(&"sanctuary"):
 				GameState.purchase_building(&"sanctuary")
+		&"village":
+			GameState.place_structure(&"village")
 	_end_carry()
 
 
@@ -297,6 +307,7 @@ func _signature() -> String:
 	parts.append("n%d" % (1 if GameState.name_entered else 0))
 	parts.append("d%d" % (1 if _was_deadlocked else 0))
 	parts.append("s%d" % (1 if (GameState.is_building_unlocked(&"sanctuary") and not GameState.is_building_built(&"sanctuary")) else 0))
+	parts.append("v%d" % (1 if GameState.is_structure_placed(&"village") else 0))
 	for i in Balance.tier_count():
 		var id: StringName = Balance.tier_at(i)["id"]
 		if GameState.is_tier_visible(id):

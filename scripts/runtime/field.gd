@@ -154,6 +154,7 @@ func _ready() -> void:
 	EventBus.campfire_placed.connect(_on_campfire_placed)
 	EventBus.enemy_place_requested.connect(_on_enemy_place_requested)
 	EventBus.building_built.connect(_on_building_built)
+	EventBus.structure_placed.connect(_on_structure_placed)
 	EventBus.rest_requested.connect(_begin_rest)
 	EventBus.world_started.connect(_on_world_started)
 	EventBus.rescue_offered.connect(_on_rescue_offered)
@@ -863,6 +864,20 @@ func _on_campfire_placed() -> void:
 	if _player and _player.has_method("set_forced_move_target"):
 		_player.set_forced_move_target(pos)
 	_show_message("모닥불을 피웠다. 더 태워볼까…?")
+
+
+## Generic TILES structures (village, …) — spawn the sprite at the dropped spot.
+func _on_structure_placed(tile_id: StringName) -> void:
+	var pos: Vector2
+	if GameState.pending_placement_position != Vector2.INF:
+		pos = _clamp_field_position(GameState.pending_placement_position)
+		GameState.pending_placement_position = Vector2.INF
+	else:
+		pos = _spawn_position_near_player(_player.position if _player else _field_size * 0.5)
+	var node := FieldStructure.new()
+	node.setup(Balance.tile_by_id(tile_id))
+	node.position = pos
+	_decorations_root.add_child(node)
 
 
 ## Drag-placed buildings that live on the field (sanctuary). Spawn a structure at

@@ -1376,6 +1376,47 @@ func place_enemy(id: StringName) -> bool:
 	return true
 
 
+# ─── Generic field structures (TILES: village, …) — placed like the campfire ──
+var placed_structures: Array[StringName] = []
+
+
+func is_structure_placed(id: StringName) -> bool:
+	return placed_structures.has(id)
+
+
+## Spend the tile's place_cost and ask the Field to spawn it. Returns false (and
+## flashes) when too poor or already placed.
+func place_structure(id: StringName) -> bool:
+	if is_structure_placed(id):
+		return false
+	var cost: int = int(Balance.tile_by_id(id).get("place_cost", 0))
+	if gold < cost or not spend_gold(cost):
+		EventBus.combat_upgrade_failed.emit(&"tier")
+		return false
+	placed_structures.append(id)
+	EventBus.structure_placed.emit(id)
+	return true
+
+
+func can_place_structure(id: StringName) -> bool:
+	return not is_structure_placed(id) and gold >= int(Balance.tile_by_id(id).get("place_cost", 0))
+
+
+## 여관(Inn): everyone wakes up topped off — revive any downed members and refill
+## all HP to full. The single full-party restore the field offers.
+func restore_party_full() -> void:
+	for i in party.size():
+		var was_downed: bool = party_downed[i]
+		party_downed[i] = false
+		_downed_recovery_accum[i] = 0.0
+		party_hp[i] = effective_max_hp(i)
+		EventBus.party_member_hp_changed.emit(i, party_hp[i], party_hp[i])
+		if was_downed:
+			EventBus.party_member_revived.emit(i)
+	_party_collapsed = false
+	EventBus.party_hp_changed.emit()
+
+
 ## Deadlock rescue: spent everything, gold 0, nothing left to fight. Spawn ONE
 ## slime for FREE so the economy can restart. No gold check, no spend — the dock
 ## only offers this when truly stuck (see _is_deadlocked), so it can't be abused.
@@ -2630,6 +2671,7 @@ func reset_run() -> void:
 	_ensure_default_skill_nodes()
 	total_gold_earned = 0
 	_tier_available_announced.clear()  # re-announce tiers next run
+	placed_structures.clear()          # village etc. re-placeable next run
 	enemies_killed = 0
 	biggest_hit = 0
 	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock

@@ -210,6 +210,12 @@ const TILES: Array[Dictionary] = [
 		"place_cost": 300, "owner": &"mage",
 		"desc": "필드에 놓는 회복 거점. 근처 파티원만 HP가 차오른다.",
 	},
+	{
+		"id": &"village", "name": "마을", "short": "촌", "color": Color(0.85, 0.78, 0.55, 1.0),
+		"sprite": "res://assets/sprites/objects/village.png",
+		"place_cost": 50,
+		"desc": "첫 마을. 클릭해 여관(휴식)·상점(장비 구매)을 연다.",
+	},
 ]
 const CAMPFIRE_REGEN_RADIUS: float = 72.0       ## only party within this regen
 const CAMPFIRE_REGEN_BASE_RATE: float = 0.6     ## HP/sec at level 1 (very weak)

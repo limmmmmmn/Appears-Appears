@@ -92,6 +92,9 @@ signal campfire_placed()
 ## path is preserved separately for future automation.)
 signal enemy_place_requested(tier_id: StringName)
 
+## A generic field structure (TILES entry, e.g. village) was paid for + placed.
+## The Field spawns its sprite at pending_placement_position.
+signal structure_placed(tile_id: StringName)
 ## A placed field object (e.g. campfire) was clicked → open its action panel.
 signal structure_clicked(building_id: StringName, world_position: Vector2)
 ## The "쉰다" button on the campfire panel was pressed.
