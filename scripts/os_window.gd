@@ -5,43 +5,35 @@ class_name OSWindow
 ##   • white border (1px)
 ##   • only the CORNERS slightly curved (retro OS window — not a full pill)
 ##   • a titlebar showing the app name
-## Centralized so a future "retro game skin" can restyle every window in one place.
+##
+## LOOK SOURCE = assets/themes/ui_theme.tres (the master Theme). The "window" and
+## "titlebar" styleboxes + the window colors/fonts live there — edit them in the
+## Godot Theme editor; this script only reads them.
 
-const FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
-const BORDER: Color = Color(0.96, 0.97, 0.99, 1.0)   ## white window edge
-const BODY: Color = Color(0.18, 0.133, 0.184, 0.98)  ## #2e222f dark interior
-const TITLE_TEXT: Color = Color(0.96, 0.97, 0.99, 1.0)
-const CORNER: int = 3                                ## 끝만 살짝 — small radius
-const TITLE_FONT: int = 8
+const THEME: Theme = preload("res://assets/themes/ui_theme.tres")
+
+static var FONT: Font = THEME.default_font
+static var BORDER: Color = THEME.get_color("window_border", "Palette")  ## white window edge
+static var BODY: Color = THEME.get_color("window_body", "Palette")      ## dark interior
+static var TITLE_TEXT: Color = THEME.get_color("title_text", "Palette")
+static var CORNER: int = THEME.get_constant("corner", "Palette")        ## 끝만 살짝
+static var TITLE_FONT: int = THEME.get_font_size("title", "Palette")
 
 
 ## Window body: dark fill, white border, lightly-rounded corners, soft shadow.
-static func body_style(bg: Color = BODY) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.set_corner_radius_all(CORNER)
-	s.set_border_width_all(1)
-	s.border_color = BORDER
-	s.shadow_color = Color(0, 0, 0, 0.4)
-	s.shadow_size = 4
+## Pass a bg to override the theme's interior fill.
+static func body_style(bg = null) -> StyleBoxFlat:
+	var s := THEME.get_stylebox("window", "Palette").duplicate() as StyleBoxFlat
+	if bg != null:
+		s.bg_color = bg
 	return s
 
 
 ## Titlebar: colored accent strip, rounded only on the TOP corners, white-bordered
 ## sides/top to merge with the body border.
 static func titlebar_style(accent: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+	var s := THEME.get_stylebox("titlebar", "Palette").duplicate() as StyleBoxFlat
 	s.bg_color = accent
-	s.corner_radius_top_left = CORNER
-	s.corner_radius_top_right = CORNER
-	s.border_width_left = 1
-	s.border_width_right = 1
-	s.border_width_top = 1
-	s.border_color = BORDER
-	s.content_margin_left = 5
-	s.content_margin_right = 4
-	s.content_margin_top = 2
-	s.content_margin_bottom = 2
 	return s
 
 

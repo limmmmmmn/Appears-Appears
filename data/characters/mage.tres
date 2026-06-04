@@ -18,5 +18,4 @@ body_center = Vector2(8, 18)
 max_hp = 22
 max_mp = 20
 attack = 8
-defense = 0
 agility = 4

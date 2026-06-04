@@ -10,7 +10,6 @@ display_name = "Blade Bug"
 sprite = ExtResource("2_sprite")
 max_hp = 36
 attack = 6
-defense = 1
 agility = 4
 party_bump_counter_damage_ratio = 0.1
 gold_reward = 1

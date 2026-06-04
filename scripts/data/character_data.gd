@@ -40,7 +40,6 @@ enum Direction { DOWN, LEFT, RIGHT, UP }
 @export var max_hp: int = 30
 @export var max_mp: int = 10
 @export var attack: int = 5
-@export var defense: int = 1
 @export var agility: int = 5
 
 

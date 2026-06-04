@@ -25,15 +25,14 @@ const SLIME_BASE_TIME: float = 2.0       ## seconds to kill one base slime at SP
 const UPGRADE_BASE_COST: int = 10
 const COST_MULT: float = 1.6             ## SPEED, GREED cost growth — kept ABOVE effect (1.4) so gold can't pile up
 const EFFECT_MULT: float = 1.4           ## SPEED, GREED shared effect growth
-const SCALE_BASE_COST: int = 10          ## ONE cheap unlock — buyable right at the start
-const SCALE_COST_MULT: float = 4.0       ## (irrelevant now — single purchase)
-
-## SCALE window-count progression. Index = number of SCALE purchases made.
-## 0 purchases → 1 window, 1 → 2, … saturating at the final entry.
-## ONE purchase opens multi-windows effectively without limit: 1 → 999. Enemy
-## click-placement + early fragility already self-limit how many you run, so a
-## stepped cap was redundant. (999 = perf backstop, not a real ceiling.)
-const SCALE_STEPS: Array[int] = [1, 999]
+## SCALE = the simultaneous battle-window count. Now monsters auto-spawn (toggle),
+## so the WINDOW COUNT is the main incremental growth pillar: start at 1, buy +1 at
+## a time. Cost ramps geometrically (no cap) — the first few are cheap (fast growth
+## dopamine), then it naturally limits itself as it gets expensive.
+##   cost(n) = SCALE_BASE_COST × SCALE_COST_MULT^n   (n = purchases already made)
+##   → 10, 16, 26, 41, 66, 105, 168, 269 … (after _round_cost tidy-up)
+const SCALE_BASE_COST: int = 10          ## first upgrade (1→2 windows) is cheap
+const SCALE_COST_MULT: float = 1.6       ## ramp — first couple easy, then steepens
 
 ## Enemy-HP calibration. HP(tier) = avg_party_hit × base_kill_time ×
 ## PARTY_HITS_PER_SECOND, so at SPEED Lv1 / full HP a tier dies in ~its base
@@ -136,21 +135,22 @@ const WEAPON_NAMES: Array[String] = [
 ## Hero auto-buys the unlocked weapon for this fraction of its unlock cost.
 const WEAPON_AUTOBUY_COST_RATIO: float = 1.0 / 50.0
 
-# ─── Armor shop = survival skin (defense, symmetric to the weapon shop) ─
+# ─── Armor shop = survival skin (MAX HP, symmetric to the weapon shop) ─
 ## Buying the next armor IS the survival upgrade. Equipped armor adds flat
-## defense to the WHOLE party (mirrors how the weapon's SPEED boosts all). Index
-## by armor_level (1-based); level 1 = "맨몸" (no defense). Text-based, no sprites.
+## MAX HP to the WHOLE party (mirrors how the weapon's SPEED boosts all). 방어력은
+## 폐지됨 — 맷집(HP)이 유일한 생존 축. Index by armor_level (1-based); level 1 =
+## "맨몸" (no bonus HP). Text-based, no sprites.
 const ARMOR_NAMES: Array[String] = [
 	"맨몸", "천 갑옷", "가죽 갑옷", "사슬 갑옷", "판금 갑옷",
 	"기사 갑옷", "미스릴 갑옷", "용비늘 갑옷", "수호의 성갑", "불멸의 판금",
 ]
-const ARMOR_DEFENSE_PER_LEVEL: int = 2   ## flat defense added per armor level
+const ARMOR_HP_PER_LEVEL: int = 8   ## flat MAX HP added per armor level
 const ARMOR_BASE_COST: int = 15
 const ARMOR_COST_MULT: float = 1.55
 
 # ─── Party level-up (accumulating survival growth, auto from kills) ────
 ## Per-member XP/level (shared by ALL party members, not hero-only). Levels
-## grant MAX HP only — attack stays with SPEED/weapon, defense with armor.
+## grant MAX HP only — attack stays with SPEED/weapon, survival(HP) with armor.
 const PARTY_LEVEL_BASE_XP: int = 12        ## XP to reach Lv2
 const PARTY_LEVEL_XP_MULT: float = 1.5     ## ×each level (exponential)
 const HP_PER_LEVEL: int = 6                ## max HP gained per level
@@ -340,15 +340,15 @@ func scale_cost(purchases_done: int) -> int:
 	return _round_cost(raw)
 
 
-## Simultaneous battle-window count for a given number of SCALE purchases.
+## Simultaneous battle-window count: 1 + one per SCALE purchase (start at 1).
 func scale_window_count(purchases_done: int) -> int:
-	var idx: int = clampi(purchases_done, 0, SCALE_STEPS.size() - 1)
-	return SCALE_STEPS[idx]
+	return 1 + maxi(0, purchases_done)
 
 
-## Max meaningful SCALE purchases (beyond this the window count is capped).
+## No real cap — the cost curve is the limiter. Huge value so scale_is_maxed()
+## never trips (kept for API compatibility).
 func scale_max_purchases() -> int:
-	return SCALE_STEPS.size() - 1
+	return 1000000
 
 
 # ─── Per-enemy level curves (System 1) ─────────────────────────────────
@@ -569,9 +569,9 @@ func armor_name_for_level(level: int) -> String:
 	return "성갑 +%d" % (idx - ARMOR_NAMES.size() + 1)
 
 
-## Flat party defense from the equipped armor (level 1 = 0).
-func armor_defense_for_level(level: int) -> int:
-	return ARMOR_DEFENSE_PER_LEVEL * (maxi(1, level) - 1)
+## Flat party MAX HP from the equipped armor (level 1 = 0).
+func armor_hp_for_level(level: int) -> int:
+	return ARMOR_HP_PER_LEVEL * (maxi(1, level) - 1)
 
 
 ## Cost to buy the next armor (from `current_level` → `current_level + 1`).

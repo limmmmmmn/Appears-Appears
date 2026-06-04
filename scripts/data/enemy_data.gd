@@ -13,7 +13,6 @@ extends Resource
 ## Combat stats.
 @export var max_hp: int = 10
 @export var attack: int = 2
-@export var defense: int = 0
 @export var agility: int = 4
 @export var party_bump_counter_damage_ratio: float = 0.0
 

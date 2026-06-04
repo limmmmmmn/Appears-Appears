@@ -12,7 +12,6 @@ const OFFER_MODE_RANDOM_UNIQUE: int = 1
 const LEVEL_UP_ONLY_EFFECT_KEYS: Array[String] = [
 	"atk_flat",
 	"hp_flat",
-	"def_flat",
 	"agi_flat",
 	"evade_chance",
 	"hero_damage_bonus_mult",

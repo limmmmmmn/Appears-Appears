@@ -62,7 +62,7 @@ var recruited_companions: Array[ModifierData] = []
 ## (검/지팡이/둔기/단검). A member's damage uses their weapon type's multiplier,
 ## so unlocking a 지팡이 only boosts the mage, etc. type id → level (default 1).
 var weapon_levels: Dictionary = {}
-## Armor = flat party defense (the armor shop is its UI skin). Survival axis.
+## Armor = flat party MAX HP (the armor shop is its UI skin). Survival axis.
 ## Level 1 = "맨몸" (no bonus). Shared by the whole party, like the weapon.
 var armor_level: int = 1
 ## LOOT LEVELS — the 무기/방어구 upgrade now raises drop QUALITY (gear that falls
@@ -175,19 +175,19 @@ const EQUIPMENT_SLOT_LABELS: Array[String] = ["Weapon", "Shield", "Helmet", "Arm
 const XP_CURVE_BASE: int = 10
 const XP_CURVE_LEVEL_STEP: int = 5
 const XP_CURVE_QUADRATIC: int = 3
+# 방어력 폐지: 옛 "def" 성장치는 생존 축인 "hp"로 흡수(1:1). 두 축(공격/HP)만 유지.
 const DEFAULT_LEVEL_GROWTH: Dictionary = {
-	"hp": 4,
+	"hp": 5,
 	"atk": 2,
-	"def": 1,
 	"agi": 1,
 }
 const LEVEL_GROWTH_BY_CHARACTER_ID: Dictionary = {
-	&"hero": {"hp": 5, "atk": 2, "def": 1, "agi": 1},
-	&"elf": {"hp": 4, "atk": 2, "def": 1, "agi": 2},
-	&"mage": {"hp": 3, "atk": 3, "def": 0, "agi": 1},
-	&"knight": {"hp": 6, "atk": 2, "def": 2, "agi": 0},
-	&"priest": {"hp": 5, "atk": 1, "def": 1, "agi": 1},
-	&"thief": {"hp": 3, "atk": 2, "def": 0, "agi": 2},
+	&"hero": {"hp": 6, "atk": 2, "agi": 1},
+	&"elf": {"hp": 5, "atk": 2, "agi": 2},
+	&"mage": {"hp": 3, "atk": 3, "agi": 1},
+	&"knight": {"hp": 8, "atk": 2, "agi": 0},
+	&"priest": {"hp": 6, "atk": 1, "agi": 1},
+	&"thief": {"hp": 3, "atk": 2, "agi": 2},
 }
 
 const PRICE_LEVEL_MULTIPLIERS = [1.0, 1.45, 2.05, 2.8, 3.7]
@@ -294,9 +294,11 @@ func damage_party_member(index: int, amount: int) -> void:
 			_downed_recovery_accum[index] = 0.0
 			total_party_downs += 1  # gates the 성소(sanctuary) build unlock
 			EventBus.party_member_downed.emit(index)
-			# Full collapse → freeze field movement until everyone recovers.
-			if is_party_all_downed():
+			# Full collapse → freeze field movement until everyone recovers, AND fire
+			# the death penalty (floating reward windows are wiped).
+			if is_party_all_downed() and not _party_collapsed:
 				_party_collapsed = true
+				EventBus.party_collapsed.emit()
 
 
 func heal_party_member(index: int, amount: int) -> void:
@@ -377,8 +379,8 @@ func _xp_required_for_level(level: int) -> int:
 
 
 ## Level-up grants MAX HP only (kept generic for every party member, not just
-## the hero). Attack is the SPEED/weapon axis and defense is the armor axis, so
-## leveling never touches them — keeps the stat space tiny.
+## the hero). Attack is the SPEED/weapon axis and HP(survival) is the armor axis,
+## so leveling only nudges HP/agility — keeps the stat space tiny (방어력 폐지).
 func _level_bonus(index: int, key: String) -> int:
 	if index < 0 or index >= party.size():
 		return 0
@@ -386,7 +388,7 @@ func _level_bonus(index: int, key: String) -> int:
 	if level <= 1:
 		return 0
 	# Level grants MAX HP (survival) + a little agility (ambush/turn order).
-	# Attack stays SPEED/weapon; defense stays armor — no stat creep.
+	# Attack stays SPEED/weapon; survival(HP) is the armor axis — no stat creep.
 	match key:
 		"hp":
 			return Balance.HP_PER_LEVEL * (level - 1)
@@ -774,8 +776,7 @@ func battle_movement_unlocked() -> bool:
 
 
 ## Max number of battle windows allowed on screen at once = the SCALE axis.
-## 0 SCALE purchases → 1 (modal, one-at-a-time). Each purchase steps the count
-## up along Balance.SCALE_STEPS (1→2→3→4→5→7→10).
+## 0 SCALE purchases → 1 (one-at-a-time); each purchase adds +1 (no cap).
 func battle_window_cap() -> int:
 	return scale_window_count()
 
@@ -864,10 +865,10 @@ func owned_weapon_types() -> Array[StringName]:
 	return out
 
 
-# ─── Survival: armor axis (party defense / armor shop) ─────────────────
-## Flat defense added to EVERY party member by the equipped armor.
-func armor_defense_bonus() -> int:
-	return Balance.armor_defense_for_level(armor_level)
+# ─── Survival: armor axis (party MAX HP / armor shop) ─────────────────
+## Flat MAX HP added to EVERY party member by the equipped armor.
+func armor_hp_bonus() -> int:
+	return Balance.armor_hp_for_level(armor_level)
 
 
 func current_armor_name() -> String:
@@ -887,7 +888,7 @@ func can_upgrade_armor() -> bool:
 
 
 ## Armor shop = survival skin: each level unlocks + auto-equips the next armor,
-## visibly bumping party defense (fewer downs → less slowdown).
+## visibly bumping party MAX HP (fewer downs → less slowdown).
 func upgrade_armor() -> bool:
 	if not spend_gold(armor_upgrade_cost()):
 		EventBus.combat_upgrade_failed.emit(&"armor")
@@ -1686,12 +1687,6 @@ func roll_kill_gold(base_reward: int) -> Dictionary:
 	return {"amount": maxi(1, int(round(float(base_reward) * mult))), "tier": tier}  # min 1 — never a total 꽝
 
 
-func scaled_enemy_defense(data: EnemyData) -> int:
-	if data == null:
-		return 0
-	return data.defense
-
-
 func scaled_enemy_agility(data: EnemyData) -> int:
 	if data == null:
 		return 0
@@ -1948,7 +1943,7 @@ func slot_index_for_item(item: ItemData) -> int:
 	return -1
 
 
-## (label, value) of an item's PRIMARY stat: weapon→공격, armor-types→방어,
+## (label, value) of an item's PRIMARY stat: weapon→공격, armor-types→체력,
 ## accessory→its biggest bonus.
 func _item_primary_stat(item: ItemData, level: int) -> Dictionary:
 	var lv: int = maxi(1, level)
@@ -1956,11 +1951,10 @@ func _item_primary_stat(item: ItemData, level: int) -> Dictionary:
 		ItemData.Slot.WEAPON:
 			return {"label": "공격", "value": item.attack_bonus * lv}
 		ItemData.Slot.SHIELD, ItemData.Slot.HELMET, ItemData.Slot.ARMOR:
-			return {"label": "방어", "value": item.defense_bonus * lv}
+			return {"label": "체력", "value": item.max_hp_bonus * lv}
 		_:
 			var best_label: String = "공격"
 			var best: int = item.attack_bonus
-			if item.defense_bonus > best: best = item.defense_bonus; best_label = "방어"
 			if item.agility_bonus > best: best = item.agility_bonus; best_label = "민첩"
 			if item.max_hp_bonus > best: best = item.max_hp_bonus; best_label = "체력"
 			return {"label": best_label, "value": best * lv}
@@ -2078,15 +2072,14 @@ func party_member_stat_tooltip(index: int) -> String:
 	var lines: PackedStringArray = []
 	lines.append("%s  Lv %d" % [member.display_name, party_level(index)])
 	lines.append("HP %d/%d   MP %d/%d" % [hp, max_hp, mp, member.max_mp])
-	lines.append("공격 %d   방어 %d   민첩 %d" % [
+	lines.append("공격 %d   민첩 %d" % [
 		combat_atk,
-		effective_defense(index),
 		effective_agility(index),
 	])
 	# 무기 배수 = 킬 속도 레버. 강화하면 ×배수와 공격 수치가 같이 오른다.
 	lines.append("  └ 무기 %s ×%.2f  (기본 공격 %d · 킬속도)" % [wname, wmult, base_atk])
 	if armor_level > 1:
-		lines.append("  └ 방어구 %s  방어 +%d" % [current_armor_name(), armor_defense_bonus()])
+		lines.append("  └ 방어구 %s  HP +%d" % [current_armor_name(), armor_hp_bonus()])
 	# 운: 파티 공통 — 킬 보상 대박(팡팡팡) 확률.
 	lines.append("운  대박 %.0f%%" % (luck_jackpot_chance() * 100.0))
 	lines.append("XP %d/%d" % [
@@ -2106,9 +2099,8 @@ func enemy_stat_tooltip(data: EnemyData, current_hp: int = -1, max_hp_override: 
 	var lines: PackedStringArray = []
 	lines.append(data.display_name)
 	lines.append("HP %d/%d" % [hp_value, max_hp_value])
-	lines.append("ATK %d   DEF %d   AGI %d" % [
+	lines.append("ATK %d   AGI %d" % [
 		scaled_enemy_attack(data),
-		scaled_enemy_defense(data),
 		scaled_enemy_agility(data),
 	])
 	lines.append("XP %d   Gold %d" % [scaled_enemy_xp_reward(data), gold_reward])
@@ -2150,14 +2142,11 @@ func _item_stat_line(item: ItemData, level: int) -> String:
 	var parts: PackedStringArray = []
 	var hp: int = item.max_hp_bonus * level
 	var atk: int = item.attack_bonus * level
-	var defense: int = item.defense_bonus * level
 	var agility: int = item.agility_bonus * level
 	if hp != 0:
 		parts.append(_signed_stat("HP", hp))
 	if atk != 0:
 		parts.append(_signed_stat("ATK", atk))
-	if defense != 0:
-		parts.append(_signed_stat("DEF", defense))
 	if agility != 0:
 		parts.append(_signed_stat("AGI", agility))
 	return "   ".join(parts)
@@ -2167,14 +2156,11 @@ func _member_gear_stat_line(index: int) -> String:
 	var parts: PackedStringArray = []
 	var hp: int = _equipment_bonus(index, "max_hp_bonus")
 	var atk: int = _equipment_bonus(index, "attack_bonus")
-	var defense: int = _equipment_bonus(index, "defense_bonus")
 	var agility: int = _equipment_bonus(index, "agility_bonus")
 	if hp != 0:
 		parts.append(_signed_stat("HP", hp))
 	if atk != 0:
 		parts.append(_signed_stat("ATK", atk))
-	if defense != 0:
-		parts.append(_signed_stat("DEF", defense))
 	if agility != 0:
 		parts.append(_signed_stat("AGI", agility))
 	return "none" if parts.is_empty() else "   ".join(parts)
@@ -2399,13 +2385,6 @@ func effective_attack(index: int) -> int:
 	return party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat") + skill_effect_int_sum("atk_flat")
 
 
-func effective_defense(index: int) -> int:
-	if index < 0 or index >= party.size():
-		return 0
-	var character_id: StringName = party[index].id
-	return party[index].defense + _level_bonus(index, "def") + _equipment_bonus(index, "defense_bonus") + _stacked_int_effect_for_character(character_id, "def_flat") + skill_effect_int_sum("def_flat") + armor_defense_bonus()
-
-
 func effective_agility(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
@@ -2526,7 +2505,8 @@ func effective_max_hp(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat") + skill_effect_int_sum("hp_flat")
+	# 방어구(방어력→HP 전환): 파티 공통 armor_hp_bonus() 가 맷집으로 합산된다.
+	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat") + skill_effect_int_sum("hp_flat") + armor_hp_bonus()
 
 
 func _equipment_bonus(index: int, property_name: StringName) -> int:

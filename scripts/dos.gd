@@ -3,52 +3,51 @@ class_name DOS
 ## DOS-game UI kit: flat single-tone boxes, one border color, one font size, tidy
 ## rows. No per-card colors, no gradients/shadows — only the item SPRITES keep
 ## their color (for identification). Centralized so every list looks identical.
+##
+## LOOK SOURCE = assets/themes/ui_theme.tres (the master Theme). Edit colors,
+## fonts, font sizes, and styleboxes THERE in Godot's Theme editor — this script
+## only READS them, so the whole UI restyles without touching code. (Logic stays
+## in code; only the look lives in the theme.)
 
-const FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
-const BG: Color = Color(0.094, 0.106, 0.137, 0.98)   ## panel fill
-const ROW_BG: Color = Color(0.149, 0.165, 0.204, 1.0)## row fill
-const ROW_HOVER: Color = Color(0.216, 0.235, 0.286, 1.0)
-const BORDER: Color = Color(0.557, 0.576, 0.624, 1.0)## single border tone
-const TEXT: Color = Color(0.866, 0.882, 0.910, 1.0)
-const DIM: Color = Color(0.42, 0.44, 0.49, 1.0)      ## unaffordable / disabled
-const SECTION: Color = Color(0.62, 0.67, 0.74, 1.0)
-const FONT_SIZE: int = 8
-const SECTION_SIZE: int = 8
-const ROW_H: float = 18.0
-const ICON: float = 16.0
+const THEME: Theme = preload("res://assets/themes/ui_theme.tres")
+
+# Palette mirrors — pulled from the editable theme at load. Keep the old names so
+# every caller (DOS.TEXT, DOS.ROW_H, …) keeps working unchanged.
+static var FONT: Font = THEME.default_font
+static var FONT_SIZE: int = THEME.get_font_size("body", "Palette")
+static var SECTION_SIZE: int = THEME.get_font_size("section", "Palette")
+static var BG: Color = THEME.get_color("bg", "Palette")
+static var ROW_BG: Color = THEME.get_color("row_bg", "Palette")
+static var ROW_HOVER: Color = THEME.get_color("row_hover", "Palette")
+static var BORDER: Color = THEME.get_color("border", "Palette")
+static var TEXT: Color = THEME.get_color("text", "Palette")
+static var DIM: Color = THEME.get_color("dim", "Palette")
+static var SECTION: Color = THEME.get_color("section", "Palette")
+static var ROW_H: float = float(THEME.get_constant("row_h", "Palette"))
+static var ICON: float = float(THEME.get_constant("icon", "Palette"))
 
 
-static func box_style(bg: Color = BG) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.set_border_width_all(1)
-	s.border_color = BORDER
-	s.set_corner_radius_all(0)  # DOS = sharp rectangles
-	s.set_content_margin_all(4)
-	s.anti_aliasing = false
+## Panel box. Pass a bg to override the theme's fill (else uses the theme's).
+static func box_style(bg = null) -> StyleBoxFlat:
+	var s := THEME.get_stylebox("box", "Palette").duplicate() as StyleBoxFlat
+	if bg != null:
+		s.bg_color = bg
 	return s
 
 
+## Row fill at the given bg (border/corner/margins come from the theme's row box).
 static func row_style(bg: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+	var s := THEME.get_stylebox("row", "Palette").duplicate() as StyleBoxFlat
 	s.bg_color = bg
-	s.set_border_width_all(1)
-	s.border_color = BORDER.darkened(0.25)
-	s.set_corner_radius_all(0)
-	s.content_margin_left = 3
-	s.content_margin_right = 3
-	s.content_margin_top = 1
-	s.content_margin_bottom = 1
-	s.anti_aliasing = false
 	return s
 
 
-static func label(text: String, color: Color = TEXT, size: int = FONT_SIZE) -> Label:
+static func label(text: String, color = null, size: int = -1) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_override("font", FONT)
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", color)
+	l.add_theme_font_size_override("font_size", size if size > 0 else FONT_SIZE)
+	l.add_theme_color_override("font_color", color if color != null else TEXT)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
@@ -61,7 +60,7 @@ static func section(text: String) -> Label:
 	return l
 
 
-## A 12px colored sprite cell (sprite keeps its color; null → empty spacer).
+## A colored sprite cell (sprite keeps its color; null → empty spacer).
 static func icon(texture: Texture2D) -> Control:
 	var tr := TextureRect.new()
 	tr.texture = texture

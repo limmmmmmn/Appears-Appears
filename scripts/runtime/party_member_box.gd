@@ -100,8 +100,8 @@ func set_downed(is_down: bool) -> void:
 	_downed_tag.visible = is_down
 
 
-## Equipped armor reflection (top-right "방N" badge). Armor is a party-wide
-## survival axis, so every member shows it. level 1 = no armor → hidden.
+## Equipped armor reflection (top-right "갑N" badge). Armor is a party-wide
+## survival axis (MAX HP), so every member shows it. level 1 = no armor → hidden.
 func set_armor(level: int, armor_name: String) -> void:
 	if _armor_badge == null:
 		_armor_badge = Label.new()
@@ -115,7 +115,7 @@ func set_armor(level: int, armor_name: String) -> void:
 		_armor_badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 		_armor_badge.position = Vector2(-22.0, 1.0)
 		add_child(_armor_badge)
-	_armor_badge.text = "방%d" % level
+	_armor_badge.text = "갑%d" % level
 	_armor_badge.tooltip_text = armor_name
 	_armor_badge.visible = level > 1
 

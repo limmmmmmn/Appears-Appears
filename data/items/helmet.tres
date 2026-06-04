@@ -9,4 +9,4 @@ id = &"helmet"
 display_name = "Helmet"
 slot = 2
 icon = ExtResource("2_icon")
-defense_bonus = 1
+max_hp_bonus = 4

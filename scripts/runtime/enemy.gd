@@ -24,7 +24,6 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 var current_hp: int = 0
 var max_hp: int = 0
 var attack: int = 0
-var defense: int = 0
 var agility: int = 0
 var gold_reward: int = 0
 ## Luck tier of this kill's rolled reward (&"low"/&"normal"/&"jackpot") — drives
@@ -58,7 +57,6 @@ func _apply_data() -> void:
 		return
 	max_hp = GameState.scaled_enemy_max_hp(data)
 	attack = GameState.scaled_enemy_attack(data)
-	defense = GameState.scaled_enemy_defense(data)
 	agility = GameState.scaled_enemy_agility(data)
 	# Roll this kill's reward like a mini chest (mean = the tier average).
 	var roll: Dictionary = GameState.roll_kill_gold(GameState.scaled_enemy_gold_reward(data))
@@ -93,7 +91,8 @@ func try_steal_gold(chance: float, amount: int) -> int:
 func take_damage(amount: int, is_crit: bool = false, hit_effect: Texture2D = null, show_damage_number: bool = true) -> int:
 	if not is_alive() or data == null:
 		return 0
-	var dealt: int = max(1, amount - defense)
+	# 방어력 제거: 공격력이 곧 데미지(차감 없음). 최소 1 보장.
+	var dealt: int = max(1, amount)
 	current_hp = max(0, current_hp - dealt)
 	_refresh_hp_bar()
 	hp_changed.emit(current_hp, max_hp)

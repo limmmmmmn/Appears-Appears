@@ -14,6 +14,5 @@ enum Slot { WEAPON, SHIELD, HELMET, ARMOR, ACCESSORY }
 
 ## Future stat hooks. Currently display-only equipment, but data is ready.
 @export var attack_bonus: int = 0
-@export var defense_bonus: int = 0
 @export var agility_bonus: int = 0
 @export var max_hp_bonus: int = 0

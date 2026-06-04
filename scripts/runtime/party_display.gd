@@ -78,8 +78,6 @@ func _popup_text_for_modifier(mod: ModifierData) -> String:
 		return "+%d HP" % GameState.modifier_last_int_effect(mod, "hp_flat")
 	if mod.effect_data.has("atk_flat"):
 		return "+%d ATK" % GameState.modifier_last_int_effect(mod, "atk_flat")
-	if mod.effect_data.has("def_flat"):
-		return "+%d DEF" % GameState.modifier_last_int_effect(mod, "def_flat")
 	if mod.effect_data.has("agi_flat"):
 		return "+%d AGI" % GameState.modifier_last_int_effect(mod, "agi_flat")
 	if mod.effect_data.has("move_speed_flat"):

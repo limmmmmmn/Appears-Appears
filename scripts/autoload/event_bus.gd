@@ -64,6 +64,11 @@ signal party_member_downed(index: int)
 ## A downed party member finished refilling and stood back up (rejoined combat).
 signal party_member_revived(index: int)
 
+## The WHOLE party just went down at once (collapse). Under the auto-recovery model
+## the run doesn't end — but the death penalty fires: every floating (un-flipped)
+## reward battle window is wiped. Stacking is now a gamble.
+signal party_collapsed()
+
 # ─── Field buildings (structure system) ────────────────────────────────
 ## A field building was purchased + placed. The Field spawns its structure.
 signal building_built(id: StringName)
@@ -136,7 +141,7 @@ signal combat_upgrade_changed(axis: StringName)
 ## "○○ 장착!" and bump their hit-effect size.
 signal weapon_equipped(weapon_name: String)
 ## Hero auto-equipped a newly unlocked armor (survival skin). Same "○○ 장착!"
-## feedback; party defense rises.
+## feedback; party MAX HP rises.
 signal armor_equipped(armor_name: String)
 ## A combat-upgrade purchase was attempted but refused (not enough gold, maxed,
 ## tier already owned, …). UI can flash the relevant control.

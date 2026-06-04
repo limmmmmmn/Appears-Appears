@@ -6,11 +6,6 @@ extends Control
 
 const ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/enemy.tscn")
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
-const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
-const SLIME_CHASER_DATA: EnemyData = preload("res://data/enemies/slime_chaser.tres")
-const BAT_DATA: EnemyData = preload("res://data/enemies/bat.tres")
-const ORC_DATA: EnemyData = preload("res://data/enemies/orc.tres")
-const BLADE_BUG_DATA: EnemyData = preload("res://data/enemies/blade_bug.tres")
 
 @export var enemy_data: EnemyData
 @export var turn_interval: float = 0.5
@@ -50,22 +45,34 @@ const DIAMOND_EDGE_WEIGHT: float = 0.5
 const CRASH_FLASH_COLOR: Color = Color(1.0, 0.48, 0.12, 1.0)
 const WINDOW_FLASH_HOLD_DURATION: float = 0.16
 const WINDOW_FLASH_FADE_DURATION: float = 0.42
-const BASE_ENEMY_REPEAT_CHANCE: float = 0.68
-const STRONGER_SUPPORT_CHANCE: float = 0.06
 const ORC_BUMP_DAMAGE_MULTIPLIER: float = 0.5
 const POSTER_DARK_TEXT: Color = Color(0.1, 0.08, 0.07, 1.0)
 const DEFAULT_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)  ## = field green
 const DQ_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)
 const DQ_WINDOW_BORDER: Color = Color(0.96, 0.97, 0.99, 1.0)     ## white window edge (still distinct)
 const DQ_WINDOW_TEXT: Color = Color(1.0, 1.0, 1.0, 1.0)
-const LOG_STEP_DURATION: float = 0.46
-const ENEMY_TIER_BY_ID: Dictionary = {
-	&"slime": 0,
-	&"slime_chaser": 1,
-	&"bat": 2,
-	&"orc": 3,
-	&"blade_bug": 3,
+
+# ─── Reward-color system: the card's COLOR = its reward type (shown from spawn) ──
+enum Reward { WEAPON, GOLD, HP, XP, RANDOM }
+const REWARD_LABEL: Dictionary = {
+	Reward.WEAPON: "무기", Reward.GOLD: "골드", Reward.HP: "회복", Reward.XP: "경험치", Reward.RANDOM: "?",
 }
+const REWARD_COLOR: Dictionary = {
+	Reward.WEAPON: Color(0.85, 0.24, 0.24, 1.0),   ## 빨강
+	Reward.GOLD: Color(0.93, 0.60, 0.26, 1.0),     ## 주황
+	Reward.HP: Color(0.16, 0.52, 0.28, 1.0),       ## 진한 녹색
+	Reward.XP: Color(0.29, 0.41, 0.72, 1.0),       ## 파랑
+	Reward.RANDOM: Color(0.55, 0.36, 0.74, 1.0),   ## 보라
+}
+## Spawn weighting (gold most common; weapon/hp/random rarer).
+const REWARD_WEIGHT: Dictionary = {Reward.WEAPON: 16, Reward.GOLD: 32, Reward.HP: 14, Reward.XP: 20, Reward.RANDOM: 14}
+const HEAL_PER_CARD: int = 14
+var _reward_type: int = Reward.GOLD
+var _mult: int = 1
+var _mult_label: Label
+var _face_overlay: Control
+
+const LOG_STEP_DURATION: float = 0.46
 
 # ─── Chest reward state (post-victory) ────────────────────────────────
 ## How long the player must hover before the chest pops open.
@@ -139,6 +146,7 @@ func _ready() -> void:
 	_name_label.show()  # enemy name = the window's small title
 	_hp_label.hide()
 	_log_label.add_theme_font_size_override("font_size", UITheme.FONT_BATTLE_LOG)
+	_reward_type = _roll_reward_type()  # the card's color = its reward type
 	_apply_card_color_chrome()
 	# The card root catches mouse (drag to move/stack, click to flip); its children
 	# pass through so the root owns the gesture.
@@ -275,7 +283,7 @@ func apply_window_collision_damage(ratio: float, log_prefix: String = "Window cr
 	for enemy: Enemy in _living_enemies():
 		if enemy.data == null:
 			continue
-		var damage: int = ceili(float(enemy.max_hp) * effective_ratio) + enemy.defense
+		var damage: int = ceili(float(enemy.max_hp) * effective_ratio)
 		total_dealt += enemy.take_damage(damage, false, null, false)
 	if total_dealt > 0:
 		_play_crash_flash()
@@ -367,10 +375,9 @@ func _play_window_color_flash(flash_color: Color) -> void:
 
 
 func _apply_card_color_chrome() -> void:
-	_background.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
-	_log_panel.add_theme_stylebox_override("panel", _flat_panel_style(DQ_WINDOW_BG, DQ_WINDOW_BORDER))
-	# Hide the green field-poster texture so the window reads as a distinct dark,
-	# white-bordered "app window" — not another patch of grass.
+	var col: Color = _reward_color()
+	_background.add_theme_stylebox_override("panel", _flat_panel_style(col, DQ_WINDOW_BORDER))
+	_log_panel.add_theme_stylebox_override("panel", _flat_panel_style(col.darkened(0.28), DQ_WINDOW_BORDER))
 	if _background_image:
 		_background_image.visible = false
 	_apply_label_color(_log_label, DQ_WINDOW_TEXT)
@@ -455,51 +462,78 @@ func _ensure_enemy_count_planned() -> void:
 
 
 func _enemies_per_window() -> int:
-	# System 1: the per-window count is this tier's level-based spawn count
-	# (1→5, capped in Balance), plus any legacy skill bonus. This is what makes
-	# a leveled-up enemy come "우르르" — more bodies per window.
+	# System 1 + 랜덤 마릿수: the tier's level-based count (1→5, capped in Balance)
+	# plus any legacy skill bonus sets the CEILING; the actual headcount is a
+	# random 1..ceiling. A Lv4 slime window is now 1~4 bodies, not always 4.
 	var tier_id: StringName = GameState.tier_id_for_enemy_data(enemy_data)
-	return maxi(1, GameState.enemy_spawn_count(tier_id) + GameState.enemies_per_window_bonus())
+	var ceiling: int = maxi(1, GameState.enemy_spawn_count(tier_id) + GameState.enemies_per_window_bonus())
+	return randi_range(1, ceiling)
 
 
 func _plan_enemy_mix(total: int) -> Array[EnemyData]:
-	# Toggle model + per-enemy levels: a window is a homogeneous pile of the
-	# bumped tier (the field already mixes tiers across windows). The old
-	# support-enemy blending is dropped so a Lv5 slime window reads as "5 slimes".
+	# 종류 섞임: when 2+ enemy types are unlocked ("On"), a fight may blend in
+	# other types as 양념. Hard rule — the BASE enemy (the one the player met)
+	# must stay numerically dominant: every other type's count ≤ base count, so
+	# the fight keeps the base's identity (e.g. base=슬라임 → 슬박오 ✓, 슬슬박 ✓,
+	# 슬박박 ✗). With one type unlocked it degrades to a homogeneous pile.
+	var others: Array[EnemyData] = _mixable_enemy_pool()
+	others.shuffle()
+
+	# How many DISTINCT other types to season this fight with (0 = pure base).
+	var max_extra: int = mini(others.size(), maxi(0, total - 1))
+	var extra_types: Array[EnemyData] = others.slice(0, randi_range(0, max_extra))
+	var k: int = extra_types.size()
+	if k == 0:
+		var pure: Array[EnemyData] = []
+		for i in total:
+			pure.append(enemy_data)
+		return pure
+
+	# Pick the base count `b` so the rest (total-b) can be split among the k
+	# others with each share in [1, b] (1 ⇒ every chosen type appears, b ⇒ ties
+	# allowed). Feasible range: b ∈ [ceil(total/(k+1)), total-k].
+	var b_min: int = int(ceil(float(total) / float(k + 1)))
+	var b_max: int = total - k
+	var base_count: int = randi_range(b_min, maxi(b_min, b_max))
+
+	# Seed each chosen type with 1, then scatter the remainder, never letting any
+	# other type's count exceed `base_count`.
+	var other_counts: Array[int] = []
+	other_counts.resize(k)
+	other_counts.fill(1)
+	var remaining: int = total - base_count - k
+	while remaining > 0:
+		var growable: Array[int] = []
+		for i in k:
+			if other_counts[i] < base_count:
+				growable.append(i)
+		if growable.is_empty():
+			break  # everything capped at base_count; leftover stays with base
+		other_counts[growable[randi() % growable.size()]] += 1
+		remaining -= 1
+
 	var planned: Array[EnemyData] = []
-	for i in total:
+	for i in base_count + remaining:
 		planned.append(enemy_data)
+	for i in k:
+		for j in other_counts[i]:
+			planned.append(extra_types[i])
+	planned.shuffle()
 	return planned
 
 
-func _pick_support_enemy() -> EnemyData:
-	var pool: Array[EnemyData] = _support_enemy_pool()
-	return enemy_data if pool.is_empty() else pool.pick_random()
-
-
-func _support_enemy_pool() -> Array[EnemyData]:
-	var pool: Array[EnemyData] = []
-	var base_tier: int = _enemy_tier(enemy_data)
-	for candidate: EnemyData in _available_support_enemies():
-		if candidate == enemy_data:
+## Other unlocked ("On") enemy types available to season a fight, excluding the
+## base type. Empty when only the base type is unlocked.
+func _mixable_enemy_pool() -> Array[EnemyData]:
+	var base_id: StringName = GameState.tier_id_for_enemy_data(enemy_data)
+	var out: Array[EnemyData] = []
+	for id: StringName in GameState.unlocked_tier_ids:
+		if id == base_id:
 			continue
-		var candidate_tier: int = _enemy_tier(candidate)
-		if candidate_tier <= base_tier or randf() < STRONGER_SUPPORT_CHANCE:
-			pool.append(candidate)
-	return pool
-
-
-func _available_support_enemies() -> Array[EnemyData]:
-	var out: Array[EnemyData] = [SLIME_DATA]
-	if GameState.chaser_enemies_enabled():
-		out.append(SLIME_CHASER_DATA)
+		var ed: EnemyData = GameState.tier_enemy_data(id)
+		if ed != null:
+			out.append(ed)
 	return out
-
-
-func _enemy_tier(data: EnemyData) -> int:
-	if data == null:
-		return 0
-	return int(ENEMY_TIER_BY_ID.get(data.id, 0))
 
 
 func _encounter_display_name() -> String:
@@ -634,7 +668,7 @@ func _enemy_attack(enemy: Enemy) -> void:
 		enemy.play_attack_lunge()
 		_queue_log("%s attacks!\n%s dodges!" % [attacker_name, target.display_name])
 		return
-	var dealt: int = max(1, enemy.attack - GameState.effective_defense(target_index))
+	var dealt: int = max(1, enemy.attack)
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
 	_queue_log("%s attacks!\n%s takes %d damage." % [attacker_name, target.display_name, dealt])
@@ -753,11 +787,66 @@ func _enter_flip_card_state() -> void:
 	_running = false
 	_turn_timer.stop()
 	_flippable = true
-	# Build the hint FIRST, then announce resolve — the manager's readiness update
-	# calls set_chain_ready and needs the hint to already exist.
+	# Battle over → the text box disappears; the card shows its reward TYPE big +
+	# the multiplier. Build the hint FIRST so the manager's readiness update works.
+	_show_reward_face()
 	_build_flip_hint()
 	# Fight resolved → release modal pause + stop counting toward the multi cap.
 	EventBus.battle_window_resolved.emit(self)
+
+
+# ─── Reward helpers ────────────────────────────────────────────────────
+func reward_type_id() -> int:
+	return _reward_type
+
+
+func _reward_color() -> Color:
+	return REWARD_COLOR.get(_reward_type, DQ_WINDOW_BG)
+
+
+func _roll_reward_type() -> int:
+	var total: int = 0
+	for k in REWARD_WEIGHT:
+		total += int(REWARD_WEIGHT[k])
+	var r: int = randi() % maxi(1, total)
+	for k in REWARD_WEIGHT:
+		r -= int(REWARD_WEIGHT[k])
+		if r < 0:
+			return int(k)
+	return Reward.GOLD
+
+
+## Resolved face: hide the combat UI, show the reward type (center, big) + "x{mult}".
+func _show_reward_face() -> void:
+	if _name_label != null:
+		_name_label.visible = false
+	if _log_panel != null:
+		_log_panel.visible = false
+	if _enemy_anchor != null:
+		_enemy_anchor.visible = false
+	_face_overlay = Control.new()
+	_face_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_face_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_face_overlay)
+	var type_lbl := _back_label(str(REWARD_LABEL[_reward_type]), 13, Color(1, 1, 1, 1))
+	type_lbl.set_anchors_preset(Control.PRESET_CENTER)
+	type_lbl.offset_top = -10.0
+	type_lbl.offset_bottom = 8.0
+	type_lbl.offset_left = -40.0
+	type_lbl.offset_right = 40.0
+	_face_overlay.add_child(type_lbl)
+	_mult_label = _back_label("x%d" % _mult, 9, Color(1.0, 0.97, 0.7, 1.0))
+	_mult_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_mult_label.offset_top = -20.0
+	_mult_label.offset_bottom = -10.0
+	_face_overlay.add_child(_mult_label)
+
+
+## BattleManager sets the same-color stack count → the visible reward multiplier.
+func set_multiplier(n: int) -> void:
+	_mult = maxi(1, n)
+	if _mult_label != null and not _flipping:
+		_mult_label.text = "x%d" % _mult
 
 
 ## Resolved (battle done) and not yet flipping/opened.
@@ -801,13 +890,16 @@ func _on_window_gui_input(event: InputEvent) -> void:
 ## chain can tally the merge bonus. Does NOT close — the chain calls chain_close.
 func reveal_and_grant() -> Dictionary:
 	if _flipping or not _flippable:
-		return {"gold": 0, "xp": 0, "items": []}
+		return {"type": _reward_type, "amount": 0}
 	_flippable = false
 	_flipping = true
 	_close_started = true
 	if _flip_hint != null:
 		_flip_hint.queue_free()
 		_flip_hint = null
+	if _face_overlay != null:
+		_face_overlay.queue_free()
+		_face_overlay = null
 	var reward: Dictionary = _grant_reward()
 	_build_card_back(reward)
 	pivot_offset = size * 0.5
@@ -829,36 +921,63 @@ func chain_close(delay: float) -> void:
 	t.tween_callback(_finish_flip_close)
 
 
-## Grant the accumulated reward straight into GameState (flip = reveal + claim),
-## then the claim funcs return 0/empty so BattleManager drops nothing on close.
+## Grant THIS card's typed reward (color = type; RANDOM resolves NOW for suspense).
+## Returns {type, amount}. Leftover accrued drops are discarded so BattleManager
+## grants nothing on close.
 func _grant_reward() -> Dictionary:
-	var gold: int = claim_gold_drops()
-	var xp: int = claim_xp_reward()
-	var items: Array[ItemData] = claim_item_drops()
-	if gold > 0:
-		GameState.add_gold(gold)
-	if xp > 0:
-		GameState.add_party_xp(xp)
-	for item: ItemData in items:
-		GameState.collect_item(item, GameState.loot_level_for_item(item))
-	return {"gold": gold, "xp": xp, "items": items}
+	var t: int = _reward_type
+	if t == Reward.RANDOM:
+		t = [Reward.WEAPON, Reward.GOLD, Reward.HP, Reward.XP].pick_random()
+	var amount: int = 0
+	match t:
+		Reward.GOLD:
+			amount = maxi(1, claim_gold_drops())
+			GameState.add_gold(amount)
+		Reward.XP:
+			amount = maxi(1, claim_xp_reward())
+			GameState.add_party_xp(amount)
+		Reward.HP:
+			amount = HEAL_PER_CARD
+			_heal_party(amount)
+		Reward.WEAPON:
+			var item: ItemData = _random_weapon_item()
+			if item != null:
+				GameState.collect_item(item, GameState.loot_level_for_item(item))
+			amount = 1
+	claim_gold_drops()  # flush any unused accrual → manager drops nothing on close
+	claim_xp_reward()
+	claim_item_drops()
+	return {"type": t, "amount": amount}
+
+
+func _random_weapon_item() -> ItemData:
+	for i in 6:
+		var it: ItemData = ItemDB.random_drop()
+		if it != null and it.slot == ItemData.Slot.WEAPON:
+			return it
+	return ItemDB.random_drop()
+
+
+func _heal_party(amount: int) -> void:
+	for i in GameState.party_size():
+		GameState.heal_party_member(i, amount)
 
 
 func _swap_to_back() -> void:
-	# Hide the combat front, restyle the panel as the fancy gold card back.
 	if _enemy_anchor != null:
 		_enemy_anchor.visible = false
 	if _name_label != null:
 		_name_label.visible = false
-	if _hp_label != null:
-		_hp_label.visible = false
 	if _log_panel != null:
 		_log_panel.visible = false
-	_background.add_theme_stylebox_override("panel", _flat_panel_style(CARD_BACK_BG, DQ_WINDOW_BORDER))
+	# Keep the reward color (lightened to "pop") so the back still reads as its type.
+	_background.add_theme_stylebox_override("panel", _flat_panel_style(_reward_color().lightened(0.14), DQ_WINDOW_BORDER))
 	if _card_back != null:
 		_card_back.visible = true
 
 
+## Back = the concrete reward revealed: type name + the amount (suspense pay-off,
+## especially for purple/random which only resolves on flip).
 func _build_card_back(reward: Dictionary) -> void:
 	_card_back = Control.new()
 	_card_back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -871,40 +990,13 @@ func _build_card_back(reward: Dictionary) -> void:
 	_card_back.add_child(center)
 	var vb := VBoxContainer.new()
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	vb.add_theme_constant_override("separation", 1)
+	vb.add_theme_constant_override("separation", 0)
 	center.add_child(vb)
-
-	vb.add_child(_back_label("★ 보상 ★", 7, Color(0.86, 0.82, 0.6, 1.0), HORIZONTAL_ALIGNMENT_CENTER))
-	if int(reward["gold"]) > 0:
-		var gold_row := HBoxContainer.new()
-		gold_row.alignment = BoxContainer.ALIGNMENT_CENTER
-		gold_row.add_theme_constant_override("separation", 2)
-		var coin := TextureRect.new()
-		coin.texture = GOLD_ICON
-		coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		coin.custom_minimum_size = Vector2(13, 13)
-		coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		gold_row.add_child(coin)
-		gold_row.add_child(_back_label("+%d" % int(reward["gold"]), 15, Color(1.0, 0.86, 0.34, 1.0), HORIZONTAL_ALIGNMENT_LEFT))
-		vb.add_child(gold_row)
-	var items: Array = reward["items"]
-	if not items.is_empty():
-		var item_row := HBoxContainer.new()
-		item_row.alignment = BoxContainer.ALIGNMENT_CENTER
-		item_row.add_theme_constant_override("separation", 2)
-		for it: ItemData in items:
-			var ico := TextureRect.new()
-			ico.texture = it.icon
-			ico.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			ico.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			ico.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			ico.custom_minimum_size = Vector2(14, 14)
-			ico.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			item_row.add_child(ico)
-		vb.add_child(item_row)
-	if int(reward["xp"]) > 0:
-		vb.add_child(_back_label("+%d XP" % int(reward["xp"]), 7, Color(0.6, 0.82, 1.0, 1.0), HORIZONTAL_ALIGNMENT_CENTER))
+	var t: int = int(reward["type"])
+	var amt: int = int(reward["amount"])
+	vb.add_child(_back_label(str(REWARD_LABEL[t]), 8, Color(1, 1, 1, 1)))
+	var txt: String = "장비!" if t == Reward.WEAPON else "+%d" % amt
+	vb.add_child(_back_label(txt, 15, Color(1.0, 0.96, 0.78, 1.0)))
 
 
 func _back_label(text: String, size: int, color: Color, align: int = HORIZONTAL_ALIGNMENT_CENTER) -> Label:

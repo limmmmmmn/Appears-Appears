@@ -5,10 +5,18 @@ extends RefCounted
 ## tile sizes. Sizes only (colors/styles stay in the individual UI scripts).
 ## Access anywhere via the class name, e.g. `UITheme.FONT_CARD_NAME`.
 
-# ─── Right panel (강화 상점 / 마을 격자) ───────────────────────────────
+# ─── Floating field panels (overlay the full-bleed field) ──────────────
+## The field now fills the whole screen; the dock + shop float ON it as small
+## cards in the top corners. These drive both the panels' placement AND the
+## battle-window play area (windows avoid the panel footprints).
+const LEFT_PANEL_WIDTH: float = 92.0       ## floating monster dock (top-left)
+const PANEL_MARGIN: float = 4.0            ## gap from screen edge / between panel & windows
+const PANEL_TOP: float = 18.0              ## below the 15px menu bar
+
+# ─── Right panel (강화 상점 / 장비) ─────────────────────────────────────
 ## Tuned to match the left dock's small, neat feel. HIERARCHY: name = base,
 ## numbers (value/cost) are SMALLER (secondary info), section labels smallest.
-const RIGHT_PANEL_WIDTH: float = 115.0     ## the dedicated 강화/장비 zone (525–640) — DOS tab list
+const RIGHT_PANEL_WIDTH: float = 108.0     ## floating 강화/장비 card (top-right)
 const PANEL_CONTENT_MARGIN: int = 4
 const LIST_SEPARATION: int = 3
 const FONT_GOLD: int = 10                 ## "Gold N" header

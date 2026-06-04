@@ -146,7 +146,7 @@ func _color_for_modifier(mod: ModifierData) -> Color:
 		return MAGIC_COLOR
 	if mod.effect_data.has("hp_flat") or mod.effect_data.has("priest_heal_flat") or mod.effect_data.has("window_collision_heal_flat"):
 		return SUPPORT_COLOR
-	if mod.effect_data.has("def_flat") or mod.effect_data.has("evade_chance"):
+	if mod.effect_data.has("evade_chance"):
 		return DEFENSE_COLOR
 	if mod.effect_data.has("atk_flat") or mod.effect_data.has("hero_damage_bonus_mult"):
 		return ATTACK_COLOR

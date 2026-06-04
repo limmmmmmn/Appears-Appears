@@ -84,6 +84,7 @@ func _ready() -> void:
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
 	EventBus.battle_window_resolved.connect(_on_battle_window_resolved)
 	EventBus.party_wiped.connect(_on_party_wiped)
+	EventBus.party_collapsed.connect(_on_party_collapsed)
 
 
 func _process(delta: float) -> void:
@@ -208,6 +209,16 @@ func _update_slot_readiness(slot: int) -> void:
 	for w in ws:
 		if w.has_method("set_chain_ready"):
 			w.set_chain_ready(w == top and all_resolved, ws.size())
+	# Same-color multiplier: each card shows xN = how many SAME-color cards are in
+	# this stack (the "같은 색 모으기" strategy → bigger combos).
+	for w in ws:
+		if w.has_method("reward_type_id") and w.has_method("set_multiplier"):
+			var c: int = int(w.reward_type_id())
+			var same: int = 0
+			for o in ws:
+				if o.has_method("reward_type_id") and int(o.reward_type_id()) == c:
+					same += 1
+			w.set_multiplier(same)
 
 
 # ─── Manual drag: free move + whole-stack (solitaire) move ─────────────
@@ -324,27 +335,23 @@ func _open_stack(slot: int) -> void:
 		return
 	ws.reverse()  # top (newest) first
 	var count: int = ws.size()
-	var total_gold: int = 0
 	for w in ws:
 		if not is_instance_valid(w):
 			continue
-		var reward: Dictionary = w.reveal_and_grant()
-		total_gold += int(reward.get("gold", 0))
+		w.reveal_and_grant()  # each card grants its TYPED reward (color = type)
 		await get_tree().create_timer(CHAIN_GAP).timeout
-	# Merge bonus (more stacked → bigger), popped at the slot center.
+	# Combo pop at the stack's (possibly moved) spot.
 	if count >= 2:
-		var bonus: int = int(round(float(total_gold) * STACK_BONUS_PER_EXTRA * float(count - 1)))
-		if bonus > 0:
-			GameState.add_gold(bonus)
-			_spawn_bonus_popup(SLOT_CENTERS[slot], bonus)
+		var center: Vector2 = _slot_base[slot] if slot < _slot_base.size() else SLOT_CENTERS[slot]
+		_spawn_bonus_popup(center, "x%d 콤보!" % count)
 	for w in ws:
 		if is_instance_valid(w):
 			w.chain_close(0.25 if count >= 2 else 0.1)
 
 
-func _spawn_bonus_popup(center: Vector2, amount: int) -> void:
+func _spawn_bonus_popup(center: Vector2, text: String) -> void:
 	var lbl := Label.new()
-	lbl.text = "팡!  +%d" % amount
+	lbl.text = text
 	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.32, 1.0))
 	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
@@ -809,15 +816,18 @@ func _visible_world_rect() -> Rect2:
 ## roam freely and the windows stay pinned to the viewport. This is the on-screen
 ## play area: the viewport minus the left dock and the right shop panel.
 func _play_area_screen_rect() -> Rect2:
-	# Confine battle windows to the CENTRAL field "app window" (inside its titlebar)
-	# so all the MOVEMENT (hero + enemies + fights) stays in the center — the side
-	# panels stay calm. Mirrors DesktopFrame.FIELD_RECT.
-	var fr: Rect2 = DesktopFrame.FIELD_RECT
-	var pad: float = 3.0
-	var top: float = fr.position.y + DesktopFrame.TITLEBAR_H + pad
+	# Full-bleed field: battle windows use the WHOLE viewport, inset only for the
+	# two floating panels (top-left dock, top-right shop) + the menu bar, so a
+	# fight never opens under a panel. Reads UITheme so resizing a panel auto-
+	# adjusts the play area.
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var left: float = UITheme.LEFT_PANEL_WIDTH + UITheme.PANEL_MARGIN * 2.0
+	var right: float = UITheme.RIGHT_PANEL_WIDTH + UITheme.PANEL_MARGIN * 2.0
+	var top: float = UITheme.PANEL_TOP
+	var bottom_pad: float = UITheme.PANEL_MARGIN
 	return Rect2(
-		Vector2(fr.position.x + pad, top),
-		Vector2(maxf(1.0, fr.size.x - pad * 2.0), maxf(1.0, fr.end.y - top - pad))
+		Vector2(left, top),
+		Vector2(maxf(1.0, vp.x - left - right), maxf(1.0, vp.y - top - bottom_pad))
 	)
 
 
@@ -931,9 +941,22 @@ func _on_party_wiped() -> void:
 	abort_all_battles()
 
 
+## Death penalty: the whole party went down → every floating (un-flipped) reward
+## window is wiped. That's the risk that makes "어디까지 쌓을까" a gamble.
+func _on_party_collapsed() -> void:
+	if _window_rects.is_empty():
+		return
+	var lost: int = _window_rects.size()
+	abort_all_battles()
+	EventBus.narration.emit("전멸! 띄워둔 보상 %d장이 사라졌다…" % lost)
+
+
 ## Force-close every active battle window. No gold, no signals, no log —
-## the run is dead. Used on party_wipe and (later) explicit run resets.
+## the run is dead. Used on party_wipe / collapse / (later) explicit run resets.
 func abort_all_battles() -> void:
+	if _drag_slot >= 0:  # cancel any in-progress drag
+		_drag_slot = -1
+		_drag_card_starts.clear()
 	for window: Node in _window_rects.keys():
 		if is_instance_valid(window):
 			window.queue_free()
@@ -944,3 +967,11 @@ func abort_all_battles() -> void:
 	_modal_windows.clear()
 	_collision_cooldowns.clear()
 	_party_collision_cooldowns.clear()
+	# Reset the slot/stack bookkeeping so new fights start from a clean board.
+	_window_slot.clear()
+	_slot_windows.clear()
+	_drag_card_starts.clear()
+	for i in _slot_counts.size():
+		_slot_counts[i] = 0
+	for i in _slot_base.size():
+		_slot_base[i] = SLOT_CENTERS[i]

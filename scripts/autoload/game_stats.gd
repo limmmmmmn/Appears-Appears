@@ -209,13 +209,12 @@ func _build_loop_report_lines(loop_num: int) -> PackedStringArray:
 	for i in GameState.party.size():
 		var member: CharacterData = GameState.party[i]
 		var hp: int = GameState.party_hp[i] if i < GameState.party_hp.size() else 0
-		lines.append("  %s Lv.%d  HP %d/%d  ATK %d DEF %d AGI %d" % [
+		lines.append("  %s Lv.%d  HP %d/%d  ATK %d AGI %d" % [
 			member.display_name,
 			GameState.party_level(i),
 			hp,
 			GameState.effective_max_hp(i),
 			GameState.effective_attack(i),
-			GameState.effective_defense(i),
 			GameState.effective_agility(i),
 		])
 	return lines

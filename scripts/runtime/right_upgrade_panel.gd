@@ -13,6 +13,9 @@ const ICON_GOLD: Texture2D = preload("res://assets/sprites/icons/gold.png")
 const TAB_UPGRADE: StringName = &"upgrade"
 const TAB_GEAR: StringName = &"gear"
 
+## Floating-card height — fits the 강화 list; the 장비 list scrolls inside.
+const CARD_HEIGHT: float = 232.0
+
 var _tab_buttons: Dictionary = {}
 var _content: VBoxContainer
 var _active_tab: StringName = TAB_UPGRADE
@@ -20,12 +23,13 @@ var _rows: Array[Dictionary] = []   ## {button, cost} — for live affordability
 
 
 func _ready() -> void:
-	var x: float = UITheme.right_panel_left()
+	# Floating card in the top-right corner, over the full-bleed field (margins on
+	# every side so green shows around it — no longer a full-height sidebar).
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
-	offset_left = x
-	offset_top = 17.0  # clear the menu bar
-	offset_right = 640.0
-	offset_bottom = 360.0
+	offset_right = 640.0 - UITheme.PANEL_MARGIN
+	offset_left = offset_right - UITheme.RIGHT_PANEL_WIDTH
+	offset_top = UITheme.PANEL_TOP
+	offset_bottom = UITheme.PANEL_TOP + CARD_HEIGHT
 	size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	add_theme_stylebox_override("panel", DOS.box_style())
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -91,7 +95,7 @@ func _build() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0.0, 200.0)
+	scroll.custom_minimum_size = Vector2(0.0, 120.0)
 	col.add_child(scroll)
 	_content = VBoxContainer.new()
 	_content.add_theme_constant_override("separation", 2)
@@ -143,12 +147,12 @@ func _upgrade_items() -> Array[Dictionary]:
 	return [
 		{"icon": ICON_WEAPON, "name": "무기 루팅", "desc": "Lv%d 장비 드롭" % GameState.weapon_loot_level,
 			"price": GameState.weapon_loot_cost(), "afford": GameState.can_upgrade_weapon_loot(), "maxed": false, "kind": &"weapon_loot"},
-		{"icon": ICON_ARMOR, "name": "방어 루팅", "desc": "Lv%d 장비 드롭" % GameState.armor_loot_level,
+		{"icon": ICON_ARMOR, "name": "방어구 루팅", "desc": "Lv%d 장비 드롭" % GameState.armor_loot_level,
 			"price": GameState.armor_loot_cost(), "afford": GameState.can_upgrade_armor_loot(), "maxed": false, "kind": &"armor_loot"},
 		{"icon": ICON_GOLD, "name": "운", "desc": "대박 %.0f%%" % (GameState.luck_jackpot_chance() * 100.0),
 			"price": GameState.luck_upgrade_cost(), "afford": GameState.can_upgrade_luck(), "maxed": GameState.luck_is_maxed(), "kind": &"luck"},
-		{"icon": ICON_GOLD, "name": "멀티 전투창", "desc": ("무제한" if GameState.scale_is_maxed() else "1개"),
-			"price": GameState.scale_upgrade_cost(), "afford": GameState.can_upgrade_scale(), "maxed": GameState.scale_is_maxed(), "kind": &"scale"},
+		{"icon": ICON_GOLD, "name": "멀티 전투창", "desc": "현재 %d개" % GameState.scale_window_count(),
+			"price": GameState.scale_upgrade_cost(), "afford": GameState.can_upgrade_scale(), "maxed": false, "kind": &"scale"},
 		{"icon": ICON_GOLD, "name": "보상 개봉", "desc": "%.2fs" % GameState.chest_hover_duration(),
 			"price": GameState.open_speed_upgrade_cost(), "afford": GameState.can_upgrade_open_speed(), "maxed": GameState.open_speed_is_maxed(), "kind": &"open_speed"},
 		{"icon": ICON_GOLD, "name": "자동 줍기", "desc": ("자동" if GameState.auto_pickup_unlocked else "수동(호버)"),

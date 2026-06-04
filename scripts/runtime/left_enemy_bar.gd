@@ -11,8 +11,8 @@ const BONFIRE_TEX: Texture2D = preload("res://assets/sprites/objects/bonfire.png
 const SHRINE_TEX: Texture2D = preload("res://assets/sprites/objects/shrine.png")
 
 const PANEL_X: float = 4.0
-const PANEL_TOP: float = 36.0     ## below the menu bar + gold chip
-const PANEL_W: float = 116.0
+const PANEL_TOP: float = 36.0     ## below the menu bar + gold chip (floats over the field now)
+const PANEL_W: float = UITheme.LEFT_PANEL_WIDTH   ## smaller floating dock
 
 var _box: PanelContainer
 var _list: VBoxContainer
