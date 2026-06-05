@@ -322,7 +322,9 @@ func _build_gold_center() -> void:
 	style.content_margin_bottom = 2
 	_gold_center = PanelContainer.new()
 	_gold_center.add_theme_stylebox_override("panel", style)
-	_gold_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Click the gold chip → +1000 (debug grant; replaces the removed top-bar button).
+	_gold_center.mouse_filter = Control.MOUSE_FILTER_STOP
+	_gold_center.gui_input.connect(_on_gold_center_input)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
 	_gold_center.add_child(row)
@@ -345,6 +347,17 @@ func _build_gold_center() -> void:
 	row.add_child(_gold_center_label)
 	add_child(_gold_center)
 	_gold_center.position = Vector2(5.0, 17.0)  # top-left, below the menu bar, above the dock
+
+
+## Click the top-left gold chip to grant +1000 gold (debug). A quick pop sells it.
+func _on_gold_center_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		GameState.add_gold(1000)
+		if _gold_center != null:
+			_gold_center.pivot_offset = _gold_center.size * 0.5
+			var t := create_tween()
+			t.tween_property(_gold_center, "scale", Vector2(1.18, 1.18), 0.07).set_trans(Tween.TRANS_QUAD)
+			t.tween_property(_gold_center, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 ## Pinned top-left (grows rightward as the number widens).

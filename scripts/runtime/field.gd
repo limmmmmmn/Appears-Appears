@@ -32,7 +32,7 @@ const HEAL_FX_INTERVAL: float = 0.32   ## seconds between green "+" pops per mem
 ## Bounded map ≈ 9× the camera (3×3 screens of 640×360). The follow-camera is
 ## clamped to these bounds (Player.set_field_bounds → camera limits), so the map
 ## has hard edges instead of an endless roam. Mouse wheel zooms in/out.
-const FIELD_SIZE: Vector2 = Vector2(1920, 1080)
+const FIELD_SIZE: Vector2 = Vector2(1200, 900)
 ## Plain-green backdrop is oversized this far beyond the map on every side so the
 ## roaming camera never sees past it into the void.
 const BG_MARGIN: float = 1400.0
@@ -196,6 +196,7 @@ func _process(delta: float) -> void:
 		return
 	_tick_campfire(delta)  # proximity regen + first-place mage event (runs always)
 	_tick_rest(delta)      # "쉰다": walk to fire, hold, fast-heal to full (runs always)
+	_tick_structure_walk() # release the post-placement walk once the hero arrives
 	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
 	if GameState.is_field_battle_paused():
 		return
@@ -866,6 +867,16 @@ func _on_campfire_placed() -> void:
 	_show_message("모닥불을 피웠다. 더 태워볼까…?")
 
 
+## How near the hero must get to a freshly placed structure before it stops
+## auto-walking toward it and resumes normal roaming.
+const STRUCTURE_ARRIVE_DIST: float = 20.0
+## World point the party is currently walking toward after placing a structure
+## (e.g. the village), or INF when not reacting.
+var _structure_walk_target: Vector2 = Vector2.INF
+## The just-placed structure's id — its action menu auto-opens on arrival.
+var _structure_walk_id: StringName = &""
+
+
 ## Generic TILES structures (village, …) — spawn the sprite at the dropped spot.
 func _on_structure_placed(tile_id: StringName) -> void:
 	var pos: Vector2
@@ -878,6 +889,41 @@ func _on_structure_placed(tile_id: StringName) -> void:
 	node.setup(Balance.tile_by_id(tile_id))
 	node.position = pos
 	_decorations_root.add_child(node)
+	# The party reacts: auto-walk over to the freshly placed structure, then its
+	# action menu auto-opens on arrival (see _tick_structure_walk).
+	_structure_walk_target = pos
+	_structure_walk_id = tile_id
+	if _player and _player.has_method("set_forced_move_target"):
+		_player.set_forced_move_target(pos)
+	var sname: String = str(Balance.tile_by_id(tile_id).get("name", "무언가"))
+	_show_message("%s%s 발견했다!" % [sname, _kor_obj_particle(sname)])
+
+
+## Korean object particle: 을 after a syllable WITH a final consonant (받침), else
+## 를. Picks the right one off the last character so messages read naturally.
+func _kor_obj_particle(word: String) -> String:
+	if word.is_empty():
+		return "을"
+	var code: int = word[word.length() - 1].unicode_at(0)
+	if code >= 0xAC00 and code <= 0xD7A3:  # Hangul syllable block
+		return "을" if (code - 0xAC00) % 28 != 0 else "를"
+	return "을"
+
+
+## Once the hero reaches a just-placed structure: stop walking + auto-open its
+## action menu (the village's 여관/상점, etc.) — "용사가 가서 직접 작동".
+func _tick_structure_walk() -> void:
+	if _structure_walk_target == Vector2.INF or _player == null:
+		return
+	if _player.global_position.distance_to(_structure_walk_target) <= STRUCTURE_ARRIVE_DIST:
+		var arrived_pos: Vector2 = _structure_walk_target
+		var arrived_id: StringName = _structure_walk_id
+		_structure_walk_target = Vector2.INF
+		_structure_walk_id = &""
+		if _player.has_method("clear_forced_move_target"):
+			_player.clear_forced_move_target()
+		if arrived_id != &"":
+			EventBus.structure_clicked.emit(arrived_id, arrived_pos)
 
 
 ## Drag-placed buildings that live on the field (sanctuary). Spawn a structure at
@@ -1273,10 +1319,12 @@ func _random_position() -> Vector2:
 
 func _apply_field_size() -> void:
 	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
-	# Plain-green backdrop oversized far past the map so the roaming camera always
-	# lands on green, never the void. (The grass texture / island diorama are off.)
-	_background.position = Vector2(-BG_MARGIN, -BG_MARGIN)
-	_background.size = _field_size + Vector2(BG_MARGIN, BG_MARGIN) * 2.0
+	# The field is a single 4:3 "board": green covers EXACTLY the board rect and
+	# nothing more. Beyond its edges the dark WallpaperLayer (behind everything)
+	# shows through as the void, so zooming all the way out reveals the whole board
+	# floating in a dark margin (wide on the sides since 4:3 < the 16:9 viewport).
+	_background.position = Vector2.ZERO
+	_background.size = _field_size
 	_background_texture.visible = false
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)

@@ -62,6 +62,15 @@ func _ready() -> void:
 		_apply()
 
 
+## Clicking anywhere on the party box snaps the camera back onto the hero (handy
+## when you've panned the view off into free-look). mouse_filter is PASS, so this
+## fires for clicks on the box body while equip slots still get their own clicks.
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT:
+		EventBus.camera_focus_hero_requested.emit()
+
+
 ## A combat-upgrade landed (weapon/armor/luck/scale). Re-sync the visible gear
 ## badges so a shop purchase shows on the party panel immediately, not just in the
 ## tooltip — this is the data↔display sync that was missing for bought weapons.

@@ -1,8 +1,8 @@
 [gd_resource type="FontVariation" format=3 uid="uid://bnwjfapjo344l"]
 
-[ext_resource type="FontFile" uid="uid://dqe8snnu5bvet" path="res://assets/fonts/Press_Start_2P/PressStart2P-Regular.ttf" id="1_pixel"]
-[ext_resource type="FontFile" uid="uid://db63wk4sagp0h" path="res://assets/fonts/neodgm.ttf" id="2_korean_pixel"]
+[ext_resource type="FontFile" uid="uid://b07vtkakyuyyx" path="res://assets/fonts/poppins/Poppins-Regular.ttf" id="1_latin"]
+[ext_resource type="FontFile" uid="uid://b1jhue7d784f3" path="res://assets/fonts/pretendard/public/static/Pretendard-Regular.otf" id="2_korean"]
 
 [resource]
-fallbacks = Array[Font]([ExtResource("1_pixel")])
-base_font = ExtResource("2_korean_pixel")
+fallbacks = Array[Font]([ExtResource("2_korean")])
+base_font = ExtResource("1_latin")

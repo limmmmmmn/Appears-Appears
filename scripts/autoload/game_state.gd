@@ -1402,6 +1402,46 @@ func can_place_structure(id: StringName) -> bool:
 	return not is_structure_placed(id) and gold >= int(Balance.tile_by_id(id).get("place_cost", 0))
 
 
+# ─── Objets (item-like collectibles: drop from battle → shelved on the left) ──
+## Acquired objet ids. Free + immediate (claimed from a reward card, no field
+## spawn). Most are one-time — once here, they won't roll as a drop again.
+var acquired_objets: Array[StringName] = []
+
+
+func is_objet_acquired(id: StringName) -> bool:
+	return acquired_objets.has(id)
+
+
+## Claim an objet (from a reward card). Idempotent; emits objet_acquired for the
+## left-panel shelf the first time.
+func acquire_objet(id: StringName) -> void:
+	if id == &"" or acquired_objets.has(id):
+		return
+	acquired_objets.append(id)
+	EventBus.objet_acquired.emit(id)
+
+
+## Has this owned objet already been dropped onto the field?
+func is_objet_placed(id: StringName) -> bool:
+	if id == &"campfire":
+		return campfire_placed
+	return is_structure_placed(id)
+
+
+## Place an OWNED objet on the field for FREE, reusing the existing spawn paths
+## (click tile → carry → drop). Returns false if not owned or already placed.
+func place_acquired_objet(id: StringName) -> bool:
+	if not is_objet_acquired(id) or is_objet_placed(id):
+		return false
+	if id == &"campfire":
+		campfire_placed = true
+		EventBus.campfire_placed.emit()  # Field spawns it + runs the mage event
+		return true
+	placed_structures.append(id)
+	EventBus.structure_placed.emit(id)   # Field spawns the structure at the drop spot
+	return true
+
+
 ## 여관(Inn): everyone wakes up topped off — revive any downed members and refill
 ## all HP to full. The single full-party restore the field offers.
 func restore_party_full() -> void:
@@ -2672,6 +2712,7 @@ func reset_run() -> void:
 	total_gold_earned = 0
 	_tier_available_announced.clear()  # re-announce tiers next run
 	placed_structures.clear()          # village etc. re-placeable next run
+	acquired_objets.clear()            # objets drop fresh again next run
 	enemies_killed = 0
 	biggest_hit = 0
 	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock

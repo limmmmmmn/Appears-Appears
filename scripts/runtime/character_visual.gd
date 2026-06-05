@@ -88,6 +88,47 @@ func _show_idle() -> void:
 	_set_frame(clampi(idle_col, 0, maxi(0, character_data.frames_per_direction - 1)), int(_dir))
 
 
+## Force a static facing (no walk). Used by battle formation: the party faces UP
+## = back to the camera, looking toward the enemy windows above them.
+func face_dir(dir: Dir) -> void:
+	_dir = dir
+	_moving = false
+	_step = 0
+	_step_timer = 0.0
+	_show_idle()
+
+
+## ─── Battle-formation juice ────────────────────────────────────────────
+## Tweens the sprite's LOCAL offset/modulate only (the owner's logical position is
+## untouched), so attacks/hits never desync movement. One tween, killed on retrigger.
+var _juice_tween: Tween
+
+## Attack tell: lunge "forward" (up — the formation faces up) and snap back.
+func play_attack_lunge() -> void:
+	if _juice_tween != null and _juice_tween.is_valid():
+		_juice_tween.kill()
+	position = Vector2.ZERO
+	modulate = Color(1, 1, 1, 1)
+	_juice_tween = create_tween()
+	_juice_tween.tween_property(self, "position", Vector2(0.0, -6.0), 0.06)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_juice_tween.tween_property(self, "position", Vector2.ZERO, 0.13)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Hit reaction: white flash + a small knockback DOWN (away from the enemy above).
+func play_hit_flinch() -> void:
+	if _juice_tween != null and _juice_tween.is_valid():
+		_juice_tween.kill()
+	position = Vector2.ZERO
+	modulate = Color(2.4, 2.4, 2.4, 1.0)  # bright flash
+	_juice_tween = create_tween()
+	_juice_tween.tween_property(self, "position", Vector2(0.0, 4.0), 0.05).set_trans(Tween.TRANS_QUAD)
+	_juice_tween.parallel().tween_property(self, "modulate", Color(1, 1, 1, 1), 0.18)
+	_juice_tween.tween_property(self, "position", Vector2.ZERO, 0.12)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 func _set_frame(col: int, row: int) -> void:
 	if character_data == null:
 		return

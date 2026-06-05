@@ -46,11 +46,27 @@ func _ready() -> void:
 	EventBus.building_built.connect(_on_changed.unbind(1))
 	EventBus.world_started.connect(_on_changed)
 	EventBus.player_named.connect(_on_changed.unbind(1))
+	EventBus.objet_acquired.connect(_on_objet_acquired)
+	EventBus.structure_placed.connect(_on_changed.unbind(1))  # placed objet → dim its tile
 	set_process(true)
 
 
 func _on_changed() -> void:
 	_refresh()
+
+
+## A battle reward dropped an objet → rebuild so the new owned tile appears, then
+## pop it in (it just "flew" here from the reward card).
+func _on_objet_acquired(_id: StringName) -> void:
+	_rebuild()
+	for t in _tiles:
+		if t["kind"] == &"objet" and is_instance_valid(t["tile"]):
+			var tile: Control = t["tile"]
+			tile.scale = Vector2(0.3, 0.3)
+			var tw := create_tween()
+			tw.tween_property(tile, "scale", Vector2(1.2, 1.2), 0.2)\
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(tile, "scale", Vector2.ONE, 0.12)
 
 
 func _process(_delta: float) -> void:
@@ -96,12 +112,13 @@ func _rebuild() -> void:
 			continue
 		_add_tile(&"enemy", id, _tier_sprite(id), _tile_bright(&"enemy", id))
 
+	# Owned OBJETS (village, campfire, … dropped from battle) sit on the shelf as
+	# tiles. Click one to place it on the field for free (existing carry/drop). It
+	# dims once placed. They are NOT bought here anymore.
+	for oid in GameState.acquired_objets:
+		_add_tile(&"objet", oid, _objet_tex(oid), _tile_bright(&"objet", oid))
 	# Events / structures. Once placed, a tile vanishes from the panel (it lives on
 	# the map now).
-	if not GameState.is_structure_placed(&"village"):
-		_add_tile(&"village", &"village", VILLAGE_TEX, _tile_bright(&"village", &"village"))
-	if not GameState.campfire_placed:
-		_add_tile(&"campfire", &"campfire", BONFIRE_TEX, _tile_bright(&"campfire", &"campfire"))
 	if GameState.is_building_unlocked(&"sanctuary") and not GameState.is_building_built(&"sanctuary"):
 		_add_tile(&"sanctuary", &"sanctuary", SHRINE_TEX, _tile_bright(&"sanctuary", &"sanctuary"))
 
@@ -144,6 +161,7 @@ func _tile_bright(kind: StringName, id: StringName) -> bool:
 			return GameState.gold >= c
 		&"sanctuary": return GameState.gold >= GameState.building_cost(&"sanctuary")
 		&"village": return GameState.can_place_structure(&"village")
+		&"objet": return not GameState.is_objet_placed(id)  # lit until placed
 	return true
 
 
@@ -178,7 +196,24 @@ func _tooltip_for(kind: StringName, id: StringName) -> String:
 			return "성소\n%dG" % GameState.building_cost(&"sanctuary")
 		&"village":
 			return "마을\n배치 %dG" % int(Balance.tile_by_id(&"village").get("place_cost", 0))
+		&"objet":
+			return "%s\n%s" % [_objet_name(id), "배치됨" if GameState.is_objet_placed(id) else "클릭해 배치"]
 	return ""
+
+
+## Objet display helpers (sprite + Korean name by id).
+func _objet_tex(id: StringName) -> Texture2D:
+	match id:
+		&"campfire": return BONFIRE_TEX
+		&"sanctuary": return SHRINE_TEX
+	return VILLAGE_TEX
+
+
+func _objet_name(id: StringName) -> String:
+	match id:
+		&"campfire": return "모닥불"
+		&"sanctuary": return "성소"
+	return "마을"
 
 
 # ─── Click handlers — pick up the tile (drag-and-drop placement) ────────
@@ -195,6 +230,10 @@ func _on_tile_pressed(kind: StringName, id: StringName) -> void:
 		&"campfire", &"sanctuary", &"village":
 			# Drag-and-drop tiles: pick up → drop on the map at the clicked spot.
 			if _tile_bright(kind, id):
+				_begin_carry(kind, id)
+		&"objet":
+			# Owned objet → pick up and drop on the field for free (until placed).
+			if not GameState.is_objet_placed(id):
 				_begin_carry(kind, id)
 
 
@@ -224,6 +263,7 @@ func _carry_icon(kind: StringName, id: StringName) -> Texture2D:
 		&"campfire": return BONFIRE_TEX
 		&"sanctuary": return SHRINE_TEX
 		&"village": return VILLAGE_TEX
+		&"objet": return _objet_tex(id)
 	return _tier_sprite(id)  # enemy / rescue
 
 
@@ -262,6 +302,8 @@ func _drop_carry_at_mouse() -> void:
 				GameState.purchase_building(&"sanctuary")
 		&"village":
 			GameState.place_structure(&"village")
+		&"objet":
+			GameState.place_acquired_objet(id)   # free placement of an owned objet
 	_end_carry()
 
 

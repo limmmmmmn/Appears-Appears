@@ -19,6 +19,10 @@ var _last_position: Vector2
 var _player_trail: Array[Vector2] = []
 ## True while this companion's party member is downed (shows the lying pose).
 var _downed_visual: bool = false
+## Battle formation: when on, the companion leaves the snake and walks to its
+## assigned row slot below the windows, then faces UP (back to camera).
+var _in_formation: bool = false
+var _formation_target: Vector2 = Vector2.ZERO
 
 @onready var _visual: CharacterVisual = $Visual
 
@@ -29,6 +33,10 @@ func _ready() -> void:
 	_seed_trail()
 	if _pending_data:
 		_visual.setup(_pending_data)
+	# Battle-formation juice: lunge on this member's attack, flinch when it's hit —
+	# but only while standing in formation (facing up toward the windows).
+	EventBus.party_member_attacked.connect(_on_party_member_attacked)
+	EventBus.party_damage_taken.connect(_on_party_damage_taken)
 
 
 ## Inject the character data. Safe to call before _ready.
@@ -41,6 +49,22 @@ func setup(data: CharacterData) -> void:
 func _physics_process(delta: float) -> void:
 	if player == null:
 		_visual.set_velocity(Vector2.ZERO)
+		_last_position = global_position
+		return
+	# Battle formation: break off the snake, walk to the assigned slot, face up.
+	if _in_formation:
+		var to_slot: Vector2 = _formation_target - global_position
+		if to_slot.length() > 1.0:
+			var spd: float = minf(max_speed, maxf(60.0, to_slot.length() * catch_up_factor))
+			var prev: Vector2 = global_position
+			global_position = global_position.move_toward(_formation_target, spd * delta)
+			_visual.set_velocity((global_position - prev) / maxf(delta, 0.001))
+		else:
+			global_position = _formation_target
+			if _downed_visual:
+				_visual.set_velocity(Vector2.ZERO)
+			else:
+				_visual.face_dir(CharacterVisual.Dir.UP)  # back to camera, facing the windows
 		_last_position = global_position
 		return
 	_remember_player_position()
@@ -77,6 +101,31 @@ func set_downed_visual(is_down: bool) -> void:
 
 func current_speed() -> float:
 	return (global_position - _last_position).length() / maxf(get_physics_process_delta_time(), 0.001)
+
+
+## BattleManager assigns this companion's battle-formation row slot (world pos).
+func set_formation_slot(pos: Vector2) -> void:
+	_in_formation = true
+	_formation_target = pos
+
+
+## Leave battle formation and rejoin the trailing snake.
+func clear_formation() -> void:
+	if not _in_formation:
+		return
+	_in_formation = false
+	_seed_trail()  # restart the trail from here so the snake doesn't snap
+
+
+# ─── Battle-formation juice (only while in formation) ──────────────────
+func _on_party_member_attacked(index: int) -> void:
+	if index == slot_index and _in_formation and _visual != null:
+		_visual.play_attack_lunge()
+
+
+func _on_party_damage_taken(member_index: int, _amount: int) -> void:
+	if member_index == slot_index and _in_formation and _visual != null and not _downed_visual:
+		_visual.play_hit_flinch()
 
 
 func snap_to_formation() -> void:

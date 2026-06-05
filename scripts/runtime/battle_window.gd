@@ -53,9 +53,9 @@ const DQ_WINDOW_BORDER: Color = Color(0, 0, 0, 1.0)              ## black window
 const DQ_WINDOW_TEXT: Color = Color(1.0, 1.0, 1.0, 1.0)
 
 # ─── Reward-color system: the card's COLOR = its reward type (shown from spawn) ──
-enum Reward { WEAPON, GOLD, HP, XP, RANDOM }
+enum Reward { WEAPON, GOLD, HP, XP, RANDOM, OBJET }
 const REWARD_LABEL: Dictionary = {
-	Reward.WEAPON: "무기", Reward.GOLD: "골드", Reward.HP: "회복", Reward.XP: "경험치", Reward.RANDOM: "?",
+	Reward.WEAPON: "무기", Reward.GOLD: "골드", Reward.HP: "회복", Reward.XP: "경험치", Reward.RANDOM: "?", Reward.OBJET: "획득!",
 }
 const REWARD_COLOR: Dictionary = {
 	Reward.WEAPON: Color(0.85, 0.24, 0.24, 1.0),   ## 빨강
@@ -63,11 +63,24 @@ const REWARD_COLOR: Dictionary = {
 	Reward.HP: Color(0.16, 0.52, 0.28, 1.0),       ## 진한 녹색
 	Reward.XP: Color(0.29, 0.41, 0.72, 1.0),       ## 파랑
 	Reward.RANDOM: Color(0.55, 0.36, 0.74, 1.0),   ## 보라
+	Reward.OBJET: Color(0.16, 0.55, 0.62, 1.0),    ## 청록 — 특별한 오브제 드롭
 }
-## Spawn weighting (gold most common; weapon/hp/random rarer).
+## Spawn weighting (gold most common; weapon/hp/random rarer). OBJET is NOT in the
+## weighted roll — it's special-cased one-time (see _roll_reward_type).
 const REWARD_WEIGHT: Dictionary = {Reward.WEAPON: 16, Reward.GOLD: 32, Reward.HP: 14, Reward.XP: 20, Reward.RANDOM: 14}
+## Per-card chance to surface an un-acquired objet instead of a normal reward.
+const OBJET_DROP_CHANCE: float = 0.22
+## Objet sprites by id (shown big in the card center). Acquired in this order.
+const OBJET_TEX: Dictionary = {
+	&"village": preload("res://assets/sprites/objects/village.png"),
+	&"campfire": preload("res://assets/sprites/objects/bonfire.png"),
+}
+## Drop order: each un-acquired objet surfaces in turn (village → campfire → …).
+const OBJET_ORDER: Array[StringName] = [&"village", &"campfire"]
 const HEAL_PER_CARD: int = 14
 var _reward_type: int = Reward.GOLD
+## When _reward_type == OBJET, which objet this card grants (e.g. &"village").
+var _objet_id: StringName = &""
 var _mult: int = 1
 var _mult_label: Label
 var _face_overlay: Control
@@ -77,8 +90,10 @@ const LOG_STEP_DURATION: float = 0.46
 # ─── Chest reward state (post-victory) ────────────────────────────────
 ## How long the player must hover before the chest pops open.
 const CHEST_HOVER_DURATION: float = 1.0
-## Window shrinks to this fraction of its battle size when becoming a chest.
-const CHEST_SCALE: float = 0.7
+## Chest stays the same size as the battle window (they share one size now), so no
+## shrink — keeping this at 1.0 leaves the reward card at scale 1 for crisp nearest
+## text. (Was 0.7; the downscale mangled the vector font.)
+const CHEST_SCALE: float = 1.0
 const CHEST_SHRINK_DURATION: float = 0.3
 const CHEST_OPEN_DURATION: float = 0.22
 const CHEST_REVEAL_LINGER: float = 1.2
@@ -141,6 +156,10 @@ var _chest_tween: Tween
 ## first), 0 보통 (by agility). Applied to the FIRST turn-queue build only.
 var _initiative: int = 0
 var _initiative_pending: bool = true
+## Battle formation gate. When false, the window opens and shows its enemy but does
+## NOT tick turns (the foe waits) until arm_combat() is called. Default true keeps
+## the classic "fight starts immediately" behavior for modal / non-formation spawns.
+var _combat_armed: bool = true
 
 func _ready() -> void:
 	_name_label.show()  # enemy name = the window's small title
@@ -166,7 +185,10 @@ func _ready() -> void:
 	EventBus.weapon_equipped.connect(_on_weapon_equipped)
 	EventBus.armor_equipped.connect(_on_weapon_equipped)
 	_running = true
-	_turn_timer.start()
+	# Battle formation: a disarmed window shows its enemy but holds its turns — the
+	# foe just WAITS until the hero reaches formation and BattleManager arms it.
+	if _combat_armed:
+		_turn_timer.start()
 
 
 func _on_weapon_equipped(weapon_name: String) -> void:
@@ -199,6 +221,26 @@ func is_opening() -> bool:
 ## Erupt from the encounter point: start as a near-zero dot centered on where the
 ## enemy was, then pop+travel out to the resting slot the spawner already set on
 ## `position`. Center pivot keeps the growth anchored to the travelling center.
+## Spawn this window in "waiting" mode — enemy visible, no turns. Call BEFORE the
+## window enters the tree (before add_child) so _ready respects it.
+func disarm_combat() -> void:
+	_combat_armed = false
+
+
+## Begin the fight (battle formation: the hero has reached its spot). Idempotent.
+func arm_combat() -> void:
+	if _combat_armed:
+		return
+	_combat_armed = true
+	if _running and is_instance_valid(_turn_timer) and _turn_timer.is_stopped():
+		_turn_timer.start()
+	# Juice: a punch-scale the instant the fight kicks off.
+	pivot_offset = size * 0.5
+	var t := create_tween()
+	t.tween_property(self, "scale", Vector2(1.12, 1.12), 0.07).set_trans(Tween.TRANS_QUAD)
+	t.tween_property(self, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 func play_open_intro() -> void:
 	var rest_position: Vector2 = position
 	pivot_offset = size * 0.5
@@ -578,6 +620,8 @@ func _party_attack(attacker_index: int) -> void:
 	var target_enemy := _first_living_enemy()
 	if target_enemy == null:
 		return
+	# Juice: the formation avatar for this member lunges forward on its attack turn.
+	EventBus.party_member_attacked.emit(attacker_index)
 	var member: CharacterData = GameState.party[attacker_index]
 	# Behavior keys off the member's innate TRAIT, not their id — so future
 	# variants of the same class can act differently.
@@ -806,6 +850,11 @@ func _reward_color() -> Color:
 
 
 func _roll_reward_type() -> int:
+	# One-time objet drop: a chance to surface an un-acquired objet (village first).
+	var objet: StringName = _pick_available_objet()
+	if objet != &"" and randf() < OBJET_DROP_CHANCE:
+		_objet_id = objet
+		return Reward.OBJET
 	var total: int = 0
 	for k in REWARD_WEIGHT:
 		total += int(REWARD_WEIGHT[k])
@@ -815,6 +864,15 @@ func _roll_reward_type() -> int:
 		if r < 0:
 			return int(k)
 	return Reward.GOLD
+
+
+## The next un-acquired objet that can drop, or &"" if none left. (Just the village
+## for now; later objets append to this list.)
+func _pick_available_objet() -> StringName:
+	for oid in OBJET_ORDER:
+		if not GameState.is_objet_acquired(oid):
+			return oid
+	return &""
 
 
 ## Resolved face: hide the combat UI, show the reward type (center, big) + "x{mult}".
@@ -829,6 +887,10 @@ func _show_reward_face() -> void:
 	_face_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_face_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_face_overlay)
+	# Objet drop: the tile sprite POPS in the card center — "something different!".
+	if _reward_type == Reward.OBJET:
+		_show_objet_face()
+		return
 	var type_lbl := _back_label(str(REWARD_LABEL[_reward_type]), 13, Color(1, 1, 1, 1))
 	type_lbl.set_anchors_preset(Control.PRESET_CENTER)
 	type_lbl.offset_top = -10.0
@@ -843,6 +905,33 @@ func _show_reward_face() -> void:
 	_face_overlay.add_child(_mult_label)
 
 
+## The objet reveal face: the tile sprite pops big in the center over a "획득!" call.
+func _show_objet_face() -> void:
+	var tex: Texture2D = OBJET_TEX.get(_objet_id, null)
+	if tex != null:
+		var icon := TextureRect.new()
+		icon.texture = tex
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.set_anchors_preset(Control.PRESET_CENTER)
+		icon.offset_left = -22.0
+		icon.offset_right = 22.0
+		icon.offset_top = -26.0
+		icon.offset_bottom = 16.0
+		icon.pivot_offset = Vector2(22.0, 21.0)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_face_overlay.add_child(icon)
+		icon.scale = Vector2(0.2, 0.2)
+		var t := create_tween()
+		t.tween_property(icon, "scale", Vector2(1.3, 1.3), 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		t.tween_property(icon, "scale", Vector2.ONE, 0.12)
+	var lbl := _back_label("획득!", 11, Color(1.0, 0.98, 0.82, 1.0))
+	lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	lbl.offset_top = -18.0
+	lbl.offset_bottom = -6.0
+	_face_overlay.add_child(lbl)
+
+
 ## BattleManager sets the same-color stack count → the visible reward multiplier.
 func set_multiplier(n: int) -> void:
 	_mult = maxi(1, n)
@@ -853,6 +942,22 @@ func set_multiplier(n: int) -> void:
 ## Resolved (battle done) and not yet flipping/opened.
 func is_resolved() -> bool:
 	return _flippable and not _flipping
+
+
+# ─── Formation 족보 inputs (color / type / count) ──────────────────────
+## Reward color = the card's Reward enum (the flush "suit").
+func reward_color() -> int:
+	return _reward_type
+
+
+## Enemy "kind" = the tier id of this window's foe (the set/멜드 key).
+func enemy_type_id() -> StringName:
+	return GameState.tier_id_for_enemy_data(enemy_data) if enemy_data != null else &""
+
+
+## How many enemies this window holds (the straight "rank" + chips base).
+func enemy_count() -> int:
+	return maxi(1, _planned_enemy_count)
 
 
 ## A small "까기" hint (direct child) shown when this card is the openable TOP of a
@@ -947,6 +1052,10 @@ func _grant_reward() -> Dictionary:
 			if item != null:
 				GameState.collect_item(item, GameState.loot_level_for_item(item))
 			amount = 1
+		Reward.OBJET:
+			# Free + immediate: claim the objet onto the left shelf (one-time).
+			GameState.acquire_objet(_objet_id)
+			amount = 1
 	claim_gold_drops()  # flush any unused accrual → manager drops nothing on close
 	claim_xp_reward()
 	claim_item_drops()
@@ -997,6 +1106,18 @@ func _build_card_back(reward: Dictionary) -> void:
 	center.add_child(vb)
 	var t: int = int(reward["type"])
 	var amt: int = int(reward["amount"])
+	if t == Reward.OBJET:
+		var tex: Texture2D = OBJET_TEX.get(_objet_id, null)
+		if tex != null:
+			var icon := TextureRect.new()
+			icon.texture = tex
+			icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.custom_minimum_size = Vector2(36.0, 36.0)
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vb.add_child(icon)
+		vb.add_child(_back_label("획득!", 11, Color(1.0, 0.98, 0.82, 1.0)))
+		return
 	vb.add_child(_back_label(str(REWARD_LABEL[t]), 8, Color(1, 1, 1, 1)))
 	var txt: String = "장비!" if t == Reward.WEAPON else "+%d" % amt
 	vb.add_child(_back_label(txt, 15, Color(1.0, 0.96, 0.78, 1.0)))

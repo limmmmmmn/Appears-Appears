@@ -57,9 +57,11 @@ layer = 8
 [node name="MessagePanel" type="Panel" parent="MessageLayer" unique_id=82022691]
 unique_name_in_owner = true
 visible = false
-offset_left = 104.0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -136.0
 offset_top = 34.0
-offset_right = 376.0
+offset_right = 136.0
 offset_bottom = 62.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBox_message")

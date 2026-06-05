@@ -54,6 +54,23 @@ const WINDOW_AREA: Rect2 = Rect2(128.0, 18.0, 393.0, 338.0)
 ## fraction of the chain's total gold per EXTRA card (2 cards → +12%, 3 → +24% …).
 const CHAIN_GAP: float = 0.13
 const STACK_BONUS_PER_EXTRA: float = 0.12
+## ─── Battle formation (multi-window) ──────────────────────────────────
+## After the hero has opened every window it can (cap full / no enemies left), it
+## walks to the horizontal CENTER, just BELOW the open windows, turns its back
+## (faces up), and only THEN do the waiting enemies start fighting.
+const FORMATION_SPACING: float = 20.0      ## horizontal gap between party members in the row
+const WIN_ROW_GAP: float = 6.0             ## horizontal gap between windows in the row
+const WINDOW_MOVE_SPEED: float = 320.0     ## how fast windows slide inward into the row
+const FORMATION_WIN_DROP: float = 10.0     ## window bottoms sit this far above the center line
+const FORMATION_PARTY_DROP: float = 18.0   ## party feet sit this far below the center line
+const FORMATION_ARRIVE_DIST: float = 14.0  ## "arrived at the spot" threshold
+const FORMATION_ARM_TIMEOUT: float = 3.0   ## arm anyway if convergence stalls (anti-softlock)
+var _formation_active: bool = false
+var _formation_armed: bool = false
+var _formation_planned: bool = false       ## row targets computed once per batch
+var _formation_pending_time: float = 0.0
+var _window_targets: Dictionary = {}       ## BattleWindow -> target row position
+var _party_slots: Array = []               ## party row world slots (parallel to members)
 var _slot_counts: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0]
 var _window_slot: Dictionary = {}    ## BattleWindow -> slot index
 var _slot_windows: Dictionary = {}   ## slot index -> Array[BattleWindow] (bottom→top)
@@ -99,6 +116,240 @@ func _process(delta: float) -> void:
 	GameState.tick_downed_recovery(delta)
 	# Windows now sit in fixed 3×3 grid slots (no drift/push) — they stay put as
 	# stacked floating cards, so the eye stays on the content.
+	_update_formation(delta)
+
+
+# ─── Battle formation ──────────────────────────────────────────────────
+## Drives the "hero walks under the windows, turns its back, THEN the fight starts"
+## flow for multi-window battles. Modal single battles are left on the classic path.
+func _update_formation(delta: float) -> void:
+	# Only the MULTI-window path forms up. Single battles (cap 1) cover the hero.
+	if GameState.battle_window_cap() <= 1:
+		if _formation_active:
+			_end_formation()
+		return
+	var windows := _waiting_or_fighting_windows()
+	if windows.is_empty():
+		if _formation_active:
+			_end_formation()
+		return
+	_formation_active = true
+	if _formation_armed:
+		return
+	var members := _party_members_ordered()
+	if members.is_empty():
+		return
+	# Keep seeking + spawning until no more windows can open (cap full / no enemies).
+	var more_to_spawn: bool = GameState.can_accept_new_battle_window() \
+		and not get_tree().get_nodes_in_group("field_enemy").is_empty()
+	if more_to_spawn:
+		_formation_pending_time = 0.0
+		_formation_planned = false
+		return
+	# Plan ONCE: a centered row of windows above a centered row of party, anchored on
+	# the group's MIDPOINT — so the scattered windows AND the party all slide inward
+	# to meet, instead of the hero hiking all the way across the map.
+	if not _formation_planned:
+		_plan_formation(windows, members)
+		_formation_planned = true
+	# Everything converges together: windows slide, party walks (fast).
+	var windows_settled: bool = _move_windows_to_targets(delta)
+	var player: Node2D = members[0] as Node2D
+	var player_there: bool = _party_slots.size() > 0 \
+		and player.global_position.distance_to(_party_slots[0]) <= FORMATION_ARRIVE_DIST
+	_formation_pending_time += delta
+	if (windows_settled and player_there) or _formation_pending_time > FORMATION_ARM_TIMEOUT:
+		_snap_formation()
+		_arm_formation(player, windows)
+
+
+## Compute the row targets once: windows edge-to-edge over the party, both centered
+## on the group midpoint. Also assigns each party member its formation slot.
+func _plan_formation(windows: Array, members: Array) -> void:
+	var center: Vector2 = _formation_center(windows, members)
+	_window_targets.clear()
+	var n: int = windows.size()
+	# Grid that stays ~4:3: windows are 4:3, so a near-SQUARE grid (cols≈rows) keeps
+	# the whole block ~4:3 instead of one ever-widening row.
+	var cols: int = maxi(1, int(ceil(sqrt(float(n)))))
+	var rows: int = int(ceil(float(n) / float(cols)))
+	# Uniform cell = biggest window + gap, so rows/cols line up cleanly.
+	var max_w: float = 0.0
+	var max_h: float = 0.0
+	for w in windows:
+		max_w = maxf(max_w, _window_rects[w].size.x)
+		max_h = maxf(max_h, _window_rects[w].size.y)
+	var cell_w: float = max_w + WIN_ROW_GAP
+	var cell_h: float = max_h + WIN_ROW_GAP
+	var grid_left: float = center.x - float(cols) * cell_w * 0.5
+	# Bottom row sits just above the center line; the block grows upward from there.
+	var grid_top: float = (center.y - FORMATION_WIN_DROP) - float(rows) * cell_h
+	for i in n:
+		var w: Variant = windows[i]
+		var col: int = i % cols
+		# Fill the BOTTOM row first and stack upward, so any partial (incomplete)
+		# row ends up on TOP, nearest the open sky and farthest from the party.
+		var row: int = (rows - 1) - (i / cols)
+		# Center each (possibly smaller) window inside its grid cell.
+		var cell_cx: float = grid_left + (float(col) + 0.5) * cell_w
+		var cell_cy: float = grid_top + (float(row) + 0.5) * cell_h
+		var sz: Vector2 = _window_rects[w].size
+		_window_targets[w] = Vector2(cell_cx - sz.x * 0.5, cell_cy - sz.y * 0.5)
+	_party_slots.clear()
+	var member_count: int = members.size()
+	for j in member_count:
+		var dx: float = (float(j) - float(member_count - 1) * 0.5) * FORMATION_SPACING
+		var slot: Vector2 = Vector2(center.x + dx, center.y + FORMATION_PARTY_DROP)
+		_party_slots.append(slot)
+		if members[j].has_method("set_formation_slot"):
+			members[j].set_formation_slot(slot)
+
+
+## Midpoint of the open windows + the hero — the spot everything converges toward.
+func _formation_center(windows: Array, members: Array) -> Vector2:
+	var sum: Vector2 = Vector2.ZERO
+	var n: int = 0
+	for w in windows:
+		sum += _window_rects[w].get_center()
+		n += 1
+	if not members.is_empty():
+		sum += (members[0] as Node2D).global_position
+		n += 1
+	return sum / float(maxi(1, n))
+
+
+## Slide every window toward its row target. Returns true once all have arrived.
+func _move_windows_to_targets(delta: float) -> bool:
+	var settled: bool = true
+	for w in _window_targets.keys():
+		if not is_instance_valid(w):
+			continue
+		var target: Vector2 = _window_targets[w]
+		# BattleWindow is a Control (has its own .position) — no Node2D cast.
+		if w.position.distance_to(target) > 1.0:
+			w.position = w.position.move_toward(target, WINDOW_MOVE_SPEED * delta)
+			settled = false
+		else:
+			w.position = target
+		if _window_rects.has(w):
+			_window_rects[w] = Rect2(w.position, _window_rects[w].size)
+	return settled
+
+
+## Snap windows exactly to their targets (kills any sub-pixel drift before the fight).
+func _snap_formation() -> void:
+	for w in _window_targets.keys():
+		if not is_instance_valid(w):
+			continue
+		w.position = _window_targets[w]
+		if _window_rects.has(w):
+			_window_rects[w] = Rect2(w.position, _window_rects[w].size)
+
+
+func _arm_formation(player: Node, windows: Array) -> void:
+	_formation_armed = true
+	for w in windows:
+		if is_instance_valid(w) and w.has_method("arm_combat"):
+			w.arm_combat()
+	# Juice: a quick screen punch the instant the whole formation locks in + fights.
+	if player.has_method("shake_camera"):
+		player.shake_camera(3.0, 0.22)
+
+
+## Floating reveal: meld badges over a big "+N G", pops in → rises → fades.
+func _show_score_popup(result: Dictionary, world_pos: Vector2) -> void:
+	var popup := Control.new()
+	popup.size = Vector2(176.0, 48.0)
+	popup.position = world_pos - popup.size * 0.5
+	popup.pivot_offset = popup.size * 0.5
+	popup.z_index = 80
+	popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_window_parent().add_child(popup)
+	var meld_text: String = ""
+	for m in result.get("melds", []):
+		meld_text += "%s ×%d  " % [str(m["name"]), int(m["mult"])]
+	meld_text = meld_text.strip_edges()
+	if meld_text == "":
+		meld_text = "보너스"
+	var meld_lbl := _score_label(meld_text, 9, Color(1.0, 0.95, 0.72, 1.0))
+	meld_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	meld_lbl.offset_bottom = 16.0
+	popup.add_child(meld_lbl)
+	var gold_lbl := _score_label("+%d G" % int(result.get("score", 0)), 18, Color(1.0, 0.86, 0.26, 1.0))
+	gold_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	gold_lbl.offset_top = -28.0
+	popup.add_child(gold_lbl)
+	popup.scale = Vector2(0.2, 0.2)
+	var t := create_tween()
+	t.tween_property(popup, "scale", Vector2(1.18, 1.18), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.tween_property(popup, "scale", Vector2.ONE, 0.1)
+	t.tween_interval(1.0)
+	t.tween_property(popup, "modulate:a", 0.0, 0.35)
+	t.tween_callback(popup.queue_free)
+	var rise := create_tween()
+	rise.tween_property(popup, "position:y", popup.position.y - 16.0, 1.6).set_trans(Tween.TRANS_SINE)
+
+
+func _score_label(text: String, size: int, color: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 1)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
+func _end_formation() -> void:
+	_formation_active = false
+	_formation_armed = false
+	_formation_planned = false
+	_formation_pending_time = 0.0
+	_window_targets.clear()
+	_party_slots.clear()
+	for m in get_tree().get_nodes_in_group("party_member"):
+		if m.has_method("clear_formation"):
+			m.clear_formation()
+
+
+## Party in a stable order: hero (slot 0) first, then companions by slot_index.
+func _party_members_ordered() -> Array:
+	var player := get_tree().get_first_node_in_group("player")
+	var comps: Array = []
+	for m in get_tree().get_nodes_in_group("party_member"):
+		if m == player:
+			continue
+		comps.append(m)
+	comps.sort_custom(func(a: Node, b: Node) -> bool: return int(a.slot_index) < int(b.slot_index))
+	var out: Array = []
+	if player != null:
+		out.append(player)
+	out.append_array(comps)
+	return out
+
+
+## Live windows whose fight isn't over (enemy still alive) — excludes reward chests.
+func _waiting_or_fighting_windows() -> Array:
+	var out: Array = []
+	for w in _window_rects.keys():
+		if not is_instance_valid(w):
+			continue
+		if w.has_method("is_resolved") and w.is_resolved():
+			continue
+		out.append(w)
+	return out
+
+
+## Single-battle placement: center the card on the hero (covering it). The hero's
+## origin is at its feet, so nudge up to sit over the body.
+func _window_over_hero_position(window_size: Vector2) -> Vector2:
+	var player := get_tree().get_first_node_in_group("player")
+	var c: Vector2 = (player as Node2D).global_position if player != null else GRID_CENTER
+	return c - window_size * 0.5 - Vector2(0.0, 8.0)
 
 
 ## How many battle windows the cap should treat as "fighting right now".
@@ -180,13 +431,23 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 	_slot_windows[slot].append(window)
 	if window.has_signal("grab_started"):
 		window.grab_started.connect(_on_grab_started)
-	var spawn_position: Vector2 = _window_position_behind_enemy(source, window_size)
+	# SINGLE battle (window cap 1): the card pops directly OVER the hero, covering it
+	# — a deliberate contrast to the MULTI scattered + formation flow.
+	var single_mode: bool = GameState.battle_window_cap() <= 1
+	var spawn_position: Vector2 = _window_over_hero_position(window_size) if single_mode \
+		else _window_position_behind_enemy(source, window_size)
 	window.position = spawn_position
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
 	if is_modal_battle:
 		_modal_windows[window] = true
 		GameState.begin_field_battle_pause()
+	# Multi-window formation: the enemy WAITS (no turns) until the hero forms up
+	# below. Single battles and combo encounters keep the classic instant fight.
+	elif not single_mode and not at_source_position:
+		window.disarm_combat()
+		_formation_armed = false   # a new window joined → re-gather before arming
+		_formation_planned = false # …and replan the row to include it
 	_window_parent().add_child(window)
 	window.play_open_intro()
 	_update_slot_readiness(slot)  # a fresh fight in the slot → stack not openable yet
@@ -349,16 +610,29 @@ func _open_stack(slot: int) -> void:
 		return
 	ws.reverse()  # top (newest) first
 	var count: int = ws.size()
+	# Read the stacked "hand" BEFORE flipping (cards are still valid here).
+	var cards: Array = []
+	for w in ws:
+		if is_instance_valid(w):
+			cards.append({
+				"type": w.enemy_type_id(),
+				"color": w.reward_color(),
+				"count": w.enemy_count(),
+			})
 	for w in ws:
 		if not is_instance_valid(w):
 			continue
 		w.reveal_and_grant()  # each card grants its TYPED reward (color = type)
 		await get_tree().create_timer(CHAIN_GAP).timeout
-	# Combo pop at the stack's world spot (top card center).
-	if count >= 2:
+	# 족보! A hand of 2+ stacked cards scores: chips × meld mult → GOLD 뻥튀기.
+	if count >= 2 and not cards.is_empty():
 		var top_win = ws[0]
 		var center: Vector2 = (top_win.position + top_win.size * 0.5) if is_instance_valid(top_win) else _player_world_position()
-		_spawn_bonus_popup(center, "x%d 콤보!" % count)
+		var result: Dictionary = FormationScore.evaluate(cards)
+		var score: int = int(result.get("score", 0))
+		if score > 0:
+			GameState.add_gold(score)
+			_show_score_popup(result, center - Vector2(0.0, 36.0))
 	for w in ws:
 		if is_instance_valid(w):
 			w.chain_close(0.25 if count >= 2 else 0.1)

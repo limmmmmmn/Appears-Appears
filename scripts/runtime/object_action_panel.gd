@@ -237,6 +237,10 @@ func _member_for(item: ItemData) -> int:
 func _layout() -> void:
 	if _panel == null:
 		return
+	# Shrink/grow the panel to fit the CURRENT content every time. Without this a
+	# Control keeps the largest size it has ever had (e.g. after the shop expanded
+	# it), so a later buttons-only open would stay needlessly huge.
+	_panel.reset_size()
 	var w: Vector2 = _panel.size
 	var base_y: float = -(POINTER_TIP_GAP + POINTER_H)
 	var tip_y: float = -POINTER_TIP_GAP

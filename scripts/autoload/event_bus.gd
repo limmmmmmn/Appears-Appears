@@ -19,6 +19,11 @@ signal town_entered(tile: Node)
 ## GameState.party / party_hp from scratch.
 signal party_changed()
 
+## The player wants the camera snapped back onto the hero (it had been panned away
+## into free-look). Emitted by the party panel boxes on click; the Player listens
+## and re-attaches its follow-camera. Clicking the field hero does the same locally.
+signal camera_focus_hero_requested()
+
 # ─── Battle Window Lifecycle ──────────────────────────────────────────
 signal battle_window_opened(window: Node)
 signal battle_window_closed(window: Node)
@@ -33,6 +38,10 @@ signal all_battles_resolved()
 # ─── Combat ───────────────────────────────────────────────────────────
 ## Damage dealt to *any* combatant. Used by floating numbers, juice, etc.
 signal damage_dealt(target: Node, amount: int, world_position: Vector2)
+
+## A party member (by index) just took its attack turn. Used by the battle-formation
+## avatars to play an attack-lunge. Fires once per attack, in any battle window.
+signal party_member_attacked(index: int)
 
 ## Enemy died. Used by reward popups, combat log, modifier triggers.
 signal enemy_defeated(enemy: Node, gold: int, world_position: Vector2)
@@ -136,6 +145,11 @@ signal modifier_purchase_failed(modifier: ModifierData, source: Node)
 signal modifier_purchased(modifier: ModifierData)
 signal card_purchased(modifier: ModifierData, cost: int)
 signal modifier_picked(modifier: ModifierData)
+
+## ─── Objets (item-like collectibles dropped from battle, shelved on the left) ──
+## An objet (village, …) was just claimed from a reward card. Free + immediate;
+## the left panel shelves it as an owned tile. Most objets are one-time.
+signal objet_acquired(id: StringName)
 
 # ─── Skill Tree ───────────────────────────────────────────────────────
 signal skill_node_purchase_succeeded(node)
