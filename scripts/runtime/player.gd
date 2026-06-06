@@ -118,11 +118,12 @@ func _ready() -> void:
 	# can hold a fixed world point while the hero walks off. In follow mode we drive
 	# its global_position onto the hero each frame; smoothing eases both the roam and
 	# the glide back when re-focusing.
+	# Camera is FIXED at the field center now (no hero-follow, no pan). Smoothing off
+	# so it sits dead-still; limits cleared so the small field isn't shoved off-center.
 	_camera.top_level = true
-	_camera.position_smoothing_enabled = true
-	_camera.position_smoothing_speed = CAMERA_SMOOTHING_SPEED
-	_camera.global_position = global_position
-	_free_camera_pos = global_position
+	_camera.position_smoothing_enabled = false
+	_camera.global_position = _field_bounds.get_center()
+	_free_camera_pos = _camera.global_position
 	_apply_zoom(GameState.field_camera_zoom)  # restore the player's last wheel zoom
 	_camera.make_current()
 	# Party-panel boxes emit this on click → snap the view back onto the hero.
@@ -162,12 +163,14 @@ func _apply_character_layout() -> void:
 
 func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 	_field_bounds = Rect2(min_pos, max_pos - min_pos)
-	# Clamp the follow-camera to the map edges → bounded map (no endless roam).
+	# Fixed camera: drop the edge limits (a field smaller than the viewport would get
+	# shoved off-center by them) and just park the view on the field center.
 	if _camera:
-		_camera.limit_left = int(min_pos.x)
-		_camera.limit_top = int(min_pos.y)
-		_camera.limit_right = int(max_pos.x)
-		_camera.limit_bottom = int(max_pos.y)
+		_camera.limit_left = -10000000
+		_camera.limit_top = -10000000
+		_camera.limit_right = 10000000
+		_camera.limit_bottom = 10000000
+		_camera.global_position = _field_bounds.get_center()
 
 
 # ─── Mouse-wheel zoom ──────────────────────────────────────────────────
@@ -175,11 +178,8 @@ func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 ## a full-rect UI Control (or Area2D physics picking) was eating the button/motion
 ## events before they reached this node. Wheel zoom still comes through fine.
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_apply_zoom(GameState.field_camera_zoom + ZOOM_STEP)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_apply_zoom(GameState.field_camera_zoom - ZOOM_STEP)
+	# Wheel zoom disabled for now — keep the field at a fixed zoom.
+	pass
 
 
 func _apply_zoom(z: float) -> void:
@@ -244,72 +244,20 @@ func _physics_process(delta: float) -> void:
 		_visual.set_velocity(Vector2.ZERO if _downed_visual else velocity)
 
 
-## Drive the camera each frame. WASD / arrows and mouse drag pan a FREE-LOOK camera
-## that detaches from the hero on first input; clicking the hero (or a party box →
-## focus_camera_on_hero) re-attaches it. While following, the camera tracks the hero.
-func _update_camera_pan(delta: float) -> void:
+## Drive the camera each frame. Fixed at the field center now — pan/follow removed.
+func _update_camera_pan(_delta: float) -> void:
+	# Camera is fixed at the field center now — no hero-follow, no keyboard/drag pan.
 	if _camera == null:
 		return
-	# Keyboard pan (WASD / arrows).
-	var pan := Vector2(
-		Input.get_action_strength("move_right") - Input.get_action_strength("move_left"),
-		Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
-	)
-	var key_panning: bool = pan != Vector2.ZERO
-
-	# Mouse drag pan — fully polled so no UI/picking layer can swallow it. On the
-	# press edge: a click ON the hero re-focuses; a click on empty field starts a
-	# drag; a click on a UI Control (dock/shop/menu) is left alone.
-	var mouse: Vector2 = get_viewport().get_mouse_position()
-	var pressed: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) \
-		or Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE) \
-		or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
-	if pressed and not _was_mouse_pressed:
-		var on_ui: bool = get_viewport().gui_get_hovered_control() != null
-		if not on_ui and get_global_mouse_position().distance_to(global_position) <= hero_click_radius:
-			focus_camera_on_hero()  # clicked the field hero → snap back
-			_is_drag_panning = false
-		else:
-			_is_drag_panning = not on_ui
-		_drag_last_mouse = mouse  # reset so the first frame has no jump
-	elif not pressed:
-		_is_drag_panning = false
-	_was_mouse_pressed = pressed
-
-	var drag_delta := Vector2.ZERO
-	if _is_drag_panning:
-		# Grab-the-world: drag right → view slides right (camera moves left). Divide
-		# by zoom so the world tracks the cursor 1:1 at any zoom level.
-		drag_delta = -(mouse - _drag_last_mouse) / _camera.zoom.x
-	_drag_last_mouse = mouse
-
-	# Any pan input detaches the camera into free-look and moves the held point.
-	if key_panning or _is_drag_panning:
-		if _camera_following:
-			_detach_camera()
-		if key_panning:
-			_free_camera_pos += pan.normalized() * KEYBOARD_PAN_SPEED * delta
-		_free_camera_pos += drag_delta
-		_free_camera_pos = _free_camera_pos.clamp(_field_bounds.position, _field_bounds.end)
-
-	# Drive the camera: glued to the hero, or holding the free-look point.
-	_camera.global_position = global_position if _camera_following else _free_camera_pos
-
-
-## Detach the camera from the hero into free-look. Smoothing off so the pan tracks
-## the cursor / keys crisply (no rubber-banding while you're actively moving it).
-func _detach_camera() -> void:
-	_camera_following = false
-	_free_camera_pos = _camera.global_position
-	_camera.position_smoothing_enabled = false
+	_camera.global_position = _field_bounds.get_center()
 
 
 ## Re-attach the camera to the hero. Smoothing on so it glides back instead of
 ## snapping. Safe to call any time (party-box click, field-hero click, loop start).
 func focus_camera_on_hero() -> void:
-	_camera_following = true
+	# Fixed camera: re-park on the field center (kept for existing callers).
 	if _camera:
-		_camera.position_smoothing_enabled = true
+		_camera.global_position = _field_bounds.get_center()
 
 
 ## Field shows this avatar lying down while its party member is downed/refilling.
@@ -345,11 +293,11 @@ func _find_nearest_in_group(group: StringName) -> Node2D:
 ## Re-attach to the hero and cancel easing so the view snaps straight onto it
 ## (no glide). Kept so existing callers (Field on loop start) still work.
 func snap_camera() -> void:
-	_camera_following = true
+	# Fixed camera: snap onto the field center.
 	if _camera:
-		_camera.position_smoothing_enabled = true
-		_camera.global_position = global_position
-		_free_camera_pos = global_position
+		_camera.position_smoothing_enabled = false
+		_camera.global_position = _field_bounds.get_center()
+		_free_camera_pos = _camera.global_position
 		_camera.reset_smoothing()
 
 

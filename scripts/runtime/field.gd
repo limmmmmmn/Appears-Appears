@@ -32,7 +32,7 @@ const HEAL_FX_INTERVAL: float = 0.32   ## seconds between green "+" pops per mem
 ## Bounded map ≈ 9× the camera (3×3 screens of 640×360). The follow-camera is
 ## clamped to these bounds (Player.set_field_bounds → camera limits), so the map
 ## has hard edges instead of an endless roam. Mouse wheel zooms in/out.
-const FIELD_SIZE: Vector2 = Vector2(1200, 900)
+const FIELD_SIZE: Vector2 = Vector2(360, 360)
 ## Plain-green backdrop is oversized this far beyond the map on every side so the
 ## roaming camera never sees past it into the void.
 const BG_MARGIN: float = 1400.0
@@ -1189,9 +1189,8 @@ func _enemy_data_for_current_nodes() -> EnemyData:
 
 
 func _random_spawn_position_for_enemy(_data: EnemyData, avoid: Vector2) -> Vector2:
-	# Plain-green world → no grass/forest region split. Everything spawns in a ring
-	# around the hero so the player-driven placement always shows up on-screen.
-	return _spawn_position_near_player(avoid)
+	# Scatter enemies randomly across the whole field, just kept clear of the party.
+	return _random_safe_position(avoid)
 
 
 ## A point a short distance from `origin` (the hero), kept on the map and clear of
