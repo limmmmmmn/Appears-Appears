@@ -98,14 +98,11 @@ func clear_formation() -> void:
 	_force_face_up = false
 
 
-# ─── Battle-formation juice (only while facing up in formation) ─────────
-func _on_party_member_attacked(index: int) -> void:
-	if index == 0 and _force_face_up and _visual != null:
-		_visual.play_attack_lunge()
-
-
+# ─── Hit reaction ──────────────────────────────────────────────────────
+## Field hero only reacts to being HIT now — no attack lunge. Flinch fires whenever
+## party member 0 takes damage in any battle window, wherever the hero is standing.
 func _on_party_damage_taken(member_index: int, _amount: int) -> void:
-	if member_index == 0 and _force_face_up and _visual != null and not _downed_visual:
+	if member_index == 0 and _visual != null and not _downed_visual:
 		_visual.play_hit_flinch()
 
 
@@ -128,9 +125,7 @@ func _ready() -> void:
 	_camera.make_current()
 	# Party-panel boxes emit this on click → snap the view back onto the hero.
 	EventBus.camera_focus_hero_requested.connect(focus_camera_on_hero)
-	# Battle-formation juice: the hero (party index 0) lunges on its attack, flinches
-	# when hit — but only while standing in formation (facing up).
-	EventBus.party_member_attacked.connect(_on_party_member_attacked)
+	# Hit reaction only: the hero (party index 0) flinches when hit. No attack lunge.
 	EventBus.party_damage_taken.connect(_on_party_damage_taken)
 	if _pending_data:
 		_visual.setup(_pending_data)
@@ -192,7 +187,7 @@ func _apply_zoom(z: float) -> void:
 func _physics_process(delta: float) -> void:
 	# Camera pan runs first so you can look around even while combat is paused.
 	_update_camera_pan(delta)
-	if GameState.is_field_battle_paused():
+	if GameState.is_field_frozen_for_battle():
 		velocity = Vector2.ZERO
 		_visual.set_velocity(velocity)
 		return

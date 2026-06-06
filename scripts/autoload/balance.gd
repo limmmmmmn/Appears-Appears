@@ -93,6 +93,10 @@ const CHEST_OPEN_SPEED_COST_MULT: float = 1.6
 ## of the player hover-collecting by hand. The manual→auto convenience staircase.
 const AUTO_PICKUP_COST: int = 200
 
+## 자동 전투: one-time unlock — battles run themselves (the turn timer drives every
+## party member). Before it, the player drives each turn by hand (Fight → 대상 선택).
+const AUTO_BATTLE_COST: int = 150
+
 # ─── 4. Enemy tiers ─────────────────────────────────────────────────────
 ## Tiers unlock by CUMULATIVE EARNED GOLD (`unlock_at` = lifetime total_gold_earned,
 ## unaffected by spending). Below the threshold a tier is HIDDEN from the dock.

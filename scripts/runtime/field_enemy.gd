@@ -142,7 +142,7 @@ func _refresh_tooltip() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if GameState.is_field_battle_paused():
+	if GameState.is_field_frozen_for_battle():
 		return
 	if _triggered or _spawning or _despawning:
 		return

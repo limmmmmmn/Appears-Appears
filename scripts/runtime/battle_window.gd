@@ -32,6 +32,10 @@ const ACTOR_ENEMY: int = 1
 ## Min window size (ratio-fit floor). Was bumped to 176×132 for the (now removed)
 ## manual-combat command row; restored to the compact 4:3 the field was tuned for.
 const BASE_WINDOW_SIZE: Vector2 = Vector2(104.0, 78.0)  ## ~20% smaller — compact, dice-like card
+## Manual combat (before the 자동 전투 upgrade) reuses the auto window's bottom log-box
+## strip for the command row — SAME window size as auto. Matches LogPanel's top inset
+## in battle_window.tscn so the buttons land exactly where the log text was.
+const COMMAND_STRIP_OFFSET_TOP: float = -34.0
 const ENEMY_SPRITE_SIZE: Vector2 = Vector2(16.0, 16.0)
 const ENEMY_SPACING_X_MIN: float = 18.0
 const ENEMY_SPACING_X_MAX: float = 34.0
@@ -170,6 +174,24 @@ var _initiative_pending: bool = true
 ## the classic "fight starts immediately" behavior for modal / non-formation spawns.
 var _combat_armed: bool = true
 
+# ─── Manual combat (pre 자동 전투 upgrade) ──────────────────────────────
+## The bottom command box ("도윤" titled, Fight/Skill/Item/Run) + target picking.
+var _command_panel: Panel
+var _command_title: Label
+var _command_row: HBoxContainer
+var _target_layer: Control
+## True while a party member's turn is paused waiting for the player's command.
+var _awaiting_command: bool = false
+var _command_party_index: int = -1
+## True while the Fight target picker is up.
+var _selecting_target: bool = false
+## Keyboard target picking: the living enemies offered, the highlighted index, and
+## the per-enemy highlight visuals (arrow + box) so Enter/arrows drive selection.
+var _target_enemies: Array[Enemy] = []
+var _target_index: int = 0
+var _target_arrows: Array[Label] = []
+var _target_boxes: Array[Panel] = []
+
 func _ready() -> void:
 	_name_label.show()  # enemy name = the window's small title
 	_hp_label.hide()
@@ -195,6 +217,10 @@ func _ready() -> void:
 	EventBus.weapon_equipped.connect(_on_weapon_equipped)
 	EventBus.armor_equipped.connect(_on_weapon_equipped)
 	_running = true
+	# Manual combat (before 자동 전투): strip the card down to enemy + HP bar and put a
+	# command box at the bottom. The turn loop pauses on each party member for input.
+	if _is_manual_combat():
+		_enter_manual_mode()
 	# Battle formation: a disarmed window shows its enemy but holds its turns — the
 	# foe just WAITS until the hero reaches formation and BattleManager arms it.
 	if _combat_armed:
@@ -609,9 +635,12 @@ func _encounter_display_name() -> String:
 	return " / ".join(parts)
 
 
-# ─── Turn loop (fully automatic) ───────────────────────────────────────
+# ─── Turn loop ─────────────────────────────────────────────────────────
+## Auto once 자동 전투 is bought; until then party turns pause for the command box.
 func _on_turn_tick() -> void:
 	if not _running:
+		return
+	if _awaiting_command:  # holding for the player's manual pick — timer is stopped anyway
 		return
 	if _is_log_busy():
 		return
@@ -621,13 +650,16 @@ func _on_turn_tick() -> void:
 	if actor.is_empty():
 		return
 	if int(actor["type"]) == ACTOR_PARTY:
+		if _is_manual_combat():
+			_begin_manual_command(actor)
+			return
 		_party_attack(int(actor["party_index"]))
 	else:
 		_enemy_attack(actor["enemy"])
 
 
-func _party_attack(attacker_index: int) -> void:
-	var target_enemy := _first_living_enemy()
+func _party_attack(attacker_index: int, target_override: Enemy = null) -> void:
+	var target_enemy: Enemy = target_override if (target_override != null and is_instance_valid(target_override) and target_override.is_alive()) else _first_living_enemy()
 	if target_enemy == null:
 		return
 	# Juice: the formation avatar for this member lunges forward on its attack turn.
@@ -731,6 +763,305 @@ func _enemy_attack(enemy: Enemy) -> void:
 	# _collapsed). The downed member just trails the party until everyone recovers.
 	if GameState.is_downed(target_index):
 		_queue_log("%s is down!" % target.display_name)
+
+
+# ─── Manual combat ─────────────────────────────────────────────────────
+## Until 자동 전투 is purchased, the player drives each party member's turn by hand.
+func _is_manual_combat() -> bool:
+	return not GameState.auto_battle_unlocked
+
+
+## Strip the card to enemy + HP bar (hide name / score / log / 적 Lv) and build the
+## bottom command box. Called once at spawn when starting in manual mode.
+func _enter_manual_mode() -> void:
+	_name_label.hide()
+	_log_panel.hide()
+	if _score_readout != null:
+		_score_readout.hide()
+	for enemy: Enemy in _enemies:
+		if is_instance_valid(enemy):
+			enemy.set_level_label_visible(false)
+	_build_command_panel()
+
+
+## A party member's turn came up in manual mode → stop the clock and ask the player.
+func _begin_manual_command(actor: Dictionary) -> void:
+	_awaiting_command = true
+	_command_party_index = int(actor["party_index"])
+	_turn_timer.stop()
+	_selecting_target = false
+	_clear_target_markers()
+	if _command_panel == null:
+		_build_command_panel()
+	_command_title.text = GameState.party[_command_party_index].display_name
+	_command_row.show()
+	_command_panel.show()
+
+
+func _on_fight_pressed() -> void:
+	if not _awaiting_command or _selecting_target:
+		return
+	var living: Array[Enemy] = _living_enemies()
+	if living.is_empty():
+		return
+	_selecting_target = true
+	_command_row.hide()
+	_command_title.text = "적 선택 ▶"
+	_build_target_markers(living)
+
+
+func _on_run_pressed() -> void:
+	if not _awaiting_command:
+		return
+	_flee()
+
+
+## Target chosen → resolve that member's attack on it and resume the turn order.
+func _on_target_chosen(enemy: Enemy) -> void:
+	if not _awaiting_command or enemy == null or not is_instance_valid(enemy) or not enemy.is_alive():
+		return
+	_clear_target_markers()
+	_selecting_target = false
+	_awaiting_command = false
+	var index: int = _command_party_index
+	_command_party_index = -1
+	_hide_command_panel()
+	_party_attack(index, enemy)
+	# Let the enemies (and any further party members) take their turns automatically.
+	if _running and not _close_started:
+		_turn_timer.start()
+
+
+## Player backed out of target picking → restore the command buttons.
+func _on_target_cancel() -> void:
+	if not _selecting_target:
+		return
+	_clear_target_markers()
+	_selecting_target = false
+	if _awaiting_command and _command_party_index >= 0:
+		_command_title.text = GameState.party[_command_party_index].display_name
+		_command_row.show()
+
+
+func _hide_command_panel() -> void:
+	if _command_panel != null:
+		_command_panel.hide()
+	_clear_target_markers()
+
+
+func _clear_target_markers() -> void:
+	if _target_layer != null and is_instance_valid(_target_layer):
+		_target_layer.queue_free()
+	_target_layer = null
+	_target_enemies.clear()
+	_target_arrows.clear()
+	_target_boxes.clear()
+	_target_index = 0
+
+
+# ─── Manual-combat UI ──────────────────────────────────────────────────
+func _build_command_panel() -> void:
+	# Lives in the bottom log-box strip — same footprint as the auto window's LogPanel,
+	# so the manual card is exactly the same size as an auto card.
+	_command_panel = Panel.new()
+	_command_panel.add_theme_stylebox_override("panel", _flat_panel_style(_reward_color().darkened(0.28), DQ_WINDOW_BORDER))
+	_command_panel.anchor_left = 0.0
+	_command_panel.anchor_top = 1.0
+	_command_panel.anchor_right = 1.0
+	_command_panel.anchor_bottom = 1.0
+	_command_panel.offset_left = 4.0
+	_command_panel.offset_top = COMMAND_STRIP_OFFSET_TOP
+	_command_panel.offset_right = -4.0
+	_command_panel.offset_bottom = -4.0
+	_command_panel.mouse_filter = Control.MOUSE_FILTER_STOP  # eat clicks so the card isn't dragged
+	_command_panel.hide()
+	add_child(_command_panel)
+	# Buttons fill the strip (tiny, four across); the member-name title floats on the
+	# strip's top border above them.
+	_command_row = HBoxContainer.new()
+	_command_row.anchor_right = 1.0
+	_command_row.anchor_bottom = 1.0
+	_command_row.offset_left = 2.0
+	_command_row.offset_top = 2.0
+	_command_row.offset_right = -2.0
+	_command_row.offset_bottom = -2.0
+	_command_row.add_theme_constant_override("separation", 1)
+	_command_panel.add_child(_command_row)
+	_make_command_button("Fight", _on_fight_pressed, true)
+	_make_command_button("Skill", Callable(), false)  # not ready yet
+	_make_command_button("Item", Callable(), false)   # not ready yet
+	_make_command_button("Run", _on_run_pressed, true)
+	# Member-name title sitting on the box's top-left border (its bg breaks the line).
+	# Uses the theme font (Korean-capable) — member names are Korean (e.g. "도윤").
+	_command_title = Label.new()
+	_command_title.add_theme_font_size_override("font_size", 7)
+	_command_title.add_theme_color_override("font_color", DQ_WINDOW_TEXT)
+	var title_bg := PanelContainer.new()
+	title_bg.add_theme_stylebox_override("panel", _flat_panel_style(_reward_color(), _reward_color()))
+	title_bg.position = Vector2(7.0, -6.0)
+	title_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_bg.add_child(_command_title)
+	_command_panel.add_child(title_bg)
+
+
+func _make_command_button(text: String, on_press: Callable, enabled: bool) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	b.add_theme_font_size_override("font_size", 6)
+	b.add_theme_constant_override("h_separation", 0)
+	# Retro cell look: card-color fill, black 1px border, white text (matches the card).
+	var base: Color = _reward_color()
+	b.add_theme_stylebox_override("normal", _flat_panel_style(base, DQ_WINDOW_BORDER))
+	b.add_theme_stylebox_override("hover", _flat_panel_style(base.lightened(0.12), DQ_WINDOW_BORDER))
+	b.add_theme_stylebox_override("pressed", _flat_panel_style(base.darkened(0.2), DQ_WINDOW_BORDER))
+	b.add_theme_stylebox_override("disabled", _flat_panel_style(base.darkened(0.34), Color(0.32, 0.32, 0.34, 1.0)))
+	b.add_theme_color_override("font_color", DQ_WINDOW_TEXT)
+	b.add_theme_color_override("font_hover_color", DQ_WINDOW_TEXT)
+	b.add_theme_color_override("font_pressed_color", DQ_WINDOW_TEXT)
+	b.add_theme_color_override("font_disabled_color", Color(0.56, 0.56, 0.6, 1.0))
+	b.disabled = not enabled
+	if enabled and on_press.is_valid():
+		b.pressed.connect(on_press)
+	_command_row.add_child(b)
+	return b
+
+
+## A clickable marker + highlight (arrow ▼ and box) over each living enemy, plus a
+## full-card cancel behind them. Mouse clicks a marker; Enter/arrows drive it too.
+func _build_target_markers(living: Array[Enemy]) -> void:
+	_clear_target_markers()
+	_target_layer = Control.new()
+	_target_layer.anchor_right = 1.0
+	_target_layer.anchor_bottom = 1.0
+	_target_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_target_layer)
+	# Behind the markers: clicking empty space cancels back to the command buttons.
+	var cancel_bg := Button.new()
+	cancel_bg.flat = true
+	cancel_bg.focus_mode = Control.FOCUS_NONE
+	cancel_bg.anchor_right = 1.0
+	cancel_bg.anchor_bottom = 1.0
+	cancel_bg.pressed.connect(_on_target_cancel)
+	_target_layer.add_child(cancel_bg)
+	for enemy: Enemy in living:
+		if enemy == null or not is_instance_valid(enemy):
+			continue
+		_target_enemies.append(enemy)
+		var local: Vector2 = _enemy_anchor.position + enemy.position
+		# Highlight box around the selected enemy (shown only on the current target).
+		var box := Panel.new()
+		box.add_theme_stylebox_override("panel", _flat_panel_style(Color(0, 0, 0, 0), Color(1.0, 0.95, 0.4, 1.0)))
+		var box_size := Vector2(ENEMY_SPRITE_SIZE.x + 8.0, ENEMY_SPRITE_SIZE.y + 8.0)
+		box.size = box_size
+		box.position = local - box_size * 0.5
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_target_layer.add_child(box)
+		_target_boxes.append(box)
+		var marker := Button.new()
+		marker.flat = true
+		marker.focus_mode = Control.FOCUS_NONE
+		var marker_size := Vector2(24.0, 24.0)
+		marker.size = marker_size
+		marker.position = local - marker_size * 0.5
+		marker.pressed.connect(_on_target_chosen.bind(enemy))
+		_target_layer.add_child(marker)
+		var arrow := Label.new()
+		arrow.text = "▼"
+		arrow.add_theme_font_size_override("font_size", 10)
+		arrow.add_theme_color_override("font_color", Color(1.0, 0.95, 0.4, 1.0))
+		arrow.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+		arrow.add_theme_constant_override("shadow_offset_x", 1)
+		arrow.add_theme_constant_override("shadow_offset_y", 1)
+		arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		arrow.position = local + Vector2(-5.0, -ENEMY_SPRITE_SIZE.y * 0.5 - 12.0)
+		_target_layer.add_child(arrow)
+		_target_arrows.append(arrow)
+	_target_index = 0
+	_update_target_highlight()
+
+
+## Show the arrow + box only on the currently-highlighted target.
+func _update_target_highlight() -> void:
+	for i in _target_arrows.size():
+		var selected: bool = (i == _target_index)
+		if i < _target_arrows.size() and is_instance_valid(_target_arrows[i]):
+			_target_arrows[i].visible = selected
+		if i < _target_boxes.size() and is_instance_valid(_target_boxes[i]):
+			_target_boxes[i].visible = selected
+
+
+## Arrow keys cycle the highlighted enemy (wraps). dir +1 = next, -1 = previous.
+func _move_target_highlight(dir: int) -> void:
+	if _target_enemies.is_empty():
+		return
+	_target_index = wrapi(_target_index + dir, 0, _target_enemies.size())
+	_update_target_highlight()
+
+
+## Enter while picking → attack the highlighted enemy.
+func _confirm_target_selection() -> void:
+	if _target_index < 0 or _target_index >= _target_enemies.size():
+		return
+	_on_target_chosen(_target_enemies[_target_index])
+
+
+# ─── Keyboard control (manual combat) ──────────────────────────────────
+## Enter drives the fight (연타): in the command box it presses Fight; while picking a
+## target it attacks the highlighted enemy. Arrows move the target highlight.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not _awaiting_command:
+		return
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return
+	if not _selecting_target:
+		if key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER:
+			_on_fight_pressed()
+			get_viewport().set_input_as_handled()
+		return
+	match key.keycode:
+		KEY_ENTER, KEY_KP_ENTER:
+			_confirm_target_selection()
+			get_viewport().set_input_as_handled()
+		KEY_RIGHT, KEY_DOWN:
+			_move_target_highlight(1)
+			get_viewport().set_input_as_handled()
+		KEY_LEFT, KEY_UP:
+			_move_target_highlight(-1)
+			get_viewport().set_input_as_handled()
+
+
+## Run: flee this fight. No reward; the field repopulates the escaped enemy through
+## its normal spawn maintenance. Releases the modal pause / window-cap slot.
+func _flee() -> void:
+	if _close_started or _chest_state != ChestState.NONE:
+		return
+	_close_started = true
+	_running = false
+	_pending_chest = false
+	_awaiting_command = false
+	_selecting_target = false
+	_turn_timer.stop()
+	_hide_command_panel()
+	_gold_drops_total = 0
+	_earned_xp_total = 0
+	_item_drops.clear()
+	EventBus.battle_window_resolved.emit(self)
+	pivot_offset = size * 0.5
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(self, "position", position + Vector2(0.0, 12.0), 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(self, "modulate:a", 0.0, 0.2)
+	tw.chain().tween_callback(_finish_flee)
+
+
+func _finish_flee() -> void:
+	if not is_inside_tree():
+		return
+	EventBus.battle_window_closed.emit(self)
+	queue_free()
 
 
 # ─── Enemy callbacks ──────────────────────────────────────────────────

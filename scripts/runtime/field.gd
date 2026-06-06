@@ -198,7 +198,7 @@ func _process(delta: float) -> void:
 	_tick_rest(delta)      # "쉰다": walk to fire, hold, fast-heal to full (runs always)
 	_tick_structure_walk() # release the post-placement walk once the hero arrives
 	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
-	if GameState.is_field_battle_paused():
+	if GameState.is_field_frozen_for_battle():
 		return
 	if _loop_complete:
 		return

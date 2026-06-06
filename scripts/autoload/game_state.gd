@@ -77,6 +77,8 @@ var luck_level: int = 1
 var open_speed_level: int = 0
 ## 자동 줍기 해금 — false = 수동 호버 줍기, true = 용사가 전리품을 자동으로 주움.
 var auto_pickup_unlocked: bool = false
+## 자동 전투 해금 — false = 수동 전투(Fight→대상 선택), true = 턴 타이머가 자동 진행.
+var auto_battle_unlocked: bool = false
 ## SCALE = how many SCALE purchases were made; simultaneous window count =
 ## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
 var scale_purchases: int = 0
@@ -798,6 +800,26 @@ func unlock_auto_pickup() -> bool:
 		return false
 	auto_pickup_unlocked = true
 	EventBus.combat_upgrade_changed.emit(&"auto_pickup")
+	return true
+
+
+# ─── 자동 전투 (manual turn input → auto turn timer) ────────────────────
+## Before unlock: the player drives each party member's turn by hand (Fight → pick a
+## target). After: every battle window ticks its turns automatically.
+func auto_battle_cost() -> int:
+	return Balance.AUTO_BATTLE_COST
+
+
+func can_unlock_auto_battle() -> bool:
+	return not auto_battle_unlocked and gold >= auto_battle_cost()
+
+
+func unlock_auto_battle() -> bool:
+	if auto_battle_unlocked or not spend_gold(auto_battle_cost()):
+		EventBus.combat_upgrade_failed.emit(&"auto_battle")
+		return false
+	auto_battle_unlocked = true
+	EventBus.combat_upgrade_changed.emit(&"auto_battle")
 	return true
 
 
@@ -1582,6 +1604,14 @@ func end_field_battle_pause() -> void:
 
 func is_field_battle_paused() -> bool:
 	return _field_battle_pause_count > 0
+
+
+## True while the field should hold still for a fight: an explicit pause is held, OR
+## every battle-window slot is in use (at the SCALE cap). Below the cap the field
+## keeps roaming so the hero walks into the next fight; once the cap is full it
+## freezes until a window resolves and frees a slot.
+func is_field_frozen_for_battle() -> bool:
+	return is_field_battle_paused() or not can_accept_new_battle_window()
 
 
 func _purchased_skill_node_data() -> Array:

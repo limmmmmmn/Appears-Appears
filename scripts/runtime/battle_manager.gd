@@ -27,6 +27,10 @@ const SETTLE_INTERVAL: float = 0.08
 const WINDOW_COLLISION_DAMAGE_COOLDOWN: float = 0.85
 const PARTY_COLLISION_DAMAGE_COOLDOWN: float = 0.45
 const MODAL_WINDOW_SIZE_MULTIPLIER: float = 1.0
+## A new battle window is kept inside the camera view on spawn. This much overhang
+## past the view edge is allowed (살짝 걸치는 정도) so windows can hug the border
+## without a hard inset; beyond it they're clamped back on-screen.
+const WINDOW_VIEW_OVERHANG: float = 24.0
 ## Width of the left dock. The play area is inset by this on the left so battle
 ## windows never spawn/drift underneath it.
 const LEFT_BAR_WIDTH: float = 46.0
@@ -119,48 +123,13 @@ func _process(delta: float) -> void:
 	_update_formation(delta)
 
 
-# ─── Battle formation ──────────────────────────────────────────────────
-## Drives the "hero walks under the windows, turns its back, THEN the fight starts"
-## flow for multi-window battles. Modal single battles are left on the classic path.
-func _update_formation(delta: float) -> void:
-	# Only the MULTI-window path forms up. Single battles (cap 1) cover the hero.
-	if GameState.battle_window_cap() <= 1:
-		if _formation_active:
-			_end_formation()
-		return
-	var windows := _waiting_or_fighting_windows()
-	if windows.is_empty():
-		if _formation_active:
-			_end_formation()
-		return
-	_formation_active = true
-	if _formation_armed:
-		return
-	var members := _party_members_ordered()
-	if members.is_empty():
-		return
-	# Keep seeking + spawning until no more windows can open (cap full / no enemies).
-	var more_to_spawn: bool = GameState.can_accept_new_battle_window() \
-		and not get_tree().get_nodes_in_group("field_enemy").is_empty()
-	if more_to_spawn:
-		_formation_pending_time = 0.0
-		_formation_planned = false
-		return
-	# Plan ONCE: a centered row of windows above a centered row of party, anchored on
-	# the group's MIDPOINT — so the scattered windows AND the party all slide inward
-	# to meet, instead of the hero hiking all the way across the map.
-	if not _formation_planned:
-		_plan_formation(windows, members)
-		_formation_planned = true
-	# Everything converges together: windows slide, party walks (fast).
-	var windows_settled: bool = _move_windows_to_targets(delta)
-	var player: Node2D = members[0] as Node2D
-	var player_there: bool = _party_slots.size() > 0 \
-		and player.global_position.distance_to(_party_slots[0]) <= FORMATION_ARRIVE_DIST
-	_formation_pending_time += delta
-	if (windows_settled and player_there) or _formation_pending_time > FORMATION_ARM_TIMEOUT:
-		_snap_formation()
-		_arm_formation(player, windows)
+# ─── Battle formation (removed) ────────────────────────────────────────
+## Formation flow is gone: every window now starts fighting the instant it opens
+## (see _spawn_window — windows are armed by default), so there's no "gather all
+## windows, walk the hero in, THEN arm" step. Kept as a no-op hook; the old
+## _plan/_move/_snap/_arm_formation helpers below are now dead and can be deleted.
+func _update_formation(_delta: float) -> void:
+	pass
 
 
 ## Compute the row targets once: windows edge-to-edge over the party, both centered
@@ -448,23 +417,21 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 	_slot_windows[slot].append(window)
 	if window.has_signal("grab_started"):
 		window.grab_started.connect(_on_grab_started)
-	# SINGLE battle (window cap 1): the card pops directly OVER the hero, covering it
-	# — a deliberate contrast to the MULTI scattered + formation flow.
+	# SINGLE battle (window cap 1): the card pops directly OVER the hero, covering it.
+	# MULTI: the card drops straight into its 3×3 grid slot and STARTS FIGHTING the
+	# instant it opens — windows just appear and fight, one after another, until the
+	# cap is full (no "gather all windows, walk the hero in, then arm" formation step).
 	var single_mode: bool = GameState.battle_window_cap() <= 1
 	var spawn_position: Vector2 = _window_over_hero_position(window_size) if single_mode \
-		else _window_position_behind_enemy(source, window_size)
+		else _slot_position(slot, count, window_size)
+	# Never open a window off-screen — keep it inside the camera view (slight overhang OK).
+	spawn_position = _clamp_window_to_view(spawn_position, window_size)
 	window.position = spawn_position
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
 	if is_modal_battle:
 		_modal_windows[window] = true
 		GameState.begin_field_battle_pause()
-	# Multi-window formation: the enemy WAITS (no turns) until the hero forms up
-	# below. Single battles and combo encounters keep the classic instant fight.
-	elif not single_mode and not at_source_position:
-		window.disarm_combat()
-		_formation_armed = false   # a new window joined → re-gather before arming
-		_formation_planned = false # …and replan the row to include it
 	_window_parent().add_child(window)
 	window.play_open_intro()
 	_update_slot_readiness(slot)  # a fresh fight in the slot → stack not openable yet
@@ -1156,6 +1123,19 @@ func _visible_world_rect() -> Rect2:
 	if camera == null:
 		return Rect2(Vector2.ZERO, viewport_size)
 	return Rect2(camera.get_screen_center_position() - viewport_size * 0.5, viewport_size)
+
+
+## Pull a spawn position so the window stays within the camera view, allowing a small
+## overhang (WINDOW_VIEW_OVERHANG). A window larger than the view on an axis is just
+## centered on that axis. World space == screen space here (camera fixed, zoom 1).
+func _clamp_window_to_view(pos: Vector2, window_size: Vector2) -> Vector2:
+	var view: Rect2 = _visible_world_rect()
+	var lo: Vector2 = view.position - Vector2.ONE * WINDOW_VIEW_OVERHANG
+	var hi: Vector2 = view.position + view.size - window_size + Vector2.ONE * WINDOW_VIEW_OVERHANG
+	var result: Vector2 = pos
+	result.x = clampf(pos.x, lo.x, hi.x) if hi.x >= lo.x else view.get_center().x - window_size.x * 0.5
+	result.y = clampf(pos.y, lo.y, hi.y) if hi.y >= lo.y else view.get_center().y - window_size.y * 0.5
+	return result
 
 
 ## Battle windows live on a CanvasLayer (SCREEN space) now — the follow camera can

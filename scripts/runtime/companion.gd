@@ -33,9 +33,7 @@ func _ready() -> void:
 	_seed_trail()
 	if _pending_data:
 		_visual.setup(_pending_data)
-	# Battle-formation juice: lunge on this member's attack, flinch when it's hit —
-	# but only while standing in formation (facing up toward the windows).
-	EventBus.party_member_attacked.connect(_on_party_member_attacked)
+	# Hit reaction only: flinch when this member is hit. No attack lunge.
 	EventBus.party_damage_taken.connect(_on_party_damage_taken)
 
 
@@ -117,14 +115,11 @@ func clear_formation() -> void:
 	_seed_trail()  # restart the trail from here so the snake doesn't snap
 
 
-# ─── Battle-formation juice (only while in formation) ──────────────────
-func _on_party_member_attacked(index: int) -> void:
-	if index == slot_index and _in_formation and _visual != null:
-		_visual.play_attack_lunge()
-
-
+# ─── Hit reaction ──────────────────────────────────────────────────────
+## Field companion only reacts to being HIT now — no attack lunge. Flinch fires
+## whenever this member takes damage in any battle window, wherever it's standing.
 func _on_party_damage_taken(member_index: int, _amount: int) -> void:
-	if member_index == slot_index and _in_formation and _visual != null and not _downed_visual:
+	if member_index == slot_index and _visual != null and not _downed_visual:
 		_visual.play_hit_flinch()
 
 

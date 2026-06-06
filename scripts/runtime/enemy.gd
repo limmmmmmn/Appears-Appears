@@ -77,6 +77,12 @@ func _apply_data() -> void:
 	hp_changed.emit(current_hp, max_hp)
 
 
+## Manual-combat windows hide the "Lv N" label (only the sprite + HP bar are shown).
+func set_level_label_visible(is_visible: bool) -> void:
+	if _level_label != null:
+		_level_label.visible = is_visible
+
+
 func is_alive() -> bool:
 	return current_hp > 0
 
