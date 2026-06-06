@@ -256,7 +256,7 @@ func _arm_formation(player: Node, windows: Array) -> void:
 		player.shake_camera(3.0, 0.22)
 
 
-## Floating reveal: meld badges over a big "+N G", pops in → rises → fades.
+## Floating reveal: meld badges over "칩(파랑) × 배수(빨강) = +N G". Pops → rises → fades.
 func _show_score_popup(result: Dictionary, world_pos: Vector2) -> void:
 	var popup := Control.new()
 	popup.size = Vector2(176.0, 48.0)
@@ -267,18 +267,28 @@ func _show_score_popup(result: Dictionary, world_pos: Vector2) -> void:
 	_window_parent().add_child(popup)
 	var meld_text: String = ""
 	for m in result.get("melds", []):
-		meld_text += "%s ×%d  " % [str(m["name"]), int(m["mult"])]
+		meld_text += "%s ×%s  " % [str(m["name"]), _fmt_mult(float(m["mult"]))]
 	meld_text = meld_text.strip_edges()
-	if meld_text == "":
-		meld_text = "보너스"
-	var meld_lbl := _score_label(meld_text, 9, Color(1.0, 0.95, 0.72, 1.0))
-	meld_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	meld_lbl.offset_bottom = 16.0
-	popup.add_child(meld_lbl)
-	var gold_lbl := _score_label("+%d G" % int(result.get("score", 0)), 18, Color(1.0, 0.86, 0.26, 1.0))
-	gold_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	gold_lbl.offset_top = -28.0
-	popup.add_child(gold_lbl)
+	if meld_text != "":
+		var meld_lbl := _score_label(meld_text, 9, Color(1.0, 0.95, 0.72, 1.0))
+		meld_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
+		meld_lbl.offset_bottom = 16.0
+		popup.add_child(meld_lbl)
+	# 칩 × 배수 = 골드 (두 덩어리: 칩 파랑, 배수 빨강).
+	var chips: int = int(result.get("chips", 0))
+	var mult: float = float(result.get("mult", 1.0))
+	var score: int = int(result.get("score", 0))
+	var rt := RichTextLabel.new()
+	rt.bbcode_enabled = true
+	rt.fit_content = true
+	rt.scroll_active = false
+	rt.autowrap_mode = TextServer.AUTOWRAP_OFF
+	rt.add_theme_font_override("normal_font", load("res://assets/fonts/field_ui_font.tres"))
+	rt.add_theme_font_size_override("normal_font_size", 16)
+	rt.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	rt.offset_top = -28.0
+	rt.text = "[center][color=#5b9cff]%d[/color] [color=#ffffff]×[/color] [color=#ff5b5b]%s[/color] [color=#ffd23a]= +%dG[/color][/center]" % [chips, _fmt_mult(mult), score]
+	popup.add_child(rt)
 	popup.scale = Vector2(0.2, 0.2)
 	var t := create_tween()
 	t.tween_property(popup, "scale", Vector2(1.18, 1.18), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -288,6 +298,13 @@ func _show_score_popup(result: Dictionary, world_pos: Vector2) -> void:
 	t.tween_callback(popup.queue_free)
 	var rise := create_tween()
 	rise.tween_property(popup, "position:y", popup.position.y - 16.0, 1.6).set_trans(Tween.TRANS_SINE)
+
+
+## 2.0 → "2", 1.5 → "1.5" (trailing .0 dropped).
+func _fmt_mult(m: float) -> String:
+	if absf(m - round(m)) < 0.01:
+		return str(int(round(m)))
+	return "%.1f" % m
 
 
 func _score_label(text: String, size: int, color: Color) -> Label:
@@ -486,6 +503,32 @@ func _update_slot_readiness(slot: int) -> void:
 				if o.has_method("reward_type_id") and int(o.reward_type_id()) == c:
 					same += 1
 			w.set_multiplier(same)
+	_refresh_stack_readout(ws, top, all_resolved)
+
+
+## Live 족보 readout: the TOP resolved card shows the whole stack's combined 칩 ×
+## 배수 (배수 red); every other card falls back to its own "칩 ×1" (grey). Only
+## RESOLVED cards form the "hand".
+func _refresh_stack_readout(ws: Array, top, all_resolved: bool) -> void:
+	for w in ws:
+		if w.has_method("set_stack_score"):
+			w.set_stack_score(-1, 1.0, [], 1)   # clear → own "칩 ×1"
+	if not all_resolved or ws.size() < 2:
+		return
+	var cards: Array = []
+	for w in ws:
+		if is_instance_valid(w):
+			cards.append({
+				"type": w.enemy_type_id(),
+				"color": w.reward_color(),
+				"count": w.enemy_count(),
+				"chips": w.chip_value(),
+			})
+	if cards.size() < 2:
+		return
+	var result: Dictionary = FormationScore.evaluate(cards)
+	if top != null and top.has_method("set_stack_score"):
+		top.set_stack_score(int(result.get("chips", 0)), float(result.get("mult", 1.0)), result.get("melds", []), cards.size())
 
 
 # ─── Manual drag: free move + whole-stack (solitaire) move ─────────────
@@ -618,6 +661,7 @@ func _open_stack(slot: int) -> void:
 				"type": w.enemy_type_id(),
 				"color": w.reward_color(),
 				"count": w.enemy_count(),
+				"chips": w.chip_value(),
 			})
 	for w in ws:
 		if not is_instance_valid(w):

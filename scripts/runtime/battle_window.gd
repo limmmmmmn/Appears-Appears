@@ -126,6 +126,15 @@ var _enemy_row_counts: Array[int] = [1]
 var _planned_enemy_count: int = 0
 var _planned_enemy_data: Array[EnemyData] = []
 var _window_size_multiplier: float = 1.0
+## Chips = monster gold, accrued kill-by-kill (the score panel counts it up). After
+## the fight this is the window's final chip value (used by the stack 족보).
+var _accumulated_chips: int = 0
+## Top score panel: "칩 × 배수". Alone → ×1 grey; the stack manager can override it.
+var _score_readout: RichTextLabel
+var _stack_chips: int = -1   ## ≥0 when a stack has set a combined readout on this (top) card
+var _stack_mult: float = 1.0
+var _stack_melds: Array = []  ## 족보 dicts ({name, mult}) of the current stack
+var _stack_count: int = 1     ## 전투창 수 in the current stack
 var _slide_tween: Tween
 var _crash_tween: Tween
 var _log_queue: Array[String] = []
@@ -179,6 +188,7 @@ func _ready() -> void:
 	_spawn_enemy()
 	_roll_initiative()
 	_rebuild_turn_queue()
+	_build_score_readout()
 	EventBus.battle_window_opened.emit(self)
 	# Weapon (SPEED) and armor (survival) equips both surface "○○ 장착!" in any
 	# live fight + a quick celebratory pop.
@@ -737,6 +747,10 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	# here as the pool the 🟧 GOLD reward card pays AGAIN as a bonus on flip.
 	var drop_reward: int = _enemy.gold_reward
 	_gold_drops_total += drop_reward
+	# Score panel: this kill's gold counts up onto the chip total (with a pop).
+	_accumulated_chips += maxi(0, drop_reward)
+	_update_score_readout()
+	_pop_score_readout()
 	if _enemy.data:
 		_earned_xp_total += GameState.scaled_enemy_xp_reward(_enemy.data)
 	_refresh_hp_label()
@@ -887,22 +901,69 @@ func _show_reward_face() -> void:
 	_face_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_face_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_face_overlay)
+	# The tiny top readout is for the FIGHT (chips counting up); on the reward card the
+	# labeled breakdown below takes over.
+	if _score_readout != null:
+		_score_readout.visible = false
 	# Objet drop: the tile sprite POPS in the card center — "something different!".
 	if _reward_type == Reward.OBJET:
 		_show_objet_face()
 		return
-	var type_lbl := _back_label(str(REWARD_LABEL[_reward_type]), 13, Color(1, 1, 1, 1))
-	type_lbl.set_anchors_preset(Control.PRESET_CENTER)
-	type_lbl.offset_top = -10.0
-	type_lbl.offset_bottom = 8.0
-	type_lbl.offset_left = -40.0
-	type_lbl.offset_right = 40.0
-	_face_overlay.add_child(type_lbl)
-	_mult_label = _back_label("x%d" % _mult, 9, Color(1.0, 0.97, 0.7, 1.0))
-	_mult_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_mult_label.offset_top = -20.0
-	_mult_label.offset_bottom = -10.0
-	_face_overlay.add_child(_mult_label)
+	_render_reward_face()
+
+
+## The settlement breakdown on a resolved card. Score is the headline; the reward
+## TYPE (회복/장비/…) is just a small "보너스". Rebuilt live as the stack changes.
+##   단독: 적 골드 N / 보너스 · 회복
+##   스택: [족보 이름] / 적 골드 N / 배수 ×M = 총점 / 보너스 · 회복 / 전투창 K개
+func _render_reward_face() -> void:
+	if _face_overlay == null or _reward_type == Reward.OBJET:
+		return
+	for c in _face_overlay.get_children():
+		c.queue_free()
+	var is_stack: bool = _stack_chips >= 0
+	var chips: int = _stack_chips if is_stack else _accumulated_chips
+	var mult: float = _stack_mult if is_stack else 1.0
+	var vb := VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 1)
+	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.offset_top = 5.0
+	vb.offset_bottom = -15.0
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_face_overlay.add_child(vb)
+	# 족보 이름 (스택일 때만)
+	if is_stack and not _stack_melds.is_empty():
+		var names: Array = []
+		for m in _stack_melds:
+			names.append(str(m.get("name", "")))
+		vb.add_child(_back_label(" · ".join(names), 10, Color(1.0, 0.84, 0.3, 1.0)))
+	# 적 골드 (메인 — 적에게서 얻은 골드 = 칩)
+	vb.add_child(_face_rich("적 골드 [color=#6aa6ff]%d[/color]" % chips, 11))
+	# 배수 + 총점 (멜드 있을 때)
+	if mult > 1.0:
+		vb.add_child(_face_rich("배수 [color=#ff6a6a]×%s[/color] =[color=#ffd23a] %d[/color]" % [_fmt_mult(mult), int(round(float(chips) * mult))], 10))
+	# 보너스 (보상 종류 — 작게)
+	vb.add_child(_back_label("보너스 · %s" % str(REWARD_LABEL.get(_reward_type, "?")), 8, Color(0.8, 0.82, 0.86, 1.0)))
+	# 쌓인 장수(스택) — 또는 단독이면 "겹치면 족보!" 유도로 스택을 자연스럽게 알림
+	if is_stack:
+		vb.add_child(_back_label("스택 %d장" % _stack_count, 9, Color(1.0, 0.84, 0.36, 1.0)))
+	else:
+		vb.add_child(_back_label("겹치면 족보!", 8, Color(0.95, 0.78, 0.42, 1.0)))
+
+
+## Centered RichTextLabel (bbcode) line for the reward-face breakdown.
+func _face_rich(bbcode: String, size: int) -> RichTextLabel:
+	var r := RichTextLabel.new()
+	r.bbcode_enabled = true
+	r.fit_content = true
+	r.scroll_active = false
+	r.autowrap_mode = TextServer.AUTOWRAP_OFF
+	r.add_theme_font_override("normal_font", load("res://assets/fonts/field_ui_font.tres"))
+	r.add_theme_font_size_override("normal_font_size", size)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.text = "[center]%s[/center]" % bbcode
+	return r
 
 
 ## The objet reveal face: the tile sprite pops big in the center over a "획득!" call.
@@ -955,9 +1016,79 @@ func enemy_type_id() -> StringName:
 	return GameState.tier_id_for_enemy_data(enemy_data) if enemy_data != null else &""
 
 
-## How many enemies this window holds (the straight "rank" + chips base).
+## How many enemies this window holds (the straight/동수 "rank").
 func enemy_count() -> int:
 	return maxi(1, _planned_enemy_count)
+
+
+## Chip value = total monster gold accrued from kills (the score base). Falls back to
+## a pre-fight estimate before any kill so a freshly-spawned card still reads sanely.
+func chip_value() -> int:
+	if _accumulated_chips > 0:
+		return _accumulated_chips
+	if enemy_data == null:
+		return enemy_count()
+	return maxi(1, GameState.scaled_enemy_gold_reward(enemy_data) * enemy_count())
+
+
+# ─── Top score panel ("칩 × 배수") ─────────────────────────────────────
+func _build_score_readout() -> void:
+	_score_readout = RichTextLabel.new()
+	_score_readout.bbcode_enabled = true
+	_score_readout.fit_content = true
+	_score_readout.scroll_active = false
+	_score_readout.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_score_readout.add_theme_font_override("normal_font", load("res://assets/fonts/field_ui_font.tres"))
+	_score_readout.add_theme_font_size_override("normal_font_size", 9)
+	_score_readout.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_score_readout.offset_left = -62.0
+	_score_readout.offset_top = 1.0
+	_score_readout.offset_right = -3.0
+	_score_readout.offset_bottom = 14.0
+	_score_readout.pivot_offset = Vector2(56.0, 6.0)
+	_score_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_score_readout)
+	_update_score_readout()
+
+
+## Refresh "칩 × 배수": chips blue. Alone → ×1 grey; a stack override shows the
+## combined chips × meld 배수 (배수 red) on the TOP card.
+func _update_score_readout() -> void:
+	if _score_readout == null:
+		return
+	var chips: int = _stack_chips if _stack_chips >= 0 else _accumulated_chips
+	var stacked: bool = _stack_chips >= 0 and _stack_mult > 1.0
+	var mult_str: String = ("×%s" % _fmt_mult(_stack_mult)) if stacked else "×1"
+	var mult_col: String = "#ff5b5b" if stacked else "#7a7d85"  # red ignite vs grey
+	_score_readout.text = "[right][color=#5b9cff]%d[/color] [color=%s]%s[/color][/right]" % [chips, mult_col, mult_str]
+
+
+## BattleManager sets the combined stack score on the TOP card (live, while stacked).
+## Pass chips<0 to clear back to this card's own "칩 ×1".
+func set_stack_score(chips: int, mult: float, melds: Array = [], count: int = 1) -> void:
+	_stack_chips = chips
+	_stack_mult = mult
+	_stack_melds = melds
+	_stack_count = count
+	_update_score_readout()
+	# If this is a resolved reward card on screen, rebuild its labeled breakdown live.
+	if _flippable and not _flipping and _reward_type != Reward.OBJET and _face_overlay != null:
+		_render_reward_face()
+
+
+static func _fmt_mult(m: float) -> String:
+	if absf(m - round(m)) < 0.01:
+		return str(int(round(m)))
+	return "%.1f" % m
+
+
+## Quick scale punch on the chip readout each time a kill adds to it.
+func _pop_score_readout() -> void:
+	if _score_readout == null:
+		return
+	_score_readout.scale = Vector2(1.3, 1.3)
+	var t := create_tween()
+	t.tween_property(_score_readout, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 ## A small "까기" hint (direct child) shown when this card is the openable TOP of a
