@@ -708,42 +708,51 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	# The attacker's WEAPON-TYPE multiplier scales damage here (per-member SPEED
 	# component of the gold/sec formula); base stat stays clean.
 	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
-	# Manual = Dragon-Quest beats: 공격 텍스트 → 이펙트 → 데미지 텍스트 (staggered).
-	if _is_manual_combat():
-		return await _play_party_attack_seq(member, target_enemy, damage, bool(crit["is_crit"]))
-	# Auto = fast combined message (the card-game pace must stay snappy).
-	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], member.attack_effect)
-	_spawn_window_damage_number(dealt, "")
+	# take_damage clamps to maxi(1, amount), so the dealt amount is known up front —
+	# we can label the result beat before the hit is actually applied.
+	var dealt: int = maxi(1, damage)
+	var is_crit: bool = bool(crit["is_crit"])
+	var effect_tex: Texture2D = member.attack_effect
 	var enemy_name: String = target_enemy.data.display_name if target_enemy.data else "적"
-	var crit_text := "  회심의 일격!" if crit["is_crit"] else ""
-	_queue_log("%s의 공격!\n%s에게 %d의 데미지!%s" % [member.display_name, enemy_name, dealt, crit_text])
-	_flush_pending_defeat_logs()
+	var crit_text: String = "  회심의 일격!" if is_crit else ""
+	# Beat 2 (이펙트): apply the hit + pop the floating number.
+	var apply_hit := func() -> void:
+		if is_instance_valid(target_enemy):
+			target_enemy.take_damage(damage, is_crit, effect_tex)
+			_spawn_window_damage_number(dealt, "")
+	# DQ-style beats for EVERY fight (auto + manual): 공격 텍스트 → 이펙트 → 데미지 텍스트.
+	await _play_attack_seq(
+		"%s의 공격!" % member.display_name,
+		apply_hit,
+		"%s의 공격!\n%s에게 %d의 데미지!%s" % [member.display_name, enemy_name, dealt, crit_text]
+	)
 	return dealt
 
 
-## DQ-style 3-beat attack. Holds the log "busy" (the turn loop waits on _is_log_busy)
-## so the next turn doesn't barge in mid-narration.
-func _play_party_attack_seq(member: CharacterData, target_enemy: Enemy, damage: int, is_crit: bool) -> int:
+## DQ-style 3-beat narration shared by every attacker: 공격 텍스트 → 이펙트 →
+## 데미지 텍스트, each held a beat. Holds the log "busy" (the turn loop waits on
+## _is_log_busy) so the next turn doesn't barge in mid-narration. `effect` applies the
+## actual hit (damage / lunge / numbers) on the middle beat so it lands between the
+## two text beats.
+func _play_attack_seq(attack_text: String, effect: Callable, result_text: String) -> void:
 	_log_sequence_running = true
 	# 1) 공격 텍스트
-	_set_log("%s의 공격!" % member.display_name)
+	_set_log(attack_text)
 	await get_tree().create_timer(ATTACK_TEXT_DELAY).timeout
-	if not is_inside_tree() or not is_instance_valid(target_enemy):
+	if not is_inside_tree():
 		_log_sequence_running = false
-		return 0
-	# 2) 공격 이펙트 — 피격 적용 + 떠오르는 데미지 숫자
-	var dealt: int = target_enemy.take_damage(damage, is_crit, member.attack_effect)
-	_spawn_window_damage_number(dealt, "")
+		return
+	# 2) 이펙트 — 피격/돌진 + 떠오르는 데미지 숫자
+	if effect.is_valid():
+		effect.call()
 	await get_tree().create_timer(ATTACK_EFFECT_DELAY).timeout
 	if not is_inside_tree():
 		_log_sequence_running = false
-		return dealt
+		return
 	# 3) 데미지 텍스트
-	var enemy_name: String = target_enemy.data.display_name if (is_instance_valid(target_enemy) and target_enemy.data) else "적"
-	var crit_text := "  회심의 일격!" if is_crit else ""
-	_set_log("%s의 공격!\n%s에게 %d의 데미지!%s" % [member.display_name, enemy_name, dealt, crit_text])
+	_set_log(result_text)
 	await get_tree().create_timer(DAMAGE_TEXT_DELAY).timeout
-	# 4) 마무리: busy 해제 → 대기 중인 "쓰러뜨렸다!"/체스트 처리
+	# 4) 마무리: busy 해제 → 대기 중인 "쓰러뜨렸다!" / 체스트 처리
 	_log_sequence_running = false
 	_flush_pending_defeat_logs()
 	if not _log_queue.is_empty():
@@ -751,7 +760,6 @@ func _play_party_attack_seq(member: CharacterData, target_enemy: Enemy, damage: 
 	elif _pending_chest and _chest_state == ChestState.NONE:
 		_pending_chest = false
 		_enter_flip_card_state()
-	return dealt
 
 
 func _mage_splash_attack(attacker_index: int) -> void:
@@ -761,13 +769,25 @@ func _mage_splash_attack(attacker_index: int) -> void:
 	var atk: int = GameState.effective_attack(attacker_index)
 	var crit: Dictionary = GameState.roll_crit()
 	var damage: int = int(round(float(atk) * GameState.member_aoe_damage_mult(attacker_index) * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
-	var total_dealt: int = 0
+	var is_crit: bool = bool(crit["is_crit"])
+	var effect_tex: Texture2D = member.attack_effect
+	# Each take_damage returns maxi(1, damage), so total is known up front.
+	var hit_targets: Array[Enemy] = []
 	for i in target_count:
-		total_dealt += targets[i].take_damage(damage, crit["is_crit"], member.attack_effect)
+		hit_targets.append(targets[i])
+	var total_dealt: int = maxi(1, damage) * target_count
 	var weapon: String = GameState.current_weapon_name(Balance.character_weapon_type(member.id))
-	var crit_text := "  치명타!" if crit["is_crit"] else ""
-	_queue_log("%s의 %s 마법!\nx%d  %d 데미지!%s" % [member.display_name, weapon, target_count, total_dealt, crit_text])
-	_flush_pending_defeat_logs()
+	var crit_text: String = "  치명타!" if is_crit else ""
+	# Beat 2 (이펙트): splash every target at once.
+	var apply_hits := func() -> void:
+		for e: Enemy in hit_targets:
+			if is_instance_valid(e):
+				e.take_damage(damage, is_crit, effect_tex)
+	await _play_attack_seq(
+		"%s의 %s 마법!" % [member.display_name, weapon],
+		apply_hits,
+		"%s의 %s 마법!\nx%d  %d 데미지!%s" % [member.display_name, weapon, target_count, total_dealt, crit_text]
+	)
 
 
 func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
@@ -809,14 +829,28 @@ func _enemy_attack(enemy: Enemy) -> void:
 	var target_index: int = alive_indices.pick_random()
 	var target: CharacterData = GameState.party[target_index]
 	var attacker_name: String = enemy.data.display_name if enemy.data else "Enemy"
+	# Evade: 공격 텍스트 → 돌진(빗나감) → 회피 텍스트.
 	if GameState.roll_evade(target_index):
-		enemy.play_attack_lunge()
-		_queue_log("%s의 공격!\n%s은(는) 잽싸게 피했다!" % [attacker_name, target.display_name])
+		var lunge_miss := func() -> void:
+			if is_instance_valid(enemy):
+				enemy.play_attack_lunge()
+		await _play_attack_seq(
+			"%s의 공격!" % attacker_name,
+			lunge_miss,
+			"%s의 공격!\n%s은(는) 잽싸게 피했다!" % [attacker_name, target.display_name]
+		)
 		return
-	var dealt: int = max(1, enemy.attack)
-	enemy.play_attack_lunge()
-	GameState.damage_party_member(target_index, dealt)
-	_queue_log("%s의 공격!\n%s에게 %d의 데미지!" % [attacker_name, target.display_name, dealt])
+	var dealt: int = maxi(1, enemy.attack)
+	# Beat 2 (이펙트): the enemy lunges and the blow lands on the party member.
+	var apply_hit := func() -> void:
+		if is_instance_valid(enemy):
+			enemy.play_attack_lunge()
+		GameState.damage_party_member(target_index, dealt)
+	await _play_attack_seq(
+		"%s의 공격!" % attacker_name,
+		apply_hit,
+		"%s의 공격!\n%s에게 %d의 데미지!" % [attacker_name, target.display_name, dealt]
+	)
 	# A single down no longer collapses the fight — the window keeps rolling with the
 	# remaining members. Only a FULL party wipe closes windows (BattleManager._on_party
 	# _collapsed). The downed member just trails the party until everyone recovers.

@@ -78,9 +78,12 @@ var open_speed_level: int = 0
 ## 자동 줍기 해금 — false = 수동 호버 줍기, true = 용사가 전리품을 자동으로 주움.
 var auto_pickup_unlocked: bool = false
 ## 자동 전투 해금 — false = 수동 전투(Fight→대상 선택), true = 턴 타이머가 자동 진행.
-var auto_battle_unlocked: bool = false
+## 지금은 처음부터 자동 상태로 시작(true). 수동 전투를 다시 켜고 싶으면 false로,
+## 강화 창 행도 다시 보이게(right_upgrade_panel) 되돌리면 됨.
+var auto_battle_unlocked: bool = true
 ## 자동 이동 해금 — false = WASD/방향키 수동 이동, true = 용사가 적으로 자동 이동.
-var auto_move_unlocked: bool = false
+## 자동 전투와 같이 처음부터 자동(true)으로 시작.
+var auto_move_unlocked: bool = true
 ## SCALE = how many SCALE purchases were made; simultaneous window count =
 ## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
 var scale_purchases: int = 0
@@ -907,6 +910,28 @@ func weapon_upgrade_cost(type_id: StringName) -> int:
 
 func can_upgrade_weapon(type_id: StringName) -> bool:
 	return gold >= weapon_upgrade_cost(type_id)
+
+
+## Property-inspector payload for a party member (hero = index 0). Shared by Player /
+## Companion so the right inspector renders allies identically: ① header icon + name,
+## ② role + 공격력 line, ③ a single 공격력(무기) 강화 action (gold-gated).
+func member_inspector_data(index: int, data: CharacterData) -> Dictionary:
+	var member_name: String = data.display_name if data else "아군"
+	var role: StringName = Balance.character_trait(data.id) if data else Balance.HERO_TRAIT
+	var role_name: String = str(Balance.TRAIT_NAMES.get(role, role))
+	var wtype: StringName = Balance.character_weapon_type(data.id) if data else Balance.HERO_WEAPON_TYPE
+	var atk: int = effective_attack(index) if index >= 0 and index < party_size() else 0
+	return {
+		"name": member_name,
+		"info": "%s · 공격력 %d" % [role_name, atk],
+		"sprite": data.inspector_icon() if data else null,
+		"actions": [{
+			"label": "공격력 강화",
+			"cost": weapon_upgrade_cost(wtype),
+			"enabled": can_upgrade_weapon(wtype),
+			"on_press": upgrade_weapon.bind(wtype),
+		}],
+	}
 
 
 ## Buying a weapon type auto-equips the matching companion (그 타입 사용자) —

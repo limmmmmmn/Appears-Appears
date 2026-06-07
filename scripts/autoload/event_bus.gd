@@ -106,6 +106,9 @@ signal enemy_place_requested(tier_id: StringName)
 signal structure_placed(tile_id: StringName)
 ## A placed field object (e.g. campfire) was clicked → open its action panel.
 signal structure_clicked(building_id: StringName, world_position: Vector2)
+## A field target (ally / enemy / objet) was clicked → show it in the right property
+## inspector. `target` implements get_inspector_data() -> Dictionary. null = deselect.
+signal inspector_target_selected(target: Node)
 ## The "쉰다" button on the campfire panel was pressed.
 signal rest_requested()
 

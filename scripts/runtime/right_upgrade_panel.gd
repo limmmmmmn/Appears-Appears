@@ -17,6 +17,9 @@ var _rows: Array[Dictionary] = []   ## {button, cost} — for live affordability
 
 func _ready() -> void:
 	add_to_group("upgrade_window")
+	# 강화 패널은 일단 숨김 — 우측은 프로퍼티 인스펙터가 차지한다. 메뉴바 "강화" 토글로
+	# 언제든 다시 꺼내 쓸 수 있다(group + toggle()는 그대로 유지).
+	visible = false
 	_rebuild()
 	# Gold ticks only re-tint affordability (no rebuild → no flicker); a purchase
 	# (combat_upgrade_changed) rebuilds so prices/levels refresh.
@@ -84,10 +87,12 @@ func _upgrade_items() -> Array[Dictionary]:
 			"price": GameState.open_speed_upgrade_cost(), "afford": GameState.can_upgrade_open_speed(), "maxed": GameState.open_speed_is_maxed(), "kind": &"open_speed"},
 		{"icon": ICON_GOLD, "name": "자동 줍기", "desc": ("자동" if GameState.auto_pickup_unlocked else "수동(호버)"),
 			"price": GameState.auto_pickup_cost(), "afford": GameState.can_unlock_auto_pickup(), "maxed": GameState.auto_pickup_unlocked, "kind": &"auto_pickup"},
-		{"icon": ICON_GOLD, "name": "자동 전투", "desc": ("자동" if GameState.auto_battle_unlocked else "수동"),
-			"price": GameState.auto_battle_cost(), "afford": GameState.can_unlock_auto_battle(), "maxed": GameState.auto_battle_unlocked, "kind": &"auto_battle"},
-		{"icon": ICON_GOLD, "name": "자동 이동", "desc": ("자동" if GameState.auto_move_unlocked else "수동(WASD)"),
-			"price": GameState.auto_move_cost(), "afford": GameState.can_unlock_auto_move(), "maxed": GameState.auto_move_unlocked, "kind": &"auto_move"},
+		# 자동 전투 / 자동 이동: 지금은 처음부터 해금 상태로 시작하므로 강화 목록에서 숨김.
+		# 코드(_on_upgrade, GameState 함수)는 그대로 두어 나중에 한 줄만 되살리면 다시 판매 가능.
+		# {"icon": ICON_GOLD, "name": "자동 전투", "desc": ("자동" if GameState.auto_battle_unlocked else "수동"),
+		# 	"price": GameState.auto_battle_cost(), "afford": GameState.can_unlock_auto_battle(), "maxed": GameState.auto_battle_unlocked, "kind": &"auto_battle"},
+		# {"icon": ICON_GOLD, "name": "자동 이동", "desc": ("자동" if GameState.auto_move_unlocked else "수동(WASD)"),
+		# 	"price": GameState.auto_move_cost(), "afford": GameState.can_unlock_auto_move(), "maxed": GameState.auto_move_unlocked, "kind": &"auto_move"},
 	]
 
 

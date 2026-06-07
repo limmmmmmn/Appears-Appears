@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/right_property_inspector.gd" id="1_inspector"]
+[ext_resource type="Theme" path="res://assets/themes/ui_theme.tres" id="2_theme"]
+
+[node name="RightPropertyInspector" type="PanelContainer"]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 528.0
+offset_top = 18.0
+offset_right = 636.0
+offset_bottom = 180.0
+theme = ExtResource("2_theme")
+script = ExtResource("1_inspector")

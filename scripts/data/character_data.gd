@@ -47,6 +47,20 @@ func frame_size_vec() -> Vector2:
 	return Vector2(frame_size)
 
 
+## A single still icon for UI (property inspector header). Uses the explicit portrait
+## if authored, else crops the idle (middle column) DOWN-facing frame from the sheet.
+func inspector_icon() -> Texture2D:
+	if portrait != null:
+		return portrait
+	if sprite_sheet == null:
+		return null
+	var atlas := AtlasTexture.new()
+	atlas.atlas = sprite_sheet
+	var col: int = clampi(1, 0, maxi(0, frames_per_direction - 1))  # middle = idle
+	atlas.region = Rect2(Vector2(float(col) * float(frame_size.x), 0.0), frame_size_vec())
+	return atlas
+
+
 func visual_center_local() -> Vector2:
 	return frame_size_vec() * 0.5 - foot_anchor
 

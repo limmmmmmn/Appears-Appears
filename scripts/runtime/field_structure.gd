@@ -80,11 +80,30 @@ func setup(building: Dictionary) -> void:
 	add_child(label)
 
 
-## Click → open this structure's action panel (handled by ObjectActionPanel).
+## Click → open this structure's action panel (ObjectActionPanel) AND show it in the
+## right property inspector.
 func _on_hotspot_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		EventBus.structure_clicked.emit(building_id, global_position)
+		EventBus.inspector_target_selected.emit(self)
 		get_viewport().set_input_as_handled()
+
+
+## Right property inspector: objet — header (이름/스프라이트) + 설명 한 줄, ③ 준비 중.
+func get_inspector_data() -> Dictionary:
+	var info: Dictionary = Balance.tile_by_id(building_id)
+	if info.is_empty():
+		info = Balance.building_by_id(building_id)
+	var sprite: Texture2D = null
+	var sprite_path: String = str(info.get("sprite", ""))
+	if not sprite_path.is_empty() and ResourceLoader.exists(sprite_path):
+		sprite = load(sprite_path)
+	return {
+		"name": str(info.get("name", building_id)),
+		"info": str(info.get("desc", "")),
+		"sprite": sprite,
+		"actions": [],
+	}
 
 
 ## Quick glow + scale pop — used when the building's effect fires (e.g. the

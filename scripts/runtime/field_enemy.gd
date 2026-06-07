@@ -80,6 +80,9 @@ func _ready() -> void:
 	add_to_group("field_enemy")
 	_apply_data()
 	body_entered.connect(_on_body_entered)
+	# Clicking the enemy (its tooltip hotspot) selects it in the right inspector.
+	if _tooltip_area != null:
+		_tooltip_area.gui_input.connect(_on_tooltip_input)
 	# Safety net: if we're freed mid hit-stop, don't leak the field pause.
 	tree_exiting.connect(_release_encounter_pause)
 	_player = _find_player()
@@ -139,6 +142,27 @@ func _refresh_tooltip() -> void:
 	if _tooltip_area == null:
 		return
 	_tooltip_area.tooltip_text = GameState.enemy_stat_tooltip(data)
+
+
+func _on_tooltip_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		EventBus.inspector_target_selected.emit(self)
+		_tooltip_area.accept_event()
+
+
+## Right property inspector: enemies show header + tier/level info, no upgrade (③ 준비 중).
+func get_inspector_data() -> Dictionary:
+	var enemy_name: String = data.display_name if data else "적"
+	var tier_id: StringName = GameState.tier_id_for_enemy_data(data) if data else &""
+	var tier: Dictionary = Balance.tier_by_id(tier_id)
+	var tier_name: String = str(tier.get("name", enemy_name))
+	var lvl: int = GameState.enemy_level(tier_id) if tier_id != &"" else 1
+	return {
+		"name": enemy_name,
+		"info": "%s · Lv %d" % [tier_name, lvl],
+		"sprite": data.sprite if data else null,
+		"actions": [],
+	}
 
 
 func _physics_process(delta: float) -> void:

@@ -13,6 +13,17 @@ const LEFT_PANEL_WIDTH: float = 92.0       ## floating monster dock (top-left)
 const PANEL_MARGIN: float = 4.0            ## gap from screen edge / between panel & windows
 const PANEL_TOP: float = 18.0              ## below the 15px menu bar
 
+# ─── Lower-left running log (Dark-Room style) ──────────────────────────
+## The left column is split: placement dock on top, accumulating text log below.
+## The split is NOT fixed at half — tune LEFT_LOG_TOP (y where the log begins) to
+## give the dock more or less room. The log fills from there to the screen bottom.
+const LEFT_LOG_LEFT: float = 6.0
+const LEFT_LOG_TOP: float = 150.0          ## ← the adjustable dock/log split point
+const LEFT_LOG_WIDTH: float = 152.0        ## desired width; clamped so it never crosses the field
+const LEFT_LOG_RIGHT_GAP: float = 6.0      ## gap kept between the log and the field's left edge
+const LEFT_LOG_BOTTOM_MARGIN: float = 12.0 ## gap above the bottom toolbar
+const FONT_LOG: int = 11
+
 # ─── Right panel (강화 상점 / 장비) ─────────────────────────────────────
 ## Tuned to match the left dock's small, neat feel. HIERARCHY: name = base,
 ## numbers (value/cost) are SMALLER (secondary info), section labels smallest.

@@ -7,7 +7,9 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/low_health_overlay.tscn" id="5_low_hp"]
 [ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
 [ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/right_property_inspector.tscn" id="7_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/left_enemy_bar.tscn" id="8_enemy_bar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/left_log_panel.tscn" id="8_log_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/town_window.tscn" id="9_town"]
 [ext_resource type="PackedScene" path="res://scenes/ui/narration_window.tscn" id="12_narration"]
 [ext_resource type="PackedScene" path="res://scenes/ui/desktop_frame.tscn" id="13_frame"]
@@ -80,12 +82,20 @@ layer = 12
 offset_left = 542.0
 offset_bottom = 177.0
 
+[node name="RightPropertyInspector" parent="RightPanelLayer" instance=ExtResource("7_inspector")]
+offset_left = 528.0
+offset_top = 18.0
+offset_right = 636.0
+offset_bottom = 180.0
+
 [node name="LeftBarLayer" type="CanvasLayer" parent="." unique_id=279611143]
 layer = 12
 
 [node name="LeftEnemyBar" parent="LeftBarLayer" unique_id=592600781 instance=ExtResource("8_enemy_bar")]
 offset_top = 6.0
 offset_right = 100.0
+
+[node name="LeftLogPanel" parent="LeftBarLayer" instance=ExtResource("8_log_panel")]
 
 [node name="TownLayer" type="CanvasLayer" parent="." unique_id=2049072489]
 layer = 15

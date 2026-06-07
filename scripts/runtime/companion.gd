@@ -35,6 +35,34 @@ func _ready() -> void:
 		_visual.setup(_pending_data)
 	# Hit reaction only: flinch when this member is hit. No attack lunge.
 	EventBus.party_damage_taken.connect(_on_party_damage_taken)
+	_add_inspector_hotspot()
+
+
+## A world-space click hotspot over this companion → selects it in the right inspector.
+func _add_inspector_hotspot() -> void:
+	var hotspot := Control.new()
+	hotspot.mouse_filter = Control.MOUSE_FILTER_STOP
+	hotspot.z_index = 4
+	if _pending_data != null:
+		var fs: Vector2 = _pending_data.frame_size_vec()
+		hotspot.size = fs
+		hotspot.position = _pending_data.visual_center_local() - fs * 0.5
+	else:
+		hotspot.size = Vector2(16, 24)
+		hotspot.position = Vector2(-8, -22)
+	hotspot.gui_input.connect(_on_inspector_hotspot_input)
+	add_child(hotspot)
+
+
+func _on_inspector_hotspot_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		EventBus.inspector_target_selected.emit(self)
+		get_viewport().set_input_as_handled()
+
+
+## Right property inspector: companion — header + role line + ③ 무기(공격력) 강화.
+func get_inspector_data() -> Dictionary:
+	return GameState.member_inspector_data(slot_index, _pending_data)
 
 
 ## Inject the character data. Safe to call before _ready.
