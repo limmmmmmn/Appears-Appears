@@ -55,6 +55,9 @@ const DEFAULT_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)  
 const DQ_WINDOW_BG: Color = Color(0.3529412, 0.70980394, 0.32156864, 1.0)
 const DQ_WINDOW_BORDER: Color = Color(0, 0, 0, 1.0)              ## black window edge (retro)
 const DQ_WINDOW_TEXT: Color = Color(1.0, 1.0, 1.0, 1.0)
+## Classic Dragon-Quest battle screen: pure black with crisp white-bordered windows.
+const DQ_BATTLE_BG: Color = Color(0.0, 0.0, 0.0, 1.0)
+const DQ_BATTLE_BORDER: Color = Color(1.0, 1.0, 1.0, 1.0)
 
 # ─── Reward-color system: the card's COLOR = its reward type (shown from spawn) ──
 enum Reward { WEAPON, GOLD, HP, XP, RANDOM, OBJET }
@@ -90,6 +93,10 @@ var _mult_label: Label
 var _face_overlay: Control
 
 const LOG_STEP_DURATION: float = 0.46
+## Dragon-Quest manual-attack beats: "○○의 공격!" → (이펙트) → "△△에게 N 데미지!".
+const ATTACK_TEXT_DELAY: float = 0.38   ## hold on the attack declaration
+const ATTACK_EFFECT_DELAY: float = 0.38 ## hit lands (flash + number) before the result
+const DAMAGE_TEXT_DELAY: float = 0.48   ## hold on the damage result
 
 # ─── Chest reward state (post-victory) ────────────────────────────────
 ## How long the player must hover before the chest pops open.
@@ -161,6 +168,8 @@ var _card_back: Control
 ## The player pressed this card → BattleManager owns the gesture from here: a
 ## release without movement = click (open the stack), a drag = move the whole stack.
 signal grab_started(window: BattleWindow, screen_pos: Vector2)
+## Keyboard Enter on the openable top card → BattleManager opens the stack (no mouse).
+signal flip_requested(window: BattleWindow)
 var _chest_root: Control
 var _chest_hover_progress: float = 0.0
 var _chest_hover_bar: ProgressBar
@@ -179,6 +188,10 @@ var _combat_armed: bool = true
 var _command_panel: Panel
 var _command_title: Label
 var _command_row: HBoxContainer
+## Keyboard command navigation: the enabled buttons (Fight, Run) + which one is picked.
+var _cmd_buttons: Array[Button] = []
+var _cmd_callables: Array[Callable] = []
+var _command_sel: int = 0
 var _target_layer: Control
 ## True while a party member's turn is paused waiting for the player's command.
 var _awaiting_command: bool = false
@@ -196,6 +209,15 @@ func _ready() -> void:
 	_name_label.show()  # enemy name = the window's small title
 	_hp_label.hide()
 	_log_label.add_theme_font_size_override("font_size", UITheme.FONT_BATTLE_LOG)
+	# LabelSettings overrides the theme font_size + line_spacing, so set BIG font with a
+	# very tight (near-touching) line gap so the 2-line "○○의 공격! / N 데미지!" both fit.
+	if _log_label.label_settings != null:
+		var ls: LabelSettings = _log_label.label_settings.duplicate()
+		ls.font_size = 8
+		ls.line_spacing = -2   # 행간 살짝 좁힘 (붙지 않게)
+		_log_label.label_settings = ls
+	_log_label.add_theme_constant_override("line_spacing", -2)
+	_log_label.autowrap_mode = TextServer.AUTOWRAP_OFF  # \n controls the 2 lines, no wrap
 	_reward_type = _roll_reward_type()  # the card's color = its reward type
 	_apply_card_color_chrome()
 	# The card root catches mouse (drag to move/stack, click to flip); its children
@@ -686,12 +708,49 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	# The attacker's WEAPON-TYPE multiplier scales damage here (per-member SPEED
 	# component of the gold/sec formula); base stat stays clean.
 	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
+	# Manual = Dragon-Quest beats: 공격 텍스트 → 이펙트 → 데미지 텍스트 (staggered).
+	if _is_manual_combat():
+		return await _play_party_attack_seq(member, target_enemy, damage, bool(crit["is_crit"]))
+	# Auto = fast combined message (the card-game pace must stay snappy).
 	var dealt: int = target_enemy.take_damage(damage, crit["is_crit"], member.attack_effect)
-	# Show the EQUIPPED WEAPON in the log so upgrades read live (강철검으로 42 데미지!).
-	var weapon: String = GameState.current_weapon_name(Balance.character_weapon_type(member.id))
-	var crit_text := "  치명타!" if crit["is_crit"] else ""
-	_queue_log("%s의 %s 공격!\n%d 데미지!%s" % [member.display_name, weapon, dealt, crit_text])
+	_spawn_window_damage_number(dealt, "")
+	var enemy_name: String = target_enemy.data.display_name if target_enemy.data else "적"
+	var crit_text := "  회심의 일격!" if crit["is_crit"] else ""
+	_queue_log("%s의 공격!\n%s에게 %d의 데미지!%s" % [member.display_name, enemy_name, dealt, crit_text])
 	_flush_pending_defeat_logs()
+	return dealt
+
+
+## DQ-style 3-beat attack. Holds the log "busy" (the turn loop waits on _is_log_busy)
+## so the next turn doesn't barge in mid-narration.
+func _play_party_attack_seq(member: CharacterData, target_enemy: Enemy, damage: int, is_crit: bool) -> int:
+	_log_sequence_running = true
+	# 1) 공격 텍스트
+	_set_log("%s의 공격!" % member.display_name)
+	await get_tree().create_timer(ATTACK_TEXT_DELAY).timeout
+	if not is_inside_tree() or not is_instance_valid(target_enemy):
+		_log_sequence_running = false
+		return 0
+	# 2) 공격 이펙트 — 피격 적용 + 떠오르는 데미지 숫자
+	var dealt: int = target_enemy.take_damage(damage, is_crit, member.attack_effect)
+	_spawn_window_damage_number(dealt, "")
+	await get_tree().create_timer(ATTACK_EFFECT_DELAY).timeout
+	if not is_inside_tree():
+		_log_sequence_running = false
+		return dealt
+	# 3) 데미지 텍스트
+	var enemy_name: String = target_enemy.data.display_name if (is_instance_valid(target_enemy) and target_enemy.data) else "적"
+	var crit_text := "  회심의 일격!" if is_crit else ""
+	_set_log("%s의 공격!\n%s에게 %d의 데미지!%s" % [member.display_name, enemy_name, dealt, crit_text])
+	await get_tree().create_timer(DAMAGE_TEXT_DELAY).timeout
+	# 4) 마무리: busy 해제 → 대기 중인 "쓰러뜨렸다!"/체스트 처리
+	_log_sequence_running = false
+	_flush_pending_defeat_logs()
+	if not _log_queue.is_empty():
+		_drain_log_queue()
+	elif _pending_chest and _chest_state == ChestState.NONE:
+		_pending_chest = false
+		_enter_flip_card_state()
 	return dealt
 
 
@@ -712,8 +771,8 @@ func _mage_splash_attack(attacker_index: int) -> void:
 
 
 func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
-	_basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
-	if not _running:
+	await _basic_party_attack(attacker_index, target_enemy, GameState.priest_attack_multiplier())
+	if not _running or not is_inside_tree():
 		return
 	var heal_target: int = _lowest_wounded_party_index()
 	if heal_target == -1:
@@ -722,7 +781,7 @@ func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 	GameState.heal_party_member(heal_target, GameState.member_heal_amount(attacker_index))
 	var healed: int = GameState.party_hp[heal_target] - before_hp
 	if healed > 0:
-		_queue_log("%s prays.\n%s recovers %d HP." % [
+		_queue_log("%s의 기도!\n%s의 HP가 %d 회복!" % [
 			GameState.party[attacker_index].display_name,
 			GameState.party[heal_target].display_name,
 			healed,
@@ -730,14 +789,14 @@ func _priest_heal_attack(attacker_index: int, target_enemy: Enemy) -> void:
 
 
 func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
-	_basic_party_attack(attacker_index, target_enemy)
-	if not _running:
+	await _basic_party_attack(attacker_index, target_enemy)
+	if not _running or not is_inside_tree():
 		return
 	var stolen: int = target_enemy.try_steal_gold(GameState.thief_steal_chance(), GameState.thief_steal_gold_amount())
 	if stolen <= 0:
 		return
 	GameState.add_gold(stolen)
-	_queue_log("%s steals %dG!" % [GameState.party[attacker_index].display_name, stolen])
+	_queue_log("%s이(가) %dG 훔쳤다!" % [GameState.party[attacker_index].display_name, stolen])
 
 
 func _enemy_attack(enemy: Enemy) -> void:
@@ -752,17 +811,17 @@ func _enemy_attack(enemy: Enemy) -> void:
 	var attacker_name: String = enemy.data.display_name if enemy.data else "Enemy"
 	if GameState.roll_evade(target_index):
 		enemy.play_attack_lunge()
-		_queue_log("%s attacks!\n%s dodges!" % [attacker_name, target.display_name])
+		_queue_log("%s의 공격!\n%s은(는) 잽싸게 피했다!" % [attacker_name, target.display_name])
 		return
 	var dealt: int = max(1, enemy.attack)
 	enemy.play_attack_lunge()
 	GameState.damage_party_member(target_index, dealt)
-	_queue_log("%s attacks!\n%s takes %d damage." % [attacker_name, target.display_name, dealt])
+	_queue_log("%s의 공격!\n%s에게 %d의 데미지!" % [attacker_name, target.display_name, dealt])
 	# A single down no longer collapses the fight — the window keeps rolling with the
 	# remaining members. Only a FULL party wipe closes windows (BattleManager._on_party
 	# _collapsed). The downed member just trails the party until everyone recovers.
 	if GameState.is_downed(target_index):
-		_queue_log("%s is down!" % target.display_name)
+		_queue_log("%s은(는) 쓰러졌다!" % target.display_name)
 
 
 # ─── Manual combat ─────────────────────────────────────────────────────
@@ -775,7 +834,9 @@ func _is_manual_combat() -> bool:
 ## bottom command box. Called once at spawn when starting in manual mode.
 func _enter_manual_mode() -> void:
 	_name_label.hide()
-	_log_panel.hide()
+	# Log stays available: the bottom strip toggles between the command box (player's
+	# turn) and the combat log (attacks resolving) — see _begin_manual_command /
+	# _on_target_chosen. So the "○○의 공격! N 데미지!" play-by-play is visible.
 	if _score_readout != null:
 		_score_readout.hide()
 	for enemy: Enemy in _enemies:
@@ -793,9 +854,35 @@ func _begin_manual_command(actor: Dictionary) -> void:
 	_clear_target_markers()
 	if _command_panel == null:
 		_build_command_panel()
+	if _log_panel != null:
+		_log_panel.hide()   # player's turn → swap the log for the command box
 	_command_title.text = GameState.party[_command_party_index].display_name
+	_command_sel = 0
+	_highlight_command()
 	_command_row.show()
 	_command_panel.show()
+
+
+## DQ cursor: the picked command lights up brighter than the rest.
+func _highlight_command() -> void:
+	for i in _cmd_buttons.size():
+		var b: Button = _cmd_buttons[i]
+		if not is_instance_valid(b):
+			continue
+		var col: Color = _reward_color().lightened(0.4) if i == _command_sel else _reward_color()
+		b.add_theme_stylebox_override("normal", _flat_panel_style(col, DQ_WINDOW_BORDER))
+
+
+func _move_command_sel(dir: int) -> void:
+	if _cmd_buttons.is_empty():
+		return
+	_command_sel = wrapi(_command_sel + dir, 0, _cmd_buttons.size())
+	_highlight_command()
+
+
+func _activate_command() -> void:
+	if _command_sel >= 0 and _command_sel < _cmd_callables.size():
+		_cmd_callables[_command_sel].call()
 
 
 func _on_fight_pressed() -> void:
@@ -826,6 +913,8 @@ func _on_target_chosen(enemy: Enemy) -> void:
 	var index: int = _command_party_index
 	_command_party_index = -1
 	_hide_command_panel()
+	if _log_panel != null:
+		_log_panel.show()   # action resolving → show the combat log (attack + replies)
 	_party_attack(index, enemy)
 	# Let the enemies (and any further party members) take their turns automatically.
 	if _running and not _close_started:
@@ -840,6 +929,7 @@ func _on_target_cancel() -> void:
 	_selecting_target = false
 	if _awaiting_command and _command_party_index >= 0:
 		_command_title.text = GameState.party[_command_party_index].display_name
+		_highlight_command()
 		_command_row.show()
 
 
@@ -887,10 +977,14 @@ func _build_command_panel() -> void:
 	_command_row.offset_bottom = -2.0
 	_command_row.add_theme_constant_override("separation", 1)
 	_command_panel.add_child(_command_row)
-	_make_command_button("Fight", _on_fight_pressed, true)
+	var fight_btn := _make_command_button("Fight", _on_fight_pressed, true)
 	_make_command_button("Skill", Callable(), false)  # not ready yet
 	_make_command_button("Item", Callable(), false)   # not ready yet
-	_make_command_button("Run", _on_run_pressed, true)
+	var run_btn := _make_command_button("Run", _on_run_pressed, true)
+	# Keyboard nav targets: only the enabled commands. Left/Right cycles, Enter picks.
+	_cmd_buttons = [fight_btn, run_btn]
+	_cmd_callables = [_on_fight_pressed, _on_run_pressed]
+	_command_sel = 0
 	# Member-name title sitting on the box's top-left border (its bg breaks the line).
 	# Uses the theme font (Korean-capable) — member names are Korean (e.g. "도윤").
 	_command_title = Label.new()
@@ -1012,15 +1106,29 @@ func _confirm_target_selection() -> void:
 ## Enter drives the fight (연타): in the command box it presses Fight; while picking a
 ## target it attacks the highlighted enemy. Arrows move the target highlight.
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not _awaiting_command:
-		return
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return
+	var is_enter: bool = key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER
+	# Reward card: Enter flips the openable TOP of a resolved stack (까기) — no mouse.
+	if _chain_ready and not _flipping and is_enter:
+		flip_requested.emit(self)
+		get_viewport().set_input_as_handled()
+		return
+	if not _awaiting_command:
+		return
 	if not _selecting_target:
-		if key.keycode == KEY_ENTER or key.keycode == KEY_KP_ENTER:
-			_on_fight_pressed()
-			get_viewport().set_input_as_handled()
+		# Command box: ←/→ (or ↑/↓) move between Fight/Run, Enter picks.
+		match key.keycode:
+			KEY_LEFT, KEY_UP:
+				_move_command_sel(-1)
+				get_viewport().set_input_as_handled()
+			KEY_RIGHT, KEY_DOWN:
+				_move_command_sel(1)
+				get_viewport().set_input_as_handled()
+			KEY_ENTER, KEY_KP_ENTER:
+				_activate_command()
+				get_viewport().set_input_as_handled()
 		return
 	match key.keycode:
 		KEY_ENTER, KEY_KP_ENTER:
@@ -1088,9 +1196,9 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	var defeated_name: String = _enemy.data.display_name if _enemy.data else "Enemy"
 	if not _living_enemies().is_empty():
 		if drop_reward > 0:
-			_pending_defeat_logs.append("%s is defeated!\n%dG drops." % [defeated_name, drop_reward])
+			_pending_defeat_logs.append("%s을(를) 쓰러뜨렸다!\n%dG 획득!" % [defeated_name, drop_reward])
 		else:
-			_pending_defeat_logs.append("%s is defeated!" % defeated_name)
+			_pending_defeat_logs.append("%s을(를) 쓰러뜨렸다!" % defeated_name)
 		call_deferred("_flush_pending_defeat_logs")
 		return
 	_running = false
@@ -1100,7 +1208,7 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	# the window transforms into. Total chest gold = enemy drops + the flat
 	# victory bonus (kept so trivial wins still pay something).
 	_gold_drops_total += VICTORY_GOLD_BONUS
-	_pending_defeat_logs.append("%s is defeated!" % defeated_name)
+	_pending_defeat_logs.append("%s을(를) 쓰러뜨렸다!" % defeated_name)
 	_pending_chest = true
 	call_deferred("_flush_pending_defeat_logs")
 

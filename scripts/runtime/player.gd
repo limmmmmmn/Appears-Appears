@@ -197,7 +197,7 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector2.ZERO
 		_visual.set_velocity(Vector2.ZERO)
 		return
-	# Auto-move game: the hero always walks itself. WASD/arrows pan the camera now.
+	# Manual movement by default (WASD / arrows); the 자동 이동 upgrade adds enemy-seeking.
 	var move_dir := Vector2.ZERO
 	var move_speed: float = GameState.effective_move_speed(speed)
 	if _formation_slot_active:
@@ -208,22 +208,28 @@ func _physics_process(delta: float) -> void:
 			move_dir = to_slot.normalized()
 		move_speed = FORMATION_MOVE_SPEED
 	elif _forced_target_active:
-		# Scripted walk (campfire mage event) overrides enemy-seeking until the
+		# Scripted walk (campfire mage event) overrides player control until the
 		# field clears the target on arrival.
 		var to_fire: Vector2 = _forced_target - global_position
 		if to_fire.length() > 1.0:
 			move_dir = to_fire.normalized()
-	elif auto_move_to_enemies:
-		# Drift toward the nearest field enemy. Touching one triggers the encounter
-		# automatically via FieldEnemy.body_entered. When no enemies remain, fall
-		# back to chasing the nearest gold/item drop so idle moments stay productive.
-		var target := _find_nearest_in_group(&"field_enemy")
-		if target == null:
-			target = _find_nearest_in_group(&"field_pickup")
-		if target != null:
-			var to_target: Vector2 = target.global_position - global_position
-			if to_target.length() > 0.01:
-				move_dir = to_target.normalized()
+	else:
+		# Manual: WASD / arrows steer the hero. Always wins over auto-seek.
+		var input_dir := Vector2(
+			Input.get_action_strength("move_right") - Input.get_action_strength("move_left"),
+			Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
+		)
+		if input_dir.length() > 0.1:
+			move_dir = input_dir.normalized()
+		elif GameState.auto_move_unlocked:
+			# 자동 이동 upgrade: drift toward the nearest enemy (then pickups) when idle.
+			var target := _find_nearest_in_group(&"field_enemy")
+			if target == null:
+				target = _find_nearest_in_group(&"field_pickup")
+			if target != null:
+				var to_target: Vector2 = target.global_position - global_position
+				if to_target.length() > 0.01:
+					move_dir = to_target.normalized()
 	velocity = move_dir * move_speed
 	move_and_slide()
 	global_position = Vector2(

@@ -97,6 +97,10 @@ const AUTO_PICKUP_COST: int = 200
 ## party member). Before it, the player drives each turn by hand (Fight → 대상 선택).
 const AUTO_BATTLE_COST: int = 150
 
+## 자동 이동: one-time unlock — the hero auto-walks to the nearest enemy/drop. Before
+## it, the player drives the hero with WASD / arrow keys.
+const AUTO_MOVE_COST: int = 120
+
 # ─── 4. Enemy tiers ─────────────────────────────────────────────────────
 ## Tiers unlock by CUMULATIVE EARNED GOLD (`unlock_at` = lifetime total_gold_earned,
 ## unaffected by spending). Below the threshold a tier is HIDDEN from the dock.

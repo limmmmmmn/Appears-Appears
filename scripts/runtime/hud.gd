@@ -29,6 +29,8 @@ var _income_per_sec: int = 0
 ## Always-on big gold readout, pinned top-left (gold is the #1 info).
 var _gold_center: PanelContainer
 var _gold_center_label: Label
+var _dq_status: PanelContainer   ## DQ top status window (manual combat)
+var _dq_grid: GridContainer
 ## Big centered "○○ 해금!" popup with the enemy sprite (tier unlock moment).
 var _unlock_popup: PanelContainer
 var _unlock_sprite: TextureRect
@@ -49,6 +51,13 @@ func _ready() -> void:
 	EventBus.armor_equipped.connect(_on_armor_equipped.unbind(1))
 	EventBus.gold_changed.connect(_on_gold_changed)
 	EventBus.tier_available.connect(_on_tier_unlocked)  # popup when the tile APPEARS
+	# Dragon-Quest top status window (manual combat only): NAME / LV / HP / MP.
+	EventBus.battle_window_opened.connect(_on_battle_opened_dq.unbind(1))
+	EventBus.all_battles_resolved.connect(_hide_dq_status)
+	EventBus.party_member_hp_changed.connect(_refresh_dq_status.unbind(3))
+	EventBus.party_member_xp_changed.connect(_refresh_dq_status.unbind(4))
+	EventBus.party_changed.connect(_refresh_dq_status)
+	_build_dq_status()
 	_income_marker = GameState.total_gold_earned
 	_build_gold_center()  # prominent gold chip, top-left next to the placement dock
 	_build_unlock_popup()
@@ -56,6 +65,77 @@ func _ready() -> void:
 		_build_name_overlay()
 	_refresh_gold()
 	_rebuild_member_boxes()
+
+
+# ─── Dragon-Quest top status window (NAME / LV / HP / MP) ──────────────
+func _build_dq_status() -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.95)
+	style.set_border_width_all(2)
+	style.border_color = Color(1, 1, 1, 1)
+	style.set_corner_radius_all(2)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 3
+	style.content_margin_bottom = 3
+	_dq_status = PanelContainer.new()
+	_dq_status.add_theme_stylebox_override("panel", style)
+	_dq_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dq_status.visible = false
+	_dq_status.anchor_left = 0.5
+	_dq_status.anchor_right = 0.5
+	_dq_status.anchor_top = 0.0
+	_dq_status.anchor_bottom = 0.0
+	_dq_status.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_dq_status.grow_vertical = Control.GROW_DIRECTION_END
+	_dq_status.offset_top = 4.0
+	_dq_grid = GridContainer.new()
+	_dq_grid.columns = 4
+	_dq_grid.add_theme_constant_override("h_separation", 10)
+	_dq_grid.add_theme_constant_override("v_separation", 0)
+	_dq_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dq_status.add_child(_dq_grid)
+	add_child(_dq_status)
+
+
+func _on_battle_opened_dq() -> void:
+	if GameState.auto_battle_unlocked:
+		return  # auto combat = card game, no DQ status window
+	_dq_status.visible = true
+	_refresh_dq_status()
+
+
+func _hide_dq_status() -> void:
+	if _dq_status != null:
+		_dq_status.visible = false
+
+
+func _refresh_dq_status() -> void:
+	if _dq_status == null or not _dq_status.visible:
+		return
+	for c in _dq_grid.get_children():
+		c.queue_free()
+	_dq_cell("NAME", HORIZONTAL_ALIGNMENT_LEFT, 50.0)
+	_dq_cell("LV", HORIZONTAL_ALIGNMENT_RIGHT, 22.0)
+	_dq_cell("HP", HORIZONTAL_ALIGNMENT_RIGHT, 30.0)
+	_dq_cell("MP", HORIZONTAL_ALIGNMENT_RIGHT, 30.0)
+	for i in GameState.party_size():
+		_dq_cell(GameState.party[i].display_name, HORIZONTAL_ALIGNMENT_LEFT, 50.0)
+		_dq_cell(str(GameState.party_level(i)), HORIZONTAL_ALIGNMENT_RIGHT, 22.0)
+		_dq_cell(str(GameState.party_hp[i]) if i < GameState.party_hp.size() else "-", HORIZONTAL_ALIGNMENT_RIGHT, 30.0)
+		_dq_cell(str(GameState.party_mp[i]) if i < GameState.party_mp.size() else "-", HORIZONTAL_ALIGNMENT_RIGHT, 30.0)
+
+
+func _dq_cell(text: String, align: int, min_w: float) -> void:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", HUD_FONT)
+	l.add_theme_font_size_override("font_size", 9)
+	l.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	l.horizontal_alignment = align
+	l.custom_minimum_size = Vector2(min_w, 0.0)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dq_grid.add_child(l)
 
 
 func _process(delta: float) -> void:

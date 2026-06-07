@@ -86,6 +86,8 @@ func _upgrade_items() -> Array[Dictionary]:
 			"price": GameState.auto_pickup_cost(), "afford": GameState.can_unlock_auto_pickup(), "maxed": GameState.auto_pickup_unlocked, "kind": &"auto_pickup"},
 		{"icon": ICON_GOLD, "name": "자동 전투", "desc": ("자동" if GameState.auto_battle_unlocked else "수동"),
 			"price": GameState.auto_battle_cost(), "afford": GameState.can_unlock_auto_battle(), "maxed": GameState.auto_battle_unlocked, "kind": &"auto_battle"},
+		{"icon": ICON_GOLD, "name": "자동 이동", "desc": ("자동" if GameState.auto_move_unlocked else "수동(WASD)"),
+			"price": GameState.auto_move_cost(), "afford": GameState.can_unlock_auto_move(), "maxed": GameState.auto_move_unlocked, "kind": &"auto_move"},
 	]
 
 
@@ -116,3 +118,4 @@ func _on_upgrade(kind: StringName) -> void:
 		&"open_speed": GameState.upgrade_open_speed()
 		&"auto_pickup": GameState.unlock_auto_pickup()
 		&"auto_battle": GameState.unlock_auto_battle()
+		&"auto_move": GameState.unlock_auto_move()

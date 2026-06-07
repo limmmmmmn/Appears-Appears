@@ -417,6 +417,8 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 	_slot_windows[slot].append(window)
 	if window.has_signal("grab_started"):
 		window.grab_started.connect(_on_grab_started)
+	if window.has_signal("flip_requested"):
+		window.flip_requested.connect(_on_flip_requested)
 	# SINGLE battle (window cap 1): the card pops directly OVER the hero, covering it.
 	# MULTI: the card drops straight into its 3×3 grid slot and STARTS FIGHTING the
 	# instant it opens — windows just appear and fight, one after another, until the
@@ -499,6 +501,15 @@ func _refresh_stack_readout(ws: Array, top, all_resolved: bool) -> void:
 
 
 # ─── Manual drag: free move + whole-stack (solitaire) move ─────────────
+## Keyboard Enter on the openable top card → open its stack (same path as a click).
+func _on_flip_requested(window: Node) -> void:
+	if _drag_slot >= 0 or not _window_slot.has(window):
+		return
+	var slot: int = int(_window_slot[window])
+	if _is_slot_ready(slot):
+		_open_stack(slot)
+
+
 ## Press a card → grab its WHOLE stack. Release without moving = click (open).
 func _on_grab_started(window: Node, screen_pos: Vector2) -> void:
 	if _drag_slot >= 0 or not _window_slot.has(window):

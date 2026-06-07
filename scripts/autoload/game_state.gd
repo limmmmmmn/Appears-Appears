@@ -79,6 +79,8 @@ var open_speed_level: int = 0
 var auto_pickup_unlocked: bool = false
 ## 자동 전투 해금 — false = 수동 전투(Fight→대상 선택), true = 턴 타이머가 자동 진행.
 var auto_battle_unlocked: bool = false
+## 자동 이동 해금 — false = WASD/방향키 수동 이동, true = 용사가 적으로 자동 이동.
+var auto_move_unlocked: bool = false
 ## SCALE = how many SCALE purchases were made; simultaneous window count =
 ## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
 var scale_purchases: int = 0
@@ -820,6 +822,26 @@ func unlock_auto_battle() -> bool:
 		return false
 	auto_battle_unlocked = true
 	EventBus.combat_upgrade_changed.emit(&"auto_battle")
+	return true
+
+
+# ─── 자동 이동 (manual WASD → hero auto-walks to enemies) ───────────────
+## Before unlock: the player drives the hero with WASD / arrows. After: the hero
+## auto-walks toward the nearest enemy/drop (manual input still overrides).
+func auto_move_cost() -> int:
+	return Balance.AUTO_MOVE_COST
+
+
+func can_unlock_auto_move() -> bool:
+	return not auto_move_unlocked and gold >= auto_move_cost()
+
+
+func unlock_auto_move() -> bool:
+	if auto_move_unlocked or not spend_gold(auto_move_cost()):
+		EventBus.combat_upgrade_failed.emit(&"auto_move")
+		return false
+	auto_move_unlocked = true
+	EventBus.combat_upgrade_changed.emit(&"auto_move")
 	return true
 
 
