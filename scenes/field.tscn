@@ -23,7 +23,7 @@ script = ExtResource("1_field")
 
 [node name="Background" type="ColorRect" parent="." unique_id=1253536074]
 z_index = -100
-offset_right = 640.0
+offset_right = 360.0
 offset_bottom = 360.0
 mouse_filter = 2
 color = Color(0.3529412, 0.70980394, 0.32156864, 1)
@@ -32,7 +32,7 @@ color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 z_index = -99
 texture_filter = 1
 clip_contents = true
-offset_right = 640.0
+offset_right = 360.0
 offset_bottom = 360.0
 mouse_filter = 2
 

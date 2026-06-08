@@ -62,12 +62,19 @@ var recruited_companions: Array[ModifierData] = []
 ## (검/지팡이/둔기/단검). A member's damage uses their weapon type's multiplier,
 ## so unlocking a 지팡이 only boosts the mage, etc. type id → level (default 1).
 var weapon_levels: Dictionary = {}
-## Armor = flat party MAX HP (the armor shop is its UI skin). Survival axis.
-## Level 1 = "맨몸" (no bonus). Shared by the whole party, like the weapon.
-var armor_level: int = 1
+## Armor = per-member MAX HP gear, bought ONE MEMBER AT A TIME in the 마을 shop
+## (no more party-wide auto-equip). Parallel to `party`: index → level, level 1 =
+## "맨몸" (no bonus). Lazily padded to party size — a missing/new index reads as Lv1,
+## so every party-append path stays correct without extra bookkeeping (the party only
+## grows within a run, never shrinks, so indices are stable).
+var member_armor_levels: Array[int] = []
+## 마을 레벨 — gates which gear TIER the shop sells. Lv1 → 1단계 장비(검 Lv2, 천 갑옷…)
+## 까지만; 마을을 강화할수록 다음 단계 무기/방어구가 해금된다. Re-placeable, so it resets
+## with the run (see reset_run).
+var village_level: int = 1
 ## LOOT LEVELS — the 무기/방어구 upgrade now raises drop QUALITY (gear that falls
 ## in battle = this level), NOT direct stats. Power comes from manually equipping
-## the dropped gear. weapon_level/armor_level stay at base (no direct effect).
+## the dropped gear. weapon_level / member armor stay at base (no direct effect).
 var weapon_loot_level: int = 1
 var armor_loot_level: int = 1
 ## LUCK = kill-gold JACKPOT CHANCE (frequency only — never a gold multiplier).
@@ -171,7 +178,7 @@ const STORY_FIELD_CONFIGS: Dictionary = {
 	1: {
 		"enemy_count": 3,
 		"campfire_unlock_kills": 3,
-		"intro": "필드 1 - 초원. 슬라임이 나타났습니다.",
+		"intro": "",  # 시작 시 왼쪽 로그를 비워둠 (슬라임 풀어놓기 전엔 아무것도 안 뜨게). 나중에 손볼 것.
 	},
 	2: {
 		"enemy_count": 8,
@@ -259,6 +266,7 @@ func set_party(members: Array[CharacterData]) -> void:
 	party_xp.clear()
 	party_equipment.clear()
 	party_downed.clear()
+	member_armor_levels.clear()  # per-member armor resets with a fresh party
 	_downed_recovery_accum.clear()
 	_party_collapsed = false
 	inventory.clear()
@@ -266,6 +274,7 @@ func set_party(members: Array[CharacterData]) -> void:
 		party_levels.append(1)
 		party_xp.append(0)
 		party_equipment.append(_empty_equipment_slots())
+		member_armor_levels.append(1)
 		party_hp.append(effective_max_hp(party_hp.size()))
 		party_mp.append(m.max_mp)
 		party_downed.append(false)
@@ -541,6 +550,7 @@ func story_recruit_mage_companion() -> bool:
 	party_levels.append(1)
 	party_xp.append(0)
 	party_equipment.append(_empty_equipment_slots())
+	member_armor_levels.append(1)
 	party_hp.append(effective_max_hp(party_hp.size()))
 	party_mp.append(STORY_MAGE_COMPANION.max_mp)
 	party_downed.append(false)
@@ -574,6 +584,7 @@ func story_recruit_first_companion() -> bool:
 	party_levels.append(1)
 	party_xp.append(0)
 	party_equipment.append(_empty_equipment_slots())
+	member_armor_levels.append(1)
 	party_hp.append(effective_max_hp(party_hp.size()))
 	party_mp.append(STORY_FIRST_COMPANION.max_mp)
 	party_downed.append(false)
@@ -909,7 +920,8 @@ func weapon_upgrade_cost(type_id: StringName) -> int:
 
 
 func can_upgrade_weapon(type_id: StringName) -> bool:
-	return gold >= weapon_upgrade_cost(type_id)
+	# Gated by the 마을 레벨: the next weapon TIER must be unlocked first.
+	return village_allows_gear_level(weapon_level(type_id) + 1) and gold >= weapon_upgrade_cost(type_id)
 
 
 ## Property-inspector payload for a party member (hero = index 0). Shared by Player /
@@ -937,6 +949,10 @@ func member_inspector_data(index: int, data: CharacterData) -> Dictionary:
 ## Buying a weapon type auto-equips the matching companion (그 타입 사용자) —
 ## visible via the "○○ 장착!" feedback + a bigger hit effect.
 func upgrade_weapon(type_id: StringName) -> bool:
+	# Hard gate (defense in depth): never sell past the 마을 레벨's unlocked tier.
+	if not village_allows_gear_level(weapon_level(type_id) + 1):
+		EventBus.combat_upgrade_failed.emit(&"weapon")
+		return false
 	if not spend_gold(weapon_upgrade_cost(type_id)):
 		EventBus.combat_upgrade_failed.emit(&"weapon")
 		return false
@@ -966,39 +982,114 @@ func owned_weapon_types() -> Array[StringName]:
 	return out
 
 
-# ─── Survival: armor axis (party MAX HP / armor shop) ─────────────────
-## Flat MAX HP added to EVERY party member by the equipped armor.
-func armor_hp_bonus() -> int:
-	return Balance.armor_hp_for_level(armor_level)
+# ─── 마을 레벨 (gates which gear tier the shop sells) ──────────────────
+## Highest gear LEVEL the 마을 currently unlocks for purchase. Level 1 = 맨손/맨몸
+## (always owned), so Lv1 마을 → gear level 2 = "1단계 장비" (청동검 / 천 갑옷).
+func village_unlocked_gear_level() -> int:
+	return village_level + 1
 
 
-func current_armor_name() -> String:
-	return Balance.armor_name_for_level(armor_level)
+## True when the shop may sell gear up to `target_level` at the current 마을 레벨.
+func village_allows_gear_level(target_level: int) -> bool:
+	return target_level <= village_unlocked_gear_level()
 
 
-func next_armor_name() -> String:
-	return Balance.armor_name_for_level(armor_level + 1)
+func village_upgrade_cost() -> int:
+	return Balance.village_upgrade_cost(village_level)
 
 
-func armor_upgrade_cost() -> int:
-	return Balance.armor_cost(armor_level)
+func can_upgrade_village() -> bool:
+	return is_structure_placed(&"village") and gold >= village_upgrade_cost()
 
 
-func can_upgrade_armor() -> bool:
-	return gold >= armor_upgrade_cost()
+## 마을 강화: raises the tier ceiling so the next 무기/방어구 단계 appears in the shop.
+func upgrade_village() -> bool:
+	if not is_structure_placed(&"village") or not spend_gold(village_upgrade_cost()):
+		EventBus.combat_upgrade_failed.emit(&"village")
+		return false
+	village_level += 1
+	EventBus.combat_upgrade_changed.emit(&"village")
+	return true
 
 
-## Armor shop = survival skin: each level unlocks + auto-equips the next armor,
-## visibly bumping party MAX HP (fewer downs → less slowdown).
-func upgrade_armor() -> bool:
-	if not spend_gold(armor_upgrade_cost()):
+# ─── Survival: armor axis (PER-MEMBER MAX HP / 마을 방어구 상점) ─────────
+## Pad `member_armor_levels` to the current party size (new members → Lv1). The party
+## only grows mid-run, so this never has to shift existing indices.
+func _ensure_member_armor_sized() -> void:
+	while member_armor_levels.size() < party.size():
+		member_armor_levels.append(1)
+	if member_armor_levels.size() > party.size():
+		member_armor_levels.resize(party.size())
+
+
+func member_armor_level(index: int) -> int:
+	if index < 0 or index >= member_armor_levels.size():
+		return 1  # unpadded / out of range → 맨몸 (correct default for a new member)
+	return member_armor_levels[index]
+
+
+func member_armor_name(index: int) -> String:
+	return Balance.armor_name_for_level(member_armor_level(index))
+
+
+func member_next_armor_name(index: int) -> String:
+	return Balance.armor_name_for_level(member_armor_level(index) + 1)
+
+
+## Flat MAX HP this member gains from THEIR own armor (level 1 = 0).
+func member_armor_hp_bonus(index: int) -> int:
+	return Balance.armor_hp_for_level(member_armor_level(index))
+
+
+func member_armor_upgrade_cost(index: int) -> int:
+	return Balance.armor_cost(member_armor_level(index))
+
+
+func can_upgrade_member_armor(index: int) -> bool:
+	return village_allows_gear_level(member_armor_level(index) + 1) \
+		and gold >= member_armor_upgrade_cost(index)
+
+
+## Buy the next armor for ONE member (no longer the whole party). Gated by the 마을
+## 레벨's tier ceiling, then by gold. Bumps that member's MAX HP only.
+func upgrade_member_armor(index: int) -> bool:
+	_ensure_member_armor_sized()
+	if index < 0 or index >= member_armor_levels.size():
+		return false
+	if not village_allows_gear_level(member_armor_level(index) + 1):
 		EventBus.combat_upgrade_failed.emit(&"armor")
 		return false
-	armor_level += 1
+	if not spend_gold(member_armor_upgrade_cost(index)):
+		EventBus.combat_upgrade_failed.emit(&"armor")
+		return false
+	member_armor_levels[index] += 1
 	EventBus.combat_upgrade_changed.emit(&"armor")
-	EventBus.armor_equipped.emit(current_armor_name())
+	EventBus.armor_equipped.emit(member_armor_name(index))
+	# Member's MAX HP just rose — refresh their bar without changing current HP.
+	if index < party_hp.size():
+		EventBus.party_member_hp_changed.emit(index, party_hp[index], effective_max_hp(index))
 	register_upgrade_purchase(&"armor")
 	return true
+
+
+## Leftmost party member who can still take the next armor at the current 마을 레벨
+## (their armor level is below the tier ceiling). -1 when everyone is maxed for this
+## village level. Drives the single 무기-style armor row: one click → this member.
+func next_armor_buyer() -> int:
+	_ensure_member_armor_sized()
+	for i in party.size():
+		if village_allows_gear_level(member_armor_level(i) + 1):
+			return i
+	return -1
+
+
+## Buy the next armor for the leftmost eligible member (the single-row shop path).
+func upgrade_next_member_armor() -> bool:
+	var i: int = next_armor_buyer()
+	if i < 0:
+		EventBus.combat_upgrade_failed.emit(&"armor")
+		return false
+	return upgrade_member_armor(i)
 
 
 # ─── Loot levels (강화 = 드롭 장비 등급↑, NOT direct stats / auto-equip) ──
@@ -1261,6 +1352,7 @@ func _add_party_member(data: CharacterData) -> void:
 	party_levels.append(1)
 	party_xp.append(0)
 	party_equipment.append(_empty_equipment_slots())
+	member_armor_levels.append(1)
 	party_hp.append(effective_max_hp(idx))
 	party_mp.append(data.max_mp)
 	party_downed.append(false)
@@ -1781,6 +1873,7 @@ func _recruit_companion(mod: ModifierData) -> void:
 	party_levels.append(1)
 	party_xp.append(0)
 	party_equipment.append(_empty_equipment_slots())
+	member_armor_levels.append(1)
 	party_hp.append(effective_max_hp(idx))
 	party_mp.append(recruited.max_mp)
 	party_downed.append(false)
@@ -2286,8 +2379,8 @@ func party_member_stat_tooltip(index: int) -> String:
 	])
 	# 무기 배수 = 킬 속도 레버. 강화하면 ×배수와 공격 수치가 같이 오른다.
 	lines.append("  └ 무기 %s ×%.2f  (기본 공격 %d · 킬속도)" % [wname, wmult, base_atk])
-	if armor_level > 1:
-		lines.append("  └ 방어구 %s  HP +%d" % [current_armor_name(), armor_hp_bonus()])
+	if member_armor_level(index) > 1:
+		lines.append("  └ 방어구 %s  HP +%d" % [member_armor_name(index), member_armor_hp_bonus(index)])
 	# 운: 파티 공통 — 킬 보상 대박(팡팡팡) 확률.
 	lines.append("운  대박 %.0f%%" % (luck_jackpot_chance() * 100.0))
 	lines.append("XP %d/%d" % [
@@ -2713,8 +2806,8 @@ func effective_max_hp(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	# 방어구(방어력→HP 전환): 파티 공통 armor_hp_bonus() 가 맷집으로 합산된다.
-	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat") + skill_effect_int_sum("hp_flat") + armor_hp_bonus()
+	# 방어구(방어력→HP 전환): 이제 멤버 개인의 armor 레벨만큼 맷집이 붙는다(파티 공통 아님).
+	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat") + skill_effect_int_sum("hp_flat") + member_armor_hp_bonus(index)
 
 
 func _equipment_bonus(index: int, property_name: StringName) -> int:
@@ -2782,6 +2875,8 @@ func reset_run() -> void:
 	party_levels.clear()
 	party_xp.clear()
 	party_equipment.clear()
+	member_armor_levels.clear()        # per-member armor resets with the run
+	village_level = 1                  # 마을 re-placeable → tier ceiling back to 1단계
 	inventory.clear()
 	gold = STARTING_GOLD
 	purchased_skill_nodes.clear()

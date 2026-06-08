@@ -80,11 +80,13 @@ func setup(building: Dictionary) -> void:
 	add_child(label)
 
 
-## Click → open this structure's action panel (ObjectActionPanel) AND show it in the
-## right property inspector.
+## Click → show this structure in the right property inspector. Most structures also
+## pop a floating action panel above themselves (모닥불: 쉰다), but the 마을 puts its
+## inn + shop in the right panel instead, so it skips the floating popup.
 func _on_hotspot_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		EventBus.structure_clicked.emit(building_id, global_position)
+		if building_id != &"village":
+			EventBus.structure_clicked.emit(building_id, global_position)
 		EventBus.inspector_target_selected.emit(self)
 		get_viewport().set_input_as_handled()
 
@@ -98,11 +100,25 @@ func get_inspector_data() -> Dictionary:
 	var sprite_path: String = str(info.get("sprite", ""))
 	if not sprite_path.is_empty() and ResourceLoader.exists(sprite_path):
 		sprite = load(sprite_path)
+	# 마을: a real 강화 action (raises the shop's gear-tier ceiling) + level readout.
+	# Everything else keeps the empty "강화 (준비 중)" placeholder for now.
+	var actions: Array = []
+	var info_text: String = str(info.get("desc", ""))
+	if building_id == &"village":
+		actions = [{
+			"label": "마을 강화",
+			"cost": GameState.village_upgrade_cost(),
+			"enabled": GameState.can_upgrade_village(),
+			"on_press": GameState.upgrade_village,
+		}]
+		info_text = "마을 Lv%d · %d단계 장비까지 판매" % [GameState.village_level, GameState.village_level]
 	return {
 		"name": str(info.get("name", building_id)),
-		"info": str(info.get("desc", "")),
+		"info": info_text,
 		"sprite": sprite,
-		"actions": [],
+		"actions": actions,
+		# 마을 hosts the inn + gear shop inline in the right panel (below 강화).
+		"shop": building_id == &"village",
 	}
 
 

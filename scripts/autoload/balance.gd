@@ -144,9 +144,9 @@ const WEAPON_NAMES: Array[String] = [
 const WEAPON_AUTOBUY_COST_RATIO: float = 1.0 / 50.0
 
 # ─── Armor shop = survival skin (MAX HP, symmetric to the weapon shop) ─
-## Buying the next armor IS the survival upgrade. Equipped armor adds flat
-## MAX HP to the WHOLE party (mirrors how the weapon's SPEED boosts all). 방어력은
-## 폐지됨 — 맷집(HP)이 유일한 생존 축. Index by armor_level (1-based); level 1 =
+## Buying the next armor IS the survival upgrade. Equipped armor adds flat MAX HP
+## to the BUYING MEMBER (each member outfits their own armor in the 마을 상점). 방어력은
+## 폐지됨 — 맷집(HP)이 유일한 생존 축. Index by armor level (1-based); level 1 =
 ## "맨몸" (no bonus HP). Text-based, no sprites.
 const ARMOR_NAMES: Array[String] = [
 	"맨몸", "천 갑옷", "가죽 갑옷", "사슬 갑옷", "판금 갑옷",
@@ -230,6 +230,9 @@ const CAMPFIRE_REGEN_BASE_RATE: float = 0.6     ## HP/sec at level 1 (very weak)
 const CAMPFIRE_REGEN_PER_LEVEL: float = 0.7     ## +HP/sec per upgrade
 const CAMPFIRE_UPGRADE_BASE_COST: int = 120
 const CAMPFIRE_UPGRADE_COST_MULT: float = 1.6
+## 마을 강화 — each level raises the gear TIER the shop will sell (무기/방어구 1단계씩).
+const VILLAGE_UPGRADE_BASE_COST: int = 80
+const VILLAGE_UPGRADE_COST_MULT: float = 1.7
 
 # ─── Weapon types (얕게 — identity + shop categories; effect = attack↑ only) ─
 ## Unlocking a type's weapon auto-equips the matching companion (그 타입 사용자).
@@ -487,6 +490,10 @@ func campfire_regen_rate(level: int) -> float:
 
 func campfire_upgrade_cost(level: int) -> int:
 	return _round_cost(float(CAMPFIRE_UPGRADE_BASE_COST) * pow(CAMPFIRE_UPGRADE_COST_MULT, float(maxi(1, level) - 1)))
+
+
+func village_upgrade_cost(level: int) -> int:
+	return _round_cost(float(VILLAGE_UPGRADE_BASE_COST) * pow(VILLAGE_UPGRADE_COST_MULT, float(maxi(1, level) - 1)))
 
 
 # ─── Companion lookups ─────────────────────────────────────────────────

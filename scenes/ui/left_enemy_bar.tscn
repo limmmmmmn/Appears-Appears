@@ -1,10 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene format=3 uid="uid://jnwqwc6vx4ho"]
 
-[ext_resource type="Script" path="res://scripts/runtime/left_enemy_bar.gd" id="1_bar"]
-[ext_resource type="Theme" path="res://assets/themes/ui_theme.tres" id="2_theme"]
-[ext_resource type="PackedScene" path="res://scenes/ui/dos_tile.tscn" id="3_tile"]
+[ext_resource type="Script" uid="uid://b34ksou0wmx8w" path="res://scripts/runtime/left_enemy_bar.gd" id="1_bar"]
+[ext_resource type="Theme" uid="uid://y11tyjfd0r6c" path="res://assets/themes/ui_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" uid="uid://cyhcy1wpnk5ed" path="res://scenes/ui/dos_tile.tscn" id="3_tile"]
 
-[node name="LeftEnemyBar" type="Control"]
+[node name="LeftEnemyBar" type="Control" unique_id=2064762100]
 layout_mode = 3
 anchors_preset = 0
 offset_right = 220.0
@@ -13,44 +13,42 @@ mouse_filter = 2
 theme = ExtResource("2_theme")
 script = ExtResource("1_bar")
 
-[node name="Box" type="PanelContainer" parent="."]
+[node name="Box" type="PanelContainer" parent="." unique_id=775100097]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 0
 offset_left = 4.0
 offset_top = 36.0
 offset_right = 4.0
 offset_bottom = 36.0
 
-[node name="Grid" type="GridContainer" parent="Box"]
+[node name="Grid" type="GridContainer" parent="Box" unique_id=1512063680]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/h_separation = 2
 theme_override_constants/v_separation = 2
 columns = 2
 
-[node name="SampleTile1" parent="Box/Grid" instance=ExtResource("3_tile")]
+[node name="SampleTile1" parent="Box/Grid" unique_id=1525387133 instance=ExtResource("3_tile")]
 layout_mode = 2
 
-[node name="SampleTile2" parent="Box/Grid" instance=ExtResource("3_tile")]
+[node name="SampleTile2" parent="Box/Grid" unique_id=752750442 instance=ExtResource("3_tile")]
 layout_mode = 2
 
-[node name="SampleTile3" parent="Box/Grid" instance=ExtResource("3_tile")]
+[node name="SampleTile3" parent="Box/Grid" unique_id=590477943 instance=ExtResource("3_tile")]
 layout_mode = 2
 
-[node name="SampleTile4" parent="Box/Grid" instance=ExtResource("3_tile")]
+[node name="SampleTile4" parent="Box/Grid" unique_id=592052785 instance=ExtResource("3_tile")]
 layout_mode = 2
 
-[node name="Tooltip" type="PanelContainer" parent="."]
+[node name="Tooltip" type="PanelContainer" parent="." unique_id=979200696]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 0
 offset_left = 76.0
 offset_top = 36.0
 mouse_filter = 2
 
-[node name="TipLabel" type="Label" parent="Tooltip"]
+[node name="TipLabel" type="Label" parent="Tooltip" unique_id=1349034052]
 unique_name_in_owner = true
-mouse_filter = 2
+layout_mode = 2
 text = "이름
 Lv 1"

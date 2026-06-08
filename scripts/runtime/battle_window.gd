@@ -93,9 +93,8 @@ var _mult_label: Label
 var _face_overlay: Control
 
 const LOG_STEP_DURATION: float = 0.46
-## Dragon-Quest manual-attack beats: "○○의 공격!" → (이펙트) → "△△에게 N 데미지!".
-const ATTACK_TEXT_DELAY: float = 0.38   ## hold on the attack declaration
-const ATTACK_EFFECT_DELAY: float = 0.38 ## hit lands (flash + number) before the result
+## Dragon-Quest attack beats: "○○의 공격!" + 이펙트(동시) → "△△에게 N 데미지!".
+const ATTACK_EFFECT_DELAY: float = 0.38 ## 선언 텍스트 + 타격(플래시 + 숫자)이 함께 떠 있는 시간
 const DAMAGE_TEXT_DELAY: float = 0.48   ## hold on the damage result
 
 # ─── Chest reward state (post-victory) ────────────────────────────────
@@ -729,30 +728,25 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	return dealt
 
 
-## DQ-style 3-beat narration shared by every attacker: 공격 텍스트 → 이펙트 →
+## DQ-style 2-beat narration shared by every attacker: 공격 텍스트 + 이펙트(동시) →
 ## 데미지 텍스트, each held a beat. Holds the log "busy" (the turn loop waits on
 ## _is_log_busy) so the next turn doesn't barge in mid-narration. `effect` applies the
-## actual hit (damage / lunge / numbers) on the middle beat so it lands between the
-## two text beats.
+## actual hit (damage / lunge / numbers) AT THE SAME TIME as the declaration so the
+## strike lands the instant the attack is announced (no dead pause before the hit).
 func _play_attack_seq(attack_text: String, effect: Callable, result_text: String) -> void:
 	_log_sequence_running = true
-	# 1) 공격 텍스트
+	# 1) 공격 텍스트 + 이펙트 동시 — 선언이 뜨는 순간 타격(플래시 + 데미지 숫자)도 함께 터진다.
 	_set_log(attack_text)
-	await get_tree().create_timer(ATTACK_TEXT_DELAY).timeout
-	if not is_inside_tree():
-		_log_sequence_running = false
-		return
-	# 2) 이펙트 — 피격/돌진 + 떠오르는 데미지 숫자
 	if effect.is_valid():
 		effect.call()
 	await get_tree().create_timer(ATTACK_EFFECT_DELAY).timeout
 	if not is_inside_tree():
 		_log_sequence_running = false
 		return
-	# 3) 데미지 텍스트
+	# 2) 데미지 텍스트
 	_set_log(result_text)
 	await get_tree().create_timer(DAMAGE_TEXT_DELAY).timeout
-	# 4) 마무리: busy 해제 → 대기 중인 "쓰러뜨렸다!" / 체스트 처리
+	# 3) 마무리: busy 해제 → 대기 중인 "쓰러뜨렸다!" / 체스트 처리
 	_log_sequence_running = false
 	_flush_pending_defeat_logs()
 	if not _log_queue.is_empty():

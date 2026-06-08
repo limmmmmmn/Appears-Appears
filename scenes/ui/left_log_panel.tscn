@@ -5,5 +5,25 @@
 [node name="LeftLogPanel" type="Control"]
 layout_mode = 3
 anchors_preset = 0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 150.0
+offset_right = 134.0
+offset_bottom = -12.0
 mouse_filter = 2
 script = ExtResource("1_log")
+
+[node name="Log" type="RichTextLabel" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+bbcode_enabled = true
+text = "[color=#e0e6f0]세계가 깨어난다.
+슬라임을 풀어놓았다.
+마을을 세웠다.[/color]"
+scroll_following = true
+autowrap_mode = 3
+theme_override_font_sizes/normal_font_size = 11

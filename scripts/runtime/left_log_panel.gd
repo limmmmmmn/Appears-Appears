@@ -18,43 +18,25 @@ const FADE_FLOOR: float = 0.55                          ## oldest visible line a
 const LINE_COLOR: Color = Color(0.88, 0.90, 0.94, 1.0)  ## achromatic LIGHT grey (on the dark left zone)
 
 ## A RichTextLabel handles wrap + auto-scroll natively (a ScrollContainer+VBox of
-## autowrap Labels collapses to ~1 char wide). Lines are kept here for dedup/fade and
-## the bbcode is rebuilt on each change.
-var _log: RichTextLabel
+## autowrap Labels collapses to ~1 char wide). It's authored in the scene now (edit
+## its font/position in the editor); lines are kept here for dedup/fade and the bbcode
+## is rebuilt on each change.
+@onready var _log: RichTextLabel = %Log
 var _lines: PackedStringArray = []  ## oldest → newest; every line kept (no merging)
 
 
 func _ready() -> void:
 	add_to_group("game_log")
-	mouse_filter = Control.MOUSE_FILTER_IGNORE  # ambient — never eats field clicks
-	# Placed/sized from UITheme so the dock/log split stays tunable in one place.
-	anchor_left = 0.0
-	anchor_top = 0.0
-	anchor_right = 0.0
-	anchor_bottom = 1.0
-	offset_left = UITheme.LEFT_LOG_LEFT
-	offset_top = UITheme.LEFT_LOG_TOP
-	offset_bottom = -UITheme.LEFT_LOG_BOTTOM_MARGIN
-	# Keep the log out of the (centered) field so text never spills onto the play area.
-	# Field is camera-centered, so its left screen edge = (viewport - field) / 2.
+	_log.text = ""  # clear the editor-preview placeholder text at runtime
+	# Layout (anchors, left/top/bottom, font) is authored on the scene. Only the RIGHT
+	# edge stays dynamic: the field is camera-centered, so the log clamps to just left of
+	# it regardless of field size, never spilling onto the play area.
 	var vp_w: float = get_viewport_rect().size.x
 	var field_left: float = (vp_w - Field.FIELD_SIZE.x) * 0.5
 	var desired_right: float = UITheme.LEFT_LOG_LEFT + UITheme.LEFT_LOG_WIDTH
 	offset_right = minf(desired_right, field_left - UITheme.LEFT_LOG_RIGHT_GAP)
 
-	_log = RichTextLabel.new()
-	_log.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_log.bbcode_enabled = true
-	_log.fit_content = false
-	_log.scroll_active = true
-	_log.scroll_following = true                       # stay pinned to newest (bottom)
-	_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_log.add_theme_font_size_override("normal_font_size", UITheme.FONT_LOG)
-	add_child(_log)
-
 	_connect_events()
-	add_line("어둠 속에서, 너는 이 세계를 굽어본다.")
 
 
 func _connect_events() -> void:

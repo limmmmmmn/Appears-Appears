@@ -77,7 +77,7 @@ func _gui_input(event: InputEvent) -> void:
 func _on_stat_source_changed() -> void:
 	if character == null:
 		return
-	set_armor(GameState.armor_level, GameState.current_armor_name())
+	set_armor(GameState.member_armor_level(party_index), GameState.member_armor_name(party_index))
 	set_equipment(GameState.equipment_for_member(party_index))  # re-paints the weapon slot
 
 
@@ -205,7 +205,7 @@ func _apply() -> void:
 	set_hp(hp, max_hp)
 	set_exp_ratio(GameState.party_xp_ratio(party_index))
 	set_level(GameState.party_level(party_index))
-	set_armor(GameState.armor_level, GameState.current_armor_name())
+	set_armor(GameState.member_armor_level(party_index), GameState.member_armor_name(party_index))
 	set_equipment(GameState.equipment_for_member(party_index))  # incl. tier weapon in slot 0
 	_refresh_tooltip()
 

@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/party_bar.gd" id="1_pb"]
+[ext_resource type="Theme" path="res://assets/fonts/field_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/party_member_box.tscn" id="3_box"]
+
+[node name="PartyBar" type="HBoxContainer"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -44.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 8
+alignment = 1
+script = ExtResource("1_pb")
+
+[node name="PreviewBox1" parent="." instance=ExtResource("3_box")]
+layout_mode = 2
+
+[node name="PreviewBox2" parent="." instance=ExtResource("3_box")]
+layout_mode = 2
+
+[node name="PreviewBox3" parent="." instance=ExtResource("3_box")]
+layout_mode = 2

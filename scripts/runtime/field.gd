@@ -1,3 +1,4 @@
+@tool
 class_name Field
 extends Node2D
 
@@ -24,15 +25,21 @@ const COMBO_SKELETON_FONT: Font = preload("res://assets/fonts/field_ui_font.tres
 const REST_HEAL_RATE: float = 14.0     ## HP/sec while resting
 const HEAL_FX_INTERVAL: float = 0.32   ## seconds between green "+" pops per member
 
-## Base world-map size. Starts as one camera-sized field; nodes expand it.
-## Spans the full 640 viewport width so the field center == the true viewport
-## center → the hero sits dead-center, with the side panels just overlaying the
-## edges. Player/enemy movement is capped to the visible play area (_play_right)
-## so nothing wanders under the right panel.
-## Bounded map ≈ 9× the camera (3×3 screens of 640×360). The follow-camera is
-## clamped to these bounds (Player.set_field_bounds → camera limits), so the map
-## has hard edges instead of an endless roam. Mouse wheel zooms in/out.
-const FIELD_SIZE: Vector2 = Vector2(360, 360)
+## Base play-area size in world px. The field is camera-centered, so the hero sits
+## dead-center with the side panels overlaying the edges; movement is capped to the
+## visible play area (_play_right) and the follow-camera is clamped to these bounds.
+##
+## EDITABLE IN THE SCENE: select the Field node and change `field_size` in the
+## inspector — @tool resizes the green board LIVE in the editor. At runtime the field
+## uses this × the skill multiplier. `FIELD_SIZE` is a static mirror kept in sync so
+## other scripts (e.g. the left log's right-edge clamp) can read it without a node ref.
+static var FIELD_SIZE: Vector2 = Vector2(360, 360)
+@export var field_size: Vector2 = Vector2(360, 360):
+	set(value):
+		field_size = value
+		FIELD_SIZE = value
+		if Engine.is_editor_hint() and is_node_ready():
+			_apply_editor_field_size()
 ## Plain-green backdrop is oversized this far beyond the map on every side so the
 ## roaming camera never sees past it into the void.
 const BG_MARGIN: float = 1400.0
@@ -135,6 +142,9 @@ var _cliff_rim: ColorRect
 
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		_apply_editor_field_size()  # editor-only: show the board at its authored size
+		return
 	EventBus.party_changed.connect(_setup_party_visuals)
 	EventBus.battle_window_opened.connect(_on_battle_window_opened)
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
@@ -192,6 +202,8 @@ func _on_world_started() -> void:
 
 
 func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
 	_tick_campfire(delta)  # proximity regen + first-place mage event (runs always)
@@ -262,7 +274,9 @@ func _on_field_loop_started(_loop_num: int) -> void:
 	_refill_enemy_population(_desired_enemy_count())
 	_apply_world_visibility()  # keep the field black until the grass is laid
 	if GameState.STORY_MODE_ENABLED:
-		_show_message(GameState.story_field_intro())
+		var intro: String = GameState.story_field_intro()
+		if not intro.is_empty():
+			_show_message(intro)
 
 
 ## Teleport the whole party back to the field center for a fresh start.
@@ -1316,8 +1330,35 @@ func _random_position() -> Vector2:
 	)
 
 
+## Editor-only preview: size the authored green board to `field_size` so the scene
+## matches the running game without pressing play. Touches ONLY the two backdrop nodes
+## — no GameState / EventBus — so it's safe to run under @tool in the editor.
+func _apply_editor_field_size() -> void:
+	# Fetch fresh (not via @onready) so this works for an INSTANCED Field in the editor,
+	# where @onready timing for instances can be unreliable.
+	var bg := get_node_or_null(^"Background") as ColorRect
+	if bg != null:
+		bg.size = field_size
+		# Center the board in the design viewport so the editor preview matches the
+		# in-game look — at runtime there's no camera here, so a board left at the world
+		# origin (0,0) reads as "left-aligned"; the running game's follow-camera centers
+		# the field on the player. Mirror that centering here (visual only).
+		bg.position = ((_design_viewport_size() - field_size) * 0.5).round()
+	var bgt := get_node_or_null(^"BackgroundTexture") as TextureRect
+	if bgt != null:
+		bgt.visible = false
+
+
+## Project's base (design) viewport size — the rect the editor draws as the game view.
+func _design_viewport_size() -> Vector2:
+	return Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width", 640)),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height", 360)),
+	)
+
+
 func _apply_field_size() -> void:
-	_field_size = FIELD_SIZE * GameState.field_size_multiplier()
+	_field_size = field_size * GameState.field_size_multiplier()
 	# The field is a single 4:3 "board": green covers EXACTLY the board rect and
 	# nothing more. Beyond its edges the dark WallpaperLayer (behind everything)
 	# shows through as the void, so zooming all the way out reveals the whole board

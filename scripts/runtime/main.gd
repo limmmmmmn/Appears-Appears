@@ -16,7 +16,7 @@ const DEFAULT_PARTY_PATHS: PackedStringArray = [
 
 @onready var _field: Node2D = $Field
 @onready var _battle_manager: BattleManager = $BattleManager
-@onready var _hud: HUD = $HUD
+@onready var _hud: CanvasLayer = $HudLayer  ## the always-on UI layer (gold/party/panels/popups)
 @onready var _pause_overlay: CanvasLayer = $PauseOverlay
 
 var _settlement_report: SettlementReport

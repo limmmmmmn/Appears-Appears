@@ -1,9 +1,8 @@
-[gd_scene format=3 uid="uid://cqf6bpvn7qq6m"]
+[gd_scene load_steps=20 format=3 uid="uid://cqf6bpvn7qq6m"]
 
 [ext_resource type="Script" uid="uid://c6lq6ty8adwon" path="res://scripts/runtime/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://3bdh8ubp16k5" path="res://scenes/field.tscn" id="2_field"]
 [ext_resource type="Script" uid="uid://do1c4iqw30pbj" path="res://scripts/runtime/battle_manager.gd" id="3_mgr"]
-[ext_resource type="PackedScene" uid="uid://w7f2ximpkfta" path="res://scenes/hud.tscn" id="4_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/low_health_overlay.tscn" id="5_low_hp"]
 [ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
 [ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
@@ -14,6 +13,11 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/narration_window.tscn" id="12_narration"]
 [ext_resource type="PackedScene" path="res://scenes/ui/desktop_frame.tscn" id="13_frame"]
 [ext_resource type="PackedScene" path="res://scenes/ui/object_action_panel.tscn" id="14_objpanel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/gold_chip.tscn" id="15_gold"]
+[ext_resource type="PackedScene" path="res://scenes/ui/party_bar.tscn" id="16_party"]
+[ext_resource type="PackedScene" path="res://scenes/ui/dq_status.tscn" id="17_dq"]
+[ext_resource type="PackedScene" path="res://scenes/ui/tier_unlock_popup.tscn" id="18_unlock"]
+[ext_resource type="PackedScene" path="res://scenes/ui/name_prompt.tscn" id="19_name"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
 font = ExtResource("6_font")
@@ -22,20 +26,20 @@ font_color = Color(1, 1, 0.92, 1)
 outline_size = 2
 outline_color = Color(0, 0, 0, 0.75)
 
-[node name="Main" type="Node2D" unique_id=653047521]
+[node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
-[node name="Field" parent="." unique_id=23524025 instance=ExtResource("2_field")]
+[node name="Field" parent="." instance=ExtResource("2_field")]
 
-[node name="BattleManager" type="Node2D" parent="." unique_id=614174327]
+[node name="BattleManager" type="Node2D" parent="."]
 script = ExtResource("3_mgr")
 
-[node name="ObjectActionPanel" parent="." unique_id=1571834821 instance=ExtResource("14_objpanel")]
+[node name="ObjectActionPanel" parent="." instance=ExtResource("14_objpanel")]
 
-[node name="WallpaperLayer" type="CanvasLayer" parent="." unique_id=1773621074]
+[node name="WallpaperLayer" type="CanvasLayer" parent="."]
 layer = -5
 
-[node name="Wallpaper" type="ColorRect" parent="WallpaperLayer" unique_id=2118689108]
+[node name="Wallpaper" type="ColorRect" parent="WallpaperLayer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -44,24 +48,65 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.07, 0.08, 0.11, 1)
 
-[node name="DesktopFrameLayer" type="CanvasLayer" parent="." unique_id=1038902841]
+[node name="BattleWindowLayer" type="CanvasLayer" parent="."]
+layer = 4
 
-[node name="DesktopFrame" parent="DesktopFrameLayer" unique_id=1151466801 instance=ExtResource("13_frame")]
+[node name="HudLayer" type="CanvasLayer" parent="."]
+layer = 5
+
+[node name="GoldChip" parent="HudLayer" instance=ExtResource("15_gold")]
+
+[node name="LeftEnemyBar" parent="HudLayer" instance=ExtResource("8_enemy_bar")]
+offset_top = 6.0
+offset_right = 100.0
+
+[node name="LeftLogPanel" parent="HudLayer" instance=ExtResource("8_log_panel")]
+
+[node name="RightUpgradePanel" parent="HudLayer" instance=ExtResource("7_upgrade_panel")]
+offset_left = 542.0
+offset_bottom = 177.0
+
+[node name="RightPropertyInspector" parent="HudLayer" instance=ExtResource("7_inspector")]
+anchor_bottom = 1.0
+offset_left = 528.0
+offset_top = 18.0
+offset_right = 636.0
+offset_bottom = -16.0
+
+[node name="PartyBar" parent="HudLayer" instance=ExtResource("16_party")]
+
+[node name="DQStatus" parent="HudLayer" instance=ExtResource("17_dq")]
+
+[node name="TierUnlockPopup" parent="HudLayer" instance=ExtResource("18_unlock")]
+
+[node name="NamePrompt" parent="HudLayer" instance=ExtResource("19_name")]
+
+[node name="LowHealthOverlay" parent="." instance=ExtResource("5_low_hp")]
+
+[node name="ModalLayer" type="CanvasLayer" parent="."]
+layer = 15
+
+[node name="TownWindow" parent="ModalLayer" instance=ExtResource("9_town")]
 layout_mode = 3
 anchors_preset = 0
 
-[node name="BattleWindowLayer" type="CanvasLayer" parent="." unique_id=212814308]
-layer = 4
+[node name="NarrationLayer" type="CanvasLayer" parent="."]
+layer = 3
 
-[node name="HUD" parent="." unique_id=1507021759 instance=ExtResource("4_hud")]
+[node name="NarrationWindow" parent="NarrationLayer" instance=ExtResource("12_narration")]
+visible = false
 
-[node name="LowHealthOverlay" parent="." unique_id=1620248755 instance=ExtResource("5_low_hp")]
+[node name="DesktopFrameLayer" type="CanvasLayer" parent="."]
 
-[node name="PauseOverlay" type="CanvasLayer" parent="." unique_id=777628969]
+[node name="DesktopFrame" parent="DesktopFrameLayer" instance=ExtResource("13_frame")]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="PauseOverlay" type="CanvasLayer" parent="."]
 layer = 20
 visible = false
 
-[node name="PauseMark" type="Label" parent="PauseOverlay" unique_id=886959083]
+[node name="PauseMark" type="Label" parent="PauseOverlay"]
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
@@ -74,38 +119,3 @@ offset_bottom = -16.0
 text = "||"
 label_settings = SubResource("LabelSettings_pause_mark")
 horizontal_alignment = 1
-
-[node name="RightPanelLayer" type="CanvasLayer" parent="." unique_id=210340216]
-layer = 12
-
-[node name="RightUpgradePanel" parent="RightPanelLayer" unique_id=1510697805 instance=ExtResource("7_upgrade_panel")]
-offset_left = 542.0
-offset_bottom = 177.0
-
-[node name="RightPropertyInspector" parent="RightPanelLayer" instance=ExtResource("7_inspector")]
-offset_left = 528.0
-offset_top = 18.0
-offset_right = 636.0
-offset_bottom = 180.0
-
-[node name="LeftBarLayer" type="CanvasLayer" parent="." unique_id=279611143]
-layer = 12
-
-[node name="LeftEnemyBar" parent="LeftBarLayer" unique_id=592600781 instance=ExtResource("8_enemy_bar")]
-offset_top = 6.0
-offset_right = 100.0
-
-[node name="LeftLogPanel" parent="LeftBarLayer" instance=ExtResource("8_log_panel")]
-
-[node name="TownLayer" type="CanvasLayer" parent="." unique_id=2049072489]
-layer = 15
-
-[node name="TownWindow" parent="TownLayer" unique_id=389899821 instance=ExtResource("9_town")]
-layout_mode = 3
-anchors_preset = 0
-
-[node name="NarrationLayer" type="CanvasLayer" parent="." unique_id=524038380]
-layer = 3
-
-[node name="NarrationWindow" parent="NarrationLayer" unique_id=1424792971 instance=ExtResource("12_narration")]
-visible = false

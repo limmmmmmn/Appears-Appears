@@ -24,13 +24,28 @@ func _ready() -> void:
 	add_to_group("property_inspector")
 	custom_minimum_size = Vector2(UITheme.RIGHT_PANEL_WIDTH, 0.0)
 	add_theme_stylebox_override("panel", _panel_style())
+	# The panel is anchored to a FIXED on-screen rect (see the scene: top → near the
+	# bottom edge). A long selection (마을 상점 with many rows) used to grow the panel
+	# straight off the bottom of the screen — now the content lives in a ScrollContainer
+	# so it scrolls inside those fixed bounds instead of overflowing.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED  # width is fixed; never scroll sideways
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(scroll)
 	_vbox = VBoxContainer.new()
+	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_vbox.add_theme_constant_override("separation", 4)
-	add_child(_vbox)
+	scroll.add_child(_vbox)
 	EventBus.inspector_target_selected.connect(_on_target_selected)
-	# Live refresh of affordability / stats while a target is shown.
+	# Live refresh of affordability / stats while a target is shown. The 마을 shop
+	# below also reacts to buys / equips / sells, so mirror those signals too.
 	EventBus.gold_changed.connect(_on_state_changed.unbind(1))
 	EventBus.combat_upgrade_changed.connect(_on_state_changed.unbind(1))
+	EventBus.inventory_changed.connect(_on_state_changed)
+	EventBus.party_equipment_changed.connect(_on_state_changed.unbind(1))
+	EventBus.weapon_equipped.connect(_on_state_changed.unbind(1))
+	EventBus.armor_equipped.connect(_on_state_changed.unbind(1))
 	_render()
 
 
@@ -64,6 +79,10 @@ func _render() -> void:
 	_build_header(data)
 	_build_info(data)
 	_build_actions(data)
+	# 마을: the inn + gear shop live here now (was a floating popup above the village),
+	# pinned right below the 강화 slot.
+	if bool(data.get("shop", false)):
+		GearShop.build(_vbox)
 
 
 func _build_empty() -> void:
