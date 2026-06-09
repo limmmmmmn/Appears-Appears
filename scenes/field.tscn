@@ -23,12 +23,14 @@ script = ExtResource("1_field")
 
 [node name="Background" type="ColorRect" parent="." unique_id=1253536074]
 z_index = -100
-offset_right = 360.0
+offset_left = 140.0
+offset_right = 500.0
 offset_bottom = 360.0
 mouse_filter = 2
 color = Color(0.3529412, 0.70980394, 0.32156864, 1)
 
 [node name="BackgroundTexture" type="TextureRect" parent="." unique_id=2127068635]
+visible = false
 z_index = -99
 texture_filter = 1
 clip_contents = true
@@ -57,6 +59,7 @@ layer = 8
 [node name="MessagePanel" type="Panel" parent="MessageLayer" unique_id=82022691]
 unique_name_in_owner = true
 visible = false
+anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -136.0

@@ -8,6 +8,8 @@ extends Node2D
 const BATTLE_WINDOW_SCENE: PackedScene = preload("res://scenes/battle_window.tscn")
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
 
+const BATTLE_LAYER_Z_INDEX: int = 500
+
 ## Fallback if no valid player-relative spawn point exists.
 const SPAWN_CENTER_OFFSET: Vector2 = Vector2(-64, -48)
 
@@ -101,6 +103,9 @@ var _settle_timer: float = 0.0
 
 
 func _ready() -> void:
+	# Keep every battle-window canvas item above field selection brackets while
+	# preserving the current world-space positioning and drag behavior.
+	z_index = BATTLE_LAYER_Z_INDEX
 	# GameState.can_accept_new_battle_window() looks us up by group to read
 	# active_window_count() against the multi-window cap.
 	add_to_group("battle_manager")

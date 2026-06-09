@@ -1,3 +1,4 @@
+@tool
 class_name RightPropertyInspector
 extends PanelContainer
 
@@ -15,6 +16,7 @@ extends PanelContainer
 ##                         "on_press": Callable } ] }
 
 const HEADER_ICON: float = 44.0
+const UPGRADE_SHOP_SCRIPT = preload("res://scripts/runtime/upgrade_shop.gd")
 
 var _selected: Node = null
 var _vbox: VBoxContainer
@@ -22,21 +24,20 @@ var _vbox: VBoxContainer
 
 func _ready() -> void:
 	add_to_group("property_inspector")
-	custom_minimum_size = Vector2(UITheme.RIGHT_PANEL_WIDTH, 0.0)
-	add_theme_stylebox_override("panel", _panel_style())
+	# Size/position/look are authored in the scene/theme now (drag/resize in the
+	# editor -> it sticks in-game). Code only fills the dynamic content.
 	# The panel is anchored to a FIXED on-screen rect (see the scene: top → near the
 	# bottom edge). A long selection (마을 상점 with many rows) used to grow the panel
 	# straight off the bottom of the screen — now the content lives in a ScrollContainer
 	# so it scrolls inside those fixed bounds instead of overflowing.
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED  # width is fixed; never scroll sideways
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(scroll)
-	_vbox = VBoxContainer.new()
-	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_vbox.add_theme_constant_override("separation", 4)
-	scroll.add_child(_vbox)
+	_ensure_content()
+	# Editor preview: show the empty state at the real panel size so the scene matches
+	# the game (the panel sizes itself in code, so without this it collapses to a thin
+	# strip in the editor). No GameState / signals in the editor.
+	if Engine.is_editor_hint():
+		if _vbox.get_child_count() == 0:
+			_build_empty()
+		return
 	EventBus.inspector_target_selected.connect(_on_target_selected)
 	# Live refresh of affordability / stats while a target is shown. The 마을 shop
 	# below also reacts to buys / equips / sells, so mirror those signals too.
@@ -47,6 +48,28 @@ func _ready() -> void:
 	EventBus.weapon_equipped.connect(_on_state_changed.unbind(1))
 	EventBus.armor_equipped.connect(_on_state_changed.unbind(1))
 	_render()
+
+
+func _ensure_content() -> void:
+	var scroll := get_node_or_null(^"Scroll") as ScrollContainer
+	if scroll == null:
+		scroll = ScrollContainer.new()
+		scroll.name = "Scroll"
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		add_child(scroll)
+	else:
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_vbox = scroll.get_node_or_null(^"Content") as VBoxContainer
+	if _vbox == null:
+		_vbox = VBoxContainer.new()
+		_vbox.name = "Content"
+		scroll.add_child(_vbox)
+	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_vbox.add_theme_constant_override("separation", 4)
 
 
 func _on_target_selected(target: Node) -> void:
@@ -83,6 +106,8 @@ func _render() -> void:
 	# pinned right below the 강화 slot.
 	if bool(data.get("shop", false)):
 		GearShop.build(_vbox)
+	if bool(data.get("upgrade_shop", false)):
+		UPGRADE_SHOP_SCRIPT.build(_vbox)
 
 
 func _build_empty() -> void:

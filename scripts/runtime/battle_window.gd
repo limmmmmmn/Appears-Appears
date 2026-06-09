@@ -25,6 +25,14 @@ const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_nu
 @onready var _background: Panel = $Background
 @onready var _background_image: TextureRect = %BackgroundImage
 @onready var _log_panel: Panel = $LogPanel
+@onready var _command_panel_scene: Panel = %CommandPanel
+@onready var _command_title_scene: Label = %CommandTitle
+@onready var _command_title_bg_scene: PanelContainer = %CommandTitleBg
+@onready var _command_row_scene: HBoxContainer = %CommandRow
+@onready var _fight_button_scene: Button = %Fight
+@onready var _skill_button_scene: Button = %Skill
+@onready var _item_button_scene: Button = %Item
+@onready var _run_button_scene: Button = %Run
 
 const ACTOR_PARTY: int = 0
 const ACTOR_ENEMY: int = 1
@@ -979,56 +987,34 @@ func _clear_target_markers() -> void:
 
 # ─── Manual-combat UI ──────────────────────────────────────────────────
 func _build_command_panel() -> void:
-	# Lives in the bottom log-box strip — same footprint as the auto window's LogPanel,
-	# so the manual card is exactly the same size as an auto card.
-	_command_panel = Panel.new()
+	_command_panel = _command_panel_scene
+	_command_row = _command_row_scene
+	_command_title = _command_title_scene
+	if _command_panel == null or _command_row == null or _command_title == null:
+		return
+	# The panel lives in battle_window.tscn now, so its footprint/title/buttons are
+	# editable in the editor. Code only applies the current reward color + handlers.
 	_command_panel.add_theme_stylebox_override("panel", _flat_panel_style(_reward_color().darkened(0.28), DQ_WINDOW_BORDER))
-	_command_panel.anchor_left = 0.0
-	_command_panel.anchor_top = 1.0
-	_command_panel.anchor_right = 1.0
-	_command_panel.anchor_bottom = 1.0
-	_command_panel.offset_left = 4.0
-	_command_panel.offset_top = COMMAND_STRIP_OFFSET_TOP
-	_command_panel.offset_right = -4.0
-	_command_panel.offset_bottom = -4.0
-	_command_panel.mouse_filter = Control.MOUSE_FILTER_STOP  # eat clicks so the card isn't dragged
+	_command_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_command_panel.hide()
-	add_child(_command_panel)
-	# Buttons fill the strip (tiny, four across); the member-name title floats on the
-	# strip's top border above them.
-	_command_row = HBoxContainer.new()
-	_command_row.anchor_right = 1.0
-	_command_row.anchor_bottom = 1.0
-	_command_row.offset_left = 2.0
-	_command_row.offset_top = 2.0
-	_command_row.offset_right = -2.0
-	_command_row.offset_bottom = -2.0
-	_command_row.add_theme_constant_override("separation", 1)
-	_command_panel.add_child(_command_row)
-	var fight_btn := _make_command_button("Fight", _on_fight_pressed, true)
-	_make_command_button("Skill", Callable(), false)  # not ready yet
-	_make_command_button("Item", Callable(), false)   # not ready yet
-	var run_btn := _make_command_button("Run", _on_run_pressed, true)
+	var fight_btn := _style_command_button(_fight_button_scene, _on_fight_pressed, true)
+	_style_command_button(_skill_button_scene, Callable(), false)
+	_style_command_button(_item_button_scene, Callable(), false)
+	var run_btn := _style_command_button(_run_button_scene, _on_run_pressed, true)
 	# Keyboard nav targets: only the enabled commands. Left/Right cycles, Enter picks.
 	_cmd_buttons = [fight_btn, run_btn]
 	_cmd_callables = [_on_fight_pressed, _on_run_pressed]
 	_command_sel = 0
 	# Member-name title sitting on the box's top-left border (its bg breaks the line).
 	# Uses the theme font (Korean-capable) — member names are Korean (e.g. "도윤").
-	_command_title = Label.new()
-	_command_title.add_theme_font_size_override("font_size", 7)
 	_command_title.add_theme_color_override("font_color", DQ_WINDOW_TEXT)
-	var title_bg := PanelContainer.new()
-	title_bg.add_theme_stylebox_override("panel", _flat_panel_style(_reward_color(), _reward_color()))
-	title_bg.position = Vector2(7.0, -6.0)
-	title_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_bg.add_child(_command_title)
-	_command_panel.add_child(title_bg)
+	if _command_title_bg_scene != null:
+		_command_title_bg_scene.add_theme_stylebox_override("panel", _flat_panel_style(_reward_color(), _reward_color()))
 
 
-func _make_command_button(text: String, on_press: Callable, enabled: bool) -> Button:
-	var b := Button.new()
-	b.text = text
+func _style_command_button(b: Button, on_press: Callable, enabled: bool) -> Button:
+	if b == null:
+		return null
 	b.focus_mode = Control.FOCUS_NONE
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1045,9 +1031,8 @@ func _make_command_button(text: String, on_press: Callable, enabled: bool) -> Bu
 	b.add_theme_color_override("font_pressed_color", DQ_WINDOW_TEXT)
 	b.add_theme_color_override("font_disabled_color", Color(0.56, 0.56, 0.6, 1.0))
 	b.disabled = not enabled
-	if enabled and on_press.is_valid():
+	if enabled and on_press.is_valid() and not b.pressed.is_connected(on_press):
 		b.pressed.connect(on_press)
-	_command_row.add_child(b)
 	return b
 
 

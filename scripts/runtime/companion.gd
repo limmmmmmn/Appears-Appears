@@ -12,6 +12,9 @@ extends Node2D
 @export var catch_up_factor: float = 12.0  ## higher = snappier catch-up
 @export var stop_distance: float = 0.5
 
+const SELECTION_CORNERS_SCRIPT = preload("res://scripts/runtime/selection_corners.gd")
+const SELECTION_PAD: float = 3.0
+
 var player: CharacterBody2D
 var slot_index: int = 1
 var _pending_data: CharacterData
@@ -23,6 +26,7 @@ var _downed_visual: bool = false
 ## assigned row slot below the windows, then faces UP (back to camera).
 var _in_formation: bool = false
 var _formation_target: Vector2 = Vector2.ZERO
+var _selection_corners: Node2D
 
 @onready var _visual: CharacterVisual = $Visual
 
@@ -35,7 +39,9 @@ func _ready() -> void:
 		_visual.setup(_pending_data)
 	# Hit reaction only: flinch when this member is hit. No attack lunge.
 	EventBus.party_damage_taken.connect(_on_party_damage_taken)
+	EventBus.inspector_target_selected.connect(_on_inspector_target_selected)
 	_add_inspector_hotspot()
+	_rebuild_selection_marker()
 
 
 ## A world-space click hotspot over this companion → selects it in the right inspector.
@@ -60,6 +66,15 @@ func _on_inspector_hotspot_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func _on_inspector_target_selected(target: Node) -> void:
+	set_selected(target == self)
+
+
+func set_selected(selected: bool) -> void:
+	if _selection_corners != null:
+		_selection_corners.set_selected(selected)
+
+
 ## Right property inspector: companion — header + role line + ③ 무기(공격력) 강화.
 func get_inspector_data() -> Dictionary:
 	return GameState.member_inspector_data(slot_index, _pending_data)
@@ -70,6 +85,20 @@ func setup(data: CharacterData) -> void:
 	_pending_data = data
 	if is_inside_tree() and _visual:
 		_visual.setup(data)
+		_rebuild_selection_marker()
+
+
+func _rebuild_selection_marker() -> void:
+	if _selection_corners != null:
+		_selection_corners.queue_free()
+		_selection_corners = null
+	var rect := Rect2(Vector2(-8.0, -22.0), Vector2(16.0, 24.0)).grow(SELECTION_PAD)
+	if _pending_data != null:
+		var fs: Vector2 = _pending_data.frame_size_vec()
+		rect = Rect2(_pending_data.visual_center_local() - fs * 0.5, fs).grow(SELECTION_PAD)
+	_selection_corners = SELECTION_CORNERS_SCRIPT.new()
+	_selection_corners.configure(rect)
+	add_child(_selection_corners)
 
 
 func _physics_process(delta: float) -> void:

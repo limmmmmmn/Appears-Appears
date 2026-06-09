@@ -1,18 +1,18 @@
-[gd_scene load_steps=20 format=3 uid="uid://cqf6bpvn7qq6m"]
+[gd_scene format=3 uid="uid://cqf6bpvn7qq6m"]
 
 [ext_resource type="Script" uid="uid://c6lq6ty8adwon" path="res://scripts/runtime/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://3bdh8ubp16k5" path="res://scenes/field.tscn" id="2_field"]
 [ext_resource type="Script" uid="uid://do1c4iqw30pbj" path="res://scripts/runtime/battle_manager.gd" id="3_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/low_health_overlay.tscn" id="5_low_hp"]
 [ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
-[ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/right_property_inspector.tscn" id="7_inspector"]
-[ext_resource type="PackedScene" path="res://scenes/ui/left_enemy_bar.tscn" id="8_enemy_bar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
+[ext_resource type="PackedScene" path="res://scenes/ui/enemy_placement_shelf.tscn" id="8_enemy_shelf"]
+[ext_resource type="PackedScene" path="res://scenes/ui/enemy_placement_tooltip.tscn" id="8_enemy_tooltip"]
 [ext_resource type="PackedScene" path="res://scenes/ui/left_log_panel.tscn" id="8_log_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/town_window.tscn" id="9_town"]
 [ext_resource type="PackedScene" path="res://scenes/ui/narration_window.tscn" id="12_narration"]
 [ext_resource type="PackedScene" path="res://scenes/ui/desktop_frame.tscn" id="13_frame"]
-[ext_resource type="PackedScene" path="res://scenes/ui/object_action_panel.tscn" id="14_objpanel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/gold_chip.tscn" id="15_gold"]
 [ext_resource type="PackedScene" path="res://scenes/ui/party_bar.tscn" id="16_party"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dq_status.tscn" id="17_dq"]
@@ -26,20 +26,19 @@ font_color = Color(1, 1, 0.92, 1)
 outline_size = 2
 outline_color = Color(0, 0, 0, 0.75)
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1047093626]
 script = ExtResource("1_main")
 
-[node name="Field" parent="." instance=ExtResource("2_field")]
+[node name="Field" parent="." unique_id=1346189154 instance=ExtResource("2_field")]
+field_layout_rect_path = null
 
-[node name="BattleManager" type="Node2D" parent="."]
+[node name="BattleManager" type="Node2D" parent="." unique_id=720570417]
 script = ExtResource("3_mgr")
 
-[node name="ObjectActionPanel" parent="." instance=ExtResource("14_objpanel")]
-
-[node name="WallpaperLayer" type="CanvasLayer" parent="."]
+[node name="WallpaperLayer" type="CanvasLayer" parent="." unique_id=1249982625]
 layer = -5
 
-[node name="Wallpaper" type="ColorRect" parent="WallpaperLayer"]
+[node name="Wallpaper" type="ColorRect" parent="WallpaperLayer" unique_id=1245021142]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -47,66 +46,71 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.07, 0.08, 0.11, 1)
+metadata/_edit_lock_ = true
 
-[node name="BattleWindowLayer" type="CanvasLayer" parent="."]
+[node name="BattleWindowLayer" type="CanvasLayer" parent="." unique_id=1339895513]
 layer = 4
 
-[node name="HudLayer" type="CanvasLayer" parent="."]
+[node name="HudLayer" type="CanvasLayer" parent="." unique_id=1929528839]
 layer = 5
 
-[node name="GoldChip" parent="HudLayer" instance=ExtResource("15_gold")]
+[node name="GoldChip" parent="HudLayer" unique_id=1756743132 instance=ExtResource("15_gold")]
 
-[node name="LeftEnemyBar" parent="HudLayer" instance=ExtResource("8_enemy_bar")]
-offset_top = 6.0
-offset_right = 100.0
+[node name="EnemyPlacementShelf" parent="HudLayer" unique_id=1927174253 instance=ExtResource("8_enemy_shelf")]
+offset_top = 47.0
+offset_bottom = 94.0
 
-[node name="LeftLogPanel" parent="HudLayer" instance=ExtResource("8_log_panel")]
+[node name="EnemyPlacementTooltip" parent="HudLayer" unique_id=637995234 instance=ExtResource("8_enemy_tooltip")]
+offset_left = 76.0
+offset_top = 47.0
 
-[node name="RightUpgradePanel" parent="HudLayer" instance=ExtResource("7_upgrade_panel")]
-offset_left = 542.0
-offset_bottom = 177.0
+[node name="LeftLogPanel" parent="HudLayer" unique_id=1291178482 instance=ExtResource("8_log_panel")]
+anchors_preset = 9
+offset_left = 0.0
+offset_top = 212.0
+offset_right = 131.0
+offset_bottom = 0.0
+grow_vertical = 2
 
-[node name="RightPropertyInspector" parent="HudLayer" instance=ExtResource("7_inspector")]
-anchor_bottom = 1.0
-offset_left = 528.0
-offset_top = 18.0
-offset_right = 636.0
-offset_bottom = -16.0
+[node name="RightUpgradePanel" parent="HudLayer" unique_id=562159693 instance=ExtResource("7_upgrade_panel")]
 
-[node name="PartyBar" parent="HudLayer" instance=ExtResource("16_party")]
+[node name="RightPropertyInspector" parent="HudLayer" unique_id=1616697781 instance=ExtResource("7_inspector")]
 
-[node name="DQStatus" parent="HudLayer" instance=ExtResource("17_dq")]
+[node name="PartyBar" parent="HudLayer" unique_id=861722315 instance=ExtResource("16_party")]
 
-[node name="TierUnlockPopup" parent="HudLayer" instance=ExtResource("18_unlock")]
+[node name="DQStatus" parent="HudLayer" unique_id=1584588224 instance=ExtResource("17_dq")]
 
-[node name="NamePrompt" parent="HudLayer" instance=ExtResource("19_name")]
+[node name="TierUnlockPopup" parent="HudLayer" unique_id=1851440665 instance=ExtResource("18_unlock")]
 
-[node name="LowHealthOverlay" parent="." instance=ExtResource("5_low_hp")]
+[node name="NamePrompt" parent="HudLayer" unique_id=454101919 instance=ExtResource("19_name")]
+metadata/_edit_lock_ = true
 
-[node name="ModalLayer" type="CanvasLayer" parent="."]
+[node name="LowHealthOverlay" parent="." unique_id=2099559033 instance=ExtResource("5_low_hp")]
+
+[node name="ModalLayer" type="CanvasLayer" parent="." unique_id=1290676057]
 layer = 15
 
-[node name="TownWindow" parent="ModalLayer" instance=ExtResource("9_town")]
+[node name="TownWindow" parent="ModalLayer" unique_id=169011224 instance=ExtResource("9_town")]
 layout_mode = 3
 anchors_preset = 0
 
-[node name="NarrationLayer" type="CanvasLayer" parent="."]
+[node name="NarrationLayer" type="CanvasLayer" parent="." unique_id=772031937]
 layer = 3
 
-[node name="NarrationWindow" parent="NarrationLayer" instance=ExtResource("12_narration")]
+[node name="NarrationWindow" parent="NarrationLayer" unique_id=1086765781 instance=ExtResource("12_narration")]
 visible = false
 
-[node name="DesktopFrameLayer" type="CanvasLayer" parent="."]
+[node name="DesktopFrameLayer" type="CanvasLayer" parent="." unique_id=704480383]
 
-[node name="DesktopFrame" parent="DesktopFrameLayer" instance=ExtResource("13_frame")]
+[node name="DesktopFrame" parent="DesktopFrameLayer" unique_id=923715491 instance=ExtResource("13_frame")]
 layout_mode = 3
 anchors_preset = 0
 
-[node name="PauseOverlay" type="CanvasLayer" parent="."]
+[node name="PauseOverlay" type="CanvasLayer" parent="." unique_id=1430391586]
 layer = 20
 visible = false
 
-[node name="PauseMark" type="Label" parent="PauseOverlay"]
+[node name="PauseMark" type="Label" parent="PauseOverlay" unique_id=2137399010]
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0

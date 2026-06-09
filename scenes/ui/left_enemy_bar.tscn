@@ -17,9 +17,9 @@ script = ExtResource("1_bar")
 unique_name_in_owner = true
 layout_mode = 1
 offset_left = 4.0
-offset_top = 36.0
-offset_right = 4.0
-offset_bottom = 36.0
+offset_top = 5.0
+offset_right = 52.0
+offset_bottom = 53.0
 
 [node name="Grid" type="GridContainer" parent="Box" unique_id=1512063680]
 unique_name_in_owner = true
@@ -44,7 +44,9 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 1
 offset_left = 76.0
-offset_top = 36.0
+offset_top = 6.0
+offset_right = 96.0
+offset_bottom = 39.0
 mouse_filter = 2
 
 [node name="TipLabel" type="Label" parent="Tooltip" unique_id=1349034052]

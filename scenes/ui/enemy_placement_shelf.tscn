@@ -1,0 +1,39 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/enemy_placement_shelf.gd" id="1_shelf"]
+[ext_resource type="Theme" uid="uid://y11tyjfd0r6c" path="res://assets/themes/ui_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" uid="uid://cyhcy1wpnk5ed" path="res://scenes/ui/dos_tile.tscn" id="3_tile"]
+
+[node name="EnemyPlacementShelf" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 56.0
+offset_bottom = 56.0
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_shelf")
+
+[node name="Box" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+offset_right = 48.0
+offset_bottom = 48.0
+
+[node name="Grid" type="GridContainer" parent="Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+columns = 2
+
+[node name="SampleTile1" parent="Box/Grid" instance=ExtResource("3_tile")]
+layout_mode = 2
+
+[node name="SampleTile2" parent="Box/Grid" instance=ExtResource("3_tile")]
+layout_mode = 2
+
+[node name="SampleTile3" parent="Box/Grid" instance=ExtResource("3_tile")]
+layout_mode = 2
+
+[node name="SampleTile4" parent="Box/Grid" instance=ExtResource("3_tile")]
+layout_mode = 2

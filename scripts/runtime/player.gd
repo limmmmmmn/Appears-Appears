@@ -32,6 +32,8 @@ const FORMATION_MOVE_SPEED: float = 175.0
 const ZOOM_MIN: float = 0.32
 const ZOOM_MAX: float = 3.0
 const ZOOM_STEP: float = 0.15
+const SELECTION_CORNERS_SCRIPT = preload("res://scripts/runtime/selection_corners.gd")
+const SELECTION_PAD: float = 3.0
 
 @onready var _visual: CharacterVisual = $Visual
 @onready var _camera: Camera2D = $Camera2D
@@ -39,6 +41,7 @@ const ZOOM_STEP: float = 0.15
 
 var _pending_data: CharacterData
 var _field_bounds := Rect2(Vector2.ZERO, Vector2(960, 540))
+var _camera_world_center: Vector2 = Vector2.INF
 var _camera_shake_tween: Tween
 ## True while this avatar's party member is downed (shows the lying pose).
 var _downed_visual: bool = false
@@ -66,6 +69,7 @@ var _free_camera_pos: Vector2 = Vector2.ZERO
 var _is_drag_panning: bool = false
 var _drag_last_mouse: Vector2 = Vector2.ZERO
 var _was_mouse_pressed: bool = false
+var _selection_corners: Node2D
 
 
 func set_forced_move_target(pos: Vector2) -> void:
@@ -119,18 +123,22 @@ func _ready() -> void:
 	# so it sits dead-still; limits cleared so the small field isn't shoved off-center.
 	_camera.top_level = true
 	_camera.position_smoothing_enabled = false
-	_camera.global_position = _field_bounds.get_center()
+	if _camera_world_center == Vector2.INF:
+		_camera_world_center = _field_bounds.get_center()
+	_camera.global_position = _camera_world_center
 	_free_camera_pos = _camera.global_position
 	_apply_zoom(GameState.field_camera_zoom)  # restore the player's last wheel zoom
 	_camera.make_current()
 	# Party-panel boxes emit this on click → snap the view back onto the hero.
 	EventBus.camera_focus_hero_requested.connect(focus_camera_on_hero)
+	EventBus.inspector_target_selected.connect(_on_inspector_target_selected)
 	# Hit reaction only: the hero (party index 0) flinches when hit. No attack lunge.
 	EventBus.party_damage_taken.connect(_on_party_damage_taken)
 	if _pending_data:
 		_visual.setup(_pending_data)
 		_apply_character_layout()
 	_add_inspector_hotspot()
+	_rebuild_selection_marker()
 
 
 ## A world-space click hotspot over the hero sprite → selects it in the right
@@ -157,6 +165,15 @@ func _on_inspector_hotspot_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func _on_inspector_target_selected(target: Node) -> void:
+	set_selected(target == self)
+
+
+func set_selected(selected: bool) -> void:
+	if _selection_corners != null:
+		_selection_corners.set_selected(selected)
+
+
 ## Right property inspector: hero (party index 0) — header + role line + ③ 무기(공격력) 강화.
 func get_inspector_data() -> Dictionary:
 	return GameState.member_inspector_data(0, _pending_data)
@@ -168,6 +185,7 @@ func setup(data: CharacterData) -> void:
 	if is_inside_tree() and _visual:
 		_visual.setup(data)
 		_apply_character_layout()
+		_rebuild_selection_marker()
 
 
 func _apply_character_layout() -> void:
@@ -186,6 +204,19 @@ func _apply_character_layout() -> void:
 		_collision_shape.position = _pending_data.body_center_local()
 
 
+func _rebuild_selection_marker() -> void:
+	if _selection_corners != null:
+		_selection_corners.queue_free()
+		_selection_corners = null
+	var rect := Rect2(Vector2(-8.0, -22.0), Vector2(16.0, 24.0)).grow(SELECTION_PAD)
+	if _pending_data != null:
+		var fs: Vector2 = _pending_data.frame_size_vec()
+		rect = Rect2(_pending_data.visual_center_local() - fs * 0.5, fs).grow(SELECTION_PAD)
+	_selection_corners = SELECTION_CORNERS_SCRIPT.new()
+	_selection_corners.configure(rect)
+	add_child(_selection_corners)
+
+
 func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 	_field_bounds = Rect2(min_pos, max_pos - min_pos)
 	# Fixed camera: drop the edge limits (a field smaller than the viewport would get
@@ -195,7 +226,13 @@ func set_field_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
 		_camera.limit_top = -10000000
 		_camera.limit_right = 10000000
 		_camera.limit_bottom = 10000000
-		_camera.global_position = _field_bounds.get_center()
+		_camera.global_position = _camera_world_center
+
+
+func set_camera_world_center(center: Vector2) -> void:
+	_camera_world_center = center
+	if _camera:
+		_camera.global_position = _camera_world_center
 
 
 # ─── Mouse-wheel zoom ──────────────────────────────────────────────────
@@ -280,7 +317,7 @@ func _update_camera_pan(_delta: float) -> void:
 	# Camera is fixed at the field center now — no hero-follow, no keyboard/drag pan.
 	if _camera == null:
 		return
-	_camera.global_position = _field_bounds.get_center()
+	_camera.global_position = _camera_world_center
 
 
 ## Re-attach the camera to the hero. Smoothing on so it glides back instead of
@@ -288,7 +325,7 @@ func _update_camera_pan(_delta: float) -> void:
 func focus_camera_on_hero() -> void:
 	# Fixed camera: re-park on the field center (kept for existing callers).
 	if _camera:
-		_camera.global_position = _field_bounds.get_center()
+		_camera.global_position = _camera_world_center
 
 
 ## Field shows this avatar lying down while its party member is downed/refilling.
@@ -327,7 +364,7 @@ func snap_camera() -> void:
 	# Fixed camera: snap onto the field center.
 	if _camera:
 		_camera.position_smoothing_enabled = false
-		_camera.global_position = _field_bounds.get_center()
+		_camera.global_position = _camera_world_center
 		_free_camera_pos = _camera.global_position
 		_camera.reset_smoothing()
 

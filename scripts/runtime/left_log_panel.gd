@@ -27,15 +27,10 @@ var _lines: PackedStringArray = []  ## oldest → newest; every line kept (no me
 
 func _ready() -> void:
 	add_to_group("game_log")
-	_log.text = ""  # clear the editor-preview placeholder text at runtime
-	# Layout (anchors, left/top/bottom, font) is authored on the scene. Only the RIGHT
-	# edge stays dynamic: the field is camera-centered, so the log clamps to just left of
-	# it regardless of field size, never spilling onto the play area.
-	var vp_w: float = get_viewport_rect().size.x
-	var field_left: float = (vp_w - Field.FIELD_SIZE.x) * 0.5
-	var desired_right: float = UITheme.LEFT_LOG_LEFT + UITheme.LEFT_LOG_WIDTH
-	offset_right = minf(desired_right, field_left - UITheme.LEFT_LOG_RIGHT_GAP)
-
+	# Position/size are AUTHORED in the scene (move/resize it in the editor → it sticks).
+	# Code no longer computes the rect, so editor and game match and edits don't get
+	# overridden.
+	_log.text = ""  # clear the authored preview text at runtime
 	_connect_events()
 
 

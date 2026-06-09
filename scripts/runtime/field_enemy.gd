@@ -74,6 +74,10 @@ const ENCOUNTER_SQUASH: Vector2 = Vector2(1.45, 0.6)
 const STUCK_ENEMY_PUSH_SPEED: float = 120.0
 const STUCK_PLAYER_PUSH_SPEED: float = 60.0
 const STUCK_MIN_OVERLAP_DISTANCE_SQ: float = 1.0
+const SELECTION_CORNERS_SCRIPT = preload("res://scripts/runtime/selection_corners.gd")
+const SELECTION_PAD: float = 3.0
+
+var _selection_corners: Node2D
 
 func _ready() -> void:
 	# Player auto-move queries this group every physics frame.
@@ -83,10 +87,12 @@ func _ready() -> void:
 	# Clicking the enemy (its tooltip hotspot) selects it in the right inspector.
 	if _tooltip_area != null:
 		_tooltip_area.gui_input.connect(_on_tooltip_input)
+	EventBus.inspector_target_selected.connect(_on_inspector_target_selected)
 	# Safety net: if we're freed mid hit-stop, don't leak the field pause.
 	tree_exiting.connect(_release_encounter_pause)
 	_player = _find_player()
 	_pick_new_wander_dir()
+	_rebuild_selection_marker()
 	_start_spawn_telegraph()
 
 
@@ -110,6 +116,7 @@ func setup(enemy_data: EnemyData) -> void:
 func _apply_data() -> void:
 	if data and data.sprite and _sprite:
 		_sprite.texture = data.sprite
+		_rebuild_selection_marker()
 	if data == null:
 		return
 	wander_speed = data.field_wander_speed
@@ -148,6 +155,30 @@ func _on_tooltip_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		EventBus.inspector_target_selected.emit(self)
 		_tooltip_area.accept_event()
+
+
+func _on_inspector_target_selected(target: Node) -> void:
+	set_selected(target == self)
+
+
+func set_selected(selected: bool) -> void:
+	if _selection_corners != null:
+		_selection_corners.set_selected(selected)
+
+
+func _rebuild_selection_marker() -> void:
+	if not is_inside_tree():
+		return
+	if _selection_corners != null:
+		_selection_corners.queue_free()
+		_selection_corners = null
+	var rect := Rect2(Vector2(-12.0, -18.0), Vector2(24.0, 28.0)).grow(SELECTION_PAD)
+	if _sprite != null and _sprite.texture != null:
+		var tex_size: Vector2 = _sprite.texture.get_size()
+		rect = Rect2(-tex_size * 0.5, tex_size).grow(SELECTION_PAD)
+	_selection_corners = SELECTION_CORNERS_SCRIPT.new()
+	_selection_corners.configure(rect)
+	add_child(_selection_corners)
 
 
 ## Right property inspector: enemies show header + tier/level info, no upgrade (③ 준비 중).

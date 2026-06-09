@@ -6,6 +6,8 @@ extends Node2D
 
 const SETTLEMENT_REPORT_SCENE: PackedScene = preload("res://scenes/settlement_report.tscn")
 const GAME_OVER_SCENE: PackedScene = preload("res://scenes/game_over.tscn")
+const OPENING_SEQUENCE_SCENE: PackedScene = preload("res://scenes/ui/opening_sequence.tscn")
+const STORY_NOTICE_SCENE: PackedScene = preload("res://scenes/ui/story_notice.tscn")
 const SLIME_DATA: EnemyData = preload("res://data/enemies/slime.tres")
 
 ## The run starts with the leader alone. Companions are recruited via
@@ -148,85 +150,18 @@ func _on_try_again_pressed() -> void:
 
 
 func _play_opening_sequence() -> void:
-	var layer := CanvasLayer.new()
-	layer.name = "OpeningLayer"
-	layer.layer = 30
-	add_child(layer)
-
-	var bg := ColorRect.new()
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color.BLACK
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(bg)
-
-	var label := Label.new()
-	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	label.offset_left = 36.0
-	label.offset_right = -36.0
-	label.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
-	label.add_theme_font_size_override("font_size", 18)
-	label.add_theme_color_override("font_color", Color.WHITE)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	layer.add_child(label)
-
-	for line in GameState.story_opening_lines():
-		label.text = line
-		label.modulate.a = 0.0
-		var tween := create_tween()
-		tween.tween_property(label, "modulate:a", 1.0, 0.35)
-		tween.tween_interval(1.05)
-		tween.tween_property(label, "modulate:a", 0.0, 0.25)
-		await tween.finished
-	await get_tree().create_timer(0.25).timeout
-	layer.queue_free()
+	var opening := OPENING_SEQUENCE_SCENE.instantiate()
+	add_child(opening)
+	opening.call("play_lines", GameState.story_opening_lines())
+	await opening.tree_exited
 
 
 func _show_story_notice(text: String) -> void:
 	if _story_notice_layer and is_instance_valid(_story_notice_layer):
 		_story_notice_layer.queue_free()
-	_story_notice_layer = CanvasLayer.new()
-	_story_notice_layer.name = "StoryNoticeLayer"
-	_story_notice_layer.layer = 18
+	_story_notice_layer = STORY_NOTICE_SCENE.instantiate()
 	add_child(_story_notice_layer)
-
-	var panel := Panel.new()
-	panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	panel.offset_left = 96.0
-	panel.offset_top = 28.0
-	panel.offset_right = -96.0
-	panel.offset_bottom = 82.0
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.02, 0.025, 0.02, 0.92)
-	style.border_width_left = 1
-	style.border_width_top = 1
-	style.border_width_right = 1
-	style.border_width_bottom = 1
-	style.border_color = Color(1.0, 0.82, 0.32, 1.0)
-	panel.add_theme_stylebox_override("panel", style)
-	_story_notice_layer.add_child(panel)
-
-	var label := Label.new()
-	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	label.offset_left = 8.0
-	label.offset_right = -8.0
-	label.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
-	label.add_theme_font_size_override("font_size", 10)
-	label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.72, 1.0))
-	label.text = text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(label)
-
-	var tween := create_tween()
-	panel.modulate.a = 0.0
-	tween.tween_property(panel, "modulate:a", 1.0, 0.12)
-	tween.tween_interval(3.0)
-	tween.tween_property(panel, "modulate:a", 0.0, 0.25)
-	tween.tween_callback(Callable(_story_notice_layer, "queue_free"))
+	_story_notice_layer.call("show_notice", text)
 
 
 # ─── Debug ────────────────────────────────────────────────────────────

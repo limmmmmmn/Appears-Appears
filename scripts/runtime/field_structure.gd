@@ -6,12 +6,21 @@ extends Node2D
 ## No sprite art yet — a stone base + colored roof + short-name label.
 
 const STRUCT_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
+const SELECTION_CORNERS_SCRIPT = preload("res://scripts/runtime/selection_corners.gd")
+const SELECT_PAD: float = 4.0
 
 var building_id: StringName
 
 var _glow: ColorRect
 var _roof: ColorRect
 var _pulse_tween: Tween
+var _selection_root: Node2D
+var _selection_rect: Rect2 = Rect2(Vector2(-14.0, -28.0), Vector2(28.0, 32.0))
+
+
+func _ready() -> void:
+	EventBus.inspector_target_selected.connect(_on_inspector_target_selected)
+	_on_inspector_target_selected(null)
 
 
 ## Inject the building's Balance dict (id / name / short / color). Call before
@@ -20,6 +29,7 @@ func setup(building: Dictionary) -> void:
 	building_id = StringName(building.get("id", &""))
 	for child in get_children():
 		child.queue_free()
+	_selection_root = null
 	var accent: Color = building.get("color", Color(0.7, 0.85, 1.0, 1.0))
 
 	# Soft glow behind (animated on pulse).
@@ -48,6 +58,10 @@ func setup(building: Dictionary) -> void:
 		spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		spr.position = Vector2(0, -8)  # sit just above the ground point
 		add_child(spr)
+		if spr.texture != null:
+			var tex_size: Vector2 = spr.texture.get_size()
+			_selection_rect = Rect2(spr.position - tex_size * 0.5, tex_size).grow(SELECT_PAD)
+		_build_selection_marker()
 		return
 
 	# Stone base.
@@ -78,17 +92,32 @@ func setup(building: Dictionary) -> void:
 	label.position = Vector2(-8, -28)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(label)
+	_selection_rect = Rect2(Vector2(-13.0, -31.0), Vector2(26.0, 31.0)).grow(SELECT_PAD)
+	_build_selection_marker()
 
 
-## Click → show this structure in the right property inspector. Most structures also
-## pop a floating action panel above themselves (모닥불: 쉰다), but the 마을 puts its
-## inn + shop in the right panel instead, so it skips the floating popup.
+## Click → show this structure in the right property inspector. Object actions live
+## there now; the old floating action bubble is intentionally gone.
 func _on_hotspot_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		if building_id != &"village":
-			EventBus.structure_clicked.emit(building_id, global_position)
 		EventBus.inspector_target_selected.emit(self)
 		get_viewport().set_input_as_handled()
+
+
+func _on_inspector_target_selected(target: Node) -> void:
+	set_selected(target == self)
+
+
+func set_selected(selected: bool) -> void:
+	if _selection_root == null:
+		return
+	_selection_root.visible = selected
+
+
+func _build_selection_marker() -> void:
+	_selection_root = SELECTION_CORNERS_SCRIPT.new()
+	_selection_root.configure(_selection_rect)
+	add_child(_selection_root)
 
 
 ## Right property inspector: objet — header (이름/스프라이트) + 설명 한 줄, ③ 준비 중.
@@ -112,6 +141,26 @@ func get_inspector_data() -> Dictionary:
 			"on_press": GameState.upgrade_village,
 		}]
 		info_text = "마을 Lv%d · %d단계 장비까지 판매" % [GameState.village_level, GameState.village_level]
+	elif building_id == &"campfire":
+		actions = [
+			{
+				"label": "쉰다",
+				"cost": 0,
+				"enabled": true,
+				"on_press": func() -> void: EventBus.rest_requested.emit(),
+			},
+			{
+				"label": "모닥불 강화",
+				"cost": GameState.campfire_upgrade_cost(),
+				"enabled": GameState.can_upgrade_campfire(),
+				"on_press": GameState.upgrade_campfire,
+			},
+		]
+		info_text = "모닥불 Lv%d · 회복 %.1f/s · 반경 %.0f" % [
+			GameState.campfire_level,
+			GameState.campfire_regen_rate(),
+			GameState.campfire_regen_radius(),
+		]
 	return {
 		"name": str(info.get("name", building_id)),
 		"info": info_text,
@@ -119,6 +168,7 @@ func get_inspector_data() -> Dictionary:
 		"actions": actions,
 		# 마을 hosts the inn + gear shop inline in the right panel (below 강화).
 		"shop": building_id == &"village",
+		"upgrade_shop": building_id == &"campfire",
 	}
 
 

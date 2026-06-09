@@ -40,6 +40,7 @@ static var FIELD_SIZE: Vector2 = Vector2(360, 360)
 		FIELD_SIZE = value
 		if Engine.is_editor_hint() and is_node_ready():
 			_apply_editor_field_size()
+@export_node_path("Control") var field_layout_rect_path: NodePath = NodePath("../HudLayer/FieldLayoutRect")
 ## Plain-green backdrop is oversized this far beyond the map on every side so the
 ## roaming camera never sees past it into the void.
 const BG_MARGIN: float = 1400.0
@@ -143,6 +144,7 @@ var _cliff_rim: ColorRect
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
+		set_process(true)
 		_apply_editor_field_size()  # editor-only: show the board at its authored size
 		return
 	EventBus.party_changed.connect(_setup_party_visuals)
@@ -203,6 +205,7 @@ func _on_world_started() -> void:
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
+		_apply_editor_field_size()
 		return
 	if GameState.field_loop_count <= 0 or GameState.is_party_wiped():
 		return
@@ -240,6 +243,8 @@ func _setup_party_visuals() -> void:
 	_player.setup(GameState.party[0])
 	if _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
+	if _player.has_method("set_camera_world_center"):
+		_player.set_camera_world_center(_camera_world_center())
 	_player.position = start_position
 	_party_root.add_child(_player)
 	for i in range(1, GameState.party_size()):
@@ -301,6 +306,8 @@ func _recenter_party() -> void:
 	var center: Vector2 = _field_size * 0.5
 	if _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
+	if _player.has_method("set_camera_world_center"):
+		_player.set_camera_world_center(_camera_world_center())
 	_player.position = center
 	# Center the fixed camera on the field center → hero at true viewport center.
 	if _player.has_method("recenter_camera"):
@@ -874,6 +881,8 @@ func _on_campfire_placed() -> void:
 	_campfire_node.setup(Balance.tile_by_id(&"campfire"))
 	_campfire_node.position = pos
 	_decorations_root.add_child(_campfire_node)
+	EventBus.inspector_target_selected.emit(_campfire_node)
+	_campfire_node.set_selected(true)
 	# First placement: party auto-walks to the fire, then 마법사 appears + joins.
 	_campfire_event_pending = true
 	if _player and _player.has_method("set_forced_move_target"):
@@ -887,7 +896,7 @@ const STRUCTURE_ARRIVE_DIST: float = 20.0
 ## World point the party is currently walking toward after placing a structure
 ## (e.g. the village), or INF when not reacting.
 var _structure_walk_target: Vector2 = Vector2.INF
-## The just-placed structure's id — its action menu auto-opens on arrival.
+## The just-placed structure's id — kept only for arrival bookkeeping.
 var _structure_walk_id: StringName = &""
 
 
@@ -903,6 +912,8 @@ func _on_structure_placed(tile_id: StringName) -> void:
 	node.setup(Balance.tile_by_id(tile_id))
 	node.position = pos
 	_decorations_root.add_child(node)
+	EventBus.inspector_target_selected.emit(node)
+	node.set_selected(true)
 	# The party reacts: auto-walk over to the freshly placed structure, then its
 	# action menu auto-opens on arrival (see _tick_structure_walk).
 	_structure_walk_target = pos
@@ -924,20 +935,16 @@ func _kor_obj_particle(word: String) -> String:
 	return "을"
 
 
-## Once the hero reaches a just-placed structure: stop walking + auto-open its
-## action menu (the village's 여관/상점, etc.) — "용사가 가서 직접 작동".
+## Once the hero reaches a just-placed structure: stop walking. Object actions live
+## in the right property inspector, which is selected immediately on placement.
 func _tick_structure_walk() -> void:
 	if _structure_walk_target == Vector2.INF or _player == null:
 		return
 	if _player.global_position.distance_to(_structure_walk_target) <= STRUCTURE_ARRIVE_DIST:
-		var arrived_pos: Vector2 = _structure_walk_target
-		var arrived_id: StringName = _structure_walk_id
 		_structure_walk_target = Vector2.INF
 		_structure_walk_id = &""
 		if _player.has_method("clear_forced_move_target"):
 			_player.clear_forced_move_target()
-		if arrived_id != &"":
-			EventBus.structure_clicked.emit(arrived_id, arrived_pos)
 
 
 ## Drag-placed buildings that live on the field (sanctuary). Spawn a structure at
@@ -955,6 +962,8 @@ func _on_building_built(id: StringName) -> void:
 	_sanctuary_node.setup(Balance.building_by_id(&"sanctuary"))
 	_sanctuary_node.position = pos
 	_decorations_root.add_child(_sanctuary_node)
+	EventBus.inspector_target_selected.emit(_sanctuary_node)
+	_sanctuary_node.set_selected(true)
 
 
 func _random_campfire_position() -> Vector2:
@@ -1336,14 +1345,13 @@ func _random_position() -> Vector2:
 func _apply_editor_field_size() -> void:
 	# Fetch fresh (not via @onready) so this works for an INSTANCED Field in the editor,
 	# where @onready timing for instances can be unreliable.
+	var layout_rect: Rect2 = _field_layout_screen_rect()
+	var authored_size: Vector2 = layout_rect.size
+	FIELD_SIZE = authored_size
 	var bg := get_node_or_null(^"Background") as ColorRect
 	if bg != null:
-		bg.size = field_size
-		# Center the board in the design viewport so the editor preview matches the
-		# in-game look — at runtime there's no camera here, so a board left at the world
-		# origin (0,0) reads as "left-aligned"; the running game's follow-camera centers
-		# the field on the player. Mirror that centering here (visual only).
-		bg.position = ((_design_viewport_size() - field_size) * 0.5).round()
+		bg.size = authored_size
+		bg.position = layout_rect.position.round()
 	var bgt := get_node_or_null(^"BackgroundTexture") as TextureRect
 	if bgt != null:
 		bgt.visible = false
@@ -1357,8 +1365,37 @@ func _design_viewport_size() -> Vector2:
 	)
 
 
+func _layout_rect_node() -> Control:
+	if field_layout_rect_path == NodePath():
+		return null
+	return get_node_or_null(field_layout_rect_path) as Control
+
+
+func _field_layout_screen_rect() -> Rect2:
+	var layout := _layout_rect_node()
+	if layout != null and layout.size.x > 1.0 and layout.size.y > 1.0:
+		return Rect2(layout.global_position, layout.size)
+	var viewport_size: Vector2 = _design_viewport_size()
+	return Rect2(((viewport_size - field_size) * 0.5).round(), field_size)
+
+
+func _authored_field_size() -> Vector2:
+	var rect: Rect2 = _field_layout_screen_rect()
+	if rect.size.x > 1.0 and rect.size.y > 1.0:
+		return rect.size
+	return field_size
+
+
+func _camera_world_center() -> Vector2:
+	# A world point appears on screen at: point - camera_center + viewport / 2.
+	# To place the field's local origin at the authored layout rect's top-left:
+	# camera_center = viewport / 2 - layout_top_left.
+	return _design_viewport_size() * 0.5 - _field_layout_screen_rect().position
+
+
 func _apply_field_size() -> void:
-	_field_size = field_size * GameState.field_size_multiplier()
+	_field_size = _authored_field_size() * GameState.field_size_multiplier()
+	FIELD_SIZE = _field_size
 	# The field is a single 4:3 "board": green covers EXACTLY the board rect and
 	# nothing more. Beyond its edges the dark WallpaperLayer (behind everything)
 	# shows through as the void, so zooming all the way out reveals the whole board
@@ -1368,6 +1405,8 @@ func _apply_field_size() -> void:
 	_background_texture.visible = false
 	if _player and _player.has_method("set_field_bounds"):
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
+	if _player and _player.has_method("set_camera_world_center"):
+		_player.set_camera_world_center(_camera_world_center())
 
 
 func _apply_field_background() -> void:

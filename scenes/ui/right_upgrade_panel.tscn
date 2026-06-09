@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/dos_upgrade_row.tscn" id="3_urow"]
 
 [node name="RightUpgradePanel" type="PanelContainer"]
+visible = false
 layout_mode = 3
 anchors_preset = 0
 offset_left = 528.0
