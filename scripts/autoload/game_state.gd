@@ -874,16 +874,35 @@ func battle_window_cap() -> int:
 ## True when BattleManager still has room under the SIMULTANEOUS-FIGHT cap (a perf
 ## guard on concurrent active windows — NOT chests). When false, new field-enemy
 ## encounters are silently refused until a fight resolves.
-## (The old chest-buffer cap was removed: click-to-place + multi-window already
-## pace the player, so stacking unopened chests no longer blocks new fights.)
+## 따로 다니기: the cap is PER SPLIT GROUP — each party may run battle_window_cap()
+## fights at once (멀티 전투창 2 × two parties → up to 4 windows total). This
+## legacy any-group form stays for generic "is anything able to fight" checks.
 func can_accept_new_battle_window() -> bool:
+	for group in active_party_groups():
+		if can_group_accept_battle_window(group):
+			return true
+	return false
+
+
+## Does THIS split group still have window room? (group 0 = the hero's chain)
+func can_group_accept_battle_window(group: int) -> bool:
 	var tree := get_tree()
 	if tree == null:
 		return true
 	var bm: Node = tree.get_first_node_in_group("battle_manager")
-	if bm == null or not bm.has_method("active_window_count"):
+	if bm == null or not bm.has_method("active_window_count_for_group"):
 		return true
-	return int(bm.active_window_count()) < battle_window_cap()
+	return int(bm.active_window_count_for_group(group)) < battle_window_cap()
+
+
+## Groups currently in play: the hero's chain (0) + every squad someone is in.
+func active_party_groups() -> Array[int]:
+	var groups: Array[int] = [0]
+	for index in _member_groups.keys():
+		var g: int = int(_member_groups[index])
+		if g > 0 and int(index) < party_size() and not groups.has(g):
+			groups.append(g)
+	return groups
 
 
 func combo_attack_unlocked() -> bool:
@@ -1176,13 +1195,13 @@ func can_purchase_building(id: StringName) -> bool:
 	return gold >= building_cost(id)
 
 
-## Build a DIRECT building. Its owner companion joins immediately (모닥불→마법사,
-## 성소→사제).
+## Build a DIRECT building. Its owner companion only APPEARS here (등장) — the
+## actual join happens RPG-style in the 이벤트 창 when the hero walks up to the
+## placed building (e.g. 성소 도착 → 사제 만남, see Field._arrival_event_for).
 func purchase_building(id: StringName) -> bool:
 	if not can_purchase_building(id) or not spend_gold(building_cost(id)):
 		return false
 	_raise_building(id)
-	_join_building_owner(id)  # direct owners join the moment the building is up
 	return true
 
 
@@ -1603,6 +1622,29 @@ func place_acquired_objet(id: StringName) -> bool:
 	return true
 
 
+## DEBUG (gold-chip click): surface EVERY placement tile in the dock at once —
+## all enemy tiers unlock, both objets (모닥불/마을) land in hand, and the direct
+## buildings' gate counters (성소's downs, …) jump to their thresholds. Placement
+## costs still apply — the +1000G from the same click bankrolls the testing.
+func debug_unlock_all_tiles() -> void:
+	for i in Balance.tier_count():
+		var tier_id: StringName = StringName(Balance.tier_at(i)["id"])
+		if not is_tier_unlocked(tier_id):
+			unlocked_tier_ids.append(tier_id)
+			EventBus.tier_unlocked.emit(tier_id)
+	for tile: Dictionary in Balance.TILES:
+		acquire_objet(StringName(tile.get("id", &"")))
+	for building_id: StringName in [&"sanctuary"]:
+		var cond: Dictionary = Balance.building_by_id(building_id).get("unlock", {})
+		var need: int = int(cond.get("value", 0))
+		match StringName(cond.get("type", &"")):
+			&"kills": total_enemy_kills = maxi(total_enemy_kills, need)
+			&"downs": total_party_downs = maxi(total_party_downs, need)
+			&"gold_earned": total_gold_earned = maxi(total_gold_earned, need)
+	# One catch-all refresh so the dock/tooltips rebuild immediately.
+	EventBus.combat_upgrade_changed.emit(&"tier")
+
+
 ## 여관(Inn): everyone wakes up topped off — revive any downed members and refill
 ## all HP to full. The single full-party restore the field offers.
 func restore_party_full() -> void:
@@ -1733,6 +1775,126 @@ func record_enemy_kill(tier_id: StringName) -> void:
 		EventBus.enemy_leveled_up.emit(tier_id, level)
 
 
+## 방문 창 (ObjectWindow) open state — the hero holds still while "inside" the
+## visited object. WITHOUT detached members the whole field pauses (movement,
+## spawning, encounters) via the battle-pause counter. WITH 따로 다니기 in effect
+## only the hero's chain is held (is_movement_frozen) — the detached members keep
+## roaming and fighting while the hero shops.
+var object_window_open: bool = false
+var _object_window_paused_field: bool = false
+
+
+func open_object_window() -> void:
+	if object_window_open:
+		return
+	object_window_open = true
+	_object_window_paused_field = not has_detached_members()
+	if _object_window_paused_field:
+		begin_field_battle_pause()
+
+
+func close_object_window() -> void:
+	if not object_window_open:
+		return
+	object_window_open = false
+	if _object_window_paused_field:
+		end_field_battle_pause()
+	_object_window_paused_field = false
+
+
+# ─── 따로 다니기 (party split — BG-style chain break into squads) ────────
+## Learned once at the campfire (needs a companion) → 2 groups. 분할 확장
+## upgrades raise the cap toward Balance.PARTY_GROUP_MAX. Group 0 = the hero's
+## chain; groups 1+ are independent SQUADS: members of the same group travel
+## together (lowest index leads, hunting field enemies; the rest wedge behind).
+## Drag a party-bar chip right/left to push it a group out / pull it back in.
+var party_group_limit: int = 1
+var _member_groups: Dictionary = {}  ## party index -> group id (0 = hero chain)
+
+
+func is_party_split_unlocked() -> bool:
+	return party_group_limit >= 2
+
+
+func party_split_learn_cost() -> int:
+	return Balance.PARTY_SPLIT_LEARN_COST
+
+
+func can_learn_party_split() -> bool:
+	return party_group_limit < 2 and party_size() >= 2 and gold >= party_split_learn_cost()
+
+
+func learn_party_split() -> void:
+	if not can_learn_party_split() or not spend_gold(party_split_learn_cost()):
+		return
+	party_group_limit = 2
+	EventBus.party_split_learned.emit()
+
+
+## 분할 확장: each step allows one more simultaneous squad (cap PARTY_GROUP_MAX).
+func party_split_expand_cost() -> int:
+	return Balance.PARTY_SPLIT_EXPAND_BASE_COST * maxi(1, party_group_limit - 1)
+
+
+func can_expand_party_split() -> bool:
+	return is_party_split_unlocked() and party_group_limit < Balance.PARTY_GROUP_MAX \
+		and gold >= party_split_expand_cost()
+
+
+func expand_party_split() -> void:
+	if not can_expand_party_split() or not spend_gold(party_split_expand_cost()):
+		return
+	party_group_limit += 1
+	EventBus.party_group_limit_changed.emit(party_group_limit)
+
+
+func member_group(index: int) -> int:
+	return int(_member_groups.get(index, 0))
+
+
+func is_member_detached(index: int) -> bool:
+	return member_group(index) != 0
+
+
+func has_detached_members() -> bool:
+	for index in _member_groups.keys():
+		if int(_member_groups[index]) != 0:
+			return true
+	return false
+
+
+## Move a member to `group` (clamped to the unlocked cap). The hero (index 0)
+## never leaves group 0. Returns true when the assignment actually changed.
+func set_member_group(index: int, group: int) -> bool:
+	if not is_party_split_unlocked() or index <= 0 or index >= party_size():
+		return false
+	var clamped: int = clampi(group, 0, party_group_limit - 1)
+	if clamped == member_group(index):
+		return false
+	_member_groups[index] = clamped
+	EventBus.member_group_changed.emit(index, clamped)
+	return true
+
+
+## 이벤트 창 (EventWindow cutscenes) — same freeze contract as the 방문 창, with
+## its own flag so the two window types can't release each other's hold.
+var event_window_open: bool = false
+
+
+func open_event_window() -> void:
+	if event_window_open:
+		return
+	event_window_open = true
+	begin_field_battle_pause()
+
+
+func close_event_window() -> void:
+	if not event_window_open:
+		return
+	event_window_open = false
+	end_field_battle_pause()
+
+
 func begin_field_battle_pause() -> void:
 	_field_battle_pause_count += 1
 
@@ -1741,16 +1903,46 @@ func end_field_battle_pause() -> void:
 	_field_battle_pause_count = maxi(0, _field_battle_pause_count - 1)
 
 
+## Per-party battle pause — used by pre-멀티전투창 MODAL fights so only the party
+## that's actually fighting holds still; the other split squads keep roaming and
+## fighting. (Global window/cutscene freezes keep using the counter above.)
+var _group_battle_pause_counts: Dictionary = {}  ## group id -> pause count
+
+
+func begin_group_battle_pause(group: int) -> void:
+	_group_battle_pause_counts[group] = int(_group_battle_pause_counts.get(group, 0)) + 1
+
+
+func end_group_battle_pause(group: int) -> void:
+	_group_battle_pause_counts[group] = maxi(0, int(_group_battle_pause_counts.get(group, 0)) - 1)
+
+
+func is_group_battle_paused(group: int) -> bool:
+	return int(_group_battle_pause_counts.get(group, 0)) > 0
+
+
 func is_field_battle_paused() -> bool:
 	return _field_battle_pause_count > 0
 
 
-## True while the field should hold still for a fight: an explicit pause is held, OR
-## every battle-window slot is in use (at the SCALE cap). Below the cap the field
-## keeps roaming so the hero walks into the next fight; once the cap is full it
-## freezes until a window resolves and frees a slot.
+## True while the WHOLE field should hold still: a global pause is held, OR every
+## active split group is individually frozen (modal-paused or window-capped).
+## With one un-split party this is the classic behavior; with 따로 다니기 the
+## field keeps living as long as ANY party can still roam.
 func is_field_frozen_for_battle() -> bool:
-	return is_field_battle_paused() or not can_accept_new_battle_window()
+	if is_field_battle_paused():
+		return true
+	for group in active_party_groups():
+		if not is_group_frozen_for_battle(group):
+			return false
+	return true
+
+
+## Per-party freeze: THIS group holds still while its own modal fight runs or its
+## own windows are capped — the other parties keep moving/fighting.
+func is_group_frozen_for_battle(group: int) -> bool:
+	return is_field_battle_paused() or is_group_battle_paused(group) \
+		or not can_group_accept_battle_window(group)
 
 
 func _purchased_skill_node_data() -> Array:
@@ -2034,9 +2226,11 @@ func is_party_fully_recovered() -> bool:
 	return true
 
 
-## Field movement is frozen while the whole party recovers from a full collapse.
+## Field movement is frozen while the whole party recovers from a full collapse,
+## or while a 방문 창 / 이벤트 창 holds the field still.
 func is_movement_frozen() -> bool:
-	return _party_collapsed or not world_started or party_resting
+	return _party_collapsed or not world_started or party_resting \
+		or object_window_open or event_window_open
 
 
 ## All combat-ready members at full HP? (Downed members refill on their own.)
@@ -2885,6 +3079,8 @@ func reset_run() -> void:
 	_tier_available_announced.clear()  # re-announce tiers next run
 	placed_structures.clear()          # village etc. re-placeable next run
 	acquired_objets.clear()            # objets drop fresh again next run
+	party_group_limit = 1              # 따로 다니기 re-learns at the campfire
+	_member_groups.clear()             # everyone back on the hero's chain
 	enemies_killed = 0
 	biggest_hit = 0
 	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock
@@ -2901,6 +3097,7 @@ func reset_run() -> void:
 	_move_speed_boost_multiplier = 1.0
 	_move_speed_boost_until_msec = 0
 	_field_battle_pause_count = 0
+	_group_battle_pause_counts.clear()
 	field_loop_count = 0
 	current_field_region_id = FIELD_REGION_GRASS
 	story_companion_joined = false

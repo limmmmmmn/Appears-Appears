@@ -103,7 +103,8 @@ func _ready() -> void:
 func is_auto_move_target() -> bool:
 	if _triggered or _despawning or _spawning:
 		return false
-	return GameState.can_accept_new_battle_window()
+	# Auto-move serves the HERO's chain → check that party's own window room.
+	return GameState.can_group_accept_battle_window(0)
 
 
 ## Allow callers to inject data after instantiate().
@@ -202,6 +203,11 @@ func _physics_process(delta: float) -> void:
 	if _triggered or _spawning or _despawning:
 		return
 	_charge_cooldown_timer = maxf(0.0, _charge_cooldown_timer - delta)
+	# 따로 다니기: detached companions have no physics body, so contact with them
+	# is a plain distance check — catching one starts a battle just like the hero.
+	_maybe_contact_detached_companion()
+	if _triggered:
+		return
 	if _state == State.WANDER:
 		_process_wander(delta)
 	elif _state == State.ALERT:
@@ -212,8 +218,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		_process_charge(delta)
 	# Cap-blocked bumps: separate from the player each frame so neither party
-	# stays locked inside the slime.
-	if not GameState.can_accept_new_battle_window():
+	# stays locked inside the slime. (Hero chain = group 0.)
+	if not GameState.can_group_accept_battle_window(0):
 		_resolve_stuck_overlap(delta)
 
 
@@ -498,14 +504,41 @@ func _build_spawn_sparkle() -> Node2D:
 	return root
 
 
+## Detached (따로 다니기) companions fight too: they're bodiless Node2Ds, so a
+## radius check stands in for the player's body_entered contact.
+const DETACHED_CONTACT_DIST_SQ: float = 110.0
+
+## Which split party started this fight (0 = hero chain) — stamped just before
+## _trigger_encounter so the battle window lands on the right per-party cap.
+var encounter_group: int = 0
+
+
+func _maybe_contact_detached_companion() -> void:
+	for node in get_tree().get_nodes_in_group("party_member"):
+		if not (node is Companion):
+			continue
+		var comp := node as Companion
+		if not comp.is_detached() or not GameState.is_combat_ready(comp.slot_index):
+			continue
+		var group: int = GameState.member_group(comp.slot_index)
+		# Per-party cap: this squad may already be running its allowed windows.
+		if not GameState.can_group_accept_battle_window(group):
+			continue
+		if global_position.distance_squared_to(comp.global_position) <= DETACHED_CONTACT_DIST_SQ:
+			encounter_group = group
+			_trigger_encounter(false)
+			return
+
+
 func _on_body_entered(body: Node) -> void:
 	if _triggered or _spawning or body is not Player:
 		return
-	# Multi-window cap: when BattleManager is already at its allowed window
-	# count, just let the player pass through. The enemy stays alive and will
-	# re-trigger once a window closes and the player walks back in.
-	if not GameState.can_accept_new_battle_window():
+	# Per-party multi-window cap: when the HERO's party is already at its allowed
+	# window count, just let the player pass through. The enemy stays alive and
+	# will re-trigger once a window closes and the player walks back in.
+	if not GameState.can_group_accept_battle_window(0):
 		return
+	encounter_group = 0
 	_trigger_encounter(false)
 
 
@@ -571,18 +604,20 @@ func _vanish_after_hit() -> void:
 	tween.chain().tween_callback(queue_free)
 
 
+## The brief encounter-handoff pause holds only the party that hit this enemy —
+## other split squads keep moving through someone else's battle intro.
 func _hold_encounter_pause() -> void:
 	if _encounter_pause_held:
 		return
 	_encounter_pause_held = true
-	GameState.begin_field_battle_pause()
+	GameState.begin_group_battle_pause(encounter_group)
 
 
 func _release_encounter_pause() -> void:
 	if not _encounter_pause_held:
 		return
 	_encounter_pause_held = false
-	GameState.end_field_battle_pause()
+	GameState.end_group_battle_pause(encounter_group)
 
 
 func _shake_player_camera() -> void:

@@ -62,13 +62,92 @@ func _ready() -> void:
 		_apply()
 
 
-## Clicking anywhere on the party box snaps the camera back onto the hero (handy
-## when you've panned the view off into free-look). mouse_filter is PASS, so this
-## fires for clicks on the box body while equip slots still get their own clicks.
+## Click = snap the camera back onto the hero. DRAG (따로 다니기 learned, not the
+## hero's own chip) = BG-style chain pull: drag RIGHT past the threshold → one
+## group further out (제2파티 → 제3파티 …); drag LEFT → one group back toward
+## the hero's chain. Lands with a "띵" / "철컥".
+const DETACH_DRAG_THRESHOLD: float = 18.0
+
+var _drag_origin: Vector2 = Vector2.INF  ## global mouse pos at press (INF = idle)
+var _drag_home_x: float = 0.0            ## container-assigned x at press
+var _drag_dx: float = 0.0
+
+
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		EventBus.camera_focus_hero_requested.emit()
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_drag_origin = get_global_mouse_position()
+			_drag_home_x = position.x
+			_drag_dx = 0.0
+			return
+		var was_chain_pull: bool = _drag_origin != Vector2.INF \
+			and absf(_drag_dx) > DETACH_DRAG_THRESHOLD and _can_toggle_detach()
+		_drag_origin = Vector2.INF
+		var moved: bool = false
+		if was_chain_pull:
+			var step: int = 1 if _drag_dx > 0.0 else -1
+			# The bar reorders on the signal, which also snaps positions clean.
+			moved = GameState.set_member_group(party_index, GameState.member_group(party_index) + step)
+		if not moved:
+			var t := create_tween()
+			t.tween_property(self, "position:x", _drag_home_x, 0.12)\
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			if absf(_drag_dx) <= 4.0:
+				EventBus.camera_focus_hero_requested.emit()
+	elif event is InputEventMouseMotion and _drag_origin != Vector2.INF and _can_toggle_detach():
+		# The chip follows the pull (clamped) — the visible "straining chain".
+		_drag_dx = get_global_mouse_position().x - _drag_origin.x
+		position.x = _drag_home_x + clampf(_drag_dx, -30.0, 30.0)
+
+
+func _can_toggle_detach() -> bool:
+	return GameState.is_party_split_unlocked() and party_index > 0
+
+
+## Tiny corner number showing which squad this member runs with (2 = 제2파티…).
+## Hidden while on the hero's chain.
+var _group_badge: Label
+
+
+func set_group_badge(group: int) -> void:
+	if _group_badge == null:
+		_group_badge = Label.new()
+		_group_badge.add_theme_font_override("font", BOX_FONT)
+		_group_badge.add_theme_font_size_override("font_size", 8)
+		_group_badge.add_theme_color_override("font_color", Color(1.0, 0.82, 0.3, 1.0))
+		_group_badge.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+		_group_badge.add_theme_constant_override("shadow_offset_x", 1)
+		_group_badge.add_theme_constant_override("shadow_offset_y", 1)
+		_group_badge.position = Vector2(-3.0, -8.0)
+		_group_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_group_badge)
+	_group_badge.text = str(group + 1)
+	_group_badge.visible = group > 0
+
+
+## 띵! — the chain snapped (detached=true) or clicked back together. Pop the chip
+## and float a tiny tag so the toggle reads instantly.
+func play_detach_pop(detached: bool) -> void:
+	pivot_offset = size * 0.5
+	scale = Vector2(1.25, 1.25) if detached else Vector2(0.8, 0.8)
+	var t := create_tween()
+	t.tween_property(self, "scale", Vector2.ONE, 0.18)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var tag := Label.new()
+	tag.text = "띵!" if detached else "철컥"
+	tag.add_theme_font_override("font", BOX_FONT)
+	tag.add_theme_font_size_override("font_size", 9)
+	tag.add_theme_color_override("font_color", Color(1.0, 0.82, 0.3, 1.0) if detached else Color(0.55, 0.85, 1.0, 1.0))
+	tag.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	tag.add_theme_constant_override("shadow_offset_x", 1)
+	tag.add_theme_constant_override("shadow_offset_y", 1)
+	tag.position = Vector2(size.x * 0.5 - 8.0, -12.0)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(tag)
+	var tt := create_tween().set_parallel(true)
+	tt.tween_property(tag, "position:y", tag.position.y - 8.0, 0.45)
+	tt.tween_property(tag, "modulate:a", 0.0, 0.45)
+	tt.chain().tween_callback(tag.queue_free)
 
 
 ## A combat-upgrade landed (weapon/armor/luck/scale). Re-sync the visible gear

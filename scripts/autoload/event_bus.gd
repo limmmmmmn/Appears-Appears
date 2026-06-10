@@ -104,8 +104,24 @@ signal enemy_place_requested(tier_id: StringName)
 ## A generic field structure (TILES entry, e.g. village) was paid for + placed.
 ## The Field spawns its sprite at pending_placement_position.
 signal structure_placed(tile_id: StringName)
-## A placed field object (e.g. campfire) was clicked → open its action panel.
-signal structure_clicked(building_id: StringName, world_position: Vector2)
+## A placed field object (e.g. campfire) was clicked → the small [간다][닫기]
+## bubble opens above it (ObjectActionPanel).
+signal structure_clicked(structure: Node)
+## [간다] pressed on a structure's bubble → the hero walks over; the 방문 창
+## (ObjectWindow) opens on arrival.
+signal structure_visit_requested(structure: Node)
+## The hero ARRIVED at a structure → open the big centered 방문 창 for it.
+## `structure` implements get_inspector_data() -> Dictionary.
+signal object_window_requested(structure: Node)
+## A story beat wants the 이벤트 창 (cutscene window). The field holds still while
+## it plays. Known ids: &"campfire_mage" (모닥불 → 메이지 합류).
+signal event_window_requested(event_id: StringName)
+## 따로 다니기 (party split) was learned at the campfire.
+signal party_split_learned()
+## A party member moved between split groups (0 = hero's chain, 1+ = roaming squads).
+signal member_group_changed(index: int, group: int)
+## The split-group cap grew (모닥불 분할 확장 upgrade).
+signal party_group_limit_changed(new_limit: int)
 ## A field target (ally / enemy / objet) was clicked → show it in the right property
 ## inspector. `target` implements get_inspector_data() -> Dictionary. null = deselect.
 signal inspector_target_selected(target: Node)

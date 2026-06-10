@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b8bhrhdxjfyt1" path="res://scripts/runtime/field.gd" id="1_field"]
 [ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="2_font"]
+[ext_resource type="PackedScene" path="res://scenes/ui/object_action_panel.tscn" id="3_oap"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_message"]
 bg_color = Color(0.02, 0.04, 0.02, 0.86)
@@ -52,6 +53,8 @@ y_sort_enabled = true
 
 [node name="Party" type="Node2D" parent="." unique_id=1572474564]
 y_sort_enabled = true
+
+[node name="ObjectActionPanel" parent="." unique_id=1572474565 instance=ExtResource("3_oap")]
 
 [node name="MessageLayer" type="CanvasLayer" parent="." unique_id=1898667897]
 layer = 8

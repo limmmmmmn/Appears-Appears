@@ -43,6 +43,9 @@ func _connect_events() -> void:
 	EventBus.objet_acquired.connect(_on_objet_acquired)
 	EventBus.companion_recruited.connect(_on_companion_recruited)
 	EventBus.party_member_leveled_up.connect(_on_member_leveled)
+	EventBus.party_split_learned.connect(func() -> void: add_line("따로 다니기를 배웠다."))
+	EventBus.party_group_limit_changed.connect(_on_group_limit_changed)
+	EventBus.member_group_changed.connect(_on_member_group_changed)
 	# Mirror one-off narration into the running log so story beats accumulate too.
 	EventBus.narration.connect(add_line)
 
@@ -80,6 +83,18 @@ func _on_companion_recruited(id: StringName) -> void:
 
 func _on_member_leveled(index: int, new_level: int) -> void:
 	add_line("%s, 레벨 %d." % [_member_name(index), new_level])
+
+
+func _on_member_group_changed(index: int, group: int) -> void:
+	var nm: String = _member_name(index)
+	if group == 0:
+		add_line("%s%s 대열로 돌아왔다." % [nm, _i(nm)])
+	else:
+		add_line("%s%s 제%d파티로 갈라져 나왔다." % [nm, _i(nm), group + 1])
+
+
+func _on_group_limit_changed(new_limit: int) -> void:
+	add_line("이제 파티를 %d개까지 나눌 수 있다." % new_limit)
 
 
 # ─── Log buffer ────────────────────────────────────────────────────────

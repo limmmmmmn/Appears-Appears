@@ -173,6 +173,7 @@ func _ready() -> void:
 	EventBus.building_built.connect(_on_building_built)
 	EventBus.structure_placed.connect(_on_structure_placed)
 	EventBus.rest_requested.connect(_begin_rest)
+	EventBus.structure_visit_requested.connect(_on_structure_visit_requested)
 	EventBus.world_started.connect(_on_world_started)
 	EventBus.rescue_offered.connect(_on_rescue_offered)
 	_hide_message()
@@ -859,6 +860,10 @@ func _on_combat_upgrade_changed(axis: StringName) -> void:
 ## A companion appeared (its building was built) — announce the "만남" so the
 ## player knows a recruit is now available in the panel.
 func _on_companion_appeared(id: StringName) -> void:
+	# Event-driven recruits (모닥불→마법사, 성소→사제) get their moment in the
+	# 이벤트 창 instead — no spoiler banner on placement.
+	if id == &"mage" or id == &"priest":
+		return
 	var comp: Dictionary = Balance.companion_by_id(id)
 	_show_message(str(comp.get("appear_text", "새로운 동료가 나타났다!")))
 
@@ -886,13 +891,13 @@ func _on_campfire_placed() -> void:
 	_campfire_node.setup(Balance.tile_by_id(&"campfire"))
 	_campfire_node.position = pos
 	_decorations_root.add_child(_campfire_node)
-	EventBus.inspector_target_selected.emit(_campfire_node)
-	_campfire_node.set_selected(true)
 	# First placement: party auto-walks to the fire, then 마법사 appears + joins.
+	# (No 방문 창 here — the story beat owns the arrival; later visits go through
+	# the [간다] bubble like any other structure.)
+	# No announcement banner here — the walk + 이벤트 창 carry the moment.
 	_campfire_event_pending = true
 	if _player and _player.has_method("set_forced_move_target"):
 		_player.set_forced_move_target(pos)
-	_show_message("모닥불을 피웠다. 더 태워볼까…?")
 
 
 ## How near the hero must get to a freshly placed structure before it stops
@@ -901,8 +906,8 @@ const STRUCTURE_ARRIVE_DIST: float = 20.0
 ## World point the party is currently walking toward after placing a structure
 ## (e.g. the village), or INF when not reacting.
 var _structure_walk_target: Vector2 = Vector2.INF
-## The just-placed structure's id — kept only for arrival bookkeeping.
-var _structure_walk_id: StringName = &""
+## The structure node the hero is walking to — its 방문 창 opens on arrival.
+var _structure_walk_node: Node2D = null
 
 
 ## Generic TILES structures (village, …) — spawn the sprite at the dropped spot.
@@ -917,14 +922,9 @@ func _on_structure_placed(tile_id: StringName) -> void:
 	node.setup(Balance.tile_by_id(tile_id))
 	node.position = pos
 	_decorations_root.add_child(node)
-	EventBus.inspector_target_selected.emit(node)
-	node.set_selected(true)
-	# The party reacts: auto-walk over to the freshly placed structure, then its
-	# action menu auto-opens on arrival (see _tick_structure_walk).
-	_structure_walk_target = pos
-	_structure_walk_id = tile_id
-	if _player and _player.has_method("set_forced_move_target"):
-		_player.set_forced_move_target(pos)
+	# RPG flow: the party walks over to the freshly placed structure, and its
+	# 방문 창 opens on arrival (see _tick_structure_walk).
+	_begin_structure_visit(node)
 	var sname: String = str(Balance.tile_by_id(tile_id).get("name", "무언가"))
 	_show_message("%s%s 발견했다!" % [sname, _kor_obj_particle(sname)])
 
@@ -940,16 +940,51 @@ func _kor_obj_particle(word: String) -> String:
 	return "을"
 
 
-## Once the hero reaches a just-placed structure: stop walking. Object actions live
-## in the right property inspector, which is selected immediately on placement.
+## Start an RPG "visit": the hero walks to the structure; on arrival its 방문 창
+## opens (마을 → 상점/여관, 모닥불 → 쉰다/강화 …) and the field holds still.
+func _begin_structure_visit(node: Node2D) -> void:
+	if node == null:
+		return
+	_structure_walk_target = node.position
+	_structure_walk_node = node
+	if _player and _player.has_method("set_forced_move_target"):
+		_player.set_forced_move_target(node.position)
+
+
+## [간다] pressed on a structure's bubble (or any future visit trigger).
+func _on_structure_visit_requested(structure: Node) -> void:
+	if structure is Node2D and is_instance_valid(structure):
+		_begin_structure_visit(structure as Node2D)
+
+
+## Once the hero reaches the visited structure: stop walking and swing open its
+## window — a story 이벤트 창 if this arrival owns one (e.g. the sanctuary's
+## priest meeting), else the regular 방문 창. Either freezes the field.
 func _tick_structure_walk() -> void:
 	if _structure_walk_target == Vector2.INF or _player == null:
 		return
 	if _player.global_position.distance_to(_structure_walk_target) <= STRUCTURE_ARRIVE_DIST:
 		_structure_walk_target = Vector2.INF
-		_structure_walk_id = &""
+		var node: Node2D = _structure_walk_node
+		_structure_walk_node = null
 		if _player.has_method("clear_forced_move_target"):
 			_player.clear_forced_move_target()
+		if is_instance_valid(node):
+			if node.has_method("pulse"):
+				node.pulse()
+			var event_id: StringName = _arrival_event_for(node)
+			if event_id != &"":
+				EventBus.event_window_requested.emit(event_id)
+			else:
+				EventBus.object_window_requested.emit(node)
+
+
+## One-time story beats that hijack a structure arrival. Returns &"" when the
+## arrival should just open the normal 방문 창.
+func _arrival_event_for(node: Node2D) -> StringName:
+	if node == _sanctuary_node and not GameState.is_companion_recruited(&"priest"):
+		return &"sanctuary_priest"
+	return &""
 
 
 ## Drag-placed buildings that live on the field (sanctuary). Spawn a structure at
@@ -967,8 +1002,8 @@ func _on_building_built(id: StringName) -> void:
 	_sanctuary_node.setup(Balance.building_by_id(&"sanctuary"))
 	_sanctuary_node.position = pos
 	_decorations_root.add_child(_sanctuary_node)
-	EventBus.inspector_target_selected.emit(_sanctuary_node)
-	_sanctuary_node.set_selected(true)
+	# RPG flow: walk over + open its 방문 창 on arrival, same as TILES structures.
+	_begin_structure_visit(_sanctuary_node)
 
 
 func _random_campfire_position() -> Vector2:
@@ -993,14 +1028,15 @@ func _tick_campfire(delta: float) -> void:
 		if (child as Node2D).position.distance_to(center) <= radius:
 			in_range.append(idx)
 	GameState.tick_campfire_regen(in_range, delta)
-	# One-time mage event: party reached the fire.
+	# One-time mage event: party reached the fire → play the 이벤트 창 cutscene
+	# (모닥불 앞에서 메이지와 첫 만남 — the join happens at the scene's end).
 	if _campfire_event_pending and _player and _player.position.distance_to(center) <= radius:
 		_campfire_event_pending = false
 		if _player.has_method("clear_forced_move_target"):
 			_player.clear_forced_move_target()
 		if _campfire_node.has_method("pulse"):
 			_campfire_node.pulse()
-		GameState.join_companion(&"mage")  # 마법사 즉시 영입 (emits join message)
+		EventBus.event_window_requested.emit(&"campfire_mage")
 
 
 # ─── Campfire "쉰다" (rest): walk over, hold, fast-heal to full ─────────

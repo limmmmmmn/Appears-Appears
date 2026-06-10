@@ -96,11 +96,11 @@ func setup(building: Dictionary) -> void:
 	_build_selection_marker()
 
 
-## Click → show this structure in the right property inspector. Object actions live
-## there now; the old floating action bubble is intentionally gone.
+## Click → the [간다][닫기] bubble opens above this structure (RPG-style: the hero
+## walks over and the 방문 창 opens on arrival — see ObjectActionPanel / Field).
 func _on_hotspot_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		EventBus.inspector_target_selected.emit(self)
+		EventBus.structure_clicked.emit(self)
 		get_viewport().set_input_as_handled()
 
 
@@ -148,6 +148,8 @@ func get_inspector_data() -> Dictionary:
 				"cost": 0,
 				"enabled": true,
 				"on_press": func() -> void: EventBus.rest_requested.emit(),
+				# Resting plays out ON the field → the 방문 창 closes itself first.
+				"close_after": true,
 			},
 			{
 				"label": "모닥불 강화",
@@ -156,6 +158,23 @@ func get_inspector_data() -> Dictionary:
 				"on_press": GameState.upgrade_campfire,
 			},
 		]
+		# 따로 다니기: learned HERE, once, with at least one companion — afterwards
+		# party-bar chips can be dragged off the chain (BG-style split). Further
+		# 분할 확장 steps raise how many squads can roam at once.
+		if not GameState.is_party_split_unlocked():
+			actions.append({
+				"label": "따로 다니기 습득",
+				"cost": GameState.party_split_learn_cost(),
+				"enabled": GameState.can_learn_party_split(),
+				"on_press": GameState.learn_party_split,
+			})
+		elif GameState.party_group_limit < Balance.PARTY_GROUP_MAX:
+			actions.append({
+				"label": "분할 확장 (%d파티)" % (GameState.party_group_limit + 1),
+				"cost": GameState.party_split_expand_cost(),
+				"enabled": GameState.can_expand_party_split(),
+				"on_press": GameState.expand_party_split,
+			})
 		info_text = "모닥불 Lv%d · 회복 %.1f/s · 반경 %.0f" % [
 			GameState.campfire_level,
 			GameState.campfire_regen_rate(),

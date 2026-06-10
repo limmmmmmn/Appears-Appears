@@ -8,8 +8,11 @@ extends HBoxContainer
 ## cleared at runtime before the live party is populated.
 
 const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.tscn")
+## 따로 다니기: each squad cluster sits past this gap — the visibly broken chain.
+const DETACH_GAP: float = 14.0
 
 var _member_boxes: Array[PartyMemberBox] = []
+var _spacers: Array[Control] = []
 
 
 func _ready() -> void:
@@ -20,6 +23,7 @@ func _ready() -> void:
 	EventBus.party_member_revived.connect(_on_revived)
 	EventBus.party_equipment_changed.connect(_on_equip)
 	EventBus.armor_equipped.connect(_on_armor.unbind(1))
+	EventBus.member_group_changed.connect(_on_group_changed)
 	_rebuild()
 
 
@@ -30,11 +34,53 @@ func _rebuild() -> void:
 		remove_child(c)
 		c.queue_free()
 	_member_boxes.clear()
+	_spacers.clear()
 	for i in GameState.party_size():
 		var box: PartyMemberBox = MEMBER_BOX_SCENE.instantiate()
 		add_child(box)
 		box.setup(i, GameState.party[i])
 		_member_boxes.append(box)
+	for g in Balance.PARTY_GROUP_MAX - 1:
+		var spacer := Control.new()
+		spacer.custom_minimum_size = Vector2(DETACH_GAP, 0.0)
+		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		spacer.visible = false
+		add_child(spacer)
+		_spacers.append(spacer)
+	_reorder()
+
+
+## Bar order mirrors the field: group-0 chain first, then each squad cluster
+## behind a gap. Group badges refresh in the same pass.
+func _reorder() -> void:
+	var group_boxes: Array = []
+	for g in Balance.PARTY_GROUP_MAX:
+		group_boxes.append([])
+	for box in _member_boxes:
+		if not is_instance_valid(box):
+			continue
+		var g: int = clampi(GameState.member_group(box.party_index), 0, Balance.PARTY_GROUP_MAX - 1)
+		group_boxes[g].append(box)
+		box.set_group_badge(g)
+	var order: Array = []
+	for g in Balance.PARTY_GROUP_MAX:
+		for box in group_boxes[g]:
+			order.append(box)
+		if g < _spacers.size():
+			# A gap shows only BETWEEN two occupied clusters (empty squads collapse).
+			var occupied_before: bool = false
+			for gg in g + 1:
+				occupied_before = occupied_before or not group_boxes[gg].is_empty()
+			_spacers[g].visible = occupied_before and not group_boxes[g + 1].is_empty()
+			order.append(_spacers[g])
+	for i in order.size():
+		move_child(order[i], i)
+
+
+func _on_group_changed(index: int, group: int) -> void:
+	_reorder()
+	if index >= 0 and index < _member_boxes.size() and is_instance_valid(_member_boxes[index]):
+		_member_boxes[index].play_detach_pop(group != 0)
 
 
 func _on_hp(index: int, new_hp: int, max_hp: int) -> void:

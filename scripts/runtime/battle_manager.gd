@@ -96,7 +96,7 @@ func _play_area_right_edge() -> float:
 
 var _window_rects: Dictionary = {}  ## BattleWindow -> Rect2 target it took
 var _window_velocities: Dictionary = {}  ## BattleWindow -> Vector2 world velocity.
-var _modal_windows: Dictionary = {}  ## BattleWindow -> true for pre-movement modal battles.
+var _modal_windows: Dictionary = {}  ## BattleWindow -> its battle GROUP (pre-movement modal battles; the pause holds only that party).
 var _collision_cooldowns: Dictionary = {}  ## window pair key -> remaining seconds.
 var _party_collision_cooldowns: Dictionary = {}  ## battle window id -> remaining seconds.
 var _settle_timer: float = 0.0
@@ -128,13 +128,74 @@ func _process(delta: float) -> void:
 	_update_formation(delta)
 
 
-# ─── Battle formation (removed) ────────────────────────────────────────
-## Formation flow is gone: every window now starts fighting the instant it opens
-## (see _spawn_window — windows are armed by default), so there's no "gather all
-## windows, walk the hero in, THEN arm" step. Kept as a no-op hook; the old
-## _plan/_move/_snap/_arm_formation helpers below are now dead and can be deleted.
+# ─── Battle stance (per split party) ────────────────────────────────────
+## The DQ read: 전투창 위, 아군 뒷모습 아래 —
+##   ㅁ  (window)
+##   0   (party, backs to camera)
+## Every party with an active fight marches into a centered row UNDER its battle
+## window and faces UP. With multiple windows the party stands in front of its
+## MOST RECENT one (마지막 전투창); when its last fight resolves to a chest the
+## members release and resume roaming/following. Refreshed every frame.
+const STANCE_GAP_Y: float = 28.0     ## party feet this far below the window's bottom edge
+const STANCE_SPACING: float = 18.0   ## px between members in the row
+## Room always kept free UNDER a window for its party row: a fight that starts at
+## the field's bottom edge gets nudged UP so the allies still fit beneath it
+## (no fixed "spawn zone" — only the minimum shift, only when needed).
+const STANCE_ROW_RESERVE: float = STANCE_GAP_Y + 10.0
+
+var _stance_groups: Dictionary = {}  ## group id -> true while members hold a battle row
+
+
 func _update_formation(_delta: float) -> void:
-	pass
+	# Latest ACTIVE (non-chest) window per battle group — _window_rects keys keep
+	# spawn order, so the last matching window IS the most recent fight.
+	var latest_by_group: Dictionary = {}
+	for window in _window_rects.keys():
+		if not is_instance_valid(window):
+			continue
+		if window.has_method("is_chest_active") and window.is_chest_active():
+			continue
+		latest_by_group[int(window.get_meta("battle_group", 0))] = window
+	for group in latest_by_group.keys():
+		_apply_group_stance(int(group), latest_by_group[group])
+	for group in _stance_groups.keys():
+		if not latest_by_group.has(int(group)):
+			_release_group_stance(int(group))
+	_stance_groups = latest_by_group
+
+
+## March this party's members into a centered row under the window (re-aimed every
+## frame so the row follows the card if it shifts).
+func _apply_group_stance(group: int, window) -> void:
+	var rect: Rect2 = _window_rects.get(window, Rect2(window.position, window.size))
+	var members: Array = _group_members_ordered(group)
+	var n: int = members.size()
+	for j in n:
+		var dx: float = (float(j) - float(n - 1) * 0.5) * STANCE_SPACING
+		var slot := Vector2(
+			clampf(rect.get_center().x + dx, 8.0, Field.FIELD_SIZE.x - 8.0),
+			clampf(rect.end.y + STANCE_GAP_Y, 8.0, Field.FIELD_SIZE.y - 8.0)
+		)
+		if members[j].has_method("set_formation_slot"):
+			members[j].set_formation_slot(slot)
+
+
+func _release_group_stance(group: int) -> void:
+	for m in _group_members_ordered(group):
+		if m.has_method("clear_formation"):
+			m.clear_formation()
+
+
+## This split group's members in stable order (hero first, companions by slot).
+func _group_members_ordered(group: int) -> Array:
+	var out: Array = []
+	for m in _party_members_ordered():
+		var idx: int = 0
+		if m is Companion:
+			idx = (m as Companion).slot_index
+		if GameState.member_group(idx) == group:
+			out.append(m)
+	return out
 
 
 ## Compute the row targets once: windows edge-to-edge over the party, both centered
@@ -175,6 +236,10 @@ func _plan_formation(windows: Array, members: Array) -> void:
 		var dx: float = (float(j) - float(member_count - 1) * 0.5) * FORMATION_SPACING
 		var slot: Vector2 = Vector2(center.x + dx, center.y + FORMATION_PARTY_DROP)
 		_party_slots.append(slot)
+		# 따로 다니기: detached members stay where they roam — they are not
+		# yanked across the map into the hero's battle row.
+		if members[j] is Companion and (members[j] as Companion).is_detached():
+			continue
 		if members[j].has_method("set_formation_slot"):
 			members[j].set_formation_slot(slot)
 
@@ -337,10 +402,13 @@ func _waiting_or_fighting_windows() -> Array:
 
 ## Single-battle placement: center the card on the hero (covering it). The hero's
 ## origin is at its feet, so nudge up to sit over the body.
+## Single-fight placement: the card opens just ABOVE the hero so the DQ read is
+## instant — 창(ㅁ) 위, 용사 뒷모습(0) 아래. The battle stance then walks him the
+## last few pixels into his row under the card.
 func _window_over_hero_position(window_size: Vector2) -> Vector2:
 	var player := get_tree().get_first_node_in_group("player")
 	var c: Vector2 = (player as Node2D).global_position if player != null else GRID_CENTER
-	return c - window_size * 0.5 - Vector2(0.0, 8.0)
+	return Vector2(c.x - window_size.x * 0.5, c.y - window_size.y - STANCE_GAP_Y - 14.0)
 
 
 ## How many battle windows the cap should treat as "fighting right now".
@@ -363,14 +431,30 @@ func active_window_count() -> int:
 	return count
 
 
+## Windows currently fighting FOR one split group (chest cards excluded) — feeds
+## the per-party multi-window cap (따로 다니기: each party caps independently).
+func active_window_count_for_group(group: int) -> int:
+	var count: int = 0
+	for window in _window_rects.keys():
+		if not is_instance_valid(window):
+			continue
+		if window.has_method("is_chest_active") and window.is_chest_active():
+			continue
+		if int(window.get_meta("battle_group", 0)) != group:
+			continue
+		count += 1
+	return count
+
+
 ## Fight inside `window` just ended (window is becoming a chest). Release the
 ## modal-battle pause (if applicable) so the player can move again, and clear
 ## it from `_modal_windows` so the eventual `_on_battle_window_closed` doesn't
 ## try to release the same pause a second time.
 func _on_battle_window_resolved(window: Node) -> void:
 	if _modal_windows.has(window):
+		var group: int = int(_modal_windows[window])
 		_modal_windows.erase(window)
-		GameState.end_field_battle_pause()
+		GameState.end_group_battle_pause(group)
 	# A card finished its fight → maybe its stack is now fully openable.
 	if _window_slot.has(window):
 		_update_slot_readiness(int(_window_slot[window]))
@@ -386,7 +470,12 @@ func _on_enemy_encountered(field_enemy: Node) -> void:
 	var source := field_enemy as Node2D
 	var is_combo_encounter: bool = bool(field_enemy.get_meta("combo_encounter", false))
 	var is_modal_battle: bool = not is_combo_encounter and not GameState.battle_movement_unlocked()
-	var window: BattleWindow = spawn_battle(data, source, is_modal_battle, is_combo_encounter)
+	# 따로 다니기: the window belongs to whichever party triggered it (0 = hero
+	# chain) — drives the per-party window cap + per-party modal pause.
+	var group: int = 0
+	if "encounter_group" in field_enemy:
+		group = int(field_enemy.encounter_group)
+	var window: BattleWindow = spawn_battle(data, source, is_modal_battle, is_combo_encounter, group)
 	if is_combo_encounter and window:
 		window.set_meta("combo_batch_id", int(field_enemy.get_meta("combo_batch_id", 0)))
 
@@ -400,11 +489,12 @@ func _on_combo_attack_damage_requested(damage_ratio: float, combo_batch_id: int)
 
 
 ## Public API. Used by enemy_encountered handler and debug helpers.
-func spawn_battle(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false, at_source_position: bool = false) -> BattleWindow:
-	return _spawn_window(data, source, is_modal_battle, at_source_position)
+## `battle_group`: which split party owns this fight (0 = hero chain).
+func spawn_battle(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false, at_source_position: bool = false, battle_group: int = 0) -> BattleWindow:
+	return _spawn_window(data, source, is_modal_battle, at_source_position, battle_group)
 
 
-func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false, at_source_position: bool = false) -> BattleWindow:
+func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool = false, at_source_position: bool = false, battle_group: int = 0) -> BattleWindow:
 	var window: BattleWindow = BATTLE_WINDOW_SCENE.instantiate()
 	# WORLD encounter spot — drives the on-field loot drop AND (converted to screen
 	# inside the window) the open-zoom origin.
@@ -424,21 +514,25 @@ func _spawn_window(data: EnemyData, source: Node2D = null, is_modal_battle: bool
 		window.grab_started.connect(_on_grab_started)
 	if window.has_signal("flip_requested"):
 		window.flip_requested.connect(_on_flip_requested)
-	# SINGLE battle (window cap 1): the card pops directly OVER the hero, covering it.
+	# SINGLE battle (window cap 1): the card pops directly OVER the hero, covering it
+	# — but only for the HERO's own fights; a split squad's fight opens at its slot.
 	# MULTI: the card drops straight into its 3×3 grid slot and STARTS FIGHTING the
 	# instant it opens — windows just appear and fight, one after another, until the
 	# cap is full (no "gather all windows, walk the hero in, then arm" formation step).
-	var single_mode: bool = GameState.battle_window_cap() <= 1
+	var single_mode: bool = GameState.battle_window_cap() <= 1 and battle_group == 0
 	var spawn_position: Vector2 = _window_over_hero_position(window_size) if single_mode \
-		else _slot_position(slot, count, window_size)
+		else _slot_position(slot, count, window_size, battle_group)
 	# Never open a window off-screen — keep it inside the camera view (slight overhang OK).
 	spawn_position = _clamp_window_to_view(spawn_position, window_size)
 	window.position = spawn_position
+	window.set_meta("battle_group", battle_group)
 	_window_rects[window] = Rect2(spawn_position, window_size)
 	_window_velocities[window] = Vector2.ZERO
 	if is_modal_battle:
-		_modal_windows[window] = true
-		GameState.begin_field_battle_pause()
+		# Modal (pre-멀티전투창) pause holds ONLY the party that's fighting — the
+		# other split squads keep roaming and starting their own fights.
+		_modal_windows[window] = battle_group
+		GameState.begin_group_battle_pause(battle_group)
 	_window_parent().add_child(window)
 	window.play_open_intro()
 	_update_slot_readiness(slot)  # a fresh fight in the slot → stack not openable yet
@@ -761,17 +855,27 @@ func _window_position_behind_enemy(source: Node2D, window_size: Vector2) -> Vect
 	return enemy + dir * WINDOW_BEHIND_ENEMY_DIST - window_size * 0.5
 
 
-func _slot_position(slot: int, stack_index: int, window_size: Vector2) -> Vector2:
-	# WORLD position: anchor the 3×3 slot grid to the party so windows sit ON THE
-	# MAP around the fight (zooming/panning with the camera) instead of pinned to
-	# the screen. Each slot keeps its relative place in the grid.
-	var anchor: Vector2 = _player_world_position()
+func _slot_position(slot: int, stack_index: int, window_size: Vector2, battle_group: int = 0) -> Vector2:
+	# WORLD position: anchor the 3×3 slot grid to the party THAT IS FIGHTING so
+	# windows open around their fight (따로 다니기: a squad's battle lands by the
+	# squad, not way off near the hero). Each slot keeps its grid-relative place.
+	var anchor: Vector2 = _group_anchor_position(battle_group)
 	if anchor == Vector2.INF:
 		anchor = GRID_CENTER
 	var slot_offset: Vector2 = SLOT_CENTERS[slot] - GRID_CENTER
 	# Diagonal cascade (down-right) so a stack fans like a dealt hand.
 	var nudge := Vector2(6.0, 6.0) * float(stack_index) + Vector2(randf_range(-1.5, 1.5), randf_range(-1.5, 1.5))
 	return anchor + slot_offset - window_size * 0.5 + nudge
+
+
+## Where a split party "is": the hero for group 0, the squad leader otherwise.
+func _group_anchor_position(group: int) -> Vector2:
+	if group == 0:
+		return _player_world_position()
+	for m in _group_members_ordered(group):
+		if m is Node2D and is_instance_valid(m):
+			return (m as Node2D).global_position
+	return _player_world_position()
 
 
 func _centered_modal_position(window_size: Vector2) -> Vector2:
@@ -1138,19 +1242,32 @@ func _visible_world_rect() -> Rect2:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	if camera == null:
 		return Rect2(Vector2.ZERO, viewport_size)
-	return Rect2(camera.get_screen_center_position() - viewport_size * 0.5, viewport_size)
+	# Account for the follow camera's ZOOM — at zoom 2 the view covers HALF the
+	# world per axis. (The old version assumed zoom 1 and mis-clamped edge fights.)
+	var world_size: Vector2 = viewport_size / camera.zoom
+	return Rect2(camera.get_screen_center_position() - world_size * 0.5, world_size)
 
 
-## Pull a spawn position so the window stays within the camera view, allowing a small
-## overhang (WINDOW_VIEW_OVERHANG). A window larger than the view on an axis is just
-## centered on that axis. World space == screen space here (camera fixed, zoom 1).
+## Pull a spawn position so the window stays inside BOTH the camera view (small
+## overhang allowed) AND the field board — an edge fight no longer hangs its card
+## half off-screen or out into the void past the field's rim. If the allowed
+## strip is narrower than the window on an axis, the window centers on it.
 func _clamp_window_to_view(pos: Vector2, window_size: Vector2) -> Vector2:
 	var view: Rect2 = _visible_world_rect()
-	var lo: Vector2 = view.position - Vector2.ONE * WINDOW_VIEW_OVERHANG
-	var hi: Vector2 = view.position + view.size - window_size + Vector2.ONE * WINDOW_VIEW_OVERHANG
+	var field: Rect2 = _field_rect()
+	var lo := Vector2(
+		maxf(view.position.x - WINDOW_VIEW_OVERHANG, field.position.x + 4.0),
+		maxf(view.position.y - WINDOW_VIEW_OVERHANG, field.position.y + 4.0)
+	)
+	var hi := Vector2(
+		minf(view.end.x + WINDOW_VIEW_OVERHANG, field.end.x - 4.0) - window_size.x,
+		# Bottom is tighter: keep the stance row's room under the card, so an
+		# edge fight pushes the WINDOW up instead of squeezing the party.
+		minf(view.end.y + WINDOW_VIEW_OVERHANG, field.end.y - 4.0 - STANCE_ROW_RESERVE) - window_size.y
+	)
 	var result: Vector2 = pos
-	result.x = clampf(pos.x, lo.x, hi.x) if hi.x >= lo.x else view.get_center().x - window_size.x * 0.5
-	result.y = clampf(pos.y, lo.y, hi.y) if hi.y >= lo.y else view.get_center().y - window_size.y * 0.5
+	result.x = clampf(pos.x, lo.x, hi.x) if hi.x >= lo.x else (lo.x + hi.x) * 0.5
+	result.y = clampf(pos.y, lo.y, hi.y) if hi.y >= lo.y else (lo.y + hi.y) * 0.5
 	return result
 
 
@@ -1192,7 +1309,12 @@ func _window_parent() -> Node:
 ## time and inside the drift loop so neither force can shove a window off
 ## screen.
 func _clamp_position_to_play_area(pos: Vector2, window_size: Vector2) -> Vector2:
-	var bounds: Rect2 = _play_area_screen_rect()
+	# WORLD bounds: windows live on the map now, so drift is fenced by the field
+	# board itself. (The old screen-space play-area rect mis-clamped the moment
+	# the follow camera left the origin — the "weird edge window" bug.)
+	# Bottom keeps the stance row's room so drift can't squeeze the party either.
+	var bounds: Rect2 = _field_rect().grow(-4.0)
+	bounds.size.y = maxf(8.0, bounds.size.y - STANCE_ROW_RESERVE)
 	var max_x: float = maxf(bounds.position.x, bounds.end.x - window_size.x)
 	var max_y: float = maxf(bounds.position.y, bounds.end.y - window_size.y)
 	return Vector2(
@@ -1231,8 +1353,9 @@ func _on_battle_window_closed(window: Node) -> void:
 			_update_slot_readiness(slot)  # a card leaving may expose a new top
 		_window_slot.erase(window)
 	if _modal_windows.has(window):
+		var modal_group: int = int(_modal_windows[window])
 		_modal_windows.erase(window)
-		GameState.end_field_battle_pause()
+		GameState.end_group_battle_pause(modal_group)
 	var battle_window := window as BattleWindow
 	if battle_window:
 		var xp_reward: int = battle_window.claim_xp_reward()
@@ -1294,7 +1417,7 @@ func abort_all_battles() -> void:
 		if is_instance_valid(window):
 			window.queue_free()
 		if _modal_windows.has(window):
-			GameState.end_field_battle_pause()
+			GameState.end_group_battle_pause(int(_modal_windows[window]))
 	_window_rects.clear()
 	_window_velocities.clear()
 	_modal_windows.clear()

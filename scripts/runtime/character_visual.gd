@@ -100,13 +100,21 @@ func face_dir(dir: Dir) -> void:
 
 ## ─── Battle-formation juice ────────────────────────────────────────────
 ## Tweens the sprite's LOCAL offset/modulate only (the owner's logical position is
-## untouched), so attacks/hits never desync movement. One tween, killed on retrigger.
+## untouched), so attacks/hits never desync movement. Killed on retrigger.
 var _juice_tween: Tween
+var _shake_tween: Tween
+
+
+func _kill_juice() -> void:
+	if _juice_tween != null and _juice_tween.is_valid():
+		_juice_tween.kill()
+	if _shake_tween != null and _shake_tween.is_valid():
+		_shake_tween.kill()
+
 
 ## Attack tell: lunge "forward" (up — the formation faces up) and snap back.
 func play_attack_lunge() -> void:
-	if _juice_tween != null and _juice_tween.is_valid():
-		_juice_tween.kill()
+	_kill_juice()
 	position = Vector2.ZERO
 	modulate = Color(1, 1, 1, 1)
 	_juice_tween = create_tween()
@@ -116,17 +124,21 @@ func play_attack_lunge() -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
-## Hit reaction: white flash + a small knockback DOWN (away from the enemy above).
+## Hit reaction: white FLASH + a tiny side-to-side rattle that settles back to
+## zero — the body never leaves its spot (attacking is the only thing that steps
+## a formation row forward; 고전게임 문법).
 func play_hit_flinch() -> void:
-	if _juice_tween != null and _juice_tween.is_valid():
-		_juice_tween.kill()
+	_kill_juice()
 	position = Vector2.ZERO
 	modulate = Color(2.4, 2.4, 2.4, 1.0)  # bright flash
 	_juice_tween = create_tween()
-	_juice_tween.tween_property(self, "position", Vector2(0.0, 4.0), 0.05).set_trans(Tween.TRANS_QUAD)
-	_juice_tween.parallel().tween_property(self, "modulate", Color(1, 1, 1, 1), 0.18)
-	_juice_tween.tween_property(self, "position", Vector2.ZERO, 0.12)\
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_juice_tween.tween_property(self, "modulate", Color(1, 1, 1, 1), 0.22)
+	_shake_tween = create_tween()
+	_shake_tween.tween_property(self, "position:x", 2.0, 0.04)
+	_shake_tween.tween_property(self, "position:x", -2.0, 0.05)
+	_shake_tween.tween_property(self, "position:x", 1.5, 0.05)
+	_shake_tween.tween_property(self, "position:x", 0.0, 0.06)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _set_frame(col: int, row: int) -> void:

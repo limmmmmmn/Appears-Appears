@@ -103,11 +103,19 @@ func clear_formation() -> void:
 
 
 # ─── Hit reaction ──────────────────────────────────────────────────────
-## Field hero only reacts to being HIT now — no attack lunge. Flinch fires whenever
-## party member 0 takes damage in any battle window, wherever the hero is standing.
+## Flinch fires whenever party member 0 takes damage in any battle window,
+## wherever the hero is standing.
 func _on_party_damage_taken(member_index: int, _amount: int) -> void:
 	if member_index == 0 and _visual != null and not _downed_visual:
 		_visual.play_hit_flinch()
+
+
+## Classic-RPG attack tell — ONLY while standing in battle formation (back shown,
+## under the window): lunge toward the window and snap back. While roaming
+## between fights (멀티 전투창 movement) attacks stay effect-free.
+func _on_party_member_attacked(member_index: int) -> void:
+	if member_index == 0 and _formation_slot_active and _visual != null and not _downed_visual:
+		_visual.play_attack_lunge()
 
 
 func _ready() -> void:
@@ -132,8 +140,9 @@ func _ready() -> void:
 	# Party-panel boxes emit this on click → snap the view back onto the hero.
 	EventBus.camera_focus_hero_requested.connect(focus_camera_on_hero)
 	EventBus.inspector_target_selected.connect(_on_inspector_target_selected)
-	# Hit reaction only: the hero (party index 0) flinches when hit. No attack lunge.
+	# Hit flinch always; attack lunge only while in battle formation (see handlers).
 	EventBus.party_damage_taken.connect(_on_party_damage_taken)
+	EventBus.party_member_attacked.connect(_on_party_member_attacked)
 	if _pending_data:
 		_visual.setup(_pending_data)
 		_apply_character_layout()
@@ -254,7 +263,11 @@ func _apply_zoom(z: float) -> void:
 func _physics_process(delta: float) -> void:
 	# Camera pan runs first so you can look around even while combat is paused.
 	_update_camera_pan(delta)
-	if GameState.is_field_frozen_for_battle():
+	# 따로 다니기: only the HERO party's own window cap freezes the hero — other
+	# split squads fighting elsewhere never hold him still. EXCEPTION: while a
+	# battle stance is assigned he may still walk to his row under the window
+	# (the formation branch below owns movement; roam input stays out).
+	if GameState.is_group_frozen_for_battle(0) and not _formation_slot_active:
 		velocity = Vector2.ZERO
 		_visual.set_velocity(velocity)
 		return
@@ -267,6 +280,8 @@ func _physics_process(delta: float) -> void:
 	# Manual movement by default (WASD / arrows); the 자동 이동 upgrade adds enemy-seeking.
 	var move_dir := Vector2.ZERO
 	var move_speed: float = GameState.effective_move_speed(speed)
+	if _formation_slot_active or _forced_target_active:
+		_reset_idle_life()  # scripted moves park the hero somewhere new — re-anchor later
 	if _formation_slot_active:
 		# Battle formation: hustle to the slot fast (the slow roam speed lagged the
 		# companions). Facing up is handled below once settled.
@@ -297,6 +312,14 @@ func _physics_process(delta: float) -> void:
 				var to_target: Vector2 = target.global_position - global_position
 				if to_target.length() > 0.01:
 					move_dir = to_target.normalized()
+		# 서성임: nothing drives the hero (camera's fixed, no harm) → putter about,
+		# chat with whoever's close, drift over to watch the fire.
+		if move_dir == Vector2.ZERO and not _downed_visual:
+			move_dir = _tick_idle_life(delta)
+			if move_dir != Vector2.ZERO:
+				move_speed = IDLE_MILL_SPEED
+		else:
+			_reset_idle_life()
 	velocity = move_dir * move_speed
 	move_and_slide()
 	global_position = Vector2(
@@ -308,6 +331,10 @@ func _physics_process(delta: float) -> void:
 	# enemy windows) instead of the last walk direction.
 	if _force_face_up and not _downed_visual and velocity.length_squared() < 1.0:
 		_visual.face_dir(CharacterVisual.Dir.UP)
+	elif _idle_face_point != Vector2.INF and not _downed_visual and velocity.length_squared() < 1.0:
+		# Idle chat / fire-watching: stand still, look at the thing.
+		_visual.set_velocity(Vector2.ZERO)
+		_visual.face_dir(_facing_dir(_idle_face_point))
 	else:
 		_visual.set_velocity(Vector2.ZERO if _downed_visual else velocity)
 
@@ -326,6 +353,168 @@ func focus_camera_on_hero() -> void:
 	# Fixed camera: re-park on the field center (kept for existing callers).
 	if _camera:
 		_camera.global_position = _camera_world_center
+
+
+# ─── 서성임 (idle life) ─────────────────────────────────────────────────
+## When nothing drives the hero — no input, no auto-seek target, no script —
+## he putters around the spot: a step or two, a pause, sometimes turning to chat
+## with a nearby member ("···") or strolling over to watch the campfire. Cozy.
+const IDLE_MILL_RADIUS: float = 8.0
+const IDLE_MILL_SPEED: float = 13.0
+const IDLE_CHAT_RANGE: float = 26.0
+const IDLE_FIRE_RANGE: float = 64.0
+## Personal space while idling — 옹기종기 but a full sprite-width apart (no 야릇함).
+const IDLE_SEPARATION: float = 18.0
+## Small talk is an occasional treat, not a habit — per-member cooldown.
+const CHAT_COOLDOWN_MIN_MS: int = 10000
+const CHAT_COOLDOWN_MAX_MS: int = 22000
+const IDLE_FONT: Font = preload("res://assets/fonts/field_ui_font.tres")
+
+var _idle_anchor: Vector2 = Vector2.INF
+var _idle_target: Vector2 = Vector2.INF
+var _idle_wait: float = 0.0
+var _idle_gaze_timer: float = 0.0
+var _idle_face_point: Vector2 = Vector2.INF
+var _idle_arrive_gaze: Vector2 = Vector2.INF
+var _next_chat_msec: int = 0
+
+
+func _tick_idle_life(delta: float) -> Vector2:
+	if _idle_anchor == Vector2.INF:
+		_idle_anchor = global_position
+	if _idle_gaze_timer > 0.0:  # holding a look (fire / chat partner)
+		_idle_gaze_timer -= delta
+		if _idle_gaze_timer <= 0.0:
+			_idle_face_point = Vector2.INF
+			_idle_wait = randf_range(0.6, 1.6)
+		return Vector2.ZERO
+	if _idle_wait > 0.0:
+		_idle_wait -= delta
+		return Vector2.ZERO
+	if _idle_target != Vector2.INF and global_position.distance_to(_idle_target) <= 1.5:
+		_idle_target = Vector2.INF
+		if _idle_arrive_gaze != Vector2.INF:  # walked over to the fire → watch it
+			_idle_face_point = _idle_arrive_gaze
+			_idle_arrive_gaze = Vector2.INF
+			_idle_gaze_timer = randf_range(1.6, 3.2)
+		else:
+			_idle_wait = randf_range(0.9, 2.4)
+		return Vector2.ZERO
+	if _idle_target == Vector2.INF:
+		_pick_idle_action()
+		return Vector2.ZERO
+	return (_idle_target - global_position).normalized()
+
+
+func _pick_idle_action() -> void:
+	# 겹침 방지 최우선: someone's standing in our pixels → step away first.
+	var crowding: Node2D = _nearest_buddy_within(IDLE_SEPARATION)
+	if crowding != null:
+		var away: Vector2 = global_position - crowding.global_position
+		if away.length_squared() < 0.5:
+			away = Vector2.RIGHT.rotated(randf() * TAU)
+		_idle_target = global_position + away.normalized() * randf_range(10.0, 14.0)
+		return
+	var roll: float = randf()
+	# 모닥불 구경: the fire is close → wander over and watch it a while.
+	if roll < 0.15 and GameState.campfire_placed \
+			and _idle_anchor.distance_to(GameState.campfire_position) <= IDLE_FIRE_RANGE:
+		_idle_target = _pick_clear_spot(GameState.campfire_position, 13.0, 19.0)
+		_idle_arrive_gaze = GameState.campfire_position
+		return
+	# 수다: rare (small band + long cooldown) — 현실 친구들도 이 정도는 아니니까.
+	if roll < 0.23 and Time.get_ticks_msec() >= _next_chat_msec:
+		var buddy: Node2D = _nearest_chat_buddy()
+		if buddy != null:
+			_next_chat_msec = Time.get_ticks_msec() \
+				+ randi_range(CHAT_COOLDOWN_MIN_MS, CHAT_COOLDOWN_MAX_MS)
+			_idle_face_point = buddy.global_position
+			_idle_gaze_timer = randf_range(1.2, 2.2)
+			_spawn_chat_dots()
+			if buddy.has_method("react_chat"):
+				buddy.react_chat(global_position)
+			return
+	# 그냥 서성: a couple of px around the anchor, with personal space.
+	_idle_target = _pick_clear_spot(_idle_anchor, 2.0, IDLE_MILL_RADIUS)
+
+
+func _reset_idle_life() -> void:
+	_idle_anchor = Vector2.INF
+	_idle_target = Vector2.INF
+	_idle_wait = 0.0
+	_idle_gaze_timer = 0.0
+	_idle_face_point = Vector2.INF
+	_idle_arrive_gaze = Vector2.INF
+
+
+## A buddy turned to talk to us — glance back for a moment (felt while idling).
+func react_chat(from: Vector2) -> void:
+	_idle_face_point = from
+	_idle_gaze_timer = maxf(_idle_gaze_timer, randf_range(1.0, 1.8))
+
+
+func _facing_dir(point: Vector2) -> CharacterVisual.Dir:
+	var d: Vector2 = point - global_position
+	if absf(d.x) > absf(d.y):
+		return CharacterVisual.Dir.RIGHT if d.x > 0.0 else CharacterVisual.Dir.LEFT
+	return CharacterVisual.Dir.DOWN if d.y > 0.0 else CharacterVisual.Dir.UP
+
+
+func _nearest_chat_buddy() -> Node2D:
+	return _nearest_buddy_within(IDLE_CHAT_RANGE)
+
+
+func _nearest_buddy_within(range_px: float) -> Node2D:
+	var best: Node2D = null
+	var best_sq: float = range_px * range_px
+	for node in get_tree().get_nodes_in_group("party_member"):
+		if node == self or not (node is Node2D):
+			continue
+		var dist_sq: float = global_position.distance_squared_to((node as Node2D).global_position)
+		if dist_sq < best_sq:
+			best_sq = dist_sq
+			best = node as Node2D
+	return best
+
+
+## A ring spot around `center` that keeps personal space from the others —
+## a few tries, then take what we got (the step-away rule untangles later).
+func _pick_clear_spot(center: Vector2, radius_min: float, radius_max: float) -> Vector2:
+	var candidate: Vector2 = center
+	for attempt in 6:
+		var ang: float = randf() * TAU
+		candidate = center + Vector2(cos(ang), sin(ang)) * randf_range(radius_min, radius_max)
+		if _idle_spot_clear(candidate):
+			return candidate
+	return candidate
+
+
+func _idle_spot_clear(pos: Vector2) -> bool:
+	for node in get_tree().get_nodes_in_group("party_member"):
+		if node == self or not (node is Node2D):
+			continue
+		if pos.distance_squared_to((node as Node2D).global_position) < IDLE_SEPARATION * IDLE_SEPARATION:
+			return false
+	return true
+
+
+## "···" puff above the head — reads as small talk between idle members.
+func _spawn_chat_dots() -> void:
+	var lbl := Label.new()
+	lbl.text = "···"
+	lbl.add_theme_font_override("font", IDLE_FONT)
+	lbl.add_theme_font_size_override("font_size", 8)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.position = Vector2(-7.0, -32.0)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(lbl)
+	var t := create_tween().set_parallel(true)
+	t.tween_property(lbl, "position:y", lbl.position.y - 5.0, 1.3)
+	t.tween_property(lbl, "modulate:a", 0.0, 1.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	t.chain().tween_callback(lbl.queue_free)
 
 
 ## Field shows this avatar lying down while its party member is downed/refilling.

@@ -44,10 +44,12 @@ func _refresh() -> void:
 		_label.text = "%d" % GameState.gold
 
 
-## Click the chip → +1000 gold (debug). A quick pop sells the action.
+## Click the chip → +1000 gold AND every placement tile surfaces in the dock
+## (debug shortcut for testing flows). A quick pop sells the action.
 func _on_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		GameState.add_gold(1000)
+		GameState.debug_unlock_all_tiles()
 		pivot_offset = size * 0.5
 		var t := create_tween()
 		t.tween_property(self, "scale", Vector2(1.18, 1.18), 0.07).set_trans(Tween.TRANS_QUAD)

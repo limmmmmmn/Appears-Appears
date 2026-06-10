@@ -824,9 +824,12 @@ func _thief_attack(attacker_index: int, target_enemy: Enemy) -> void:
 func _enemy_attack(enemy: Enemy) -> void:
 	var alive_indices: Array[int] = []
 	for i in GameState.party_size():
-		if GameState.is_combat_ready(i):
+		if _is_party_participant(i):
 			alive_indices.append(i)
 	if alive_indices.is_empty():
+		# The owning party is fully down (or got pulled away) — nobody left on
+		# this side of the window, so the fight breaks off instead of stalling.
+		_flee()
 		return
 	var target_index: int = alive_indices.pick_random()
 	var target: CharacterData = GameState.party[target_index]
@@ -1418,20 +1421,21 @@ func _face_rich(bbcode: String, size: int) -> RichTextLabel:
 	return r
 
 
-## The objet reveal face: the tile sprite pops big in the center over a "획득!" call.
+## The objet reveal face: the tile sprite (NATIVE 1× pixels — same size as on the
+## field) pops in the center over a "획득!" call.
 func _show_objet_face() -> void:
 	var tex: Texture2D = OBJET_TEX.get(_objet_id, null)
 	if tex != null:
 		var icon := TextureRect.new()
 		icon.texture = tex
 		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 		icon.set_anchors_preset(Control.PRESET_CENTER)
-		icon.offset_left = -22.0
-		icon.offset_right = 22.0
-		icon.offset_top = -26.0
-		icon.offset_bottom = 16.0
-		icon.pivot_offset = Vector2(22.0, 21.0)
+		icon.offset_left = -8.0
+		icon.offset_right = 8.0
+		icon.offset_top = -14.0
+		icon.offset_bottom = 2.0
+		icon.pivot_offset = Vector2(8.0, 8.0)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_face_overlay.add_child(icon)
 		icon.scale = Vector2(0.2, 0.2)
@@ -1572,6 +1576,11 @@ func set_chain_ready(ready: bool, stack_count: int = 1) -> void:
 # ─── Input: press hands the gesture to BattleManager (click vs drag) ───
 func _on_window_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and not _flipping:
+		# Mid-fight windows are PINNED — the party is standing in formation under
+		# this card, so it can't be dragged out from over their heads. Only
+		# resolved reward cards (chests) hand the grab gesture to the manager.
+		if not is_chest_active():
+			return
 		grab_started.emit(self, event.global_position)
 
 
@@ -1695,8 +1704,9 @@ func _build_card_back(reward: Dictionary) -> void:
 			var icon := TextureRect.new()
 			icon.texture = tex
 			icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon.custom_minimum_size = Vector2(36.0, 36.0)
+			# NATIVE 1× pixels — the tile reads at the same size it has on the field.
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+			icon.custom_minimum_size = Vector2(20.0, 20.0)
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			vb.add_child(icon)
 		vb.add_child(_back_label("획득!", 11, Color(1.0, 0.98, 0.82, 1.0)))
@@ -2076,11 +2086,22 @@ func _first_living_enemy() -> Enemy:
 	return null
 
 
+## 따로 다니기: only the party (split group) that STARTED this fight participates
+## — its members take the turns, soak the hits, and receive the in-fight heals.
+## The group was stamped on the window by BattleManager (0 = the hero's chain).
+func _battle_group() -> int:
+	return int(get_meta("battle_group", 0))
+
+
+func _is_party_participant(index: int) -> bool:
+	return GameState.is_combat_ready(index) and GameState.member_group(index) == _battle_group()
+
+
 func _lowest_wounded_party_index() -> int:
 	var best_index: int = -1
 	var best_ratio: float = 1.1
 	for i in GameState.party_size():
-		if not GameState.is_combat_ready(i):
+		if not _is_party_participant(i):
 			continue
 		var max_hp: int = GameState.effective_max_hp(i)
 		if max_hp <= 0 or GameState.party_hp[i] >= max_hp:
@@ -2107,7 +2128,7 @@ func _next_actor() -> Dictionary:
 func _rebuild_turn_queue() -> void:
 	_turn_queue.clear()
 	for i in GameState.party_size():
-		if GameState.is_combat_ready(i):
+		if _is_party_participant(i):
 			_turn_queue.append({
 				"type": ACTOR_PARTY,
 				"party_index": i,
@@ -2167,7 +2188,9 @@ func _roll_initiative() -> void:
 
 func _is_actor_alive(actor: Dictionary) -> bool:
 	if int(actor["type"]) == ACTOR_PARTY:
-		return GameState.is_combat_ready(int(actor["party_index"]))
+		# Participant check (not just combat-ready): a member dragged to another
+		# split group mid-fight stops taking turns in THIS window.
+		return _is_party_participant(int(actor["party_index"]))
 	var enemy := actor["enemy"] as Enemy
 	return enemy != null and is_instance_valid(enemy) and enemy.is_alive()
 

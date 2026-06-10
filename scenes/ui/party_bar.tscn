@@ -5,14 +5,12 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/party_member_box.tscn" id="3_box"]
 
 [node name="PartyBar" type="HBoxContainer" unique_id=28480058]
-anchors_preset = 0
 offset_left = 8.0
-offset_top = 142.0
+offset_top = 176.0
 offset_right = 140.0
-offset_bottom = 175.0
+offset_bottom = 212.0
 theme = ExtResource("2_theme")
 theme_override_constants/separation = 4
-alignment = 0
 script = ExtResource("1_pb")
 
 [node name="PreviewBox1" parent="." unique_id=1029807113 instance=ExtResource("3_box")]

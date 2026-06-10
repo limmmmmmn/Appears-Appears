@@ -230,6 +230,11 @@ const CAMPFIRE_REGEN_BASE_RATE: float = 0.6     ## HP/sec at level 1 (very weak)
 const CAMPFIRE_REGEN_PER_LEVEL: float = 0.7     ## +HP/sec per upgrade
 const CAMPFIRE_UPGRADE_BASE_COST: int = 120
 const CAMPFIRE_UPGRADE_COST_MULT: float = 1.6
+## 따로 다니기 (party split) — learned once at the campfire; needs a companion.
+## Further 분할 확장 upgrades raise the squad cap toward PARTY_GROUP_MAX.
+const PARTY_SPLIT_LEARN_COST: int = 150
+const PARTY_SPLIT_EXPAND_BASE_COST: int = 300  ## ×(current cap - 1) per step
+const PARTY_GROUP_MAX: int = 4                 ## hero chain + up to 3 squads
 ## 마을 강화 — each level raises the gear TIER the shop will sell (무기/방어구 1단계씩).
 const VILLAGE_UPGRADE_BASE_COST: int = 80
 const VILLAGE_UPGRADE_COST_MULT: float = 1.7
