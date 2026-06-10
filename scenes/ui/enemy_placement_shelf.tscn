@@ -33,7 +33,7 @@ anti_aliasing = false
 [node name="EnemyPlacementShelf" type="Control"]
 layout_mode = 3
 anchors_preset = 0
-offset_right = 106.0
+offset_right = 74.0
 offset_bottom = 64.0
 mouse_filter = 2
 theme = ExtResource("2_theme")
@@ -42,7 +42,7 @@ script = ExtResource("1_shelf")
 [node name="Box" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 1
-offset_right = 106.0
+offset_right = 74.0
 offset_bottom = 64.0
 theme_override_styles/panel = SubResource("StyleBox_window")
 
@@ -101,7 +101,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/h_separation = 2
 theme_override_constants/v_separation = 2
-columns = 4
+columns = 3
 
 [node name="SampleTile1" parent="Box/Col/Body/Grid" instance=ExtResource("3_tile")]
 layout_mode = 2
@@ -110,7 +110,4 @@ layout_mode = 2
 layout_mode = 2
 
 [node name="SampleTile3" parent="Box/Col/Body/Grid" instance=ExtResource("3_tile")]
-layout_mode = 2
-
-[node name="SampleTile4" parent="Box/Col/Body/Grid" instance=ExtResource("3_tile")]
 layout_mode = 2

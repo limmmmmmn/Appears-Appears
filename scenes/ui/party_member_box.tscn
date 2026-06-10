@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/party_member_box.gd" id="1_box"]
 [ext_resource type="Theme" path="res://assets/fonts/field_theme.tres" id="2_theme"]
@@ -23,7 +23,7 @@ font_size = 5
 font_color = Color(0.12941177, 0.11764706, 0.101960786, 1)
 
 [node name="PartyMemberBox" type="Panel"]
-custom_minimum_size = Vector2(78, 26)
+custom_minimum_size = Vector2(28, 33)
 size_flags_horizontal = 0
 size_flags_vertical = 8
 mouse_filter = 2
@@ -31,7 +31,7 @@ theme = ExtResource("2_theme")
 theme_override_styles/panel = SubResource("StyleBox_panel")
 script = ExtResource("1_box")
 
-[node name="HBox" type="HBoxContainer" parent="."]
+[node name="Col" type="VBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -41,73 +41,61 @@ offset_top = 2.0
 offset_right = -2.0
 offset_bottom = -2.0
 mouse_filter = 2
-theme_override_constants/separation = 3
+theme_override_constants/separation = 1
 
-[node name="LeftCol" type="VBoxContainer" parent="HBox"]
-custom_minimum_size = Vector2(22, 0)
+[node name="HPBar" parent="Col" instance=ExtResource("4_stat_bar")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 0
+fill_color = Color(0.84, 0.22, 0.22, 1)
+label_alignment = 0
 
-[node name="Portrait" parent="HBox/LeftCol" instance=ExtResource("3_portrait")]
+[node name="BarLabel" parent="Col/HPBar"]
+visible = false
+
+[node name="Portrait" parent="Col" instance=ExtResource("3_portrait")]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
 
-[node name="NameLabel" type="Label" parent="HBox/LeftCol"]
-unique_name_in_owner = true
+[node name="Hidden" type="Control" parent="."]
 visible = false
-layout_mode = 2
+layout_mode = 0
+mouse_filter = 2
+
+[node name="NameLabel" type="Label" parent="Hidden"]
+unique_name_in_owner = true
 mouse_filter = 2
 text = "—"
 label_settings = SubResource("LabelSettings_name")
 horizontal_alignment = 1
 
-[node name="RightCol" type="VBoxContainer" parent="HBox"]
-custom_minimum_size = Vector2(48, 0)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-theme_override_constants/separation = 1
-alignment = 1
-
-[node name="HPBar" parent="HBox/RightCol" instance=ExtResource("4_stat_bar")]
+[node name="ExpBar" parent="Hidden" instance=ExtResource("4_stat_bar")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 10)
-layout_mode = 2
-fill_color = Color(0.84, 0.22, 0.22, 1)
-label_alignment = 0
-
-[node name="ExpBar" parent="HBox/RightCol" instance=ExtResource("4_stat_bar")]
-unique_name_in_owner = true
-visible = false
 custom_minimum_size = Vector2(0, 8)
-layout_mode = 2
 fill_color = Color(0.28, 0.58, 0.95, 1)
 label_alignment = 1
 
-[node name="EquipRow" type="HBoxContainer" parent="HBox/RightCol"]
+[node name="EquipRow" type="HBoxContainer" parent="Hidden"]
 unique_name_in_owner = true
-visible = false
 custom_minimum_size = Vector2(0, 10)
-layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 1
 
-[node name="Slot1" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+[node name="Slot1" parent="Hidden/EquipRow" instance=ExtResource("5_equip_slot")]
 layout_mode = 2
 
-[node name="Slot2" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+[node name="Slot2" parent="Hidden/EquipRow" instance=ExtResource("5_equip_slot")]
 layout_mode = 2
 
-[node name="Slot3" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+[node name="Slot3" parent="Hidden/EquipRow" instance=ExtResource("5_equip_slot")]
 layout_mode = 2
 
-[node name="Slot4" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+[node name="Slot4" parent="Hidden/EquipRow" instance=ExtResource("5_equip_slot")]
 layout_mode = 2
 
-[node name="Slot5" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+[node name="Slot5" parent="Hidden/EquipRow" instance=ExtResource("5_equip_slot")]
 layout_mode = 2
 
-[node name="Slot6" parent="HBox/RightCol/EquipRow" instance=ExtResource("5_equip_slot")]
+[node name="Slot6" parent="Hidden/EquipRow" instance=ExtResource("5_equip_slot")]
 layout_mode = 2

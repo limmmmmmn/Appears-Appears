@@ -55,51 +55,51 @@ layer = 4
 layer = 5
 
 [node name="FieldLayoutRect" type="ReferenceRect" parent="HudLayer" unique_id=1101467223]
-offset_left = 122.0
-offset_top = 39.0
-offset_right = 490.0
-offset_bottom = 329.0
+offset_right = 640.0
+offset_bottom = 360.0
 mouse_filter = 2
 border_color = Color(0.35, 1, 0.45, 0.9)
 border_width = 1.5
 
-[node name="FieldNameChip" parent="HudLayer" unique_id=1101467224 instance=ExtResource("20_fieldname")]
-offset_left = 122.0
-offset_top = 8.0
-offset_right = 178.0
-offset_bottom = 30.0
-
 [node name="GoldChip" parent="HudLayer" unique_id=1756743132 instance=ExtResource("15_gold")]
-offset_left = 186.0
-offset_top = 8.0
-offset_right = 246.0
-offset_bottom = 30.0
+offset_left = 8.0
+offset_top = 6.0
+offset_right = 82.0
+offset_bottom = 28.0
+
+[node name="FieldNameChip" parent="HudLayer" unique_id=1101467224 instance=ExtResource("20_fieldname")]
+visible = false
+offset_left = 90.0
+offset_top = 6.0
+offset_right = 146.0
+offset_bottom = 28.0
 
 [node name="EnemyPlacementShelf" parent="HudLayer" unique_id=1927174253 instance=ExtResource("8_enemy_shelf")]
 offset_left = 8.0
-offset_top = 39.0
-offset_right = 114.0
-offset_bottom = 103.0
+offset_top = 34.0
+offset_right = 82.0
+offset_bottom = 139.0
 
 [node name="EnemyPlacementTooltip" parent="HudLayer" unique_id=637995234 instance=ExtResource("8_enemy_tooltip")]
-offset_left = 8.0
-offset_top = 140.0
-offset_right = 114.0
-offset_bottom = 188.0
+offset_left = 86.0
+offset_top = 48.0
+offset_right = 144.0
+offset_bottom = 74.0
 
 [node name="RightUpgradePanel" parent="HudLayer" unique_id=562159693 instance=ExtResource("7_upgrade_panel")]
 
 [node name="RightPropertyInspector" parent="HudLayer" unique_id=1616697781 instance=ExtResource("7_inspector")]
-offset_left = -142.0
-offset_top = 39.0
-offset_right = -8.0
-offset_bottom = -31.0
+visible = false
+offset_left = -105.0
+offset_top = 6.0
+offset_right = -5.0
+offset_bottom = -202.0
 
 [node name="PartyBar" parent="HudLayer" unique_id=861722315 instance=ExtResource("16_party")]
-offset_left = 122.0
-offset_top = -26.0
-offset_right = -150.0
-offset_bottom = -2.0
+offset_left = 9.0
+offset_top = 323.0
+offset_right = 141.0
+offset_bottom = 356.0
 
 [node name="DQStatus" parent="HudLayer" unique_id=1584588224 instance=ExtResource("17_dq")]
 
@@ -109,10 +109,8 @@ offset_bottom = -2.0
 metadata/_edit_lock_ = true
 
 [node name="LeftLogPanel" parent="HudLayer" unique_id=1291178482 instance=ExtResource("8_log_panel")]
-offset_left = 8.0
-offset_top = 192.0
-offset_right = 114.0
-offset_bottom = -31.0
+visible = false
+offset_top = 186.0
 grow_vertical = 2
 
 [node name="LowHealthOverlay" parent="." unique_id=2099559033 instance=ExtResource("5_low_hp")]

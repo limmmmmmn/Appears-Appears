@@ -9,9 +9,9 @@ extends RefCounted
 ## The field now fills the whole screen; the dock + shop float ON it as small
 ## cards in the top corners. These drive both the panels' placement AND the
 ## battle-window play area (windows avoid the panel footprints).
-const LEFT_PANEL_WIDTH: float = 92.0       ## floating monster dock (top-left)
+const LEFT_PANEL_WIDTH: float = 142.0      ## left column: dock + party chips + 기록 window
 const PANEL_MARGIN: float = 4.0            ## gap from screen edge / between panel & windows
-const PANEL_TOP: float = 18.0              ## below the 15px menu bar
+const PANEL_TOP: float = 30.0              ## below the top-left gold / field-name chips
 
 # ─── Lower-left running log (Dark-Room style) ──────────────────────────
 ## The left column is split: placement dock on top, accumulating text log below.
@@ -27,7 +27,7 @@ const FONT_LOG: int = 11
 # ─── Right panel (강화 상점 / 장비) ─────────────────────────────────────
 ## Tuned to match the left dock's small, neat feel. HIERARCHY: name = base,
 ## numbers (value/cost) are SMALLER (secondary info), section labels smallest.
-const RIGHT_PANEL_WIDTH: float = 108.0     ## floating 강화/장비 card (top-right)
+const RIGHT_PANEL_WIDTH: float = 120.0     ## floating 속성 inspector window (right)
 const PANEL_CONTENT_MARGIN: int = 4
 const LIST_SEPARATION: int = 3
 const FONT_GOLD: int = 10                 ## "Gold N" header
