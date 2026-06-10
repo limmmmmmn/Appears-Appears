@@ -1,10 +1,11 @@
 class_name PartyBar
 extends HBoxContainer
 
-## Bottom-center party-member boxes, split out of the HUD into its own scene. Rebuilds
-## on party_changed and pushes per-member HP / XP / equip / armor / downed updates. The
-## row itself (this HBoxContainer) is authored in party_bar.tscn with editor-preview
-## boxes; those are cleared at runtime before the live party is populated.
+## Bottom party strip — compact 초상화+HP chips, one per member, laid out horizontally
+## under the field. Rebuilds on party_changed and pushes per-member HP / XP / equip /
+## armor / downed updates (XP/equip land on hidden nodes in the compact box — harmless).
+## The row itself is authored in party_bar.tscn with editor-preview boxes; those are
+## cleared at runtime before the live party is populated.
 
 const MEMBER_BOX_SCENE: PackedScene = preload("res://scenes/ui/party_member_box.tscn")
 

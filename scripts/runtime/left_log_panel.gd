@@ -15,7 +15,7 @@ extends Control
 const MAX_LINES: int = 200                              ## safety cap (oldest pruned)
 const FADE_LINES: int = 9                               ## newest N fade IN toward bottom
 const FADE_FLOOR: float = 0.55                          ## oldest visible line alpha (still readable)
-const LINE_COLOR: Color = Color(0.88, 0.90, 0.94, 1.0)  ## achromatic LIGHT grey (on the dark left zone)
+const LINE_COLOR: Color = Color(0.09, 0.13, 0.19, 1.0)  ## dark ink (reads on the bright desktop wallpaper)
 
 ## A RichTextLabel handles wrap + auto-scroll natively (a ScrollContainer+VBox of
 ## autowrap Labels collapses to ~1 char wide). It's authored in the scene now (edit

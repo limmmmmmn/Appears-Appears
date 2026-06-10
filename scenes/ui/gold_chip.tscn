@@ -9,14 +9,16 @@ content_margin_left = 6.0
 content_margin_top = 2.0
 content_margin_right = 7.0
 content_margin_bottom = 2.0
-bg_color = Color(0.1, 0.09, 0.04, 0.95)
+bg_color = Color(0.972549, 0.7882353, 0.30588236, 1)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0, 0, 0, 1)
-shadow_color = Color(0, 0, 0, 0.35)
-shadow_size = 2
+border_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+shadow_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+shadow_size = 1
+shadow_offset = Vector2(2, 2)
+anti_aliasing = false
 
 [node name="GoldChip" type="PanelContainer"]
 offset_left = 5.0
@@ -39,10 +41,7 @@ stretch_mode = 5
 [node name="GoldLabel" type="Label" parent="Row"]
 unique_name_in_owner = true
 mouse_filter = 2
-theme_override_colors/font_color = Color(1, 0.9, 0.4, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.85)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
+theme_override_colors/font_color = Color(0.16078432, 0.12156863, 0.05490196, 1)
 theme_override_fonts/font = ExtResource("3_font")
 theme_override_font_sizes/font_size = 9
 text = "999"

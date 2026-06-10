@@ -5,19 +5,20 @@
 [ext_resource type="Script" uid="uid://do1c4iqw30pbj" path="res://scripts/runtime/battle_manager.gd" id="3_mgr"]
 [ext_resource type="PackedScene" path="res://scenes/ui/low_health_overlay.tscn" id="5_low_hp"]
 [ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
-[ext_resource type="PackedScene" path="res://scenes/ui/right_property_inspector.tscn" id="7_inspector"]
+[ext_resource type="PackedScene" uid="uid://ekijluknax6g" path="res://scenes/ui/right_property_inspector.tscn" id="7_inspector"]
 [ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/enemy_placement_shelf.tscn" id="8_enemy_shelf"]
-[ext_resource type="PackedScene" path="res://scenes/ui/enemy_placement_tooltip.tscn" id="8_enemy_tooltip"]
-[ext_resource type="PackedScene" path="res://scenes/ui/left_log_panel.tscn" id="8_log_panel"]
+[ext_resource type="PackedScene" uid="uid://b47s837wn30v4" path="res://scenes/ui/enemy_placement_tooltip.tscn" id="8_enemy_tooltip"]
+[ext_resource type="PackedScene" uid="uid://3e2t0cobc74e" path="res://scenes/ui/left_log_panel.tscn" id="8_log_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/town_window.tscn" id="9_town"]
 [ext_resource type="PackedScene" path="res://scenes/ui/narration_window.tscn" id="12_narration"]
 [ext_resource type="PackedScene" path="res://scenes/ui/desktop_frame.tscn" id="13_frame"]
 [ext_resource type="PackedScene" path="res://scenes/ui/gold_chip.tscn" id="15_gold"]
-[ext_resource type="PackedScene" path="res://scenes/ui/party_bar.tscn" id="16_party"]
+[ext_resource type="PackedScene" uid="uid://b1svx6sru4pmd" path="res://scenes/ui/party_bar.tscn" id="16_party"]
 [ext_resource type="PackedScene" path="res://scenes/ui/dq_status.tscn" id="17_dq"]
 [ext_resource type="PackedScene" path="res://scenes/ui/tier_unlock_popup.tscn" id="18_unlock"]
 [ext_resource type="PackedScene" path="res://scenes/ui/name_prompt.tscn" id="19_name"]
+[ext_resource type="PackedScene" path="res://scenes/ui/field_name_chip.tscn" id="20_fieldname"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
 font = ExtResource("6_font")
@@ -30,7 +31,6 @@ outline_color = Color(0, 0, 0, 0.75)
 script = ExtResource("1_main")
 
 [node name="Field" parent="." unique_id=1346189154 instance=ExtResource("2_field")]
-field_layout_rect_path = null
 
 [node name="BattleManager" type="Node2D" parent="." unique_id=720570417]
 script = ExtResource("3_mgr")
@@ -45,7 +45,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.07, 0.08, 0.11, 1)
+color = Color(0.43137255, 0.654902, 0.78039217, 1)
 metadata/_edit_lock_ = true
 
 [node name="BattleWindowLayer" type="CanvasLayer" parent="." unique_id=1339895513]
@@ -54,29 +54,52 @@ layer = 4
 [node name="HudLayer" type="CanvasLayer" parent="." unique_id=1929528839]
 layer = 5
 
+[node name="FieldLayoutRect" type="ReferenceRect" parent="HudLayer" unique_id=1101467223]
+offset_left = 122.0
+offset_top = 39.0
+offset_right = 490.0
+offset_bottom = 329.0
+mouse_filter = 2
+border_color = Color(0.35, 1, 0.45, 0.9)
+border_width = 1.5
+
+[node name="FieldNameChip" parent="HudLayer" unique_id=1101467224 instance=ExtResource("20_fieldname")]
+offset_left = 122.0
+offset_top = 8.0
+offset_right = 178.0
+offset_bottom = 30.0
+
 [node name="GoldChip" parent="HudLayer" unique_id=1756743132 instance=ExtResource("15_gold")]
+offset_left = 186.0
+offset_top = 8.0
+offset_right = 246.0
+offset_bottom = 30.0
 
 [node name="EnemyPlacementShelf" parent="HudLayer" unique_id=1927174253 instance=ExtResource("8_enemy_shelf")]
-offset_top = 47.0
-offset_bottom = 94.0
+offset_left = 8.0
+offset_top = 39.0
+offset_right = 114.0
+offset_bottom = 103.0
 
 [node name="EnemyPlacementTooltip" parent="HudLayer" unique_id=637995234 instance=ExtResource("8_enemy_tooltip")]
-offset_left = 76.0
-offset_top = 47.0
-
-[node name="LeftLogPanel" parent="HudLayer" unique_id=1291178482 instance=ExtResource("8_log_panel")]
-anchors_preset = 9
-offset_left = 0.0
-offset_top = 212.0
-offset_right = 131.0
-offset_bottom = 0.0
-grow_vertical = 2
+offset_left = 8.0
+offset_top = 140.0
+offset_right = 114.0
+offset_bottom = 188.0
 
 [node name="RightUpgradePanel" parent="HudLayer" unique_id=562159693 instance=ExtResource("7_upgrade_panel")]
 
 [node name="RightPropertyInspector" parent="HudLayer" unique_id=1616697781 instance=ExtResource("7_inspector")]
+offset_left = -142.0
+offset_top = 39.0
+offset_right = -8.0
+offset_bottom = -31.0
 
 [node name="PartyBar" parent="HudLayer" unique_id=861722315 instance=ExtResource("16_party")]
+offset_left = 122.0
+offset_top = -26.0
+offset_right = -150.0
+offset_bottom = -2.0
 
 [node name="DQStatus" parent="HudLayer" unique_id=1584588224 instance=ExtResource("17_dq")]
 
@@ -84,6 +107,13 @@ grow_vertical = 2
 
 [node name="NamePrompt" parent="HudLayer" unique_id=454101919 instance=ExtResource("19_name")]
 metadata/_edit_lock_ = true
+
+[node name="LeftLogPanel" parent="HudLayer" unique_id=1291178482 instance=ExtResource("8_log_panel")]
+offset_left = 8.0
+offset_top = 192.0
+offset_right = 114.0
+offset_bottom = -31.0
+grow_vertical = 2
 
 [node name="LowHealthOverlay" parent="." unique_id=2099559033 instance=ExtResource("5_low_hp")]
 

@@ -24,7 +24,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_font_sizes/normal_font_size = 10
 bbcode_enabled = true
-text = "[color=#e0e6f0]세계가 깨어난다.
+text = "[color=#172130]세계가 깨어난다.
 슬라임을 풀어놓았다.
 마을을 세웠다.[/color]"
 scroll_following = true

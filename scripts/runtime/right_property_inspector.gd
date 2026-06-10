@@ -51,7 +51,11 @@ func _ready() -> void:
 
 
 func _ensure_content() -> void:
-	var scroll := get_node_or_null(^"Scroll") as ScrollContainer
+	# The scene wraps the scroll in a titlebar'd window layout; fall back to the old
+	# flat path (or building one in code) so the script stays scene-shape tolerant.
+	var scroll := get_node_or_null(^"Layout/Body/Scroll") as ScrollContainer
+	if scroll == null:
+		scroll = get_node_or_null(^"Scroll") as ScrollContainer
 	if scroll == null:
 		scroll = ScrollContainer.new()
 		scroll.name = "Scroll"
@@ -96,9 +100,11 @@ func _render() -> void:
 	for c in _vbox.get_children():
 		c.queue_free()
 	if not is_instance_valid(_selected) or not _selected.has_method("get_inspector_data"):
+		_set_title("속성")
 		_build_empty()
 		return
 	var data: Dictionary = _selected.get_inspector_data()
+	_set_title(str(data.get("name", "속성")))
 	_build_header(data)
 	_build_info(data)
 	_build_actions(data)
@@ -108,6 +114,13 @@ func _render() -> void:
 		GearShop.build(_vbox)
 	if bool(data.get("upgrade_shop", false)):
 		UPGRADE_SHOP_SCRIPT.build(_vbox)
+
+
+## Window titlebar text mirrors the selection ("속성" when nothing is picked).
+func _set_title(text: String) -> void:
+	var title := get_node_or_null(^"Layout/TitleBar/TitleRow/TitleLabel") as Label
+	if title != null:
+		title.text = text
 
 
 func _build_empty() -> void:

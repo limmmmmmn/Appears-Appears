@@ -29,10 +29,14 @@ const HEAL_FX_INTERVAL: float = 0.32   ## seconds between green "+" pops per mem
 ## dead-center with the side panels overlaying the edges; movement is capped to the
 ## visible play area (_play_right) and the follow-camera is clamped to these bounds.
 ##
-## EDITABLE IN THE SCENE: select the Field node and change `field_size` in the
-## inspector — @tool resizes the green board LIVE in the editor. At runtime the field
-## uses this × the skill multiplier. `FIELD_SIZE` is a static mirror kept in sync so
-## other scripts (e.g. the left log's right-edge clamp) can read it without a node ref.
+## EDITABLE IN THE SCENE: the field's on-screen rect is authored by the
+## `HudLayer/FieldLayoutRect` control in main.tscn — drag/resize THAT rect in the
+## 2D editor and the green board follows live (and the runtime camera places the
+## field there). `field_size` is only the fallback used when no layout rect exists
+## (e.g. editing field.tscn standalone). NEVER move/scale the Field Node2D itself —
+## that distorts every child at runtime, so the editor pins it back to identity.
+## `FIELD_SIZE` is a static mirror kept in sync so other scripts (e.g. the left
+## log's right-edge clamp) can read it without a node ref.
 static var FIELD_SIZE: Vector2 = Vector2(360, 360)
 @export var field_size: Vector2 = Vector2(360, 360):
 	set(value):
@@ -134,6 +138,7 @@ var _combo_attack_running: bool = false
 var _combo_cooldown_remaining: float = 0.0
 var _combo_attack_batch_id: int = 0
 var _message_tween: Tween
+var _warned_about_transform: bool = false  ## editor-only: one warning per session
 var _diorama_root: Node2D
 var _void_rect: ColorRect
 var _void_vignette: TextureRect
@@ -1343,6 +1348,13 @@ func _random_position() -> Vector2:
 ## matches the running game without pressing play. Touches ONLY the two backdrop nodes
 ## — no GameState / EventBus — so it's safe to run under @tool in the editor.
 func _apply_editor_field_size() -> void:
+	# Sizing/positioning is authored via HudLayer/FieldLayoutRect; a transform on
+	# this Node2D would distort every runtime child, so pin it back to identity.
+	if transform != Transform2D.IDENTITY:
+		transform = Transform2D.IDENTITY
+		if not _warned_about_transform:
+			_warned_about_transform = true
+			push_warning("Field 노드는 직접 움직이거나 스케일하지 마세요 — HudLayer/FieldLayoutRect를 드래그해서 필드 위치/크기를 조절하세요.")
 	# Fetch fresh (not via @onready) so this works for an INSTANCED Field in the editor,
 	# where @onready timing for instances can be unreliable.
 	var layout_rect: Rect2 = _field_layout_screen_rect()

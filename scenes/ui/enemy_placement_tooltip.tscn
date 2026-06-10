@@ -1,20 +1,16 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://b47s837wn30v4"]
 
-[ext_resource type="Script" path="res://scripts/runtime/enemy_placement_tooltip.gd" id="1_tooltip"]
+[ext_resource type="Script" uid="uid://do8bbpe0x77dg" path="res://scripts/runtime/enemy_placement_tooltip.gd" id="1_tooltip"]
 [ext_resource type="Theme" uid="uid://y11tyjfd0r6c" path="res://assets/themes/ui_theme.tres" id="2_theme"]
 
-[node name="EnemyPlacementTooltip" type="PanelContainer"]
-layout_mode = 3
-anchors_preset = 0
+[node name="EnemyPlacementTooltip" type="PanelContainer" unique_id=57012230]
 offset_right = 58.0
-offset_bottom = 56.0
+offset_bottom = 18.0
 mouse_filter = 2
 theme = ExtResource("2_theme")
 script = ExtResource("1_tooltip")
 
-[node name="TipLabel" type="Label" parent="."]
+[node name="TipLabel" type="Label" parent="." unique_id=126810908]
 unique_name_in_owner = true
 layout_mode = 2
-text = "슬라임
-Lv 1
-배치 1G"
+text = "슬라임 배치 1G"
