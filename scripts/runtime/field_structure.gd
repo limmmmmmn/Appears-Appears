@@ -20,7 +20,31 @@ var _selection_rect: Rect2 = Rect2(Vector2(-14.0, -28.0), Vector2(28.0, 32.0))
 
 func _ready() -> void:
 	EventBus.inspector_target_selected.connect(_on_inspector_target_selected)
+	EventBus.tile_upgraded.connect(_on_tile_upgraded)
 	_on_inspector_target_selected(null)
+
+
+## 강화 lands visibly ON the world object: pulse + a floating "Lv N!" tag.
+## (Psychology: the purchase must be SEEN where it lives, not just in a panel.)
+func _on_tile_upgraded(id: StringName, new_level: int) -> void:
+	if id != building_id:
+		return
+	pulse()
+	var tag := Label.new()
+	tag.text = "Lv%d!" % new_level
+	tag.add_theme_font_override("font", STRUCT_FONT)
+	tag.add_theme_font_size_override("font_size", 9)
+	tag.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35, 1.0))
+	tag.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	tag.add_theme_constant_override("shadow_offset_x", 1)
+	tag.add_theme_constant_override("shadow_offset_y", 1)
+	tag.position = Vector2(-10.0, -34.0)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(tag)
+	var t := create_tween().set_parallel(true)
+	t.tween_property(tag, "position:y", tag.position.y - 10.0, 0.6)
+	t.tween_property(tag, "modulate:a", 0.0, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	t.chain().tween_callback(tag.queue_free)
 
 
 ## Inject the building's Balance dict (id / name / short / color). Call before
@@ -177,10 +201,36 @@ func get_inspector_data() -> Dictionary:
 				"enabled": GameState.can_expand_party_split(),
 				"on_press": GameState.expand_party_split,
 			})
-		info_text = "모닥불 Lv%d · 회복 %.1f/s · 반경 %.0f" % [
+		# World aura now: the fire warms EVERYONE, wherever they roam.
+		info_text = "모닥불 Lv%d · 모든 아군 회복 %.1f/s" % [
 			GameState.campfire_level,
 			GameState.campfire_regen_rate(),
-			GameState.campfire_regen_radius(),
+		]
+	elif building_id == &"spawner":
+		actions = [{
+			"label": "방생 가속",
+			"cost": GameState.spawner_upgrade_cost(),
+			"enabled": GameState.can_upgrade_spawner(),
+			"on_press": GameState.upgrade_spawner,
+		}]
+		info_text = "방생 장치 Lv%d · %.1f초마다 적 방생" % [
+			GameState.spawner_level,
+			GameState.spawner_interval(),
+		]
+	elif Balance.TILE_UPGRADES.has(building_id):
+		# Generic PASSIVE TILE (Loop-Hero aura): readout = current party-wide
+		# effect; one 강화 action levels it. New tiles only need a Balance entry.
+		var up: Dictionary = Balance.TILE_UPGRADES[building_id]
+		var tile_id: StringName = building_id
+		actions = [{
+			"label": "강화",
+			"cost": GameState.tile_upgrade_cost(tile_id),
+			"enabled": GameState.can_upgrade_tile(tile_id),
+			"on_press": func() -> void: GameState.upgrade_tile(tile_id),
+		}]
+		info_text = ("Lv%d · " + str(up.get("effect_fmt", "+%d%%"))) % [
+			GameState.tile_level(tile_id),
+			GameState.tile_effect_percent(tile_id),
 		]
 	return {
 		"name": str(info.get("name", building_id)),

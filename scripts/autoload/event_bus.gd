@@ -118,6 +118,12 @@ signal object_window_requested(structure: Node)
 signal event_window_requested(event_id: StringName)
 ## 따로 다니기 (party split) was learned at the campfire.
 signal party_split_learned()
+## 프레스티지: the world was folded (earned, total 별조각) — UI reloads the run.
+signal prestige_completed(shards_earned: int, total_shards: int)
+## A prestige perk was bought / shard balance changed.
+signal prestige_changed()
+## A passive tile (숫돌/금빛 비석/…) leveled up — juice + readout refresh.
+signal tile_upgraded(id: StringName, new_level: int)
 ## A party member moved between split groups (0 = hero's chain, 1+ = roaming squads).
 signal member_group_changed(index: int, group: int)
 ## The split-group cap grew (모닥불 분할 확장 upgrade).

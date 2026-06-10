@@ -9,10 +9,14 @@ extends Control
 const BONFIRE_TEX: Texture2D = preload("res://assets/sprites/objects/bonfire.png")
 const SHRINE_TEX: Texture2D = preload("res://assets/sprites/objects/shrine.png")
 const VILLAGE_TEX: Texture2D = preload("res://assets/sprites/objects/village.png")
+const SPAWNER_TEX: Texture2D = preload("res://assets/sprites/objects/spawner.png")
 const TILE_SCENE: PackedScene = preload("res://scenes/ui/dos_tile.tscn")
 
 const TILE_ON: Color = Color(1, 1, 1, 1)
 const TILE_OFF: Color = Color(0.4, 0.42, 0.46, 1.0)
+## Locked-tier silhouette: the tile stays visible (the "next carrot") but the
+## sprite is blacked out — 무엇인지는 비밀, 언제 나오는지는 공개.
+const SILHOUETTE: Color = Color(0.13, 0.11, 0.16, 1.0)
 
 @onready var _grid: GridContainer = %Grid
 
@@ -92,11 +96,23 @@ func _rebuild() -> void:
 		var tier: Dictionary = Balance.tier_at(i)
 		var id: StringName = tier["id"]
 		if not GameState.is_tier_visible(id):
+			# Locked tier → SILHOUETTE tile: visible roadmap slot, blacked-out
+			# sprite, hover shows how much lifetime gold is still needed.
+			_add_locked_tile(id, _tier_sprite(id))
 			continue
 		_add_tile(&"enemy", id, _tier_sprite(id), _tile_bright(&"enemy", id))
-	for oid in GameState.acquired_objets:
-		if not GameState.is_objet_placed(oid):
-			_add_tile(&"objet", oid, _objet_tex(oid), _tile_bright(&"objet", oid))
+	# 직구매 타일 로드맵: every TILES entry in unlock order — silhouette before
+	# its lifetime-gold milestone, price tag after, gone once placed. Plannable,
+	# zero RNG: the player always sees what's next and saves toward it.
+	for t: Dictionary in Balance.TILES:
+		var tid: StringName = StringName(t.get("id", &""))
+		if tid == &"" or GameState.is_tile_placed(tid):
+			continue
+		if not GameState.is_tile_unlocked(tid):
+			_add_locked_tile(tid, _tile_tex(tid))
+			continue
+		var kind: StringName = &"campfire" if tid == &"campfire" else &"tile"
+		_add_tile(kind, tid, _tile_tex(tid), _tile_bright(kind, tid))
 	if GameState.is_building_unlocked(&"sanctuary") and not GameState.is_building_built(&"sanctuary"):
 		_add_tile(&"sanctuary", &"sanctuary", SHRINE_TEX, _tile_bright(&"sanctuary", &"sanctuary"))
 
@@ -117,11 +133,26 @@ func _add_tile(kind: StringName, id: StringName, icon: Texture2D, bright: bool) 
 	_tiles.append({"tile": tile, "kind": kind, "id": id})
 
 
+## A still-locked tier OR tile: same chrome, but the sprite renders as a black
+## silhouette. Click does nothing — hover tells you the unlock milestone.
+func _add_locked_tile(id: StringName, icon_tex: Texture2D) -> void:
+	var tile: Button = TILE_SCENE.instantiate()
+	var icon := tile.get_node("Icon") as TextureRect
+	icon.texture = icon_tex
+	icon.modulate = SILHOUETTE
+	tile.mouse_entered.connect(_on_tile_hover.bind(&"locked", id))
+	tile.mouse_exited.connect(_hide_tip)
+	_grid.add_child(tile)
+	_tiles.append({"tile": tile, "kind": &"locked", "id": id})
+
+
 func _refresh_brightness() -> void:
 	for t: Dictionary in _tiles:
 		var tile: Button = t["tile"]
 		if not is_instance_valid(tile):
 			continue
+		if t["kind"] == &"locked":
+			continue  # silhouettes keep their blackout look
 		tile.modulate = TILE_ON if _tile_bright(t["kind"], t["id"]) else TILE_OFF
 
 
@@ -134,7 +165,10 @@ func _tile_bright(kind: StringName, id: StringName) -> bool:
 			return GameState.gold >= c
 		&"sanctuary": return GameState.gold >= GameState.building_cost(&"sanctuary")
 		&"village": return GameState.can_place_structure(&"village")
+		&"spawner": return GameState.can_place_structure(&"spawner")
+		&"tile": return GameState.can_place_structure(id)
 		&"objet": return not GameState.is_objet_placed(id)
+		&"locked": return false
 	return true
 
 
@@ -173,19 +207,39 @@ func _tooltip_for(kind: StringName, id: StringName) -> String:
 			return "성소\n%dG" % GameState.building_cost(&"sanctuary")
 		&"village":
 			return "마을\n배치 %dG" % int(Balance.tile_by_id(&"village").get("place_cost", 0))
+		&"spawner":
+			return "방생 장치\n적을 스스로 풀어놓는다\n배치 %dG" % int(Balance.tile_by_id(&"spawner").get("place_cost", 0))
+		&"tile":
+			var t: Dictionary = Balance.tile_by_id(id)
+			return "%s\n배치 %dG" % [str(t.get("name", id)), int(t.get("place_cost", 0))]
 		&"objet":
 			return "%s\n%s" % [_objet_name(id), "배치됨" if GameState.is_objet_placed(id) else "클릭해 배치"]
+		&"locked":
+			# The carrot: WHAT stays secret, WHEN is public — count up to it.
+			var need: int = GameState.tier_unlock_threshold(id)
+			if need <= 0:
+				need = int(Balance.tile_by_id(id).get("unlock_at", 0))
+			return "???\n%d / %d G 누적" % [GameState.total_gold_earned, need]
 	return ""
+
+
+const WHETSTONE_TEX: Texture2D = preload("res://assets/sprites/objects/whetstone.png")
+const GOLD_IDOL_TEX: Texture2D = preload("res://assets/sprites/objects/gold_idol.png")
 
 
 func _objet_tex(id: StringName) -> Texture2D:
 	match id:
 		&"campfire": return BONFIRE_TEX
 		&"sanctuary": return SHRINE_TEX
+		&"whetstone": return WHETSTONE_TEX
+		&"gold_idol": return GOLD_IDOL_TEX
 	return VILLAGE_TEX
 
 
 func _objet_name(id: StringName) -> String:
+	var named: Dictionary = Balance.tile_by_id(id)
+	if not named.is_empty():
+		return str(named.get("name", id))
 	match id:
 		&"campfire": return "모닥불"
 		&"sanctuary": return "성소"
@@ -200,7 +254,7 @@ func _on_tile_pressed(kind: StringName, id: StringName) -> void:
 			GameState.place_enemy(id)
 		&"rescue":
 			GameState.place_rescue_slime()
-		&"campfire", &"sanctuary", &"village":
+		&"campfire", &"sanctuary", &"village", &"spawner", &"tile":
 			if _tile_bright(kind, id):
 				_begin_carry(kind, id)
 		&"objet":
@@ -241,8 +295,18 @@ func _carry_icon(kind: StringName, id: StringName) -> Texture2D:
 		&"campfire": return BONFIRE_TEX
 		&"sanctuary": return SHRINE_TEX
 		&"village": return VILLAGE_TEX
+		&"spawner": return SPAWNER_TEX
+		&"tile": return _tile_tex(id)
 		&"objet": return _objet_tex(id)
 	return _tier_sprite(id)
+
+
+## Texture straight from the tile's Balance entry — new tiles need no preload.
+func _tile_tex(id: StringName) -> Texture2D:
+	var path: String = str(Balance.tile_by_id(id).get("sprite", ""))
+	if not path.is_empty() and ResourceLoader.exists(path):
+		return load(path)
+	return null
 
 
 func _input(event: InputEvent) -> void:
@@ -274,6 +338,10 @@ func _drop_carry_at_mouse() -> void:
 				GameState.purchase_building(&"sanctuary")
 		&"village":
 			GameState.place_structure(&"village")
+		&"spawner":
+			GameState.place_structure(&"spawner")
+		&"tile":
+			GameState.place_structure(id)
 		&"objet":
 			GameState.place_acquired_objet(id)
 	_end_carry()
@@ -316,9 +384,13 @@ func _signature() -> String:
 	parts.append("n%d" % (1 if GameState.name_entered else 0))
 	parts.append("d%d" % (1 if _was_deadlocked else 0))
 	parts.append("s%d" % (1 if (GameState.is_building_unlocked(&"sanctuary") and not GameState.is_building_built(&"sanctuary")) else 0))
-	parts.append("v%d" % (1 if GameState.is_structure_placed(&"village") else 0))
-	for oid in GameState.acquired_objets:
-		parts.append("%s:%d" % [oid, 1 if GameState.is_objet_placed(oid) else 0])
+	for t: Dictionary in Balance.TILES:
+		var tid: StringName = StringName(t.get("id", &""))
+		parts.append("%s:%d%d" % [
+			tid,
+			1 if GameState.is_tile_unlocked(tid) else 0,
+			1 if GameState.is_tile_placed(tid) else 0,
+		])
 	for i in Balance.tier_count():
 		var id: StringName = Balance.tier_at(i)["id"]
 		if GameState.is_tier_visible(id):

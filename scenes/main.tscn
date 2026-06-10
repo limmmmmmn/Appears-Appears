@@ -21,6 +21,8 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/field_name_chip.tscn" id="20_fieldname"]
 [ext_resource type="PackedScene" path="res://scenes/ui/object_window.tscn" id="21_objwin"]
 [ext_resource type="PackedScene" path="res://scenes/ui/event_window.tscn" id="22_eventwin"]
+[ext_resource type="PackedScene" path="res://scenes/ui/star_chip.tscn" id="23_star"]
+[ext_resource type="PackedScene" path="res://scenes/ui/prestige_window.tscn" id="24_prestige"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
 font = ExtResource("6_font")
@@ -71,6 +73,10 @@ offset_top = 5.0
 offset_right = 353.0
 offset_bottom = 27.0
 
+[node name="StarChip" parent="HudLayer" unique_id=1756743133 instance=ExtResource("23_star")]
+offset_left = 360.0
+offset_right = 412.0
+
 [node name="FieldNameChip" parent="HudLayer" unique_id=1101467224 instance=ExtResource("20_fieldname")]
 visible = false
 offset_left = 87.0
@@ -91,10 +97,10 @@ offset_bottom = 49.0
 [node name="RightUpgradePanel" parent="HudLayer" unique_id=562159693 instance=ExtResource("7_upgrade_panel")]
 
 [node name="RightPropertyInspector" parent="HudLayer" unique_id=1616697781 instance=ExtResource("7_inspector")]
-offset_left = -97.0
+offset_left = -96.0
 offset_top = 4.0
 offset_right = -6.0
-offset_bottom = -189.0
+offset_bottom = -5.0
 
 [node name="PartyBar" parent="HudLayer" unique_id=861722315 instance=ExtResource("16_party")]
 offset_left = 11.0
@@ -130,6 +136,9 @@ anchors_preset = 0
 visible = false
 
 [node name="EventWindow" parent="ModalLayer" unique_id=169011226 instance=ExtResource("22_eventwin")]
+visible = false
+
+[node name="PrestigeWindow" parent="ModalLayer" unique_id=169011227 instance=ExtResource("24_prestige")]
 visible = false
 
 [node name="NarrationLayer" type="CanvasLayer" parent="." unique_id=772031937]

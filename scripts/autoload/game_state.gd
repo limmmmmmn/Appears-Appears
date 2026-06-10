@@ -239,8 +239,9 @@ func _on_enemy_defeated(_enemy: Node, gold: int, _world_position: Vector2) -> vo
 	# Kill gold is paid IMMEDIATELY now — the floating "Ng" on the dead enemy IS
 	# real money. The reward CARD on the window is a BONUS on top (🟧 = extra gold,
 	# 🟥/🟩/🟦 = weapon/heal/xp). See battle_window._grant_reward.
+	# 금빛 비석 (passive tile): every kill pays a level-scaled % more.
 	if gold > 0:
-		add_gold(gold)
+		add_gold(int(round(float(gold) * gold_idol_multiplier())))
 
 
 func _on_damage_dealt(_target: Node, amount: int, _world_position: Vector2) -> void:
@@ -950,19 +951,96 @@ func member_inspector_data(index: int, data: CharacterData) -> Dictionary:
 	var member_name: String = data.display_name if data else "아군"
 	var role: StringName = Balance.character_trait(data.id) if data else Balance.HERO_TRAIT
 	var role_name: String = str(Balance.TRAIT_NAMES.get(role, role))
-	var wtype: StringName = Balance.character_weapon_type(data.id) if data else Balance.HERO_WEAPON_TYPE
 	var atk: int = effective_attack(index) if index >= 0 and index < party_size() else 0
 	return {
 		"name": member_name,
 		"info": "%s · 공격력 %d" % [role_name, atk],
 		"sprite": data.inspector_icon() if data else null,
-		"actions": [{
-			"label": "공격력 강화",
-			"cost": weapon_upgrade_cost(wtype),
-			"enabled": can_upgrade_weapon(wtype),
-			"on_press": upgrade_weapon.bind(wtype),
-		}],
+		"actions": [],
+		# JRPG equipment sheet: 6 slots, each with [구매]/[변경] (see the builder).
+		"equip_rows": member_equipment_rows(index),
 	}
+
+
+## ─── 장비 6칸 (JRPG sheet in the 속성창) ────────────────────────────────
+## Slots: 무기 / 방패(쌍수 클래스는 보조 무기) / 투구 / 갑옷 / 악세 ×2.
+## [구매] = the gold ladder (무기/갑옷만; the village must STAND on the field —
+## early game is loot-only). [변경] = rotate matching gear from the bag.
+const EQUIP_SLOT_NAMES_KR: Array[String] = ["무기", "방패", "투구", "갑옷", "악세 1", "악세 2"]
+
+
+## 장비 구매는 마을이 필드에 서 있어야 열린다 — 초반은 루팅 경제.
+func gear_buying_unlocked() -> bool:
+	return is_tile_placed(&"village")
+
+
+func member_equipment_rows(index: int) -> Array:
+	var rows: Array = []
+	if index < 0 or index >= party_size():
+		return rows
+	var equipment: Array = equipment_for_member(index)
+	var wtype: StringName = Balance.character_weapon_type(party[index].id)
+	for slot in EQUIPMENT_SLOT_COUNT:
+		var slot_name: String = EQUIP_SLOT_NAMES_KR[slot]
+		if slot == 1 and member_dual_wields(index):
+			slot_name = "쌍수"
+		# Contents: looted entry first; the bought ladders show through 무기/갑옷
+		# when nothing looted sits there (same rule as the party-box slots).
+		var entry = equipment[slot] if slot < equipment.size() else null
+		var item: ItemData = item_entry_data(entry)
+		var item_name: String = "—"
+		if item != null:
+			var lvl: int = int(entry.get("level", 1)) if entry is Dictionary else 1
+			item_name = item.display_name + (" +%d" % (lvl - 1) if lvl > 1 else "")
+		elif slot == 0 and weapon_level(wtype) > 1:
+			item_name = current_weapon_name(wtype)
+		elif slot == 3 and member_armor_level(index) > 1:
+			item_name = Balance.armor_name_for_level(member_armor_level(index))
+		var buy_cost: int = 0
+		var can_buy: bool = false
+		var on_buy: Callable = Callable()
+		var has_buy: bool = slot == 0 or slot == 3
+		match slot:
+			0:
+				var ladder: Array = Balance.WEAPON_NAMES_BY_TYPE.get(wtype, [])
+				var maxed: bool = weapon_level(wtype) >= ladder.size()
+				buy_cost = 0 if maxed else weapon_upgrade_cost(wtype)
+				can_buy = gear_buying_unlocked() and not maxed and can_upgrade_weapon(wtype)
+				on_buy = upgrade_weapon.bind(wtype)
+			3:
+				buy_cost = member_armor_upgrade_cost(index)
+				can_buy = gear_buying_unlocked() and can_upgrade_member_armor(index)
+				on_buy = upgrade_member_armor.bind(index)
+		rows.append({
+			"slot": slot,
+			"slot_name": slot_name,
+			"item_name": item_name,
+			"has_buy": has_buy,
+			"buy_cost": buy_cost,
+			"can_buy": can_buy,
+			"on_buy": on_buy,
+			"can_change": not _inventory_matches_for_slot(index, slot).is_empty(),
+			"on_change": cycle_equip.bind(index, slot),
+		})
+	return rows
+
+
+func _inventory_matches_for_slot(member_index: int, slot: int) -> Array[int]:
+	var matches: Array[int] = []
+	for i in inventory.size():
+		var item: ItemData = item_entry_data(inventory[i])
+		if item != null and can_equip_to_slot(item, member_index, slot):
+			matches.append(i)
+	return matches
+
+
+## [변경]: equip the FIRST matching bag item — repeated clicks rotate naturally
+## because the swapped-out piece returns to the END of the bag.
+func cycle_equip(index: int, slot: int) -> void:
+	var matches: Array[int] = _inventory_matches_for_slot(index, slot)
+	if matches.is_empty():
+		return
+	equip_inventory_item_to(matches[0], index, slot)
 
 
 ## Buying a weapon type auto-equips the matching companion (그 타입 사용자) —
@@ -1542,8 +1620,38 @@ func tier_place_cost(id: StringName) -> int:
 
 
 ## Can place one now? (Unlocked + can afford the place cost.)
+## The NEAREST still-locked milestone (tier OR tile) — drives the HUD "next
+## carrot" gauge (incremental rule: the next thing is ALWAYS visible).
+## {} when everything is already open.
+func next_tier_unlock_progress() -> Dictionary:
+	var best_need: int = -1
+	for i in Balance.tier_count():
+		var id: StringName = Balance.tier_at(i)["id"]
+		if is_tier_unlocked(id):
+			continue
+		var need: int = tier_unlock_threshold(id)
+		if need > 0 and (best_need < 0 or need < best_need):
+			best_need = need
+	for t: Dictionary in Balance.TILES:
+		var tid: StringName = StringName(t.get("id", &""))
+		if tid == &"" or is_tile_unlocked(tid):
+			continue
+		var need: int = int(t.get("unlock_at", 0))
+		if need > 0 and (best_need < 0 or need < best_need):
+			best_need = need
+	if best_need <= 0:
+		return {}
+	return {"current": total_gold_earned, "need": best_need}
+
+
 func can_place_enemy(id: StringName) -> bool:
 	return is_tier_unlocked(id) and gold >= tier_place_cost(id)
+
+
+## Highest tier the player has DELIBERATELY placed this run — the ceiling for
+## every mixed/automatic spawn. The dragon never crashes a slime party until
+## the player has personally introduced it to the world.
+var _max_placed_tier_index: int = 0
 
 
 ## Spend the place cost and ask the Field to spawn one. Returns false (and flashes
@@ -1552,6 +1660,7 @@ func place_enemy(id: StringName) -> bool:
 	if not can_place_enemy(id) or not spend_gold(tier_place_cost(id)):
 		EventBus.combat_upgrade_failed.emit(&"tier")
 		return false
+	_max_placed_tier_index = maxi(_max_placed_tier_index, Balance.tier_index(id))
 	EventBus.enemy_place_requested.emit(id)
 	return true
 
@@ -1580,6 +1689,176 @@ func place_structure(id: StringName) -> bool:
 
 func can_place_structure(id: StringName) -> bool:
 	return not is_structure_placed(id) and gold >= int(Balance.tile_by_id(id).get("place_cost", 0))
+
+
+## Direct-buy tile gates: a tile OPENS at its lifetime-gold milestone (before
+## that the dock shows its silhouette + the milestone — plannable, no RNG).
+func is_tile_unlocked(id: StringName) -> bool:
+	return total_gold_earned >= int(Balance.tile_by_id(id).get("unlock_at", 0))
+
+
+## Placed check that also covers the campfire's dedicated flag.
+func is_tile_placed(id: StringName) -> bool:
+	return is_objet_placed(id)
+
+
+# ─── 방생 장치 (auto-spawner — the automation rung) ─────────────────────
+## The incremental ladder: the player graduates from CLICKING enemies in to
+## DESIGNING a machine that does it. Placed like the village (generic TILES
+## path); upgraded in the 속성창; spawns random UNLOCKED tiers for free.
+var spawner_level: int = 1
+
+
+func spawner_unlocked() -> bool:
+	return is_tile_unlocked(&"spawner")
+
+
+func is_spawner_placed() -> bool:
+	return is_structure_placed(&"spawner")
+
+
+func spawner_interval() -> float:
+	return maxf(
+		Balance.SPAWNER_MIN_INTERVAL,
+		Balance.SPAWNER_BASE_INTERVAL \
+			* pow(Balance.SPAWNER_INTERVAL_MULT_PER_LEVEL, float(spawner_level - 1)) \
+			* prestige_spawner_multiplier()
+	)
+
+
+func spawner_upgrade_cost() -> int:
+	return int(round(Balance.SPAWNER_UPGRADE_BASE_COST * pow(Balance.SPAWNER_UPGRADE_COST_MULT, float(spawner_level - 1))))
+
+
+func can_upgrade_spawner() -> bool:
+	return is_spawner_placed() and gold >= spawner_upgrade_cost()
+
+
+func upgrade_spawner() -> void:
+	if not can_upgrade_spawner() or not spend_gold(spawner_upgrade_cost()):
+		return
+	spawner_level += 1
+	EventBus.combat_upgrade_changed.emit(&"spawner")
+
+
+## What the machine releases: drawn from the UNLOCKED roster but capped at the
+## strongest tier the player has personally placed, weak-biased — the device
+## keeps pace with the player without ever springing a surprise dragon.
+func spawner_random_enemy_data() -> EnemyData:
+	return _weighted_weak_enemy_pick(unlocked_tier_ids)
+
+
+# ─── 패시브 타일 (Loop-Hero style world auras) ───────────────────────────
+## A PLACED passive tile blesses the whole party — no radius, no babysitting.
+## Click the tile → 속성창 → 강화 raises its level. Effects are read through
+## the helpers below so combat code never touches tile bookkeeping.
+var tile_levels: Dictionary = {}  ## tile id -> level (1 when first placed)
+
+
+func tile_level(id: StringName) -> int:
+	return int(tile_levels.get(id, 1))
+
+
+func tile_upgrade_cost(id: StringName) -> int:
+	var up: Dictionary = Balance.TILE_UPGRADES.get(id, {})
+	return int(round(int(up.get("base_cost", 100)) * pow(float(up.get("cost_mult", 1.6)), float(tile_level(id) - 1))))
+
+
+func can_upgrade_tile(id: StringName) -> bool:
+	var up: Dictionary = Balance.TILE_UPGRADES.get(id, {})
+	if up.is_empty() or not is_structure_placed(id):
+		return false
+	return tile_level(id) < int(up.get("max_level", 1)) and gold >= tile_upgrade_cost(id)
+
+
+func upgrade_tile(id: StringName) -> void:
+	if not can_upgrade_tile(id) or not spend_gold(tile_upgrade_cost(id)):
+		return
+	tile_levels[id] = tile_level(id) + 1
+	EventBus.tile_upgraded.emit(id, tile_level(id))
+	EventBus.combat_upgrade_changed.emit(&"tile")
+
+
+## Tile effect %, already multiplied by level (0 when not placed).
+func tile_effect_percent(id: StringName) -> int:
+	if not is_structure_placed(id):
+		return 0
+	return int(Balance.TILE_UPGRADES.get(id, {}).get("value", 0)) * tile_level(id)
+
+
+func whetstone_attack_multiplier() -> float:
+	return 1.0 + float(tile_effect_percent(&"whetstone")) / 100.0
+
+
+func gold_idol_multiplier() -> float:
+	return 1.0 + float(tile_effect_percent(&"gold_idol")) / 100.0
+
+
+# ─── 프레스티지 (세계 다시 쓰기) ─────────────────────────────────────────
+## The hour-two layer: fold the world, convert lifetime gold into 별조각, buy
+## PERMANENT perks, wake the world again stronger. Everything here deliberately
+## survives reset_run() — it IS the thing that persists.
+var star_shards: int = 0
+var prestige_count: int = 0
+var prestige_perk_levels: Dictionary = {}  ## perk id -> level (permanent)
+
+
+## Shards this fold would pay right now.
+func prestige_shards_on_reset() -> int:
+	return int(floor(sqrt(float(total_gold_earned) / Balance.PRESTIGE_SHARD_DIVISOR)))
+
+
+func can_prestige() -> bool:
+	return world_started and prestige_shards_on_reset() >= 1
+
+
+## Fold the world: bank the shards, reset the run. The caller (prestige window)
+## reloads the scene afterwards so every node starts from the fresh state.
+func do_prestige() -> void:
+	if not can_prestige():
+		return
+	var earned: int = prestige_shards_on_reset()
+	star_shards += earned
+	prestige_count += 1
+	reset_run()
+	EventBus.prestige_completed.emit(earned, star_shards)
+
+
+func perk_level(id: StringName) -> int:
+	return int(prestige_perk_levels.get(id, 0))
+
+
+func perk_cost(id: StringName) -> int:
+	var perk: Dictionary = Balance.prestige_perk_by_id(id)
+	return int(perk.get("base_cost", 1)) * (perk_level(id) + 1)
+
+
+func can_buy_perk(id: StringName) -> bool:
+	var perk: Dictionary = Balance.prestige_perk_by_id(id)
+	if perk.is_empty() or perk_level(id) >= int(perk.get("max_level", 1)):
+		return false
+	return star_shards >= perk_cost(id)
+
+
+func buy_perk(id: StringName) -> void:
+	if not can_buy_perk(id):
+		return
+	star_shards -= perk_cost(id)
+	prestige_perk_levels[id] = perk_level(id) + 1
+	EventBus.prestige_changed.emit()
+
+
+## ── Perk effects (hooked into the run systems) ──
+func prestige_starting_gold() -> int:
+	return STARTING_GOLD + perk_level(&"start_gold") * int(Balance.prestige_perk_by_id(&"start_gold").get("value", 100))
+
+
+func prestige_attack_multiplier() -> float:
+	return 1.0 + 0.1 * float(perk_level(&"hero_might"))
+
+
+func prestige_spawner_multiplier() -> float:
+	return pow(0.9, float(perk_level(&"swift_spawner")))
 
 
 # ─── Objets (item-like collectibles: drop from battle → shelved on the left) ──
@@ -1633,7 +1912,7 @@ func debug_unlock_all_tiles() -> void:
 			unlocked_tier_ids.append(tier_id)
 			EventBus.tier_unlocked.emit(tier_id)
 	for tile: Dictionary in Balance.TILES:
-		acquire_objet(StringName(tile.get("id", &"")))
+		total_gold_earned = maxi(total_gold_earned, int(tile.get("unlock_at", 0)))
 	for building_id: StringName in [&"sanctuary"]:
 		var cond: Dictionary = Balance.building_by_id(building_id).get("unlock", {})
 		var need: int = int(cond.get("value", 0))
@@ -1708,17 +1987,41 @@ func tier_for_enemy_data(data: EnemyData) -> Dictionary:
 
 ## A random toggled-on tier's enemy resource for the field to spawn. Returns
 ## null when nothing is active (field then spawns nothing new).
+## Capped + weak-biased — see _weighted_weak_enemy_pick.
 func random_active_tier_enemy_data() -> EnemyData:
-	var candidates: Array[String] = []
-	for id: StringName in active_tier_ids:
+	return _weighted_weak_enemy_pick(active_tier_ids)
+
+
+## Shared mixed-spawn picker (field refill + 방생 장치):
+##   ① CEILING — only tiers at/below the strongest one the player has placed
+##      ("슬라임 눌렀는데 용" never happens; you introduce each tier yourself).
+##   ② WEAK BIAS — weight halves per strength rank, so stronger tiers stay
+##      accents inside the mix instead of taking it over.
+func _weighted_weak_enemy_pick(ids: Array[StringName]) -> EnemyData:
+	var paths: Array[String] = []
+	var weights: Array[float] = []
+	var total: float = 0.0
+	for id: StringName in ids:
 		if not is_tier_unlocked(id):
 			continue
+		var rank: int = Balance.tier_index(id)
+		if rank > _max_placed_tier_index:
+			continue
 		var path: String = str(Balance.tier_by_id(id).get("enemy_res", ""))
-		if not path.is_empty() and ResourceLoader.exists(path):
-			candidates.append(path)
-	if candidates.is_empty():
+		if path.is_empty() or not ResourceLoader.exists(path):
+			continue
+		var weight: float = pow(0.5, float(rank))
+		paths.append(path)
+		weights.append(weight)
+		total += weight
+	if paths.is_empty():
 		return null
-	return load(candidates[randi() % candidates.size()]) as EnemyData
+	var roll: float = randf() * total
+	for i in paths.size():
+		roll -= weights[i]
+		if roll <= 0.0:
+			return load(paths[i]) as EnemyData
+	return load(paths.back()) as EnemyData
 
 
 func tier_id_for_enemy_data(data: EnemyData) -> StringName:
@@ -2397,10 +2700,19 @@ func can_equip_to_slot(item: ItemData, member_index: int, slot_index: int) -> bo
 	if member_index < 0 or member_index >= party.size():
 		return false
 	if not equip_slot_accepts(slot_index, item):
-		return false
+		# 쌍수: dual-wield classes take a second WEAPON in the off-hand (slot 1).
+		if not (slot_index == 1 and item.slot == ItemData.Slot.WEAPON and member_dual_wields(member_index)):
+			return false
 	if item.allowed_character_id != &"" and party[member_index].id != item.allowed_character_id:
 		return false
 	return true
+
+
+## 쌍수 class check — the off-hand slot doubles as a weapon hand (단검 계열).
+func member_dual_wields(index: int) -> bool:
+	if index < 0 or index >= party.size():
+		return false
+	return Balance.character_weapon_type(party[index].id) == &"dagger"
 
 
 ## Manual equip: move inventory[inv_index] into member's slot, sending whatever was
@@ -2877,7 +3189,9 @@ func effective_attack(index: int) -> int:
 	if index < 0 or index >= party.size():
 		return 0
 	var character_id: StringName = party[index].id
-	return party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat") + skill_effect_int_sum("atk_flat")
+	var base: int = party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat") + skill_effect_int_sum("atk_flat")
+	# 숫돌 (passive tile) + 프레스티지 "착취 강화": party-wide % multipliers.
+	return int(round(float(base) * whetstone_attack_multiplier() * prestige_attack_multiplier()))
 
 
 func effective_agility(index: int) -> int:
@@ -3072,7 +3386,9 @@ func reset_run() -> void:
 	member_armor_levels.clear()        # per-member armor resets with the run
 	village_level = 1                  # 마을 re-placeable → tier ceiling back to 1단계
 	inventory.clear()
-	gold = STARTING_GOLD
+	gold = prestige_starting_gold()    # 프레스티지 종잣돈 perk applies here
+	spawner_level = 1                  # 방생 장치 re-levels with the run
+	tile_levels.clear()                # 패시브 타일도 새 세계에서 다시 깐다
 	purchased_skill_nodes.clear()
 	_ensure_default_skill_nodes()
 	total_gold_earned = 0
@@ -3085,6 +3401,7 @@ func reset_run() -> void:
 	biggest_hit = 0
 	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock
 	active_tier_ids = []             # toggle/auto-spawn dormant (click-place default)
+	_max_placed_tier_index = 0       # mixed-spawn ceiling resets to slime-only
 	world_started = false            # opening replays: lay grass again to begin
 	name_entered = false             # …and re-prompt for the hero's name
 	player_name = ""

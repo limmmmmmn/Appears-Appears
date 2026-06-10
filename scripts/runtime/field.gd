@@ -129,6 +129,9 @@ var _decor_rng := RandomNumberGenerator.new()
 var _forest_cells: Dictionary = {}
 var _spawn_timer: float = 0.0
 var _crowd_pressure: int = 0
+## 방생 장치 (auto-spawner): the placed structure node + its release clock.
+var _spawner_node: Node2D
+var _spawner_timer: float = 0.0
 var _field_size: Vector2 = FIELD_SIZE
 var _loop_complete: bool = false
 var _active_battle_windows: int = 0
@@ -223,6 +226,7 @@ func _process(delta: float) -> void:
 		return
 	if _loop_complete:
 		return
+	_tick_spawner(delta)  # 방생 장치: the machine releases enemies on its own
 	# Incremental model: the field continuously maintains a population of the
 	# toggled-on tiers. Killed/cleared enemies are replenished toward the target.
 	# Toggling a tier OFF just stops it joining the spawn mix (random_active_tier
@@ -836,6 +840,28 @@ func _max_grid_y() -> int:
 	return floori((_field_size.y - SPAWN_MARGIN) / float(TILE_SIZE)) - 1
 
 
+## 방생 장치: every interval, release one random UNLOCKED-tier enemy beside the
+## device — free (the machine does the clicking now). Soft population cap keeps
+## a neglected field from flooding.
+func _tick_spawner(delta: float) -> void:
+	if not GameState.is_spawner_placed() or not is_instance_valid(_spawner_node):
+		return
+	_spawner_timer -= delta
+	if _spawner_timer > 0.0:
+		return
+	_spawner_timer = GameState.spawner_interval()
+	if _active_field_enemy_count() >= _desired_enemy_count() + 8:
+		return  # field is saturated — hold the release until it thins out
+	var data: EnemyData = GameState.spawner_random_enemy_data()
+	if data == null:
+		return
+	GameState.pending_placement_position = _clamp_field_position(
+		_spawner_node.position + Vector2(randf_range(-30.0, 30.0), randf_range(-30.0, 30.0)))
+	_spawn_field_enemy(data)
+	if _spawner_node.has_method("pulse"):
+		_spawner_node.pulse()
+
+
 func _grow_crowd_pressure() -> void:
 	if _active_field_enemy_count() <= 0:
 		_crowd_pressure = 0
@@ -922,6 +948,9 @@ func _on_structure_placed(tile_id: StringName) -> void:
 	node.setup(Balance.tile_by_id(tile_id))
 	node.position = pos
 	_decorations_root.add_child(node)
+	if tile_id == &"spawner":
+		_spawner_node = node
+		_spawner_timer = GameState.spawner_interval()
 	# RPG flow: the party walks over to the freshly placed structure, and its
 	# 방문 창 opens on arrival (see _tick_structure_walk).
 	_begin_structure_visit(node)
@@ -1012,22 +1041,21 @@ func _random_campfire_position() -> Vector2:
 	return _spawn_position_near_player(origin)
 
 
-## Per-frame: heal party members standing near the campfire; trigger the mage
-## event once the party reaches it the first time.
+## Per-frame: the campfire is a WORLD aura now (Loop-Hero style passive tile) —
+## every party member regenerates wherever they roam, squads included. Also
+## triggers the mage event once the party reaches the fire the first time.
 func _tick_campfire(delta: float) -> void:
 	if not GameState.campfire_placed or not is_instance_valid(_campfire_node):
 		return
 	var center: Vector2 = _campfire_node.position
 	var radius: float = GameState.campfire_regen_radius()
-	# Collect in-range party member indices for proximity regen.
-	var in_range: Array[int] = []
+	# Party-wide regen: placing the fire blesses the whole world.
+	var everyone: Array[int] = []
 	for child in _party_root.get_children():
 		var idx: int = _party_member_index_of(child)
-		if idx < 0:
-			continue
-		if (child as Node2D).position.distance_to(center) <= radius:
-			in_range.append(idx)
-	GameState.tick_campfire_regen(in_range, delta)
+		if idx >= 0:
+			everyone.append(idx)
+	GameState.tick_campfire_regen(everyone, delta)
 	# One-time mage event: party reached the fire → play the 이벤트 창 cutscene
 	# (모닥불 앞에서 메이지와 첫 만남 — the join happens at the scene's end).
 	if _campfire_event_pending and _player and _player.position.distance_to(center) <= radius:

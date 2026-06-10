@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/runtime/gold_chip.gd" id="1_gc"]
 [ext_resource type="Texture2D" path="res://assets/sprites/icons/gold.png" id="2_coin"]
@@ -8,7 +8,7 @@
 content_margin_left = 6.0
 content_margin_top = 2.0
 content_margin_right = 7.0
-content_margin_bottom = 2.0
+content_margin_bottom = 3.0
 bg_color = Color(0.972549, 0.7882353, 0.30588236, 1)
 border_width_left = 1
 border_width_top = 1
@@ -20,6 +20,19 @@ shadow_size = 1
 shadow_offset = Vector2(2, 2)
 anti_aliasing = false
 
+[sub_resource type="StyleBoxFlat" id="UnlockBarBG"]
+bg_color = Color(0.18, 0.15, 0.08, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+anti_aliasing = false
+
+[sub_resource type="StyleBoxFlat" id="UnlockBarFill"]
+bg_color = Color(0.96862745, 0.9411765, 0.87058824, 1)
+anti_aliasing = false
+
 [node name="GoldChip" type="PanelContainer"]
 offset_left = 5.0
 offset_top = 17.0
@@ -28,21 +41,38 @@ offset_bottom = 33.0
 theme_override_styles/panel = SubResource("GoldChipStyle")
 script = ExtResource("1_gc")
 
-[node name="Row" type="HBoxContainer" parent="."]
+[node name="Col" type="VBoxContainer" parent="."]
+theme_override_constants/separation = 2
+
+[node name="Row" type="HBoxContainer" parent="Col"]
+layout_mode = 2
 theme_override_constants/separation = 3
 
-[node name="Coin" type="TextureRect" parent="Row"]
+[node name="Coin" type="TextureRect" parent="Col/Row"]
 custom_minimum_size = Vector2(12, 12)
+layout_mode = 2
 texture_filter = 1
 mouse_filter = 2
 texture = ExtResource("2_coin")
 stretch_mode = 5
 
-[node name="GoldLabel" type="Label" parent="Row"]
+[node name="GoldLabel" type="Label" parent="Col/Row"]
 unique_name_in_owner = true
+layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.16078432, 0.12156863, 0.05490196, 1)
 theme_override_fonts/font = ExtResource("3_font")
 theme_override_font_sizes/font_size = 9
 text = "999"
 vertical_alignment = 1
+
+[node name="UnlockBar" type="ProgressBar" parent="Col"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 5)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/background = SubResource("UnlockBarBG")
+theme_override_styles/fill = SubResource("UnlockBarFill")
+max_value = 100.0
+value = 40.0
+show_percentage = false

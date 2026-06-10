@@ -89,9 +89,13 @@ const OBJET_DROP_CHANCE: float = 0.22
 const OBJET_TEX: Dictionary = {
 	&"village": preload("res://assets/sprites/objects/village.png"),
 	&"campfire": preload("res://assets/sprites/objects/bonfire.png"),
+	&"whetstone": preload("res://assets/sprites/objects/whetstone.png"),
+	&"gold_idol": preload("res://assets/sprites/objects/gold_idol.png"),
 }
-## Drop order: each un-acquired objet surfaces in turn (village → campfire → …).
-const OBJET_ORDER: Array[StringName] = [&"village", &"campfire"]
+## Random objet drops are RETIRED: tiles are direct-buy from the dock roadmap now
+## (silhouette → milestone → price tag) so progress is plannable, not lucky.
+## The empty order keeps the card machinery dormant for future collectibles.
+const OBJET_ORDER: Array[StringName] = []
 const HEAL_PER_CARD: int = 14
 var _reward_type: int = Reward.GOLD
 ## When _reward_type == OBJET, which objet this card grants (e.g. &"village").

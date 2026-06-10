@@ -7,6 +7,7 @@ extends PanelContainer
 ## label) is authored in gold_chip.tscn — this only drives the number + the click pop.
 
 @onready var _label: Label = %GoldLabel
+@onready var _unlock_bar: ProgressBar = %UnlockBar
 
 var _income_timer: float = 0.0
 var _income_marker: int = 0
@@ -42,6 +43,18 @@ func _refresh() -> void:
 		_label.text = "%d  +%d/s" % [GameState.gold, _income_per_sec]
 	else:
 		_label.text = "%d" % GameState.gold
+	# Next-carrot gauge: lifetime gold vs the cheapest still-locked tier. The bar
+	# filling up IS the reason to keep the session going — hide it only when the
+	# whole roster is open.
+	if _unlock_bar != null:
+		var prog: Dictionary = GameState.next_tier_unlock_progress()
+		_unlock_bar.visible = not prog.is_empty()
+		if not prog.is_empty():
+			_unlock_bar.max_value = float(prog["need"])
+			_unlock_bar.value = minf(float(prog["current"]), float(prog["need"]))
+			tooltip_text = "다음 등장까지  %d / %d G (누적)" % [int(prog["current"]), int(prog["need"])]
+		else:
+			tooltip_text = ""
 
 
 ## Click the chip → +1000 gold AND every placement tile surfaces in the dock

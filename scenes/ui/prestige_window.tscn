@@ -1,0 +1,122 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/prestige_window.gd" id="1_pw"]
+[ext_resource type="Theme" uid="uid://y11tyjfd0r6c" path="res://assets/themes/ui_theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_frame"]
+content_margin_left = 9.0
+content_margin_top = 7.0
+content_margin_right = 9.0
+content_margin_bottom = 7.0
+bg_color = Color(0.96862745, 0.9411765, 0.87058824, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+shadow_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+shadow_size = 1
+shadow_offset = Vector2(3, 3)
+anti_aliasing = false
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_rule"]
+bg_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+
+[node name="PrestigeWindow" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_pw")
+
+[node name="Dim" type="ColorRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.02, 0.03, 0.06, 0.42)
+
+[node name="Panel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -122.0
+offset_top = -104.0
+offset_right = 122.0
+offset_bottom = 104.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBox_frame")
+
+[node name="Col" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Title" type="Label" parent="Panel/Col"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "세계 다시 쓰기"
+horizontal_alignment = 1
+
+[node name="ShardLabel" type="Label" parent="Panel/Col"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.54, 0.44, 0.82, 1)
+theme_override_font_sizes/font_size = 9
+text = "보유 별조각  ★0"
+horizontal_alignment = 1
+
+[node name="Rule" type="Panel" parent="Panel/Col"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_rule")
+
+[node name="Perks" type="VBoxContainer" parent="Panel/Col"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="Rule2" type="Panel" parent="Panel/Col"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_rule")
+
+[node name="FoldButton" type="Button" parent="Panel/Col"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 17)
+layout_mode = 2
+focus_mode = 0
+text = "세계 다시 쓰기"
+
+[node name="HintLabel" type="Label" parent="Panel/Col"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47843137, 0.42745098, 0.36078432, 1)
+theme_override_font_sizes/font_size = 7
+text = "누적 골드가 별조각이 된다. 진행은 접히고, 퍼크는 영원하다."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="CloseRow" type="HBoxContainer" parent="Panel/Col"]
+layout_mode = 2
+alignment = 1
+
+[node name="CloseButton" type="Button" parent="Panel/Col/CloseRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 15)
+layout_mode = 2
+focus_mode = 0
+text = "닫기"

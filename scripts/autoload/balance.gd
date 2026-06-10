@@ -211,20 +211,99 @@ const COMPANIONS: Array[Dictionary] = [
 ## upgrades (vs the right panel's abstract stat buildings). Pricey by design.
 ## Campfire = a proximity HP-regen outpost; placing it the first time recruits
 ## the mage. Data-driven so more tiles/outposts drop in later.
+## PLANNABLE purchases (no random drops): each tile shows as a silhouette in the
+## dock with its `unlock_at` lifetime-gold milestone, opens at that milestone,
+## and costs `place_cost` to put down. Ordered by unlock — the visible roadmap.
 const TILES: Array[Dictionary] = [
-	{
-		"id": &"campfire", "name": "모닥불", "short": "불", "color": Color(1.0, 0.6, 0.3, 1.0),
-		"sprite": "res://assets/sprites/objects/bonfire.png",
-		"place_cost": 300, "owner": &"mage",
-		"desc": "필드에 놓는 회복 거점. 근처 파티원만 HP가 차오른다.",
-	},
 	{
 		"id": &"village", "name": "마을", "short": "촌", "color": Color(0.85, 0.78, 0.55, 1.0),
 		"sprite": "res://assets/sprites/objects/village.png",
-		"place_cost": 50,
+		"place_cost": 50, "unlock_at": 60,
 		"desc": "첫 마을. 클릭해 여관(휴식)·상점(장비 구매)을 연다.",
 	},
+	{
+		"id": &"campfire", "name": "모닥불", "short": "불", "color": Color(1.0, 0.6, 0.3, 1.0),
+		"sprite": "res://assets/sprites/objects/bonfire.png",
+		"place_cost": 300, "unlock_at": 150, "owner": &"mage",
+		"desc": "세계의 모닥불. 모든 아군의 HP가 어디서든 차오른다.",
+	},
+	{
+		"id": &"whetstone", "name": "숫돌", "short": "숫", "color": Color(0.77, 0.35, 0.27, 1.0),
+		"sprite": "res://assets/sprites/objects/whetstone.png",
+		"place_cost": 150, "unlock_at": 350,
+		"desc": "세계에 깔린 숫돌. 모든 아군의 무기가 은근히 날카로워진다.",
+	},
+	{
+		"id": &"spawner", "name": "방생 장치", "short": "방", "color": Color(0.54, 0.44, 0.82, 1.0),
+		"sprite": "res://assets/sprites/objects/spawner.png",
+		"place_cost": 250, "unlock_at": 600,
+		"desc": "주변에 해금된 적을 스스로 풀어놓는 장치. 클릭은 이제 설계의 영역.",
+	},
+	{
+		"id": &"gold_idol", "name": "금빛 비석", "short": "金", "color": Color(0.9, 0.71, 0.24, 1.0),
+		"sprite": "res://assets/sprites/objects/gold_idol.png",
+		"place_cost": 220, "unlock_at": 900,
+		"desc": "세계에 깔린 비석. 쓰러진 적이 더 많은 골드를 흘린다.",
+	},
 ]
+## ─── 패시브 타일 강화 (Loop-Hero style world auras) ─────────────────────
+## A placed passive tile applies PARTY-WIDE, level-scaled. `value` = % per level;
+## `effect_fmt` renders the 속성창 readout. Costs scale per level.
+const TILE_UPGRADES: Dictionary = {
+	&"whetstone": {
+		"base_cost": 120, "cost_mult": 1.6, "max_level": 25,
+		"value": 6, "effect_fmt": "모든 아군 공격 +%d%%",
+	},
+	&"gold_idol": {
+		"base_cost": 150, "cost_mult": 1.65, "max_level": 25,
+		"value": 10, "effect_fmt": "처치 골드 +%d%%",
+	},
+}
+## ─── 방생 장치 (auto-spawner — the automation rung) ────────────────────
+## Unlock milestone lives in its TILES entry ("unlock_at"). Spawns a random
+## UNLOCKED tier near itself for free every interval; upgrades shorten the
+## interval (multiplicative, floored).
+const SPAWNER_BASE_INTERVAL: float = 6.0
+const SPAWNER_INTERVAL_MULT_PER_LEVEL: float = 0.85
+const SPAWNER_MIN_INTERVAL: float = 1.2
+const SPAWNER_UPGRADE_BASE_COST: int = 200
+const SPAWNER_UPGRADE_COST_MULT: float = 1.7
+
+## ─── 프레스티지 (세계 다시 쓰기) ────────────────────────────────────────
+## Folding the world converts LIFETIME gold into 별조각 (star shards), spent on
+## PERMANENT perks that survive every reset. Shards = floor(sqrt(earned/400)):
+## first fold worth taking around ~400G, ~5★ at 10k, ~16★ at 100k.
+const PRESTIGE_SHARD_DIVISOR: float = 400.0
+## Perk cost = base_cost × (level + 1) shards. `value` is the per-level effect.
+const PRESTIGE_PERKS: Array[Dictionary] = [
+	{
+		"id": &"start_gold", "name": "세계의 종잣돈", "base_cost": 1, "max_level": 12,
+		"value": 100, "desc": "다시 쓴 세계가 시작 골드 +100을 품는다",
+	},
+	{
+		"id": &"hero_might", "name": "착취 강화", "base_cost": 2, "max_level": 10,
+		"value": 10, "desc": "용사 일행의 공격력 +10%",
+	},
+	{
+		"id": &"swift_spawner", "name": "방생 가속", "base_cost": 2, "max_level": 8,
+		"value": 10, "desc": "방생 장치가 10% 빠르게 돈다",
+	},
+]
+
+
+## A tier's strength rank = its position in the TIERS list (0 = weakest).
+func tier_index(id: StringName) -> int:
+	for i in tier_count():
+		if StringName(tier_at(i).get("id", &"")) == id:
+			return i
+	return 0
+
+
+static func prestige_perk_by_id(id: StringName) -> Dictionary:
+	for perk: Dictionary in PRESTIGE_PERKS:
+		if StringName(perk.get("id", &"")) == id:
+			return perk
+	return {}
 const CAMPFIRE_REGEN_RADIUS: float = 72.0       ## only party within this regen
 const CAMPFIRE_REGEN_BASE_RATE: float = 0.6     ## HP/sec at level 1 (very weak)
 const CAMPFIRE_REGEN_PER_LEVEL: float = 0.7     ## +HP/sec per upgrade

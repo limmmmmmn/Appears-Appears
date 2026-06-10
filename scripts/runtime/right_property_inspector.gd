@@ -108,6 +108,7 @@ func _render() -> void:
 	_build_header(data)
 	_build_info(data)
 	_build_actions(data)
+	_build_equipment(data)
 	# 마을: the inn + gear shop live here now (was a floating popup above the village),
 	# pinned right below the 강화 slot.
 	if bool(data.get("shop", false)):
@@ -173,6 +174,8 @@ func _build_info(data: Dictionary) -> void:
 func _build_actions(data: Dictionary) -> void:
 	var actions: Array = data.get("actions", [])
 	if actions.is_empty():
+		if data.has("equip_rows"):
+			return  # party members: the equipment sheet IS the action area
 		# Targets without an upgrade yet still show the ③ slot (준비 중) for structure.
 		var placeholder := Button.new()
 		placeholder.text = "강화 (준비 중)"
@@ -184,6 +187,54 @@ func _build_actions(data: Dictionary) -> void:
 		return
 	for action: Dictionary in actions:
 		_vbox.add_child(_make_action_button(action))
+
+
+# ─── ④ 장비 6칸 (party members): [슬롯 · 아이템] / [구매][변경] ──────────
+## 구매 = gold ladder (마을이 서 있어야 활성 — 초반은 루팅 경제), 변경 = 가방의
+## 같은 슬롯 장비를 순환 장착. Two compact lines per slot, scrolls with the panel.
+func _build_equipment(data: Dictionary) -> void:
+	var rows: Array = data.get("equip_rows", [])
+	if rows.is_empty():
+		return
+	_vbox.add_child(DOS.section("장비"))
+	for row: Dictionary in rows:
+		var name_label := Label.new()
+		name_label.text = "%s · %s" % [str(row.get("slot_name", "")), str(row.get("item_name", "—"))]
+		name_label.add_theme_color_override("font_color", DOS.TEXT)
+		name_label.add_theme_font_size_override("font_size", UITheme.FONT_CARD_VALUE)
+		name_label.clip_text = true
+		_vbox.add_child(name_label)
+		var buttons := HBoxContainer.new()
+		buttons.add_theme_constant_override("separation", 2)
+		_vbox.add_child(buttons)
+		var buy := Button.new()
+		buy.focus_mode = Control.FOCUS_NONE
+		buy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		buy.custom_minimum_size = Vector2(0.0, 13.0)
+		buy.add_theme_font_size_override("font_size", 6)
+		var cost: int = int(row.get("buy_cost", 0))
+		buy.text = "구매 %dG" % cost if (bool(row.get("has_buy", false)) and cost > 0) else "구매"
+		buy.disabled = not bool(row.get("can_buy", false))
+		if buy.disabled:
+			buy.tooltip_text = "마을을 세우면 구매할 수 있다" if not GameState.gear_buying_unlocked() \
+				else ("입고 예정" if not bool(row.get("has_buy", false)) else "")
+		var on_buy: Callable = row.get("on_buy", Callable())
+		if not buy.disabled and on_buy.is_valid():
+			buy.pressed.connect(on_buy)
+		buttons.add_child(buy)
+		var change := Button.new()
+		change.focus_mode = Control.FOCUS_NONE
+		change.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		change.custom_minimum_size = Vector2(0.0, 13.0)
+		change.add_theme_font_size_override("font_size", 6)
+		change.text = "변경"
+		change.disabled = not bool(row.get("can_change", false))
+		if change.disabled:
+			change.tooltip_text = "가방에 맞는 장비가 없다"
+		var on_change: Callable = row.get("on_change", Callable())
+		if not change.disabled and on_change.is_valid():
+			change.pressed.connect(on_change)
+		buttons.add_child(change)
 
 
 func _make_action_button(action: Dictionary) -> Button:
