@@ -292,6 +292,10 @@ func disarm_combat() -> void:
 	_combat_armed = false
 
 
+func is_combat_armed() -> bool:
+	return _combat_armed
+
+
 ## Begin the fight (battle formation: the hero has reached its spot). Idempotent.
 func arm_combat() -> void:
 	if _combat_armed:

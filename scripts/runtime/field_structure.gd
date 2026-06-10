@@ -96,11 +96,13 @@ func setup(building: Dictionary) -> void:
 	_build_selection_marker()
 
 
-## Click → the [간다][닫기] bubble opens above this structure (RPG-style: the hero
-## walks over and the 방문 창 opens on arrival — see ObjectActionPanel / Field).
+## Click → select this structure in the right 속성 창 (property inspector), where
+## its upgrades/shop live — the incremental loop: click the thing, buy the thing.
+## (The RPG 방문 창 still plays on first-placement arrival; this is the everyday
+## interaction afterwards.)
 func _on_hotspot_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		EventBus.structure_clicked.emit(self)
+		EventBus.inspector_target_selected.emit(self)
 		get_viewport().set_input_as_handled()
 
 

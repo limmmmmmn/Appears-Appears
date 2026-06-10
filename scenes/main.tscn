@@ -47,7 +47,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.43137255, 0.654902, 0.78039217, 1)
+color = Color(0, 0.39607844, 0.32941177, 1)
 metadata/_edit_lock_ = true
 
 [node name="BattleWindowLayer" type="CanvasLayer" parent="." unique_id=1339895513]
@@ -58,9 +58,9 @@ layer = 5
 
 [node name="FieldLayoutRect" type="ReferenceRect" parent="HudLayer" unique_id=1101467223]
 offset_left = 86.0
-offset_top = 37.0
+offset_top = 32.0
 offset_right = 540.0
-offset_bottom = 320.0
+offset_bottom = 329.0
 mouse_filter = 2
 border_color = Color(0.35, 1, 0.45, 0.9)
 border_width = 1.5

@@ -123,67 +123,16 @@ func _process(delta: float) -> void:
 	# Drive the downed → refill → auto-stand cycle every frame (runs even between
 	# fights so knocked-out members always recover). No passive regen otherwise.
 	GameState.tick_downed_recovery(delta)
-	# Windows now sit in fixed 3×3 grid slots (no drift/push) — they stay put as
-	# stacked floating cards, so the eye stays on the content.
-	_update_formation(delta)
+	# No battle formation/stance: when a party's cap fills it simply stops where
+	# it stands (per-group freeze) and watches its windows fight.
 
 
-# ─── Battle stance (per split party) ────────────────────────────────────
-## The DQ read: 전투창 위, 아군 뒷모습 아래 —
-##   ㅁ  (window)
-##   0   (party, backs to camera)
-## Every party with an active fight marches into a centered row UNDER its battle
-## window and faces UP. With multiple windows the party stands in front of its
-## MOST RECENT one (마지막 전투창); when its last fight resolves to a chest the
-## members release and resume roaming/following. Refreshed every frame.
-const STANCE_GAP_Y: float = 28.0     ## party feet this far below the window's bottom edge
-const STANCE_SPACING: float = 18.0   ## px between members in the row
-## Room always kept free UNDER a window for its party row: a fight that starts at
-## the field's bottom edge gets nudged UP so the allies still fit beneath it
-## (no fixed "spawn zone" — only the minimum shift, only when needed).
-const STANCE_ROW_RESERVE: float = STANCE_GAP_Y + 10.0
-
-var _stance_groups: Dictionary = {}  ## group id -> true while members hold a battle row
-
-
-func _update_formation(_delta: float) -> void:
-	# Latest ACTIVE (non-chest) window per battle group — _window_rects keys keep
-	# spawn order, so the last matching window IS the most recent fight.
-	var latest_by_group: Dictionary = {}
-	for window in _window_rects.keys():
-		if not is_instance_valid(window):
-			continue
-		if window.has_method("is_chest_active") and window.is_chest_active():
-			continue
-		latest_by_group[int(window.get_meta("battle_group", 0))] = window
-	for group in latest_by_group.keys():
-		_apply_group_stance(int(group), latest_by_group[group])
-	for group in _stance_groups.keys():
-		if not latest_by_group.has(int(group)):
-			_release_group_stance(int(group))
-	_stance_groups = latest_by_group
-
-
-## March this party's members into a centered row under the window (re-aimed every
-## frame so the row follows the card if it shifts).
-func _apply_group_stance(group: int, window) -> void:
-	var rect: Rect2 = _window_rects.get(window, Rect2(window.position, window.size))
-	var members: Array = _group_members_ordered(group)
-	var n: int = members.size()
-	for j in n:
-		var dx: float = (float(j) - float(n - 1) * 0.5) * STANCE_SPACING
-		var slot := Vector2(
-			clampf(rect.get_center().x + dx, 8.0, Field.FIELD_SIZE.x - 8.0),
-			clampf(rect.end.y + STANCE_GAP_Y, 8.0, Field.FIELD_SIZE.y - 8.0)
-		)
-		if members[j].has_method("set_formation_slot"):
-			members[j].set_formation_slot(slot)
-
-
-func _release_group_stance(group: int) -> void:
-	for m in _group_members_ordered(group):
-		if m.has_method("clear_formation"):
-			m.clear_formation()
+# ─── No battle formation ─────────────────────────────────────────────────
+## Stance/formation removed: fights start instantly where they're met, the party
+## roams below its cap, and when the cap fills the members simply stop in place
+## (per-group freeze) until a window resolves. The single-fight card still opens
+## just ABOVE the hero so the ㅁ/0 read happens naturally.
+const STANCE_GAP_Y: float = 28.0     ## gap kept between the over-hero card and his head
 
 
 ## This split group's members in stable order (hero first, companions by slot).
@@ -1261,9 +1210,7 @@ func _clamp_window_to_view(pos: Vector2, window_size: Vector2) -> Vector2:
 	)
 	var hi := Vector2(
 		minf(view.end.x + WINDOW_VIEW_OVERHANG, field.end.x - 4.0) - window_size.x,
-		# Bottom is tighter: keep the stance row's room under the card, so an
-		# edge fight pushes the WINDOW up instead of squeezing the party.
-		minf(view.end.y + WINDOW_VIEW_OVERHANG, field.end.y - 4.0 - STANCE_ROW_RESERVE) - window_size.y
+		minf(view.end.y + WINDOW_VIEW_OVERHANG, field.end.y - 4.0) - window_size.y
 	)
 	var result: Vector2 = pos
 	result.x = clampf(pos.x, lo.x, hi.x) if hi.x >= lo.x else (lo.x + hi.x) * 0.5
@@ -1312,9 +1259,7 @@ func _clamp_position_to_play_area(pos: Vector2, window_size: Vector2) -> Vector2
 	# WORLD bounds: windows live on the map now, so drift is fenced by the field
 	# board itself. (The old screen-space play-area rect mis-clamped the moment
 	# the follow camera left the origin — the "weird edge window" bug.)
-	# Bottom keeps the stance row's room so drift can't squeeze the party either.
 	var bounds: Rect2 = _field_rect().grow(-4.0)
-	bounds.size.y = maxf(8.0, bounds.size.y - STANCE_ROW_RESERVE)
 	var max_x: float = maxf(bounds.position.x, bounds.end.x - window_size.x)
 	var max_y: float = maxf(bounds.position.y, bounds.end.y - window_size.y)
 	return Vector2(
