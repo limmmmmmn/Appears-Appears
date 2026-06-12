@@ -45,6 +45,20 @@ func _ready() -> void:
 		_apply_data()
 
 
+## Move this enemy to a new home slot AND re-anchor its idle/lunge/flinch base
+## there. Without re-anchoring, attack/hit tweens snap the body back to its old
+## (stale) base — which is why fed-window enemies drifted to the center & overlapped.
+func set_home_position(pos: Vector2) -> void:
+	if _hit_tween != null and _hit_tween.is_valid():
+		_hit_tween.kill()
+	if _attack_tween != null and _attack_tween.is_valid():
+		_attack_tween.kill()
+	position = pos
+	_base_position = pos
+	if not _dying:
+		scale = _base_scale
+
+
 ## Allows callers to inject data after instantiate() but before adding to tree.
 func setup(enemy_data: EnemyData) -> void:
 	data = enemy_data
@@ -71,7 +85,7 @@ func _apply_data() -> void:
 	if data.sprite and _sprite:
 		_sprite.texture = data.sprite
 	if _level_label != null:
-		_level_label.text = "Lv %d" % GameState.enemy_level(GameState.tier_id_for_enemy_data(data))
+		_level_label.visible = false  # 적 레벨 표시 제거 (전투창)
 	_refresh_hp_bar()
 	_refresh_tooltip()
 	hp_changed.emit(current_hp, max_hp)

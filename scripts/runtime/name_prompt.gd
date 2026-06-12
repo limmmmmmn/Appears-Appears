@@ -14,8 +14,9 @@ var _line_edit: LineEdit
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE  # idle root never blocks
+	# 이름 입력 오프닝 스킵 — 그냥 "용사"로 바로 시작 ㅋㅋ (start_world도 여기서 발동)
 	if not GameState.name_entered:
-		_build()
+		GameState.set_player_name("용사")
 
 
 func _build() -> void:

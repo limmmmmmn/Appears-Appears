@@ -112,6 +112,9 @@ func _ready() -> void:
 	for c: Vector2 in SLOT_CENTERS:
 		_slot_base.append(c)  # each slot starts at its grid center, then is movable
 	EventBus.enemy_encountered.connect(_on_enemy_encountered)
+	EventBus.wave_started.connect(_on_wave_reset)
+	# (No abort on settle-prep anymore — open fights are allowed to FINISH; the
+	# settlement waits for them via has_active_windows().)
 	EventBus.combo_attack_damage_requested.connect(_on_combo_attack_damage_requested)
 	EventBus.battle_window_closed.connect(_on_battle_window_closed)
 	EventBus.battle_window_resolved.connect(_on_battle_window_resolved)
@@ -409,9 +412,27 @@ func _on_battle_window_resolved(window: Node) -> void:
 		_update_slot_readiness(int(_window_slot[window]))
 
 
+# ─── Wave reset: every new wave starts from a clean board ───────────────
+## Wipe last wave's windows so nothing carries over (wave 1 = no-op, no windows).
+func _on_wave_reset(wave: int) -> void:
+	if wave > 1:
+		abort_all_battles()
+
+
+## Any battle window still on screen (fighting or resolving)? The 정산 waits on this.
+func has_active_windows() -> bool:
+	for w in _window_rects.keys():
+		if is_instance_valid(w):
+			return true
+	return false
+
+
 # ─── Spawning ─────────────────────────────────────────────────────────
 func _on_enemy_encountered(field_enemy: Node) -> void:
 	if GameState.is_party_wiped() or not is_instance_valid(field_enemy):
+		return
+	# Wave winding down → no NEW windows; let the open ones finish first.
+	if GameState.wave_winding_down:
 		return
 	var data: EnemyData = field_enemy.data
 	if data == null:
@@ -1306,9 +1327,16 @@ func _on_battle_window_closed(window: Node) -> void:
 		var xp_reward: int = battle_window.claim_xp_reward()
 		if xp_reward > 0:
 			GameState.add_party_xp(xp_reward)
-		# Kill GOLD is paid immediately on each kill (GameState._on_enemy_defeated),
-		# so we no longer drop a gold pile on close. Items still drop on the field.
-		_drop_items_from_window(battle_window)
+		# Victory reward: a gold coin + mystery gear BOXES scatter on the field (no
+		# chest) — the player sweeps them up. Per-kill gold was already paid instantly.
+		# Boxes hide their loot; each collected one = a 정산 3지선다 pick.
+		var gold_reward: int = battle_window.claim_gold_reward()
+		var base_pos: Vector2 = _drop_base_position(battle_window)
+		if gold_reward > 0:
+			EventBus.field_gold_drop_requested.emit(gold_reward, base_pos)
+		var boxes: int = battle_window.claim_gear_box_drops()
+		for i in boxes:
+			EventBus.field_gear_box_drop_requested.emit(base_pos)
 	# Tell anyone who cares (Field, etc.) when the last fight ends. This is
 	# the gate Field uses before declaring field_loop_settled — Echo Strike means
 	# the *first* window closing is rarely the last one.

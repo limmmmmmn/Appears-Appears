@@ -6,6 +6,7 @@ extends Area2D
 
 const DAMAGE_NUMBER_SCENE: PackedScene = preload("res://scenes/effects/damage_number.tscn")
 const GOLD_TEXTURE: Texture2D = preload("res://assets/sprites/icons/gold.png")
+const BOX_TEXTURE: Texture2D = preload("res://assets/sprites/icons/chest.png")  ## mystery gear box
 const GOLD_DROP_HEIGHT_MIN: float = 14.0
 const GOLD_DROP_HEIGHT_MAX: float = 24.0
 const GOLD_DROP_SIDE_RANGE: float = 8.0
@@ -26,6 +27,9 @@ const HOVER_PICKUP_RADIUS: float = 12.0
 @export var gold_amount: int = 0
 ## Loot level the item dropped at — it enters the inventory at this entry level.
 var _level: int = 1
+## Mystery GEAR BOX: type hidden on the field; collecting banks a settlement pick
+## ticket (the actual gear is chosen later in the 정산 3지선다).
+var _is_gear_box: bool = false
 
 @onready var _sprite: Sprite2D = $Sprite2D
 @onready var _collision_shape: CollisionShape2D = $CollisionShape2D
@@ -89,6 +93,15 @@ func setup_gold_drop(amount: int) -> void:
 		_apply_item()
 
 
+## A mystery gear box: no type shown, collecting grants a settlement pick ticket.
+func setup_gear_box() -> void:
+	item = null
+	gold_amount = 0
+	_is_gear_box = true
+	if is_inside_tree():
+		_apply_item()
+
+
 func reveal_with_pop() -> void:
 	_set_pickup_collision_enabled(false)
 	scale = Vector2.ONE
@@ -138,6 +151,11 @@ func _apply_item() -> void:
 	if gold_amount > 0:
 		_sprite.texture = GOLD_TEXTURE
 		_ensure_drop_shadow()
+	elif _is_gear_box:
+		_sprite.texture = BOX_TEXTURE  # every gear drops as the same mystery box
+		_ensure_drop_shadow()
+		_set_drop_shadow_alpha(DROP_SHADOW_ALPHA)
+		_set_drop_shadow_scale(1.0)
 	elif item and item.icon:
 		_sprite.texture = item.icon
 		_ensure_drop_shadow()
@@ -165,6 +183,11 @@ func _finish_collect() -> void:
 	if gold_amount > 0:
 		_collect_gold()
 		return
+	if _is_gear_box:
+		GameState.add_gear_ticket()  # remembered → opened at the 정산 3지선다
+		_spawn_box_popup()
+		_play_collect_animation()
+		return
 	var equipped: bool = GameState.can_equip_item(item)
 	if not GameState.collect_item(item, _level):
 		_collected = false
@@ -174,10 +197,63 @@ func _finish_collect() -> void:
 	_play_collect_animation()
 
 
+func _spawn_box_popup() -> void:
+	var parent_node: Node = get_parent()
+	if parent_node == null:
+		return
+	var num: DamageNumber = DAMAGE_NUMBER_SCENE.instantiate()
+	parent_node.add_child(num)
+	num.global_position = global_position + Vector2(0, -12)
+	num.z_index = 50
+	num.setup_text("보물 상자!", Color(0.95, 0.8, 0.42, 1.0))
+
+
 func _collect_gold() -> void:
-	GameState.add_gold(gold_amount)
+	GameState.bank_wave_gold(gold_amount)  # counts toward 스테이지 골드 readout
 	_spawn_gold_popup()
 	_play_collect_animation()
+
+
+## Buzzer sweep: auto-collected into the wave totals at wave-end (no animation,
+## no manual grab needed) so last-instant loot still lands in the 정산.
+func collect_into_wave() -> void:
+	if _collected:
+		return
+	_collected = true
+	_bank_into_wave()
+	queue_free()
+
+
+## Bank this drop's value into the wave totals (no node freeing — the caller frees).
+func _bank_into_wave() -> void:
+	if gold_amount > 0:
+		GameState.bank_wave_gold(gold_amount)
+	elif _is_gear_box:
+		GameState.add_gear_ticket()
+	elif item != null:
+		GameState.collect_item(item, _level)
+
+
+## 자동 줍기 흡수 연출: arc toward the hero (shrinking), bank on arrival. Works
+## for gold/box/item alike — used during the wave-end pickup grace.
+func auto_absorb_to(target: Node2D) -> void:
+	if _collected or not is_instance_valid(target):
+		return
+	_collected = true
+	_magnet_active = false
+	_set_pickup_collision_enabled(false)
+	z_index = 80
+	if _tween and _tween.is_valid():
+		_tween.kill()
+	var aim: Vector2 = target.global_position + Vector2(0, -8)
+	var t := create_tween()
+	t.set_parallel(true)
+	t.tween_property(self, "global_position", aim, 0.34).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	t.tween_property(self, "scale", Vector2(0.45, 0.45), 0.34)
+	t.tween_property(self, "modulate:a", 0.0, 0.34)
+	t.chain().tween_callback(func() -> void:
+		_bank_into_wave()
+		queue_free())
 
 
 func _play_gold_drop_motion() -> void:

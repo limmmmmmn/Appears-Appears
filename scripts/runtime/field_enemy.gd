@@ -114,6 +114,28 @@ func setup(enemy_data: EnemyData) -> void:
 		_apply_data()
 
 
+## 밤의 사냥꾼: sees forever, never gives up, runs faster, looks meaner. Spawned
+## only during the night phase — the dread is the POINT.
+var _night_hunter: bool = false
+
+
+func set_night_hunter() -> void:
+	_night_hunter = true
+	if is_inside_tree():
+		_apply_night_hunter()
+	else:
+		# _ready's _apply_data overwrites detect/chase from data — re-apply AFTER.
+		ready.connect(_apply_night_hunter, CONNECT_ONE_SHOT)
+
+
+func _apply_night_hunter() -> void:
+	detect_radius = 9999.0   # sees forever
+	lose_radius = 99999.0    # never gives up
+	chase_speed *= Balance.NIGHT_CHASE_SPEED_MULT
+	if _sprite != null:
+		_sprite.modulate = Color(1.0, 0.78, 0.78, 1.0)  # 살짝 핏빛 — 거칠다
+
+
 func _apply_data() -> void:
 	if data and data.sprite and _sprite:
 		_sprite.texture = data.sprite
@@ -139,9 +161,8 @@ func _apply_data() -> void:
 func _refresh_level_and_hp() -> void:
 	if data == null:
 		return
-	var tier_id: StringName = GameState.tier_id_for_enemy_data(data)
 	if _level_label != null:
-		_level_label.text = "Lv %d" % GameState.enemy_level(tier_id)
+		_level_label.visible = false  # 적 레벨 표시 제거 — 해금은 노드트리로
 	if _hp_bar != null:
 		_hp_bar.value = 1.0
 
@@ -152,9 +173,12 @@ func _refresh_tooltip() -> void:
 	_tooltip_area.tooltip_text = GameState.enemy_stat_tooltip(data)
 
 
+## Click a field enemy → the hero walks over to engage it (his collision opens
+## the window). The player's manual targeting before 자동 이동 is bought.
 func _on_tooltip_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		EventBus.inspector_target_selected.emit(self)
+		if not _triggered and not _spawning and not _despawning:
+			EventBus.field_enemy_clicked.emit(self)
 		_tooltip_area.accept_event()
 
 
@@ -313,7 +337,7 @@ func _find_player() -> Node2D:
 
 
 func _can_chase_player() -> bool:
-	return data == null or data.chases_player_on_field
+	return _night_hunter or data == null or data.chases_player_on_field
 
 
 func _find_nearest_party_member(radius: float) -> Node2D:
@@ -441,8 +465,6 @@ func _start_spawn_telegraph() -> void:
 	_sprite.visible = true
 	if _hp_bar != null:
 		_hp_bar.visible = true
-	if _level_label != null:
-		_level_label.visible = true
 	_sprite.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	var reveal: Tween = create_tween()
 	reveal.tween_property(_sprite, "modulate", Color.WHITE, 0.16)

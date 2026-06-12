@@ -8,6 +8,10 @@ extends Node
 ## Player collided with an enemy on the field. Triggers a battle_window spawn.
 signal enemy_encountered(enemy: Node)
 
+## The player CLICKED a field enemy → send the hero to engage it (manual control;
+## auto-move node later does this automatically). The field routes it to the hero.
+signal field_enemy_clicked(enemy: Node)
+
 ## A party combo attack should damage the battle windows opened by that combo.
 signal combo_attack_damage_requested(damage_ratio: float, combo_batch_id: int)
 
@@ -60,6 +64,9 @@ signal inventory_changed()
 ## Field should spawn an item pickup at this world position.
 signal field_item_drop_requested(item: ItemData, world_position: Vector2, level: int)
 signal field_gold_drop_requested(amount: int, world_position: Vector2)
+## Field should spawn a mystery GEAR BOX (type hidden) — collecting it banks a
+## settlement pick ticket (the gear is chosen later in the 정산 3지선다).
+signal field_gear_box_drop_requested(world_position: Vector2)
 
 ## At least one party member changed HP. Used for "any-change" listeners.
 signal party_hp_changed()
@@ -124,6 +131,18 @@ signal prestige_completed(shards_earned: int, total_shards: int)
 signal prestige_changed()
 ## A passive tile (숫돌/금빛 비석/…) leveled up — juice + readout refresh.
 signal tile_upgraded(id: StringName, new_level: int)
+## 웨이브 cadence: a wave began / its timer ran out (→ the draft window opens).
+signal wave_started(wave: int)
+signal wave_ended(wave: int)
+## 낮 타이머 종료 → 밤: day enemies vanish, the field darkens, hunters pour in.
+## (밤 종료는 wave_ended로 흘러 정산 → 마을로.)
+signal night_started(wave: int)
+## Fired right before the 정산 snapshots: close lingering battle windows + sweep
+## every field drop (coins/boxes) into the wave totals so nothing earned is lost
+## in the buzzer-beating moment.
+signal wave_settle_prep()
+## A draft card was picked (applied already) — log/juice listeners.
+signal draft_card_picked(card_id: StringName, card_name: String)
 ## A party member moved between split groups (0 = hero's chain, 1+ = roaming squads).
 signal member_group_changed(index: int, group: int)
 ## The split-group cap grew (모닥불 분할 확장 upgrade).

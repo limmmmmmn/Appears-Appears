@@ -125,6 +125,8 @@ const CARD_REVEAL_LINGER: float = 0.95
 const CARD_BACK_BG: Color = Color(0.16, 0.12, 0.05, 1.0)  ## fancy dark-gold card back
 ## How many bonus gold the victory itself grants on top of enemy drops.
 const VICTORY_GOLD_BONUS: int = 1
+const VICTORY_GOLD_FRACTION: float = 0.5  ## dropped reward coin = this × fight's kill gold
+var _reward_gold: int = 0                 ## gold coin scattered on the field at victory
 const GOLD_ICON: Texture2D = preload("res://assets/sprites/icons/gold.png")
 ## Reward chests float above active battle windows (which sit at z_index 0) so a
 ## freshly spawned fight can never bury the box the player needs to claim.
@@ -140,6 +142,12 @@ enum ChestState { NONE, CLOSED, OPENING, REVEALED, CLOSING }
 var _enemies: Array[Enemy] = []
 var _turn_queue: Array[Dictionary] = []
 var _running: bool = false
+# ─── 강타 (Smite): the player's tap-to-burst lever on this window ────────
+var _smite_charge: float = 0.0   ## 0..1, fills while fighting
+var _smite_ready: bool = false
+var _smite_track: ColorRect      ## thin gauge across the top edge
+var _smite_fill: ColorRect       ## the charging fill
+var _smite_pulse: Tween
 var _earned_xp_total: int = 0
 var _gold_drops_total: int = 0
 var _field_drop_position: Vector2 = Vector2.INF
@@ -217,7 +225,7 @@ var _target_arrows: Array[Label] = []
 var _target_boxes: Array[Panel] = []
 
 func _ready() -> void:
-	_name_label.show()  # enemy name = the window's small title
+	_name_label.hide()  # 적 이름/레벨 표시 제거 — 전투창은 적과 강타 게이지만
 	_hp_label.hide()
 	_log_label.add_theme_font_size_override("font_size", UITheme.FONT_BATTLE_LOG)
 	# LabelSettings overrides the theme font_size + line_spacing, so set BIG font with a
@@ -243,13 +251,14 @@ func _ready() -> void:
 	_spawn_enemy()
 	_roll_initiative()
 	_rebuild_turn_queue()
-	_build_score_readout()
+	# 우상단 점수 숫자(_score_readout) 표시 제거 — null로 두면 update/pop은 no-op.
 	EventBus.battle_window_opened.emit(self)
 	# Weapon (SPEED) and armor (survival) equips both surface "○○ 장착!" in any
 	# live fight + a quick celebratory pop.
 	EventBus.weapon_equipped.connect(_on_weapon_equipped)
 	EventBus.armor_equipped.connect(_on_weapon_equipped)
 	_running = true
+	_build_smite_gauge()
 	# Manual combat (before 자동 전투): strip the card down to enemy + HP bar and put a
 	# command box at the bottom. The turn loop pauses on each party member for input.
 	if _is_manual_combat():
@@ -386,6 +395,13 @@ func claim_item_drops() -> Array[ItemData]:
 	var drops: Array[ItemData] = _item_drops.duplicate()
 	_item_drops.clear()
 	return drops
+
+
+## Victory gold coin to scatter on the field (claimed once by BattleManager).
+func claim_gold_reward() -> int:
+	var g: int = _reward_gold
+	_reward_gold = 0
+	return g
 
 
 func field_drop_position() -> Vector2:
@@ -730,11 +746,11 @@ func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: 
 	var effect_tex: Texture2D = member.attack_effect
 	var enemy_name: String = target_enemy.data.display_name if target_enemy.data else "적"
 	var crit_text: String = "  회심의 일격!" if is_crit else ""
-	# Beat 2 (이펙트): apply the hit + pop the floating number.
+	# Beat 2 (이펙트): apply the hit. take_damage pops the floating number on the
+	# enemy itself — no separate window-level number (that double-counted).
 	var apply_hit := func() -> void:
 		if is_instance_valid(target_enemy):
 			target_enemy.take_damage(damage, is_crit, effect_tex)
-			_spawn_window_damage_number(dealt, "")
 	# DQ-style beats for EVERY fight (auto + manual): 공격 텍스트 → 이펙트 → 데미지 텍스트.
 	await _play_attack_seq(
 		"%s의 공격!" % member.display_name,
@@ -755,13 +771,16 @@ func _play_attack_seq(attack_text: String, effect: Callable, result_text: String
 	_set_log(attack_text)
 	if effect.is_valid():
 		effect.call()
-	await get_tree().create_timer(ATTACK_EFFECT_DELAY).timeout
+	# 전투 가속 (노드트리): the narration beats shrink with the turn interval, so
+	# the speed-up is FELT, not just simulated.
+	var pace: float = GameState.battle_turn_interval_multiplier()
+	await get_tree().create_timer(ATTACK_EFFECT_DELAY * pace).timeout
 	if not is_inside_tree():
 		_log_sequence_running = false
 		return
 	# 2) 데미지 텍스트
 	_set_log(result_text)
-	await get_tree().create_timer(DAMAGE_TEXT_DELAY).timeout
+	await get_tree().create_timer(DAMAGE_TEXT_DELAY * pace).timeout
 	# 3) 마무리: busy 해제 → 대기 중인 "쓰러뜨렸다!" / 체스트 처리
 	_log_sequence_running = false
 	_flush_pending_defeat_logs()
@@ -1228,13 +1247,13 @@ func _on_enemy_died(_enemy: Enemy) -> void:
 	_running = false
 	_turn_timer.stop()
 	_add_window_item_drop()
-	# Rewards no longer drop onto the field — they're locked inside the chest
-	# the window transforms into. Total chest gold = enemy drops + the flat
-	# victory bonus (kept so trivial wins still pay something).
-	_gold_drops_total += VICTORY_GOLD_BONUS
+	# Reward = LOOT DROPPED on the field (no chest, no flip): a gold coin worth a
+	# slice of the fight + any item drops scatter at the encounter spot; the player
+	# sweeps them up with the cursor. Per-kill gold stays instant on top.
+	_reward_gold = maxi(VICTORY_GOLD_BONUS, int(round(float(_gold_drops_total) * VICTORY_GOLD_FRACTION)))
 	_pending_defeat_logs.append("%s을(를) 쓰러뜨렸다!" % defeated_name)
-	_pending_chest = true
 	call_deferred("_flush_pending_defeat_logs")
+	_drop_rewards_and_close()
 
 
 func _set_log(text: String) -> void:
@@ -1584,10 +1603,11 @@ func set_chain_ready(ready: bool, stack_count: int = 1) -> void:
 # ─── Input: press hands the gesture to BattleManager (click vs drag) ───
 func _on_window_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and not _flipping:
-		# Mid-fight windows are PINNED — the party is standing in formation under
-		# this card, so it can't be dragged out from over their heads. Only
-		# resolved reward cards (chests) hand the grab gesture to the manager.
+		# A fighting window is PINNED (the party stands under it) — but TAP it to
+		# SMITE when charged. Resolved reward cards (chests) hand off the grab.
 		if not is_chest_active():
+			if _smite_ready:
+				_do_smite()
 			return
 		grab_started.emit(self, event.global_position)
 
@@ -1903,7 +1923,133 @@ func _build_hover_progress_bar() -> void:
 	add_child(_chest_hover_bar)
 
 
+# ─── 강타 (Smite) ───────────────────────────────────────────────────────
+## A thin amber gauge across the window's top edge that charges while the fight
+## runs; full → it glows and the window is tappable for an AoE burst.
+const SMITE_GAUGE_INSET: float = 3.0   ## kept off every window edge
+const SMITE_GAUGE_HEIGHT: float = 3.0
+
+
+func _build_smite_gauge() -> void:
+	# Plain (un-anchored) rects — _tick_smite sizes them to the window each frame,
+	# so they can't drift outside when the window re-lays-out or scale-punches.
+	_smite_track = ColorRect.new()
+	_smite_track.color = Color(0.1, 0.08, 0.04, 0.85)
+	_smite_track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_smite_track.z_index = 40
+	add_child(_smite_track)
+	_smite_fill = ColorRect.new()
+	_smite_fill.color = Color(0.97, 0.7, 0.2, 1.0)
+	_smite_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_smite_fill.position = Vector2.ZERO
+	_smite_fill.size = Vector2(0.0, SMITE_GAUGE_HEIGHT)
+	_smite_track.add_child(_smite_fill)
+
+
+func _tick_smite(delta: float) -> void:
+	if _smite_track == null:
+		return
+	# Smite is a bought node — no gauge until unlocked.
+	var fighting: bool = GameState.smite_unlocked and _running and not _close_started \
+		and not is_chest_active() and not is_opening() and not _living_enemies().is_empty()
+	if not fighting:
+		if _smite_ready:
+			_set_smite_ready(false)
+		_smite_track.visible = false
+		return
+	_smite_track.visible = true
+	if not _smite_ready:
+		_smite_charge = clampf(_smite_charge + delta / maxf(0.1, GameState.smite_cooldown()), 0.0, 1.0)
+		if _smite_charge >= 1.0:
+			_set_smite_ready(true)
+	# Re-fit to the window's CURRENT size each frame, inset on every side so it
+	# always sits inside the top edge (never sticks out).
+	var gauge_w: float = maxf(0.0, size.x - SMITE_GAUGE_INSET * 2.0)
+	_smite_track.position = Vector2(SMITE_GAUGE_INSET, SMITE_GAUGE_INSET)
+	_smite_track.size = Vector2(gauge_w, SMITE_GAUGE_HEIGHT)
+	_smite_fill.size = Vector2(gauge_w * _smite_charge, SMITE_GAUGE_HEIGHT)
+
+
+func _set_smite_ready(ready: bool) -> void:
+	_smite_ready = ready
+	if _smite_pulse != null and _smite_pulse.is_valid():
+		_smite_pulse.kill()
+	if ready:
+		_smite_charge = 1.0
+		_smite_fill.color = Color(1.0, 0.92, 0.5, 1.0)  # bright gold
+		# Breathing glow so the player SEES it's tappable.
+		_smite_pulse = create_tween().set_loops()
+		_smite_pulse.tween_property(_smite_fill, "modulate:a", 0.45, 0.4).set_trans(Tween.TRANS_SINE)
+		_smite_pulse.tween_property(_smite_fill, "modulate:a", 1.0, 0.4).set_trans(Tween.TRANS_SINE)
+	else:
+		_smite_charge = 0.0
+		_smite_fill.color = Color(0.97, 0.7, 0.2, 1.0)
+		_smite_fill.modulate.a = 1.0
+
+
+## TAP a charged window → AoE burst on every enemy inside. The lever that makes
+## "몰아넣기" pay: more bodies = more hit at once + a multi-kill combo bonus.
+func _do_smite() -> void:
+	if not _smite_ready:
+		return
+	_set_smite_ready(false)
+	var living: Array[Enemy] = _living_enemies()
+	if living.is_empty():
+		return
+	var dmg: int = GameState.smite_damage()
+	var before: int = living.size()
+	for enemy: Enemy in living:
+		if is_instance_valid(enemy):
+			enemy.take_damage(dmg, true, null)  # enemy pops its own damage number
+	var kills: int = before - _living_enemies().size()
+	if kills >= 1:
+		GameState.grant_smite_combo(kills)
+	_smite_flourish(kills)
+	_refresh_hp_label()
+
+
+## White flash + "강타!" pop + window punch + camera kick — the payoff beat.
+func _smite_flourish(kills: int) -> void:
+	var flash := ColorRect.new()
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flash.color = Color(1.0, 0.96, 0.7, 0.0)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.z_index = 50
+	add_child(flash)
+	var ft := create_tween()
+	ft.tween_property(flash, "color:a", 0.7, 0.04)
+	ft.tween_property(flash, "color:a", 0.0, 0.18)
+	ft.tween_callback(flash.queue_free)
+	var lbl := Label.new()
+	lbl.text = "강타!" if kills < 2 else "강타!  x%d" % kills
+	lbl.add_theme_font_override("font", load("res://assets/fonts/field_ui_font.tres"))
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.3, 1.0))
+	lbl.add_theme_color_override("font_outline_color", Color(0.2, 0.06, 0.0, 1.0))
+	lbl.add_theme_constant_override("outline_size", 4)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.z_index = 51
+	lbl.position = Vector2(size.x * 0.5 - 30.0, size.y * 0.3)
+	lbl.scale = Vector2(0.4, 0.4)
+	lbl.pivot_offset = Vector2(30.0, 8.0)
+	add_child(lbl)
+	var lt := create_tween()
+	lt.tween_property(lbl, "scale", Vector2(1.15, 1.15), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	lt.parallel().tween_property(lbl, "position:y", lbl.position.y - 14.0, 0.5)
+	lt.tween_interval(0.25)
+	lt.tween_property(lbl, "modulate:a", 0.0, 0.25)
+	lt.tween_callback(lbl.queue_free)
+	pivot_offset = size * 0.5
+	var pt := create_tween()
+	pt.tween_property(self, "scale", Vector2(1.08, 1.08), 0.06).set_trans(Tween.TRANS_QUAD)
+	pt.tween_property(self, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var player := get_tree().get_first_node_in_group("player")
+	if player != null and player.has_method("shake_camera"):
+		player.shake_camera(3.0, 0.2)
+
+
 func _process(delta: float) -> void:
+	_tick_smite(delta)
 	if _chest_state != ChestState.CLOSED:
 		return
 	# Hover = mouse anywhere over the box (plus a small pad so it's forgiving).
@@ -2061,11 +2207,20 @@ const ITEM_DROP_CHANCE: float = 0.4  ## per-victory gear-drop chance (tune freel
 func _add_window_item_drop() -> void:
 	if not GameState.item_drops_enabled():
 		return
-	if randf() > ITEM_DROP_CHANCE:
+	# "보물 감각" node raises the box-drop odds. The item TYPE is irrelevant now —
+	# the window just yields a mystery BOX (count); the gear is rolled at 정산.
+	if randf() > ITEM_DROP_CHANCE + GameState.gear_box_chance_bonus():
 		return
-	var item: ItemData = ItemDB.random_drop()
-	if item:
-		_item_drops.append(item)
+	_gear_box_drops += 1
+
+
+var _gear_box_drops: int = 0  ## mystery boxes this fight yields on victory
+
+
+func claim_gear_box_drops() -> int:
+	var n: int = _gear_box_drops
+	_gear_box_drops = 0
+	return n
 
 
 func _refresh_hp_label() -> void:

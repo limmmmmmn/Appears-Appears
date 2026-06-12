@@ -81,6 +81,23 @@ func clear_forced_move_target() -> void:
 	_forced_target_active = false
 
 
+## Window-keeper loop: the player clicked a field enemy → the hero hunts THIS one
+## (walks to it; his collision opens the window). Replaces the old WASD/auto-hunt
+## as the default way the hero engages. Cleared when the target is consumed/dies.
+var _engage_target: Node2D
+
+
+func set_engage_target(enemy: Node2D) -> void:
+	_engage_target = enemy
+	_reset_idle_life()
+
+
+## True while the hero is actively walking toward a clicked enemy — the wave clock
+## only runs when the hero is DOING something (or 자동 이동 / a fight is on).
+func is_engaged() -> bool:
+	return is_instance_valid(_engage_target)
+
+
 ## Battle formation: when on, the hero shows its back (faces UP toward the enemy
 ## windows) once it stops moving. BattleManager toggles this on arrival at the
 ## formation point and off when the fight ends.
@@ -296,29 +313,26 @@ func _physics_process(delta: float) -> void:
 		if to_fire.length() > 1.0:
 			move_dir = to_fire.normalized()
 	else:
-		# Manual: WASD / arrows steer the hero. Always wins over auto-seek.
-		var input_dir := Vector2(
-			Input.get_action_strength("move_right") - Input.get_action_strength("move_left"),
-			Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
-		)
-		if input_dir.length() > 0.1:
-			move_dir = input_dir.normalized()
-		elif GameState.auto_move_unlocked:
-			# 자동 이동 upgrade: drift toward the nearest enemy (then pickups) when idle.
-			var target := _find_nearest_in_group(&"field_enemy")
-			if target == null:
-				target = _find_nearest_in_group(&"field_pickup")
-			if target != null:
-				var to_target: Vector2 = target.global_position - global_position
-				if to_target.length() > 0.01:
-					move_dir = to_target.normalized()
-		# 서성임: nothing drives the hero (camera's fixed, no harm) → putter about,
-		# chat with whoever's close, drift over to watch the fire.
-		if move_dir == Vector2.ZERO and not _downed_visual:
-			move_dir = _tick_idle_life(delta)
-			if move_dir != Vector2.ZERO:
-				move_speed = IDLE_MILL_SPEED
+		# Window-keeper: the hero hunts the CLICKED enemy (his collision opens the
+		# window). No WASD steering — the hero is an anchor you point, not a cursor.
+		if is_instance_valid(_engage_target):
+			_reset_idle_life()
+			var to_e: Vector2 = (_engage_target as Node2D).global_position - global_position
+			if to_e.length() > 1.0:
+				move_dir = to_e.normalized()
 		else:
+			_engage_target = null
+			if GameState.auto_move_unlocked:
+				# 자동 사냥 upgrade (automation): the hero picks targets himself.
+				var target := _find_nearest_in_group(&"field_enemy")
+				if target == null:
+					target = _find_nearest_in_group(&"field_pickup")
+				if target != null:
+					var to_target: Vector2 = target.global_position - global_position
+					if to_target.length() > 0.01:
+						move_dir = to_target.normalized()
+			# No idle wander: the hero holds still until you point him at an enemy
+			# (the wandering read as "is he doing something?" — too ambiguous).
 			_reset_idle_life()
 	velocity = move_dir * move_speed
 	move_and_slide()

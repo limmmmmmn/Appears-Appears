@@ -1,0 +1,39 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/wave_chip.gd" id="1_wc"]
+[ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="2_font"]
+
+[sub_resource type="StyleBoxFlat" id="WaveChipStyle"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 7.0
+content_margin_bottom = 2.0
+bg_color = Color(0.96862745, 0.9411765, 0.87058824, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+shadow_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+shadow_size = 1
+shadow_offset = Vector2(2, 2)
+anti_aliasing = false
+
+[node name="WaveChip" type="PanelContainer"]
+visible = false
+offset_left = 5.0
+offset_top = 5.0
+offset_right = 64.0
+offset_bottom = 27.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("WaveChipStyle")
+script = ExtResource("1_wc")
+
+[node name="WaveLabel" type="Label" parent="."]
+unique_name_in_owner = true
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.12941177, 0.11764706, 0.101960786, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 9
+text = "W1 · 10s"
+vertical_alignment = 1

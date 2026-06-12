@@ -88,8 +88,8 @@ var auto_pickup_unlocked: bool = false
 ## 지금은 처음부터 자동 상태로 시작(true). 수동 전투를 다시 켜고 싶으면 false로,
 ## 강화 창 행도 다시 보이게(right_upgrade_panel) 되돌리면 됨.
 var auto_battle_unlocked: bool = true
-## 자동 이동 해금 — false = WASD/방향키 수동 이동, true = 용사가 적으로 자동 이동.
-## 자동 전투와 같이 처음부터 자동(true)으로 시작.
+## 자동 이동 — 용사가 알아서 가까운 적을 사냥. 처음부터 ON (클릭 이동은 영 별로라).
+## 적 클릭은 여전히 그 적으로 유도 가능(engage 우선).
 var auto_move_unlocked: bool = true
 ## SCALE = how many SCALE purchases were made; simultaneous window count =
 ## Balance.scale_window_count(scale_purchases). 0 purchases → 1 window.
@@ -232,6 +232,10 @@ func _ready() -> void:
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
 	EventBus.damage_dealt.connect(_on_damage_dealt)
 	EventBus.modifier_purchase_requested.connect(_on_modifier_purchase_requested)
+	# 밤에 전멸하면 즉시 마을로 (낮 전멸은 기존 페널티 흐름 유지).
+	EventBus.party_collapsed.connect(func() -> void:
+		if is_night and wave_active:
+			end_cycle())
 
 
 func _on_enemy_defeated(_enemy: Node, gold: int, _world_position: Vector2) -> void:
@@ -239,9 +243,16 @@ func _on_enemy_defeated(_enemy: Node, gold: int, _world_position: Vector2) -> vo
 	# Kill gold is paid IMMEDIATELY now — the floating "Ng" on the dead enemy IS
 	# real money. The reward CARD on the window is a BONUS on top (🟧 = extra gold,
 	# 🟥/🟩/🟦 = weapon/heal/xp). See battle_window._grant_reward.
-	# 금빛 비석 (passive tile): every kill pays a level-scaled % more.
+	# 금빛 비석 (tile) + 노드트리 "황금 감각": every kill pays % more.
 	if gold > 0:
-		add_gold(int(round(float(gold) * gold_idol_multiplier())))
+		var paid: int = int(round(float(gold) * gold_idol_multiplier() * _draft_gold_mult))
+		add_gold(paid)
+		wave_gold_earned += paid  # settlement readout: what THIS wave was worth
+	# 장비 발견은 이제 전투창이 떨어뜨리는 "보물 상자"를 주워야 생긴다(add_gear_ticket).
+	# 처치당 자동 티켓은 제거 — 줍는 행위가 보상의 핵심.
+	# "모래시계" node: kills can buy back wave time (+1s, chance per level).
+	if wave_active and _tree_kill_time_chance > 0.0 and randf() < _tree_kill_time_chance:
+		wave_time_left += 1.0
 
 
 func _on_damage_dealt(_target: Node, amount: int, _world_position: Vector2) -> void:
@@ -441,22 +452,9 @@ func _level_growth_value(character_id: StringName, key: String) -> int:
 func add_gold(amount: int) -> void:
 	gold += amount
 	if amount > 0:
-		total_gold_earned += amount  # gates gold-based building unlocks
-		_announce_new_tiers()        # popup fires when a new tier becomes available
+		total_gold_earned += amount  # still tracked (프레스티지 별조각 등)
+	# 누적 골드 자동 해금/팝업 제거 — 모든 적 해금은 이제 노드트리 "새로운 마물"이 담당.
 	EventBus.gold_changed.emit(gold)
-
-
-## Fire the "○○ 해금!" popup the moment a tier's cumulative-gold milestone is
-## crossed (the new tile appears in the dock) — once per tier, not on click.
-func _announce_new_tiers() -> void:
-	for i in Balance.tier_count():
-		var id: StringName = Balance.tier_at(i)["id"]
-		if is_tier_unlocked(id) or _tier_available_announced.has(id):
-			continue
-		if tier_threshold_reached(id):
-			_tier_available_announced.append(id)
-			EventBus.tier_available.emit(id)  # "○○ 해금!" popup
-			unlock_tier(id)                   # auto-claim → tile is placeable right away
 
 
 func story_field_index() -> int:
@@ -747,7 +745,8 @@ func field_enemy_count_bonus() -> int:
 
 
 func field_crowd_cap_bonus() -> int:
-	return skill_effect_int_sum("field_crowd_cap_bonus")
+	# 드래프트 "북적이는 들판" stacks on top of any skill-tree bonus.
+	return skill_effect_int_sum("field_crowd_cap_bonus") + draft_crowd_bonus()
 
 
 func field_spawn_batch_bonus() -> int:
@@ -789,15 +788,17 @@ func chaser_enemies_enabled() -> bool:
 
 
 func enemies_per_window_bonus() -> int:
-	return skill_effect_int_sum("enemies_per_window_bonus")
+	return skill_effect_int_sum("enemies_per_window_bonus") + _tree_window_size_bonus  # 노드트리 "전투창 적 +N"
 
 
 func battle_turn_interval_multiplier() -> float:
-	return skill_effect_float_product("battle_turn_interval_mult")
+	# 노드트리 "전투 가속" stacks multiplicatively with any skill effects.
+	return skill_effect_float_product("battle_turn_interval_mult") * _tree_battle_speed_mult
 
 
 func pickup_range_multiplier() -> float:
-	return maxf(1.0, skill_effect_float_product("pickup_range_mult"))
+	# 노드트리 "넓은 손" stacks on any skill effect.
+	return maxf(1.0, skill_effect_float_product("pickup_range_mult")) * _tree_pickup_mult
 
 
 # ─── 자동 줍기 (manual hover → hero auto-collects) ──────────────────────
@@ -863,13 +864,48 @@ func unlock_auto_move() -> bool:
 ## Multi-window drift unlocks with the first SCALE purchase. (Legacy skill
 ## flags kept as an OR so any older nodes still work.)
 func battle_movement_unlocked() -> bool:
-	return scale_purchases > 0 or has_skill_node(&"battle_movement") or skill_effect_bool("battle_movement_enabled")
+	# 멀티 전투창 노드를 사면 전투가 더 이상 파티를 멈추지 않는다(한 창이 싸우는
+	# 동안 용사는 다음 적을 사냥) — 이게 멀티 전투창의 핵심 가치.
+	return _tree_window_bonus > 0 or scale_purchases > 0 or has_skill_node(&"battle_movement") or skill_effect_bool("battle_movement_enabled")
 
 
 ## Max number of battle windows allowed on screen at once = the SCALE axis.
 ## 0 SCALE purchases → 1 (one-at-a-time); each purchase adds +1 (no cap).
 func battle_window_cap() -> int:
-	return scale_window_count()
+	return scale_window_count() + _tree_window_bonus  # 노드트리 "멀티 전투창"
+
+
+# ─── 강타 (Smite — the player's active MULTIPLIER on a battle window) ────
+## Auto-battle is the slow passive baseline; the player taps a charged window to
+## SMITE — an AoE burst hitting EVERY enemy in it. That's the missing "곱하기"
+## lever: more enemies fed in = more hit at once. Scales off the party's best
+## attacker so it stays relevant; cooldown + power are future node axes.
+const SMITE_ATK_MULT: float = 3.2     ## smite = best member's combat attack × this
+const SMITE_BASE_COOLDOWN: float = 3.0
+const SMITE_COMBO_GOLD: int = 8       ## bonus gold per EXTRA enemy killed in one smite
+
+
+## Smite is a NODE-TREE unlock (cheap first buy). Until bought, no gauge appears.
+var smite_unlocked: bool = false
+
+
+func smite_cooldown() -> float:
+	# 전투 가속 + "빠른 강타" both shorten the charge.
+	return SMITE_BASE_COOLDOWN * _tree_battle_speed_mult * _tree_smite_cd_mult
+
+
+func smite_damage() -> int:
+	var best: int = 0
+	for i in party_size():
+		if is_combat_ready(i):
+			best = maxi(best, int(round(float(effective_attack(i)) * member_weapon_multiplier(i))))
+	return maxi(1, int(round(float(best) * SMITE_ATK_MULT * _tree_smite_mult)))  # "강타 강화"
+
+
+## A multi-kill smite pays a combo bonus on top of each kill's own gold.
+func grant_smite_combo(kills: int) -> void:
+	if kills >= 2:
+		add_gold(SMITE_COMBO_GOLD * (kills - 1))
 
 
 ## True when BattleManager still has room under the SIMULTANEOUS-FIGHT cap (a perf
@@ -907,7 +943,7 @@ func active_party_groups() -> Array[int]:
 
 
 func combo_attack_unlocked() -> bool:
-	return has_skill_node(&"combo_attack") or skill_effect_bool("combo_attack_enabled")
+	return _draft_combo_unlocked or has_skill_node(&"combo_attack") or skill_effect_bool("combo_attack_enabled")
 
 
 # ─── Weapons: per-type tracks (damage axis / weapon shop) ──────────────
@@ -990,8 +1026,7 @@ func member_equipment_rows(index: int) -> Array:
 		var item: ItemData = item_entry_data(entry)
 		var item_name: String = "—"
 		if item != null:
-			var lvl: int = int(entry.get("level", 1)) if entry is Dictionary else 1
-			item_name = item.display_name + (" +%d" % (lvl - 1) if lvl > 1 else "")
+			item_name = entry_display_name(entry)  # "[등급] 이름 +N"
 		elif slot == 0 and weapon_level(wtype) > 1:
 			item_name = current_weapon_name(wtype)
 		elif slot == 3 and member_armor_level(index) > 1:
@@ -1748,6 +1783,508 @@ func spawner_random_enemy_data() -> EnemyData:
 	return _weighted_weak_enemy_pick(unlocked_tier_ids)
 
 
+# ─── 웨이브 (the dopamine cadence) ───────────────────────────────────────
+## fight wave_duration() seconds → wave_ended → 3-card draft → next wave.
+## Enemies pour in FREE during a wave (no placement needed — placement stays as
+## an optional accelerator). Draft picks are the run's build: 적(danger) /
+## 아군(power) / 보상(greed) / 필살기(hooks).
+var wave_number: int = 0
+var wave_active: bool = false
+var wave_time_left: float = 0.0
+## True between the timer hitting 0 and the 정산 opening: blocks NEW battle windows
+## so the open turn-based fights can FINISH (no abort) before settlement.
+var wave_winding_down: bool = false
+## 밤: the second half of a cycle. Day timeout → night (hunters chase); night
+## timeout OR party collapse → 마을 (정산). One full cycle = day + night.
+var is_night: bool = false
+var night_time_left: float = 0.0
+## Draft-granted run effects (cleared by reset_run).
+var _draft_attack_mult: float = 1.0
+var _draft_hp_mult: float = 1.0
+var _draft_gold_mult: float = 1.0
+var _draft_spawn_rate_mult: float = 1.0
+var _draft_crowd_bonus: int = 0
+var _draft_combo_unlocked: bool = false
+var _draft_window_collision_ratio: float = 0.0
+var _drafted_once_ids: Array[StringName] = []
+
+
+## Wave length no longer auto-grows per wave — it's bought: "오래 머물기" node.
+func wave_duration(_n: int) -> float:
+	return minf(Balance.WAVE_DURATION_MAX, Balance.WAVE_BASE_DURATION + _tree_wave_time_bonus)
+
+
+## Per-wave HARVEST (shown + spent at settlement).
+var wave_gold_earned: int = 0     ## kill gold banked THIS wave (multipliers included)
+var wave_item_tickets: int = 0    ## gear finds — each one = a 4-choice pick round
+
+
+func start_next_wave() -> void:
+	wave_number += 1
+	wave_active = true
+	wave_winding_down = false
+	is_night = false  # 아침이 밝았다
+	wave_time_left = wave_duration(wave_number)
+	wave_gold_earned = 0
+	wave_item_tickets = 0
+	EventBus.wave_started.emit(wave_number)
+
+
+## Field drives this each frame (only while the field actually runs).
+## 낮 타임아웃 → 밤 시작; 밤 타임아웃 → 마을(정산). 한 사이클 = 낮 + 밤.
+func tick_wave(delta: float) -> void:
+	if not wave_active:
+		return
+	if is_night:
+		night_time_left = maxf(0.0, night_time_left - delta)
+		if night_time_left <= 0.0:
+			end_cycle()
+	else:
+		wave_time_left = maxf(0.0, wave_time_left - delta)
+		if wave_time_left <= 0.0:
+			# 밤 보류: 낮이 끝나면 바로 정산 → 마을. (밤 사이클은 _begin_night으로
+			# 다시 이어붙일 수 있게 코드는 그대로 둔다.)
+			end_cycle()
+
+
+func _begin_night() -> void:
+	is_night = true
+	night_time_left = Balance.NIGHT_DURATION
+	EventBus.night_started.emit(wave_number)
+
+
+## 밤 종료(버팀) 또는 전멸 → 무조건 마을로 (기존 정산 체인이 받아서 처리).
+func end_cycle() -> void:
+	if not wave_active:
+		return
+	wave_active = false
+	EventBus.wave_ended.emit(wave_number)
+
+
+## 밤의 박쥐 — the night hunter's data (one tier up, NIGHT_ENEMY_TIER).
+func night_enemy_data() -> EnemyData:
+	var path: String = str(Balance.tier_by_id(Balance.NIGHT_ENEMY_TIER).get("enemy_res", ""))
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return wave_enemy_data()
+	return load(path) as EnemyData
+
+
+func wave_spawn_interval() -> float:
+	return maxf(Balance.WAVE_SPAWN_INTERVAL_MIN, Balance.WAVE_SPAWN_INTERVAL * _draft_spawn_rate_mult)
+
+
+func wave_enemy_data() -> EnemyData:
+	return _weighted_weak_enemy_pick(unlocked_tier_ids)
+
+
+func draft_crowd_bonus() -> int:
+	return _draft_crowd_bonus
+
+
+## A collected 보물 상자 → one settlement pick (3지선다) at the next 정산.
+func add_gear_ticket() -> void:
+	wave_item_tickets += 1
+
+
+## Bank gold that ALSO counts toward this wave's 스테이지 골드 readout (field coin
+## pickups route through here so the 정산 total matches the balance).
+func bank_wave_gold(amount: int) -> void:
+	if amount <= 0:
+		return
+	add_gold(amount)
+	wave_gold_earned += amount
+
+
+## Settlement pick with NO eligible wearer → straight into the bag (전설템은
+## 일단 갖고 싶으니까). Returns true.
+func gain_gear_to_bag(item: ItemData, level: int, rarity: StringName = &"common") -> bool:
+	if item == null:
+		return false
+	inventory.append(_make_item_entry(item, level, rarity))
+	EventBus.inventory_changed.emit()
+	return true
+
+
+## 정산 "가방 전부 판매" — sells every bag entry at once, returns the total gold.
+func sell_all_inventory() -> int:
+	var total: int = 0
+	var i: int = 0
+	while i < inventory.size():
+		var v: int = sell_inventory_entry_at(i)
+		if v <= 0:
+			i += 1  # unsellable entry (worthless/null) — skip, don't loop forever
+		else:
+			total += v  # sold → next entry slid into slot i
+	return total
+
+
+## Extra chance a battle window drops a 보물 상자 ("보물 감각" node). Read by the
+## window's drop roll on top of its base ITEM_DROP_CHANCE.
+func gear_box_chance_bonus() -> float:
+	return _tree_ticket_bonus
+
+
+## Pull WAVE_DRAFT_CHOICES distinct cards, skipping spent "once" picks and the
+## new-tier card when no stronger tier exists to introduce.
+func draft_options() -> Array[Dictionary]:
+	var pool: Array[Dictionary] = []
+	for card: Dictionary in Balance.WAVE_DRAFT_CARDS:
+		var id: StringName = StringName(card.get("id", &""))
+		if bool(card.get("once", false)) and _drafted_once_ids.has(id):
+			continue
+		if id == &"enemy_new_tier" and _next_tier_above_ceiling() == &"":
+			continue
+		pool.append(card)
+	pool.shuffle()
+	var picks: Array[Dictionary] = []
+	for card: Dictionary in pool:
+		if picks.size() >= Balance.WAVE_DRAFT_CHOICES:
+			break
+		picks.append(card)
+	return picks
+
+
+## The weakest tier strictly above the current mixed-spawn ceiling, or &"".
+func _next_tier_above_ceiling() -> StringName:
+	for i in Balance.tier_count():
+		if i > _max_placed_tier_index:
+			return StringName(Balance.tier_at(i).get("id", &""))
+	return &""
+
+
+# ─── 마을 노드트리 (JRPG spine — settlement gold goes HERE) ──────────────
+## 태초마을부터 마왕 마을까지 외길 스파인; 각 마을이 열리면 그 마을의 파생
+## 노드(적/아군/보상/전투창)가 구매 가능해지고, 마을 등급이 정산 픽의 장비
+## 레벨 천장을 올린다. 프레스티지에 전부 리셋 — 요즘 인크리멘탈의 룰대로.
+var town_index: int = 0                 ## highest unlocked spine town (0 = 태초마을)
+var tree_levels: Dictionary = {}        ## node id -> level
+var map_hero_hex: Vector2i = Vector2i.ZERO  ## the hero's avatar position ON the world map
+var _tree_window_bonus: int = 0         ## "멀티 전투창" node → battle window cap
+var _tree_battle_speed_mult: float = 1.0  ## "전투 가속" — turn interval shrinks (<1)
+var _tree_move_speed_mult: float = 1.0    ## "신속" — party move speed grows (>1)
+var _tree_window_size_bonus: int = 0      ## "전투창 적 +N" — bodies per window
+## Per-class 단련 nodes (아군 axis): character id → multiplier.
+var _tree_member_atk_mult: Dictionary = {}
+var _tree_member_hp_mult: Dictionary = {}
+var _tree_crit_bonus: float = 0.0         ## "도적 단련" — flat crit chance for everyone
+var _tree_sell_mult: float = 1.0          ## "비싸게 팔기" — gear sell value
+var _tree_ticket_bonus: float = 0.0       ## "보물 감각" — gear-find chance per kill
+var _tree_wave_time_bonus: float = 0.0    ## "오래 머물기" — +초 per wave
+var _tree_kill_time_chance: float = 0.0   ## "모래시계" — kill → chance of +1s
+var _tree_auto_collect_chance: float = 0.0  ## "자동 줍기" — per-drop auto-pickup at wave end
+var _tree_smite_mult: float = 1.0         ## "강타 강화/폭주" — smite damage
+var _tree_smite_cd_mult: float = 1.0      ## "빠른 강타" — smite charge time (<1)
+var _tree_pickup_mult: float = 1.0        ## "넓은 손" — hover/magnet pickup reach
+var _tree_interest: float = 0.0           ## "이자" — % of held gold paid at 정산
+
+
+## 0 by default — drops must be picked up by HAND (100%). The "자동 줍기" node
+## buys a per-drop chance the wave-end sweep grabs leftovers for you.
+func auto_collect_chance() -> float:
+	return _tree_auto_collect_chance
+
+
+func town_gear_level() -> int:
+	return int(Balance.town_by_index(town_index).get("gear_level", 1))
+
+
+func next_town() -> Dictionary:
+	return Balance.town_by_index(town_index + 1)
+
+
+func can_unlock_next_town() -> bool:
+	var town: Dictionary = next_town()
+	return not town.is_empty() and gold >= int(town.get("cost", 0))
+
+
+func unlock_next_town() -> void:
+	if not can_unlock_next_town() or not spend_gold(int(next_town().get("cost", 0))):
+		return
+	town_index += 1
+	EventBus.combat_upgrade_changed.emit(&"town")
+
+
+func tree_node_level(id: StringName) -> int:
+	return int(tree_levels.get(id, 0))
+
+
+func tree_node_cost(id: StringName) -> int:
+	var node: Dictionary = Balance.tree_node_by_id(id)
+	return int(round(int(node.get("cost", 50)) * pow(float(node.get("cost_mult", 1.5)), float(tree_node_level(id)))))
+
+
+## A node is visible/buyable only once its town stands on the spine.
+func is_tree_node_open(id: StringName) -> bool:
+	var node: Dictionary = Balance.tree_node_by_id(id)
+	var town_id: StringName = StringName(node.get("town", &""))
+	for i in town_index + 1:
+		if StringName(Balance.town_by_index(i).get("id", &"")) == town_id:
+			return true
+	return false
+
+
+func can_buy_tree_node(id: StringName) -> bool:
+	var node: Dictionary = Balance.tree_node_by_id(id)
+	if node.is_empty() or not is_tree_node_open(id):
+		return false
+	if tree_node_level(id) >= int(node.get("max_level", 1)):
+		return false
+	if StringName(node.get("effect", "")) == &"tier" and _next_tier_above_ceiling() == &"":
+		return false
+	# 영입 노드: already in the party (or party full) → not buyable.
+	var char_id: StringName = StringName(node.get("char_id", &""))
+	if char_id != &"" and (has_party_member(char_id) or party.size() >= Balance.MAX_PARTY_SIZE):
+		return false
+	# 체인 순서: an ADJACENT hex must already be owned (도르프식 성장).
+	if not is_tree_node_reachable(id):
+		return false
+	return gold >= tree_node_cost(id)
+
+
+## Chain-order gate: a node opens only when it touches something already built
+## (a town, a road, or a bought node) — the tree grows outward, no skipping.
+func is_tree_node_reachable(id: StringName) -> bool:
+	var node: Dictionary = Balance.tree_node_by_id(id)
+	var hex: Vector2i = node.get("hex", Vector2i.ZERO)
+	for n: Vector2i in Balance.hex_neighbors(hex):
+		if _is_hex_owned(n):
+			return true
+	return false
+
+
+func _is_hex_owned(h: Vector2i) -> bool:
+	# Unlocked towns.
+	for i in town_index + 1:
+		if Vector2i(Balance.town_by_index(i).get("hex", Vector2i(99, 99))) == h:
+			return true
+	# Roads between unlocked towns (odd x on the spine row).
+	if h.y == 0 and posmod(h.x, 2) == 1 and h.x >= 1 and h.x <= town_index * 2 - 1:
+		return true
+	# Bought nodes.
+	for node: Dictionary in Balance.TREE_NODES:
+		if Vector2i(node.get("hex", Vector2i(99, 99))) == h \
+				and tree_node_level(StringName(node.get("id", &""))) > 0:
+			return true
+	return false
+
+
+## "이자" node: pays % of held gold at 정산 (called once by the tally). 0 = none.
+func collect_wave_interest() -> int:
+	if _tree_interest <= 0.0:
+		return 0
+	var amount: int = int(floor(float(gold) * _tree_interest))
+	if amount > 0:
+		add_gold(amount)
+	return amount
+
+
+func buy_tree_node(id: StringName) -> void:
+	if not can_buy_tree_node(id) or not spend_gold(tree_node_cost(id)):
+		return
+	tree_levels[id] = tree_node_level(id) + 1
+	var node: Dictionary = Balance.tree_node_by_id(id)
+	_apply_tree_effect(str(node.get("effect", "")), float(node.get("mag", 0.0)))
+	EventBus.combat_upgrade_changed.emit(&"tree")
+
+
+## Generic, magnitude-driven effect table: the node's "mag" field IS the number
+## ("atk" mag 0.05 = +5%, "wave_time" mag 3.0 = +3s …) so tier-II/royal versions
+## of an effect are pure data, no new code.
+func _apply_tree_effect(effect: String, mag: float = 0.0) -> void:
+	match effect:
+		# ⚔️ 공격
+		"atk": _draft_attack_mult *= 1.0 + mag
+		"atk_hero": _bump_tree_member_atk(&"hero", 1.0 + mag)
+		"atk_mage": _bump_tree_member_atk(&"mage", 1.0 + mag)
+		"atk_priest": _bump_tree_member_atk(&"priest", 1.0 + mag)
+		"crit": _tree_crit_bonus += mag
+		"battle_speed": _tree_battle_speed_mult *= 1.0 - mag
+		# 🛡 생존/이동
+		"hp":
+			_draft_hp_mult *= 1.0 + mag
+			EventBus.party_hp_changed.emit()
+		"hp_knight":
+			_tree_member_hp_mult[&"knight"] = float(_tree_member_hp_mult.get(&"knight", 1.0)) * (1.0 + mag)
+			EventBus.party_hp_changed.emit()
+		"move_speed": _tree_move_speed_mult *= 1.0 + mag
+		# 💰 보상
+		"gold": _draft_gold_mult *= 1.0 + mag
+		"sell": _tree_sell_mult *= 1.0 + mag
+		"interest": _tree_interest += mag
+		"wave_time": _tree_wave_time_bonus += mag
+		"kill_time": _tree_kill_time_chance += mag
+		# 🧲 획득
+		"pickup_range": _tree_pickup_mult *= 1.0 + mag
+		"auto_collect": _tree_auto_collect_chance = minf(1.0, _tree_auto_collect_chance + mag)
+		"ticket": _tree_ticket_bonus += mag
+		# 🔴 적 (위험 = 수입 다이얼)
+		"horde": _draft_spawn_rate_mult *= 1.0 - mag
+		"crowd": _draft_crowd_bonus += int(mag)
+		"window_size": _tree_window_size_bonus += int(mag)
+		"tier": _raise_tier_ceiling()
+		# 🟣 전투창 훅
+		"windows": _tree_window_bonus += 1
+		"smite": smite_unlocked = true
+		"smite_power": _tree_smite_mult *= 1.0 + mag
+		"smite_cd": _tree_smite_cd_mult *= 1.0 - mag
+		"combo": _draft_combo_unlocked = true
+		"billiards": _draft_window_collision_ratio = maxf(_draft_window_collision_ratio, 0.2)
+		"collision": _draft_window_collision_ratio += mag
+		# 👥 동료
+		"recruit_mage": _recruit_by_node(&"mage")
+		"recruit_priest": _recruit_by_node(&"priest")
+		"recruit_knight": _recruit_by_node(&"knight")
+		"recruit_thief": _recruit_by_node(&"thief")
+
+
+func _bump_tree_member_atk(char_id: StringName, mult: float) -> void:
+	_tree_member_atk_mult[char_id] = float(_tree_member_atk_mult.get(char_id, 1.0)) * mult
+	EventBus.combat_upgrade_changed.emit(&"speed")
+
+
+## 동료 영입 노드: the companion joins the party on the spot (이벤트 없이 즉시).
+func _recruit_by_node(char_id: StringName) -> void:
+	if has_party_member(char_id):
+		return
+	var path: String = "res://data/characters/%s.tres" % char_id
+	if not ResourceLoader.exists(path):
+		return
+	var data: CharacterData = load(path) as CharacterData
+	if data == null:
+		return
+	_add_party_member(data)
+	EventBus.companion_recruited.emit(char_id)
+
+
+## The next tier debuts: force-unlock + raise the mixed-spawn ceiling.
+func _raise_tier_ceiling() -> void:
+	var next_id: StringName = _next_tier_above_ceiling()
+	if next_id == &"":
+		return
+	if not is_tier_unlocked(next_id):
+		unlocked_tier_ids.append(next_id)
+		EventBus.tier_unlocked.emit(next_id)
+	_max_placed_tier_index = Balance.tier_index(next_id)
+	EventBus.combat_upgrade_changed.emit(&"tier")
+
+
+# ─── 정산 장비 픽 (Brotato-style 4지선다) ────────────────────────────────
+## Each wave's gear find = one round of: 3 rolled items + the gold option.
+## Items roll up to the TOWN's gear level — better towns, better loot.
+func roll_gear_options() -> Array[Dictionary]:
+	var options: Array[Dictionary] = []
+	for i in Balance.SETTLE_GEAR_CHOICES:
+		var item: ItemData = ItemDB.random_drop()
+		if item == null:
+			continue
+		var cap: int = town_gear_level()
+		var level: int = randi_range(maxi(1, cap - 1), cap)
+		var rarity: StringName = StringName(Balance.roll_gear_rarity().get("id", &"common"))
+		options.append({"item": item, "level": level, "rarity": rarity})
+	return options
+
+
+func settle_gold_option_value() -> int:
+	return Balance.SETTLE_GOLD_OPTION_BASE + Balance.SETTLE_GOLD_OPTION_PER_WAVE * wave_number
+
+
+func gear_gold_value(level: int) -> int:
+	return Balance.GEAR_GOLD_VALUE_PER_LEVEL * maxi(1, level)
+
+
+## Party indices that can wear this item (drives the pick-card portraits).
+func eligible_members_for_item(item: ItemData) -> Array[int]:
+	var out: Array[int] = []
+	var slot: int = slot_index_for_item(item)
+	for i in party_size():
+		if can_equip_to_slot(item, i, slot):
+			out.append(i)
+	return out
+
+
+## The slot this item should drop into for `member`. Accessories prefer an EMPTY
+## accessory slot (악세1 then 악세2) so both get used; only replace 악세1 when both
+## are full. Everything else uses its fixed slot.
+func best_slot_for_item(item: ItemData, member_index: int) -> int:
+	if item == null or member_index < 0 or member_index >= party_equipment.size():
+		return slot_index_for_item(item)
+	if item.slot == ItemData.Slot.ACCESSORY:
+		if item_entry_data(party_equipment[member_index][EQUIPMENT_ACCESSORY_SLOT_A]) == null:
+			return EQUIPMENT_ACCESSORY_SLOT_A
+		if item_entry_data(party_equipment[member_index][EQUIPMENT_ACCESSORY_SLOT_B]) == null:
+			return EQUIPMENT_ACCESSORY_SLOT_B
+		return EQUIPMENT_ACCESSORY_SLOT_A  # both full → replace 악세1
+	return slot_index_for_item(item)
+
+
+## Which (member, slot) a settlement pick would land in: prefer an eligible member
+## who has an EMPTY destination slot; else the first eligible (a replace).
+func settlement_target_for(item: ItemData) -> Dictionary:
+	var eligible: Array[int] = eligible_members_for_item(item)
+	if eligible.is_empty():
+		return {}
+	for i in eligible:
+		var slot: int = best_slot_for_item(item, i)
+		if item_entry_data(party_equipment[i][slot]) == null:
+			return {"member": i, "slot": slot}
+	var first: int = eligible[0]
+	return {"member": first, "slot": best_slot_for_item(item, first)}
+
+
+## Equip a settlement pick. The replaced piece (if any) goes BACK TO THE BAG —
+## never auto-sold (the player decides). Returns the equipped member index (or -1).
+func equip_settlement_gear(item: ItemData, level: int, rarity: StringName = &"common") -> int:
+	var target: Dictionary = settlement_target_for(item)
+	if target.is_empty():
+		return -1
+	var member: int = int(target["member"])
+	var slot: int = int(target["slot"])
+	var previous = party_equipment[member][slot]
+	if item_entry_data(previous) != null:
+		inventory.append(previous)  # 교체된 장비는 판매 대신 가방으로
+		EventBus.inventory_changed.emit()
+	party_equipment[member][slot] = _make_item_entry(item, level, rarity)
+	party_hp[member] = mini(party_hp[member], effective_max_hp(member))
+	EventBus.party_member_hp_changed.emit(member, party_hp[member], effective_max_hp(member))
+	EventBus.party_equipment_changed.emit(member)
+	return member
+
+
+func apply_draft_card(card_id: StringName) -> void:
+	var card: Dictionary = {}
+	for c: Dictionary in Balance.WAVE_DRAFT_CARDS:
+		if StringName(c.get("id", &"")) == card_id:
+			card = c
+			break
+	if card.is_empty():
+		return
+	if bool(card.get("once", false)):
+		_drafted_once_ids.append(card_id)
+	match card_id:
+		&"enemy_new_tier":
+			_raise_tier_ceiling()
+		&"enemy_horde":
+			_draft_spawn_rate_mult *= 0.8
+		&"enemy_crowd":
+			_draft_crowd_bonus += 2
+		&"ally_sharpen":
+			_draft_attack_mult *= 1.05
+		&"ally_vitality":
+			_draft_hp_mult *= 1.08
+			EventBus.party_hp_changed.emit()
+		&"ally_mend":
+			restore_party_full()
+		&"loot_gold":
+			_draft_gold_mult *= 1.15
+		&"loot_cache":
+			add_gold(Balance.WAVE_CACHE_GOLD_BASE + Balance.WAVE_CACHE_GOLD_PER_WAVE * wave_number)
+		&"hook_combo":
+			_draft_combo_unlocked = true
+		&"hook_billiards":
+			_draft_window_collision_ratio = maxf(_draft_window_collision_ratio, 0.2)
+	EventBus.draft_card_picked.emit(card_id, str(card.get("name", "")))
+
+
 # ─── 패시브 타일 (Loop-Hero style world auras) ───────────────────────────
 ## A PLACED passive tile blesses the whole party — no radius, no babysitting.
 ## Click the tile → 속성창 → 강화 raises its level. Effects are read through
@@ -2048,9 +2585,10 @@ func enemy_level_progress_ratio(tier_id: StringName) -> float:
 	return clampf(float(enemy_kill_progress_value(tier_id)) / float(req), 0.0, 1.0)
 
 
-## How many of this tier spawn in one window (1→5, level-capped).
-func enemy_spawn_count(tier_id: StringName) -> int:
-	return Balance.spawn_count_for_level(enemy_level(tier_id))
+## Base enemies per window = 1. 적 레벨에 따른 증가 제거 — 전투창 적 수는 이제
+## 오직 노드트리 "전투창 적 +1"(enemies_per_window_bonus)이 키운다.
+func enemy_spawn_count(_tier_id: StringName) -> int:
+	return 1
 
 
 ## Uncapped per-level kill-gold multiplier for this tier.
@@ -2058,24 +2596,10 @@ func enemy_kill_gold_multiplier(tier_id: StringName) -> float:
 	return Balance.kill_gold_mult_for_level(enemy_level(tier_id))
 
 
-## Called when one enemy of `tier_id` dies. Accumulates kill progress and levels
-## the tier up (possibly multiple levels at once). Emits UI signals.
-func record_enemy_kill(tier_id: StringName) -> void:
-	if tier_id == &"":
-		return
-	total_enemy_kills += 1  # gates the 모닥불(campfire) build unlock
-	var progress: int = enemy_kill_progress_value(tier_id) + 1
-	var level: int = enemy_level(tier_id)
-	var leveled: bool = false
-	while progress >= Balance.kills_for_level(level):
-		progress -= Balance.kills_for_level(level)
-		level += 1
-		leveled = true
-	enemy_levels[tier_id] = level
-	enemy_kill_progress[tier_id] = progress
-	EventBus.enemy_progress_changed.emit(tier_id)
-	if leveled:
-		EventBus.enemy_leveled_up.emit(tier_id, level)
+## Called when one enemy of `tier_id` dies. 적 레벨 시스템 제거 — 더 이상 누적
+## 처치로 레벨이 오르지 않는다(노드트리와 중복). 총 처치 수만 집계.
+func record_enemy_kill(_tier_id: StringName) -> void:
+	total_enemy_kills += 1
 
 
 ## 방문 창 (ObjectWindow) open state — the hero holds still while "inside" the
@@ -2439,7 +2963,10 @@ func scaled_enemy_max_hp(data: EnemyData) -> int:
 	# tiers all get the right HP.
 	var base_kill_time: float = float(tier_for_enemy_data(data).get("base_kill_time", Balance.SLIME_BASE_TIME))
 	var avg_hit: float = _reference_party_hit_damage()
-	return maxi(1, int(round(avg_hit * base_kill_time * Balance.PARTY_HITS_PER_SECOND)))
+	var hp: float = avg_hit * base_kill_time * Balance.PARTY_HITS_PER_SECOND
+	if is_night:
+		hp *= Balance.NIGHT_ENEMY_HP_MULT  # 밤엔 끈질기게 버틴다 — 강타로도 한방에 안 죽음
+	return maxi(1, int(round(hp)))
 
 
 func scaled_enemy_attack(data: EnemyData) -> int:
@@ -2448,7 +2975,10 @@ func scaled_enemy_attack(data: EnemyData) -> int:
 	# Per-tier attack ramp (Balance TIERS.atk_mult) so orc+ hit hard enough to
 	# actually threaten a wipe — the source of mid/late "위기".
 	var atk_mult: float = float(tier_for_enemy_data(data).get("atk_mult", 1.0))
-	return maxi(1, int(round(float(data.attack) * atk_mult)))
+	var atk: float = float(data.attack) * atk_mult
+	if is_night:
+		atk *= Balance.NIGHT_ENEMY_ATK_MULT  # 밤의 공격은 묵직하다 — 초반엔 버티다 전멸
+	return maxi(1, int(round(atk)))
 
 
 ## Each kill is a mini chest-open: the base (average) reward × a random roll.
@@ -2798,7 +3328,8 @@ func inventory_items() -> Array:
 func inventory_sell_value(entry) -> int:
 	if item_entry_data(entry) == null:
 		return 0
-	return maxi(1, item_entry_level(entry))
+	# Half the gear's worth, scaled by the "비싸게 팔기" node.
+	return maxi(1, int(round(float(gear_entry_value(entry)) * 0.5 * _tree_sell_mult)))
 
 
 func inventory_sell_total() -> int:
@@ -2918,11 +3449,87 @@ func enemy_stat_tooltip(data: EnemyData, current_hp: int = -1, max_hp_override: 
 	return "\n".join(lines)
 
 
-func _make_item_entry(item: ItemData, level: int = 1) -> Dictionary:
+func _make_item_entry(item: ItemData, level: int = 1, rarity: StringName = &"common") -> Dictionary:
 	return {
 		"item": item,
 		"level": maxi(1, level),
+		"rarity": rarity,
 	}
+
+
+# ─── 장비 등급 (rarity) helpers ───────────────────────────────────────────
+func item_entry_rarity(entry) -> StringName:
+	if entry is Dictionary:
+		return StringName((entry as Dictionary).get("rarity", &"common"))
+	return &"common"
+
+
+func entry_rarity_mult(entry) -> float:
+	return float(Balance.gear_rarity_by_id(item_entry_rarity(entry)).get("mult", 1.0))
+
+
+func entry_rarity_color(entry) -> Color:
+	return Balance.gear_rarity_by_id(item_entry_rarity(entry)).get("color", Color.WHITE)
+
+
+## "[고급] 강철검 +1" — the full colored-name string for lists/cards.
+func entry_display_name(entry) -> String:
+	var item: ItemData = item_entry_data(entry)
+	if item == null:
+		return "—"
+	var level: int = item_entry_level(entry)
+	var rarity: Dictionary = Balance.gear_rarity_by_id(item_entry_rarity(entry))
+	var prefix: String = "" if StringName(rarity.get("id", &"common")) == &"common" else "[%s] " % str(rarity.get("name", ""))
+	return prefix + item.display_name + (" +%d" % (level - 1) if level > 1 else "")
+
+
+## A gear entry's base gold worth: per-level value × rarity multiplier.
+func gear_entry_value(entry) -> int:
+	var item: ItemData = item_entry_data(entry)
+	if item == null:
+		return 0
+	return maxi(1, int(round(float(Balance.GEAR_GOLD_VALUE_PER_LEVEL * item_entry_level(entry)) * entry_rarity_mult(entry))))
+
+
+## 장비 상자: buy ONE random piece of the current town's stage straight into the
+## bag. Rarity is rolled — the shop is a little slot machine.
+func gear_box_cost() -> int:
+	return town_gear_level() * Balance.GEAR_SHOP_COST_PER_LEVEL
+
+
+func can_buy_gear_box() -> bool:
+	return gold >= gear_box_cost()
+
+
+func buy_gear_box() -> bool:
+	if not can_buy_gear_box() or not spend_gold(gear_box_cost()):
+		return false
+	var item: ItemData = ItemDB.random_drop()
+	if item == null:
+		return false
+	var cap: int = town_gear_level()
+	var level: int = randi_range(maxi(1, cap - 1), cap)
+	var rarity: StringName = StringName(Balance.roll_gear_rarity().get("id", &"common"))
+	inventory.append(_make_item_entry(item, level, rarity))
+	EventBus.inventory_changed.emit()
+	return true
+
+
+## [해제]: take the piece OFF into the bag (the equip/unequip half of the tab).
+func unequip_to_bag(member_index: int, slot: int) -> void:
+	if member_index < 0 or member_index >= party_equipment.size():
+		return
+	if slot < 0 or slot >= party_equipment[member_index].size():
+		return
+	var entry = party_equipment[member_index][slot]
+	if item_entry_data(entry) == null:
+		return
+	party_equipment[member_index][slot] = null
+	inventory.append(entry)
+	party_hp[member_index] = mini(party_hp[member_index], effective_max_hp(member_index))
+	EventBus.party_member_hp_changed.emit(member_index, party_hp[member_index], effective_max_hp(member_index))
+	EventBus.party_equipment_changed.emit(member_index)
+	EventBus.inventory_changed.emit()
 
 
 func _item_owner_label(item: ItemData) -> String:
@@ -3190,8 +3797,9 @@ func effective_attack(index: int) -> int:
 		return 0
 	var character_id: StringName = party[index].id
 	var base: int = party[index].attack + _level_bonus(index, "atk") + _equipment_bonus(index, "attack_bonus") + _stacked_int_effect_for_character(character_id, "atk_flat") + skill_effect_int_sum("atk_flat")
-	# 숫돌 (passive tile) + 프레스티지 "착취 강화": party-wide % multipliers.
-	return int(round(float(base) * whetstone_attack_multiplier() * prestige_attack_multiplier()))
+	# 숫돌 (tile) + 노드트리 (전체 + per-class 단련) + 프레스티지: % multipliers.
+	var class_mult: float = float(_tree_member_atk_mult.get(party[index].id, 1.0))
+	return int(round(float(base) * whetstone_attack_multiplier() * _draft_attack_mult * class_mult * prestige_attack_multiplier()))
 
 
 func effective_agility(index: int) -> int:
@@ -3206,7 +3814,8 @@ func effective_move_speed(base_speed: float) -> float:
 	var mult_bonus: float = 0.0
 	for mod: ModifierData in active_modifiers:
 		mult_bonus += float(mod.effect_data.get("move_speed_mult", 0.0))
-	return (base_speed + flat_bonus) * (1.0 + mult_bonus) * _active_move_speed_drag_multiplier() * _active_move_speed_boost_multiplier()
+	return (base_speed + flat_bonus) * (1.0 + mult_bonus) * _tree_move_speed_mult \
+		* _active_move_speed_drag_multiplier() * _active_move_speed_boost_multiplier()
 
 
 func apply_move_speed_drag(multiplier: float, duration: float) -> void:
@@ -3315,7 +3924,10 @@ func effective_max_hp(index: int) -> int:
 		return 0
 	var character_id: StringName = party[index].id
 	# 방어구(방어력→HP 전환): 이제 멤버 개인의 armor 레벨만큼 맷집이 붙는다(파티 공통 아님).
-	return party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat") + skill_effect_int_sum("hp_flat") + member_armor_hp_bonus(index)
+	var base: int = party[index].max_hp + _level_bonus(index, "hp") + _equipment_bonus(index, "max_hp_bonus") + _stacked_int_effect_for_character(character_id, "hp_flat") + skill_effect_int_sum("hp_flat") + member_armor_hp_bonus(index)
+	# 노드트리 "강골"(전체) + per-class 단련 (기사): % multipliers.
+	var class_hp_mult: float = float(_tree_member_hp_mult.get(character_id, 1.0))
+	return int(round(float(base) * _draft_hp_mult * class_hp_mult))
 
 
 func _equipment_bonus(index: int, property_name: StringName) -> int:
@@ -3325,7 +3937,8 @@ func _equipment_bonus(index: int, property_name: StringName) -> int:
 	for entry in party_equipment[index]:
 		var item: ItemData = item_entry_data(entry)
 		if item:
-			total += int(item.get(property_name)) * item_entry_level(entry)
+			# 단계(level) × 등급(rarity) — the two dials of the gear half.
+			total += int(round(float(int(item.get(property_name)) * item_entry_level(entry)) * entry_rarity_mult(entry)))
 	return total
 
 
@@ -3333,7 +3946,7 @@ func _equipment_bonus(index: int, property_name: StringName) -> int:
 ## Multiple crit modifiers stack their chances (capped at 1.0); the largest
 ## multiplier wins.
 func roll_crit() -> Dictionary:
-	var total_chance: float = 0.0
+	var total_chance: float = _tree_crit_bonus  # 노드트리 "도적 단련"
 	var max_mult: float = 1.0
 	for mod: ModifierData in active_modifiers:
 		total_chance += float(mod.effect_data.get("crit_chance", 0.0))
@@ -3346,7 +3959,7 @@ func roll_crit() -> Dictionary:
 
 
 func window_collision_damage_ratio() -> float:
-	var ratio: float = 0.0
+	var ratio: float = _draft_window_collision_ratio  # 드래프트 "전투창 당구"
 	for mod: ModifierData in active_modifiers:
 		ratio = maxf(ratio, float(mod.effect_data.get("window_collision_damage_ratio", 0.0)))
 	return ratio
@@ -3402,6 +4015,42 @@ func reset_run() -> void:
 	unlocked_tier_ids = [&"slime"]   # only slime from the start; rest re-lock
 	active_tier_ids = []             # toggle/auto-spawn dormant (click-place default)
 	_max_placed_tier_index = 0       # mixed-spawn ceiling resets to slime-only
+	wave_number = 0                  # waves restart with the world
+	wave_active = false
+	wave_time_left = 0.0
+	is_night = false
+	night_time_left = 0.0
+	wave_gold_earned = 0
+	wave_item_tickets = 0
+	town_index = 0                   # 노드트리: back to 태초마을 (프레스티지 룰)
+	tree_levels.clear()
+	smite_unlocked = false           # 강타도 다시 노드로 사야 함
+	auto_move_unlocked = true        # 자동 이동은 기본 ON 유지 (프레스티지 후에도)
+	map_hero_hex = Vector2i.ZERO     # 지도 위 용사도 태초마을로
+	_tree_window_bonus = 0
+	_tree_battle_speed_mult = 1.0
+	_tree_move_speed_mult = 1.0
+	_tree_window_size_bonus = 0
+	_tree_member_atk_mult.clear()
+	_tree_member_hp_mult.clear()
+	_tree_crit_bonus = 0.0
+	_tree_sell_mult = 1.0
+	_tree_ticket_bonus = 0.0
+	_tree_wave_time_bonus = 0.0
+	_tree_kill_time_chance = 0.0
+	_tree_auto_collect_chance = 0.0
+	_tree_smite_mult = 1.0
+	_tree_smite_cd_mult = 1.0
+	_tree_pickup_mult = 1.0
+	_tree_interest = 0.0
+	_draft_attack_mult = 1.0
+	_draft_hp_mult = 1.0
+	_draft_gold_mult = 1.0
+	_draft_spawn_rate_mult = 1.0
+	_draft_crowd_bonus = 0
+	_draft_combo_unlocked = false
+	_draft_window_collision_ratio = 0.0
+	_drafted_once_ids.clear()
 	world_started = false            # opening replays: lay grass again to begin
 	name_entered = false             # …and re-prompt for the hero's name
 	player_name = ""

@@ -135,6 +135,7 @@ var _spawner_timer: float = 0.0
 var _field_size: Vector2 = FIELD_SIZE
 var _loop_complete: bool = false
 var _active_battle_windows: int = 0
+var _first_step_taken: bool = false  ## once the hero first moves, the wave clock runs forever
 var _chaser_spawned_this_loop: bool = false
 var _combo_kills: int = 0
 var _combo_attack_running: bool = false
@@ -162,6 +163,9 @@ func _ready() -> void:
 	EventBus.field_loop_started.connect(_on_field_loop_started)
 	EventBus.field_item_drop_requested.connect(_on_field_item_drop_requested)
 	EventBus.field_gold_drop_requested.connect(_on_field_gold_drop_requested)
+	EventBus.field_gear_box_drop_requested.connect(_on_field_gear_box_drop_requested)
+	EventBus.wave_settle_prep.connect(_on_wave_settle_prep)
+	EventBus.field_enemy_clicked.connect(_on_field_enemy_clicked)
 	EventBus.field_loop_finish_requested.connect(_on_field_loop_finish_requested)
 	EventBus.enemy_encountered.connect(_on_enemy_encountered_for_story)
 	EventBus.enemy_defeated.connect(_on_enemy_defeated)
@@ -176,6 +180,8 @@ func _ready() -> void:
 	EventBus.building_built.connect(_on_building_built)
 	EventBus.structure_placed.connect(_on_structure_placed)
 	EventBus.rest_requested.connect(_begin_rest)
+	EventBus.wave_started.connect(_on_wave_started)
+	EventBus.night_started.connect(_on_night_started)
 	EventBus.structure_visit_requested.connect(_on_structure_visit_requested)
 	EventBus.world_started.connect(_on_world_started)
 	EventBus.rescue_offered.connect(_on_rescue_offered)
@@ -205,11 +211,15 @@ func _apply_world_visibility() -> void:
 func _on_world_started() -> void:
 	# Reveal the world the player just "laid": fade the plain-green field in over
 	# the opening void. (Island diorama / grass texture stay off — plain green.)
+	_first_step_taken = false  # tutorial cushion: wave clock waits for the 1st step
 	_apply_field_background()
 	if _decorations_root != null:
 		_decorations_root.visible = true
 		_decorations_root.modulate.a = 0.0
 		create_tween().tween_property(_decorations_root, "modulate:a", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
+	# The dopamine cadence begins: wave 1 opens with slimes ALREADY pouring in —
+	# no placement homework before the first fight.
+	GameState.start_next_wave()
 
 
 func _process(delta: float) -> void:
@@ -222,11 +232,17 @@ func _process(delta: float) -> void:
 	_tick_rest(delta)      # "쉰다": walk to fire, hold, fast-heal to full (runs always)
 	_tick_structure_walk() # release the post-placement walk once the hero arrives
 	_combo_cooldown_remaining = maxf(0.0, _combo_cooldown_remaining - delta)
+	# Wave clock: runs through battles (싸우는 동안에도 시간은 간다), BUT freezes
+	# while the hero stands idle with nothing clicked — "이동하기 전엔 시간 안 감"
+	# gives the early game a calm "어디 칠까" beat. 자동 이동을 사면 항상 흐른다.
+	if _wave_clock_should_run() and not GameState.is_field_battle_paused():
+		GameState.tick_wave(delta)
 	if GameState.is_field_frozen_for_battle():
 		return
 	if _loop_complete:
 		return
 	_tick_spawner(delta)  # 방생 장치: the machine releases enemies on its own
+	_tick_wave_spawns(delta)
 	# Incremental model: the field continuously maintains a population of the
 	# toggled-on tiers. Killed/cleared enemies are replenished toward the target.
 	# Toggling a tier OFF just stops it joining the spawn mix (random_active_tier
@@ -318,6 +334,10 @@ func _recenter_party() -> void:
 		_player.set_field_bounds(Vector2.ZERO, _field_size)
 	if _player.has_method("set_camera_world_center"):
 		_player.set_camera_world_center(_camera_world_center())
+	# Drop any leftover battle stance so the centered hero doesn't immediately
+	# walk back toward an aborted window's old formation slot.
+	if _player.has_method("clear_formation"):
+		_player.clear_formation()
 	_player.position = center
 	# Center the fixed camera on the field center → hero at true viewport center.
 	if _player.has_method("recenter_camera"):
@@ -326,6 +346,8 @@ func _recenter_party() -> void:
 		_player.snap_camera()
 	for child in _party_root.get_children():
 		if child.is_in_group("party_member") and child != _player:
+			if child.has_method("clear_formation"):
+				child.clear_formation()
 			if child.has_method("snap_to_formation"):
 				child.snap_to_formation()
 			else:
@@ -840,6 +862,65 @@ func _max_grid_y() -> int:
 	return floori((_field_size.y - SPAWN_MARGIN) / float(TILE_SIZE)) - 1
 
 
+## 웨이브 자동 스폰: while a wave runs, enemies pour in for FREE on their own
+## clock (weak-biased, ceiling-capped — see GameState). Placement stays as an
+## optional accelerator on top.
+var _wave_spawn_timer: float = 0.0
+
+
+## 밤이 내린다: 낮 적은 모두 사라지고, 필드가 어두워지고, 사냥꾼(박쥐)이 사방에서
+## 플레이어를 향해 달려든다. 열려 있던 전투창은 그대로 마저 끝난다.
+func _on_night_started(_wave: int) -> void:
+	_clear_field_enemies()
+	_wave_spawn_timer = 0.6  # first hunter lands fast
+	var t := create_tween()
+	t.tween_property(self, "modulate", Balance.NIGHT_TINT, 1.2).set_trans(Tween.TRANS_SINE)
+
+
+## Wave opening: a burst lands IMMEDIATELY so the fight starts on second zero.
+func _on_wave_started(wave: int) -> void:
+	# Fresh slate each wave (wave 2+): the LAST wave's leftovers don't carry over —
+	# only your upgrades do. Clear stray enemies + dropped loot and march the party
+	# back to center. Battle windows are wiped by BattleManager on the same signal.
+	# Placed structures (마을/모닥불/타일) are investments → kept.
+	if wave > 1:
+		_clear_field_enemies()
+		_clear_items()
+		_recenter_party()
+		GameState.restore_party_full()  # 아군 HP 가득 — 매 웨이브는 깨끗한 새 출발
+	# 아침: lift the night shade.
+	var dawn := create_tween()
+	dawn.tween_property(self, "modulate", Color.WHITE, 0.8).set_trans(Tween.TRANS_SINE)
+	_wave_spawn_timer = 0.0
+	for i in Balance.WAVE_OPENING_BURST:
+		var data: EnemyData = GameState.wave_enemy_data()
+		if data != null:
+			_spawn_field_enemy(data)
+
+
+func _tick_wave_spawns(delta: float) -> void:
+	if not GameState.wave_active:
+		return
+	_wave_spawn_timer -= delta
+	if _wave_spawn_timer > 0.0:
+		return
+	# 밤: hunters (박쥐) spawn on their own clock and CHASE on sight.
+	if GameState.is_night:
+		_wave_spawn_timer = Balance.NIGHT_SPAWN_INTERVAL
+		if _active_field_enemy_count() >= _desired_enemy_count() + 10:
+			return
+		var night_data: EnemyData = GameState.night_enemy_data()
+		if night_data != null:
+			_spawn_field_enemy(night_data, true)
+		return
+	_wave_spawn_timer = GameState.wave_spawn_interval()
+	if _active_field_enemy_count() >= _desired_enemy_count() + 10:
+		return  # saturated — hold until fights thin the field out
+	var data: EnemyData = GameState.wave_enemy_data()
+	if data != null:
+		_spawn_field_enemy(data)
+
+
 ## 방생 장치: every interval, release one random UNLOCKED-tier enemy beside the
 ## device — free (the machine does the clicking now). Soft population cap keeps
 ## a neglected field from flooding.
@@ -1243,12 +1324,14 @@ func _on_enemy_place_requested(tier_id: StringName) -> void:
 		_spawn_field_enemy(data)
 
 
-func _spawn_field_enemy(data: EnemyData) -> void:
+func _spawn_field_enemy(data: EnemyData, night_hunter: bool = false) -> void:
 	if data == null:
 		return  # every tier toggled off → nothing to spawn this tick
 	var safe_origin: Vector2 = _player.position if _player else _field_size * 0.5
 	var fe: FieldEnemy = FIELD_ENEMY_SCENE.instantiate()
 	fe.setup(data)
+	if night_hunter:
+		fe.set_night_hunter()
 	# Drag-and-drop: if the player dropped this on a specific map spot, use it
 	# (clamped to the map); otherwise fall back to a random spot near the party.
 	var spawn: Vector2
@@ -1281,7 +1364,11 @@ func _enemy_data_for_current_nodes() -> EnemyData:
 
 
 func _random_spawn_position_for_enemy(_data: EnemyData, avoid: Vector2) -> Vector2:
-	# Scatter enemies randomly across the whole field, just kept clear of the party.
+	# Always keep ONE easy target: when the field is empty, the next spawn lands
+	# near the hero (48~150px). Everything else SCATTERS across the whole map so
+	# they don't bunch up in the center.
+	if _active_field_enemy_count() == 0:
+		return _spawn_position_near_player(avoid)
 	return _random_safe_position(avoid)
 
 
@@ -1366,6 +1453,48 @@ func _spawn_gold_drop(amount: int, world_position: Vector2) -> void:
 	drop.position = _drop_position_near(world_position)
 	_items_root.add_child(drop)
 	drop.reveal_with_pop()
+
+
+func _on_field_gear_box_drop_requested(world_position: Vector2) -> void:
+	var drop := FIELD_ITEM_DROP_SCENE.instantiate() as FieldItemDrop
+	drop.setup_gear_box()
+	drop.position = _drop_position_near(world_position)
+	_items_root.add_child(drop)
+	drop.reveal_with_pop()
+
+
+## Wave over → roll the "자동 줍기" chance for each leftover drop. Default chance
+## is 0 (hand-pickup is the only way → manual is always worth it); the node buys a
+## per-drop chance the buzzer sweep grabs it for you. Un-grabbed drops are lost
+## when the next wave clears the field.
+## Tutorial cushion ONLY: the very first wave waits to start its clock until the
+## hero takes his first step (player clicks an enemy / auto-move / a fight). Once
+## that first step happens, the clock runs forever after (incl. idle, like normal).
+func _wave_clock_should_run() -> bool:
+	if _first_step_taken:
+		return true
+	if GameState.auto_move_unlocked or _active_battle_windows > 0 \
+			or (_player != null and _player.has_method("is_engaged") and _player.is_engaged()):
+		_first_step_taken = true
+		return true
+	return false
+
+
+## Clicked a field enemy → point the hero at it (his collision opens the window).
+func _on_field_enemy_clicked(enemy: Node) -> void:
+	if _player != null and is_instance_valid(enemy) and _player.has_method("set_engage_target"):
+		_player.set_engage_target(enemy)
+
+
+## Pickup grace begins (fights done): each leftover drop rolls 자동 줍기 — passing
+## ones ARC into the hero (visible absorption); the rest stay grabbable for 0.5s.
+func _on_wave_settle_prep() -> void:
+	var chance: float = GameState.auto_collect_chance()
+	if chance <= 0.0 or _player == null:
+		return
+	for drop in _items_root.get_children():
+		if drop.has_method("auto_absorb_to") and randf() < chance:
+			drop.auto_absorb_to(_player)
 
 
 func _drop_position_near(origin: Vector2) -> Vector2:

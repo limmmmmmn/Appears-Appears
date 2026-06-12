@@ -6,9 +6,6 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/low_health_overlay.tscn" id="5_low_hp"]
 [ext_resource type="FontVariation" uid="uid://bnwjfapjo344l" path="res://assets/fonts/field_ui_font.tres" id="6_font"]
 [ext_resource type="PackedScene" uid="uid://ekijluknax6g" path="res://scenes/ui/right_property_inspector.tscn" id="7_inspector"]
-[ext_resource type="PackedScene" path="res://scenes/ui/right_upgrade_panel.tscn" id="7_upgrade_panel"]
-[ext_resource type="PackedScene" path="res://scenes/ui/enemy_placement_shelf.tscn" id="8_enemy_shelf"]
-[ext_resource type="PackedScene" uid="uid://b47s837wn30v4" path="res://scenes/ui/enemy_placement_tooltip.tscn" id="8_enemy_tooltip"]
 [ext_resource type="PackedScene" uid="uid://3e2t0cobc74e" path="res://scenes/ui/left_log_panel.tscn" id="8_log_panel"]
 [ext_resource type="PackedScene" path="res://scenes/ui/town_window.tscn" id="9_town"]
 [ext_resource type="PackedScene" path="res://scenes/ui/narration_window.tscn" id="12_narration"]
@@ -23,6 +20,9 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/event_window.tscn" id="22_eventwin"]
 [ext_resource type="PackedScene" path="res://scenes/ui/star_chip.tscn" id="23_star"]
 [ext_resource type="PackedScene" path="res://scenes/ui/prestige_window.tscn" id="24_prestige"]
+[ext_resource type="PackedScene" path="res://scenes/ui/wave_chip.tscn" id="25_wave"]
+[ext_resource type="PackedScene" path="res://scenes/ui/settlement_window.tscn" id="27_settle"]
+[ext_resource type="PackedScene" path="res://scenes/ui/node_tree_window.tscn" id="28_tree"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pause_mark"]
 font = ExtResource("6_font")
@@ -49,7 +49,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0, 0.39607844, 0.32941177, 1)
+color = Color(0.17138016, 0.350725, 0.5092353, 1)
 metadata/_edit_lock_ = true
 
 [node name="BattleWindowLayer" type="CanvasLayer" parent="." unique_id=1339895513]
@@ -59,44 +59,39 @@ layer = 4
 layer = 5
 
 [node name="FieldLayoutRect" type="ReferenceRect" parent="HudLayer" unique_id=1101467223]
-offset_left = 86.0
-offset_top = 32.0
-offset_right = 540.0
-offset_bottom = 329.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 99.0
+offset_top = 40.0
+offset_right = -95.0
+offset_bottom = -44.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 border_color = Color(0.35, 1, 0.45, 0.9)
 border_width = 1.5
 
 [node name="GoldChip" parent="HudLayer" unique_id=1756743132 instance=ExtResource("15_gold")]
-offset_left = 279.0
-offset_top = 5.0
-offset_right = 353.0
-offset_bottom = 27.0
+offset_top = 3.0
+offset_right = 79.0
+offset_bottom = 31.0
 
 [node name="StarChip" parent="HudLayer" unique_id=1756743133 instance=ExtResource("23_star")]
 offset_left = 360.0
 offset_right = 412.0
+
+[node name="WaveChip" parent="HudLayer" unique_id=1756743134 instance=ExtResource("25_wave")]
+offset_left = 213.0
+offset_right = 272.0
 
 [node name="FieldNameChip" parent="HudLayer" unique_id=1101467224 instance=ExtResource("20_fieldname")]
 visible = false
 offset_left = 87.0
 offset_right = 143.0
 
-[node name="EnemyPlacementShelf" parent="HudLayer" unique_id=1927174253 instance=ExtResource("8_enemy_shelf")]
-offset_left = 6.0
-offset_top = 5.0
-offset_right = 80.0
-offset_bottom = 71.0
-
-[node name="EnemyPlacementTooltip" parent="HudLayer" unique_id=637995234 instance=ExtResource("8_enemy_tooltip")]
-offset_left = 84.0
-offset_top = 23.0
-offset_right = 142.0
-offset_bottom = 49.0
-
-[node name="RightUpgradePanel" parent="HudLayer" unique_id=562159693 instance=ExtResource("7_upgrade_panel")]
-
 [node name="RightPropertyInspector" parent="HudLayer" unique_id=1616697781 instance=ExtResource("7_inspector")]
+visible = false
 offset_left = -96.0
 offset_top = 4.0
 offset_right = -6.0
@@ -139,6 +134,12 @@ visible = false
 visible = false
 
 [node name="PrestigeWindow" parent="ModalLayer" unique_id=169011227 instance=ExtResource("24_prestige")]
+visible = false
+
+[node name="SettlementWindow" parent="ModalLayer" unique_id=169011228 instance=ExtResource("27_settle")]
+visible = false
+
+[node name="NodeTreeWindow" parent="ModalLayer" unique_id=169011229 instance=ExtResource("28_tree")]
 visible = false
 
 [node name="NarrationLayer" type="CanvasLayer" parent="." unique_id=772031937]

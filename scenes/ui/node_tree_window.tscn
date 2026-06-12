@@ -1,0 +1,207 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/runtime/node_tree_window.gd" id="1_ntw"]
+[ext_resource type="Theme" uid="uid://y11tyjfd0r6c" path="res://assets/themes/ui_theme.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="BarStyle"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.96862745, 0.9411765, 0.87058824, 1)
+border_width_top = 2
+border_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+anti_aliasing = false
+
+[node name="NodeTreeWindow" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_ntw")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.92941177, 0.85882354, 0.7647059, 1)
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 8.0
+offset_bottom = 26.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.08627451, 0.08235294, 0.09411765, 1)
+theme_override_font_sizes/font_size = 14
+text = "세계 지도"
+horizontal_alignment = 1
+
+[node name="GoldLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 28.0
+offset_bottom = 40.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.62, 0.45, 0.1, 1)
+theme_override_font_sizes/font_size = 10
+text = "보유 골드  0G"
+horizontal_alignment = 1
+
+[node name="TabRow" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 8.0
+offset_top = 6.0
+offset_right = -428.0
+offset_bottom = 26.0
+theme_override_constants/separation = 4
+
+[node name="MapTabButton" type="Button" parent="TabRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 18)
+layout_mode = 2
+focus_mode = 0
+text = "세계 지도"
+
+[node name="GearTabButton" type="Button" parent="TabRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 18)
+layout_mode = 2
+focus_mode = 0
+text = "파티·장비"
+
+[node name="MapWrap" type="Control" parent="."]
+unique_name_in_owner = true
+clip_contents = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 44.0
+offset_bottom = -34.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="DragCatcher" type="Control" parent="MapWrap"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Map" type="Control" parent="MapWrap"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Overlay" type="Control" parent="MapWrap"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="GearPanel" type="ScrollContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 70.0
+offset_top = 46.0
+offset_right = -70.0
+offset_bottom = -38.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="GearContent" type="VBoxContainer" parent="GearPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="BottomBar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -32.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("BarStyle")
+
+[node name="Row" type="HBoxContainer" parent="BottomBar"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Hints" type="HBoxContainer" parent="BottomBar/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Hint1" type="Label" parent="BottomBar/Row/Hints"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.42, 0.38, 0.33, 1)
+theme_override_font_sizes/font_size = 8
+text = "[WASD] 패닝"
+vertical_alignment = 1
+
+[node name="Hint2" type="Label" parent="BottomBar/Row/Hints"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.42, 0.38, 0.33, 1)
+theme_override_font_sizes/font_size = 8
+text = "[드래그] 지도 이동"
+vertical_alignment = 1
+
+[node name="Hint3" type="Label" parent="BottomBar/Row/Hints"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.42, 0.38, 0.33, 1)
+theme_override_font_sizes/font_size = 8
+text = "[클릭] 해금"
+vertical_alignment = 1
+
+[node name="CostLabel" type="Label" parent="BottomBar/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.45, 0.1, 1)
+theme_override_font_sizes/font_size = 13
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NextButton" type="Button" parent="BottomBar/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 22)
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 4
+focus_mode = 0
+text = "[SPACE] 다음 웨이브 ▸"
