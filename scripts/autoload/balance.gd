@@ -291,6 +291,18 @@ const NIGHT_TINT: Color = Color(0.45, 0.5, 0.72, 1.0)  ## the field's night shad
 const NIGHT_ENEMY_HP_MULT: float = 3.0
 const NIGHT_ENEMY_ATK_MULT: float = 2.5
 
+## ─── 장비 어픽스 (등급 보너스 스탯) ─────────────────────────────────────
+## 일반 초과 장비의 덤: 무기 = 치명 확률, 그 외 = 회피 확률. 등급 배수에 비례.
+const GEAR_AFFIX_CRIT_PER_MULT: float = 0.025   ## 전설(×3.0) 무기 ≈ 치명 +7.5%
+const GEAR_AFFIX_EVADE_PER_MULT: float = 0.02   ## 전설 방어구 ≈ 회피 +6%
+
+## ─── 필드 랜덤 이벤트 (하루 한 번, 예고 없이 — 도파민의 불시 배달) ────────
+const FIELD_EVENT_CHANCE: float = 0.7       ## per-wave chance the day's event fires
+const GOLD_RUSH_DURATION: float = 8.0       ## 골드 러시 지속 시간
+const GOLD_RUSH_MULT: float = 2.0           ## 골드 러시 동안 처치 골드 ×
+const METEOR_COIN_COUNT: int = 3            ## 보물 유성이 흩뿌리는 코인 수
+const GOLD_BAR_MULT: int = 5                ## "금괴" 노드: 금괴 = 코인 ×5
+
 ## Draft card pool — 4 axes: 적(danger dial) / 아군(power) / 보상(greed) /
 ## 필살기(hooks). Repeatable unless "once". Effects live in
 ## GameState.apply_draft_card; this is data only.
@@ -383,8 +395,10 @@ const TREE_NODES: Array[Dictionary] = [
 	{"id": &"n_battle_speed", "town": &"town1", "axis": &"hook", "name": "전투 가속", "desc": "전투·강타 속도 +13%/Lv", "cost": 110, "cost_mult": 1.6, "max_level": 6, "effect": "battle_speed", "mag": 0.13, "hex": Vector2i(-1, -3), "icon": "res://assets/sprites/objects/bonfire.png"},
 	# 💰 보상 체인 (남쪽)
 	{"id": &"n_gold1", "town": &"town1", "axis": &"loot", "name": "황금 감각", "desc": "처치 골드 +10%/Lv", "cost": 15, "cost_mult": 1.55, "max_level": 8, "effect": "gold", "mag": 0.10, "hex": Vector2i(0, 1), "icon": "res://assets/sprites/icons/gold.png"},
-	{"id": &"n_time", "town": &"town1", "axis": &"loot", "name": "오래 머물기", "desc": "웨이브 시간 +3초/Lv", "cost": 35, "cost_mult": 1.6, "max_level": 8, "effect": "wave_time", "mag": 3.0, "hex": Vector2i(0, 2), "icon": "res://assets/sprites/objects/save_point.png"},
-	{"id": &"n_hourglass", "town": &"town1", "axis": &"loot", "name": "모래시계", "desc": "처치 시 10%/Lv 확률로 웨이브 +1초", "cost": 90, "cost_mult": 1.7, "max_level": 3, "effect": "kill_time", "mag": 0.10, "hex": Vector2i(0, 3), "icon": "res://assets/sprites/objects/save_point.png"},
+	{"id": &"n_lucky_coin", "town": &"town1", "axis": &"loot", "name": "행운의 동전", "desc": "처치 골드가 2배로 나올 확률 +10%p/Lv", "cost": 25, "cost_mult": 1.55, "max_level": 5, "effect": "double_gold", "mag": 0.10, "hex": Vector2i(0, 2), "icon": "res://assets/sprites/icons/gold.png"},
+	{"id": &"n_time", "town": &"town1", "axis": &"loot", "name": "오래 머물기", "desc": "웨이브 시간 +3초/Lv", "cost": 45, "cost_mult": 1.6, "max_level": 8, "effect": "wave_time", "mag": 3.0, "hex": Vector2i(0, 3), "icon": "res://assets/sprites/objects/save_point.png"},
+	{"id": &"n_gold_bar", "town": &"town1", "axis": &"loot", "name": "금괴", "desc": "코인이 금괴(5배)로 떨어질 확률 +5%p/Lv", "cost": 80, "cost_mult": 1.65, "max_level": 4, "effect": "gold_bar", "mag": 0.05, "hex": Vector2i(0, 4), "icon": "res://assets/sprites/icons/gold.png"},
+	{"id": &"n_hourglass", "town": &"town1", "axis": &"loot", "name": "모래시계", "desc": "처치 시 10%/Lv 확률로 웨이브 +1초", "cost": 115, "cost_mult": 1.7, "max_level": 3, "effect": "kill_time", "mag": 0.10, "hex": Vector2i(0, 5), "icon": "res://assets/sprites/objects/save_point.png"},
 	# 🧲 획득 체인 (서쪽)
 	{"id": &"n_pickup", "town": &"town1", "axis": &"loot", "name": "넓은 손", "desc": "줍기 범위 +25%/Lv", "cost": 20, "cost_mult": 1.55, "max_level": 5, "effect": "pickup_range", "mag": 0.25, "hex": Vector2i(-1, 0), "icon": "res://assets/sprites/icons/gold.png"},
 	{"id": &"n_autocollect", "town": &"town1", "axis": &"loot", "name": "자동 줍기", "desc": "웨이브 종료 시 남은 전리품 +30%p/Lv 확률 자동 수거", "cost": 45, "cost_mult": 1.7, "max_level": 4, "effect": "auto_collect", "mag": 0.30, "hex": Vector2i(-1, 1), "icon": "res://assets/sprites/icons/gold.png"},
@@ -393,7 +407,7 @@ const TREE_NODES: Array[Dictionary] = [
 	{"id": &"n_rec_mage", "town": &"town2", "axis": &"ally", "name": "메이지 영입", "desc": "광역 마법사가 파티에 합류한다", "cost": 120, "cost_mult": 1.0, "max_level": 1, "effect": "recruit_mage", "hex": Vector2i(2, -1), "char_id": &"mage"},
 	{"id": &"n_mage", "town": &"town2", "axis": &"ally", "name": "메이지 단련", "desc": "메이지 공격(광역) +10%/Lv", "cost": 60, "cost_mult": 1.5, "max_level": 10, "effect": "atk_mage", "mag": 0.10, "hex": Vector2i(2, -2), "icon": "res://assets/sprites/icons/mage_staff.png"},
 	{"id": &"n_hp", "town": &"town2", "axis": &"ally", "name": "강골", "desc": "아군 전체 최대 HP +8%/Lv", "cost": 50, "cost_mult": 1.55, "max_level": 8, "effect": "hp", "mag": 0.08, "hex": Vector2i(2, 1), "icon": "res://assets/sprites/icons/armor.png"},
-	{"id": &"n_move", "town": &"town2", "axis": &"ally", "name": "신속", "desc": "이동 속도 +10%/Lv", "cost": 70, "cost_mult": 1.55, "max_level": 6, "effect": "move_speed", "mag": 0.10, "hex": Vector2i(2, 2), "icon": "res://assets/sprites/icons/thief_sword.png"},
+	{"id": &"n_move", "town": &"town2", "axis": &"ally", "name": "신속", "desc": "이동 속도 +10%/Lv", "cost": 40, "cost_mult": 1.5, "max_level": 6, "effect": "move_speed", "mag": 0.10, "hex": Vector2i(2, 2), "icon": "res://assets/sprites/icons/thief_sword.png"},
 	{"id": &"n_tier", "town": &"town2", "axis": &"enemy", "name": "새로운 마물", "desc": "다음 단계 마물이 나타난다 (더 큰 골드)", "cost": 150, "cost_mult": 1.9, "max_level": 4, "effect": "tier", "hex": Vector2i(3, 1), "icon": "res://assets/sprites/objects/spawner.png"},
 	{"id": &"n_sell", "town": &"town2", "axis": &"loot", "name": "비싸게 팔기", "desc": "장비 판매가 +20%/Lv", "cost": 130, "cost_mult": 1.6, "max_level": 5, "effect": "sell", "mag": 0.20, "hex": Vector2i(3, 2), "icon": "res://assets/sprites/icons/gold.png"},
 	{"id": &"n_horde", "town": &"town2", "axis": &"enemy", "name": "마물 쇄도", "desc": "웨이브 스폰 속도 +20%/Lv", "cost": 80, "cost_mult": 1.7, "max_level": 5, "effect": "horde", "mag": 0.20, "hex": Vector2i(3, -1), "icon": "res://assets/sprites/objects/spawner.png"},

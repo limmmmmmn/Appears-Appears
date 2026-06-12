@@ -280,6 +280,9 @@ func _make_inventory_box(index: int) -> PanelContainer:
 			style.border_color = rcol
 			style.bg_color = rcol.lerp(Color(0.96862745, 0.9411765, 0.87058824, 1.0), 0.45)
 			box.tooltip_text = GameState.entry_display_name(entry)
+			var inv_affix: String = GameState.entry_affix_text(entry)
+			if inv_affix != "":
+				box.tooltip_text += "\n" + inv_affix
 			if item.icon != null:
 				var icon := TextureRect.new()
 				icon.texture = item.icon
@@ -388,7 +391,11 @@ func _make_slot_box(member: int, slot: int) -> PanelContainer:
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			box.add_child(icon)
 			_add_level_badge(icon, GameState.item_entry_level(entry))
-		box.tooltip_text = GameState.entry_display_name(entry) + "\n클릭: 해제"
+		box.tooltip_text = GameState.entry_display_name(entry)
+		var slot_affix: String = GameState.entry_affix_text(entry)
+		if slot_affix != "":
+			box.tooltip_text += "\n" + slot_affix
+		box.tooltip_text += "\n클릭: 해제"
 		# 클릭 = 가방으로 해제.
 		box.mouse_filter = Control.MOUSE_FILTER_STOP
 		box.gui_input.connect(func(e: InputEvent) -> void:
@@ -495,6 +502,11 @@ func _preview_for_option(option: Dictionary) -> String:
 		var delta: int = new_v - old_v
 		var delta_str: String = "  (%+d)" % delta if old_v != 0 else ""
 		parts.append("%s +%d%s" % [stat[1], new_v, delta_str])
+	# 어픽스 (등급 보너스): 무기 = 치명, 그 외 = 회피 — 픽 전에 한눈에.
+	var affix_txt: String = GameState.entry_affix_text(
+		{"item": item, "level": level, "rarity": StringName(option.get("rarity", &"common"))})
+	if affix_txt != "":
+		parts.append(affix_txt)
 	var member_name: String = GameState.party[target].display_name
 	var slot_name: String = GameState.EQUIP_SLOT_NAMES_KR[slot]
 	var stats_str: String = " · ".join(parts) if not parts.is_empty() else "외형용"

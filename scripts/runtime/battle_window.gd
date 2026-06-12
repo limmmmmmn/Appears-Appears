@@ -735,7 +735,7 @@ func _party_attack(attacker_index: int, target_override: Enemy = null) -> void:
 func _basic_party_attack(attacker_index: int, target_enemy: Enemy, damage_mult: float = 1.0) -> int:
 	var member: CharacterData = GameState.party[attacker_index]
 	var atk: int = GameState.effective_attack(attacker_index)
-	var crit: Dictionary = GameState.roll_crit()
+	var crit: Dictionary = GameState.roll_crit(attacker_index)  # 무기 어픽스 치명 포함
 	# The attacker's WEAPON-TYPE multiplier scales damage here (per-member SPEED
 	# component of the gold/sec formula); base stat stays clean.
 	var damage: int = int(round(float(atk) * damage_mult * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
@@ -796,7 +796,7 @@ func _mage_splash_attack(attacker_index: int) -> void:
 	var targets: Array[Enemy] = _living_enemies()
 	var target_count: int = mini(targets.size(), 1 + GameState.member_aoe_extra_targets(attacker_index))
 	var atk: int = GameState.effective_attack(attacker_index)
-	var crit: Dictionary = GameState.roll_crit()
+	var crit: Dictionary = GameState.roll_crit(attacker_index)  # 무기 어픽스 치명 포함
 	var damage: int = int(round(float(atk) * GameState.member_aoe_damage_mult(attacker_index) * float(crit["mult"]) * GameState.member_weapon_multiplier(attacker_index)))
 	var is_crit: bool = bool(crit["is_crit"])
 	var effect_tex: Texture2D = member.attack_effect
@@ -1989,6 +1989,22 @@ func _set_smite_ready(ready: bool) -> void:
 
 ## TAP a charged window → AoE burst on every enemy inside. The lever that makes
 ## "몰아넣기" pay: more bodies = more hit at once + a multi-kill combo bonus.
+## 스페이스바 강타: BattleManager가 키 입력으로 가장 충전된 창의 강타를 쏜다.
+func is_smite_ready() -> bool:
+	return _smite_ready
+
+
+func smite_charge() -> float:
+	return _smite_charge
+
+
+func try_smite() -> bool:
+	if not _smite_ready:
+		return false
+	_do_smite()
+	return true
+
+
 func _do_smite() -> void:
 	if not _smite_ready:
 		return

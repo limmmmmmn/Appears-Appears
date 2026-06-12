@@ -313,9 +313,20 @@ func _physics_process(delta: float) -> void:
 		if to_fire.length() > 1.0:
 			move_dir = to_fire.normalized()
 	else:
+		# WASD 수동 조향: 누르는 동안 클릭 명령·자동 사냥보다 우선한다. 놓으면
+		# 자동 이동이 그대로 복귀 — 키보드는 "세부 조절" 레이어다.
+		var steer := Vector2(
+			(1.0 if Input.is_physical_key_pressed(KEY_D) else 0.0)
+				- (1.0 if Input.is_physical_key_pressed(KEY_A) else 0.0),
+			(1.0 if Input.is_physical_key_pressed(KEY_S) else 0.0)
+				- (1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0))
+		if steer != Vector2.ZERO:
+			_engage_target = null  # manual steering cancels the standing click order
+			move_dir = steer.normalized()
+			_reset_idle_life()
 		# Window-keeper: the hero hunts the CLICKED enemy (his collision opens the
-		# window). No WASD steering — the hero is an anchor you point, not a cursor.
-		if is_instance_valid(_engage_target):
+		# window).
+		elif is_instance_valid(_engage_target):
 			_reset_idle_life()
 			var to_e: Vector2 = (_engage_target as Node2D).global_position - global_position
 			if to_e.length() > 1.0:

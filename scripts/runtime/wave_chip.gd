@@ -16,6 +16,7 @@ const MOON_RIM: Color = Color(0.45, 0.5, 0.78, 1.0)
 @onready var _label: Label = %WaveLabel
 
 var _dial: Control  ## the sun/moon circle (placeholder for future art)
+var _town_btn: Button  ## "마을로" — settle the wave early, on YOUR clock
 
 
 func _ready() -> void:
@@ -27,12 +28,21 @@ func _ready() -> void:
 	# Put the dial + label in a row (label already lives under the panel).
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if _label != null and _label.get_parent() != null:
 		_label.get_parent().remove_child(_label)
 	add_child(row)
 	row.add_child(_dial)
 	row.add_child(_label)
+	# 마을로 버튼: 시간이 남아도 내 타이밍에 정산하러 간다 (유기적 마을행).
+	_town_btn = Button.new()
+	_town_btn.text = "마을로"
+	_town_btn.tooltip_text = "지금 바로 정산하고 마을로 간다"
+	_town_btn.focus_mode = Control.FOCUS_NONE
+	_town_btn.add_theme_font_size_override("font_size", 8)
+	_town_btn.pressed.connect(func() -> void:
+		if GameState.wave_active and not GameState.wave_winding_down:
+			GameState.end_cycle())
+	row.add_child(_town_btn)
 
 
 func _draw_dial() -> void:
@@ -54,6 +64,8 @@ func _process(_delta: float) -> void:
 	visible = true
 	if _dial != null:
 		_dial.queue_redraw()
+	if _town_btn != null:
+		_town_btn.visible = GameState.wave_active and not GameState.wave_winding_down
 	if GameState.wave_active:
 		if GameState.is_night:
 			_label.text = "밤! · %ds" % int(ceil(GameState.night_time_left))

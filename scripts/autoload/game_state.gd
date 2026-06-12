@@ -1798,6 +1798,8 @@ var wave_winding_down: bool = false
 ## timeout OR party collapse → 마을 (정산). One full cycle = day + night.
 var is_night: bool = false
 var night_time_left: float = 0.0
+## 필드 이벤트 "골드 러시": while > 0 every kill pays GOLD_RUSH_MULT×.
+var gold_rush_time_left: float = 0.0
 ## Draft-granted run effects (cleared by reset_run).
 var _draft_attack_mult: float = 1.0
 var _draft_hp_mult: float = 1.0
@@ -1824,6 +1826,7 @@ func start_next_wave() -> void:
 	wave_active = true
 	wave_winding_down = false
 	is_night = false  # 아침이 밝았다
+	gold_rush_time_left = 0.0
 	wave_time_left = wave_duration(wave_number)
 	wave_gold_earned = 0
 	wave_item_tickets = 0
@@ -1835,6 +1838,7 @@ func start_next_wave() -> void:
 func tick_wave(delta: float) -> void:
 	if not wave_active:
 		return
+	gold_rush_time_left = maxf(0.0, gold_rush_time_left - delta)
 	if is_night:
 		night_time_left = maxf(0.0, night_time_left - delta)
 		if night_time_left <= 0.0:
@@ -1967,6 +1971,8 @@ var _tree_window_size_bonus: int = 0      ## "전투창 적 +N" — bodies per w
 var _tree_member_atk_mult: Dictionary = {}
 var _tree_member_hp_mult: Dictionary = {}
 var _tree_crit_bonus: float = 0.0         ## "도적 단련" — flat crit chance for everyone
+var _tree_double_gold_chance: float = 0.0 ## "행운의 동전" — chance a kill pays double
+var _tree_gold_bar_chance: float = 0.0    ## "금괴" — chance a coin drop lands ×5
 var _tree_sell_mult: float = 1.0          ## "비싸게 팔기" — gear sell value
 var _tree_ticket_bonus: float = 0.0       ## "보물 감각" — gear-find chance per kill
 var _tree_wave_time_bonus: float = 0.0    ## "오래 머물기" — +초 per wave
@@ -2098,6 +2104,8 @@ func _apply_tree_effect(effect: String, mag: float = 0.0) -> void:
 		"atk_mage": _bump_tree_member_atk(&"mage", 1.0 + mag)
 		"atk_priest": _bump_tree_member_atk(&"priest", 1.0 + mag)
 		"crit": _tree_crit_bonus += mag
+		"double_gold": _tree_double_gold_chance += mag
+		"gold_bar": _tree_gold_bar_chance += mag
 		"battle_speed": _tree_battle_speed_mult *= 1.0 - mag
 		# 🛡 생존/이동
 		"hp":
@@ -2987,12 +2995,18 @@ func scaled_enemy_attack(data: EnemyData) -> int:
 func roll_kill_gold(base_reward: int) -> Dictionary:
 	if base_reward <= 0:
 		return {"amount": 0, "tier": &"normal"}
+	# 행운의 동전 (노드): chance the WHOLE kill pays double — feedback rides the
+	# jackpot juice so a double always FEELS like a hit.
+	var lucky: bool = randf() < _tree_double_gold_chance
+	var lucky_mult: int = 2 if lucky else 1
 	# LUCK raises the jackpot CHANCE (frequency); the MULTIPLIER stays fixed.
 	if randf() < luck_jackpot_chance():
-		return {"amount": maxi(1, int(round(float(base_reward) * Balance.KILL_GOLD_JACKPOT_MULT))), "tier": &"jackpot"}
+		return {"amount": maxi(1, int(round(float(base_reward) * Balance.KILL_GOLD_JACKPOT_MULT))) * lucky_mult, "tier": &"jackpot"}
 	var mult: float = randf_range(Balance.KILL_GOLD_MIN_MULT, Balance.KILL_GOLD_MAX_MULT)
 	var tier: StringName = &"low" if mult < Balance.KILL_GOLD_LOW_MULT_THRESHOLD else &"normal"
-	return {"amount": maxi(1, int(round(float(base_reward) * mult))), "tier": tier}  # min 1 — never a total 꽝
+	if lucky:
+		tier = &"jackpot"
+	return {"amount": maxi(1, int(round(float(base_reward) * mult))) * lucky_mult, "tier": tier}  # min 1 — never a total 꽝
 
 
 func scaled_enemy_agility(data: EnemyData) -> int:
@@ -3009,7 +3023,9 @@ func scaled_enemy_gold_reward(data: EnemyData) -> int:
 	# applied later in roll_kill_gold, not here.)
 	var tier_id: StringName = tier_id_for_enemy_data(data)
 	var kill_gold: int = int(tier_for_enemy_data(data).get("kill_gold", Balance.SLIME_BASE_GOLD))
-	return maxi(1, int(round(float(kill_gold) * enemy_kill_gold_multiplier(tier_id) * thief_gold_multiplier())))
+	# 골드 러시 (필드 이벤트): 진행 중엔 모든 처치 골드 ×2.
+	var rush: float = Balance.GOLD_RUSH_MULT if gold_rush_time_left > 0.0 else 1.0
+	return maxi(1, int(round(float(kill_gold) * enemy_kill_gold_multiplier(tier_id) * thief_gold_multiplier() * rush)))
 
 
 ## Average single party hit at SPEED Lv1 (weapon-free, full HP). Used only to
@@ -3483,6 +3499,44 @@ func entry_display_name(entry) -> String:
 	return prefix + item.display_name + (" +%d" % (level - 1) if level > 1 else "")
 
 
+## ─── 장비 어픽스 (등급 보너스 스탯) ────────────────────────────────────────
+## 일반 초과 등급 장비엔 보너스 스탯이 따라온다: 무기 = 치명, 그 외(방패/방어구/
+## 악세) = 회피. 값은 등급 배수에 비례 — 전설 무기 ≈ 치명 +7.5%. 엔트리에서
+## 결정론적으로 파생되므로 저장할 것도, 시그니처에 끼워 보낼 것도 없다.
+func entry_affix(entry) -> Dictionary:
+	var item: ItemData = item_entry_data(entry)
+	if item == null or item_entry_rarity(entry) == &"common":
+		return {}
+	var mult: float = entry_rarity_mult(entry)
+	if slot_index_for_item(item) == 0:
+		return {"id": &"crit", "name": "치명", "value": Balance.GEAR_AFFIX_CRIT_PER_MULT * mult}
+	return {"id": &"evade", "name": "회피", "value": Balance.GEAR_AFFIX_EVADE_PER_MULT * mult}
+
+
+func entry_affix_text(entry) -> String:
+	var affix: Dictionary = entry_affix(entry)
+	if affix.is_empty():
+		return ""
+	return "✦ %s +%d%%" % [str(affix["name"]), int(round(float(affix["value"]) * 100.0))]
+
+
+## A member's total gear bonus for one affix id (sum over equipped pieces).
+func member_affix_total(index: int, affix_id: StringName) -> float:
+	if index < 0 or index >= party_equipment.size():
+		return 0.0
+	var total: float = 0.0
+	for entry in party_equipment[index]:
+		var affix: Dictionary = entry_affix(entry)
+		if not affix.is_empty() and StringName(affix["id"]) == affix_id:
+			total += float(affix["value"])
+	return total
+
+
+## "금괴" 노드: chance a dropped coin lands as a bar worth GOLD_BAR_MULT×.
+func gold_bar_chance() -> float:
+	return _tree_gold_bar_chance
+
+
 ## A gear entry's base gold worth: per-level value × rarity multiplier.
 func gear_entry_value(entry) -> int:
 	var item: ItemData = item_entry_data(entry)
@@ -3850,6 +3904,7 @@ func roll_evade(index: int) -> bool:
 		return false
 	var character_id: StringName = party[index].id
 	var chance: float = _stacked_float_effect_for_character(character_id, "evade_chance", EFFECT_STACK_MULTIPLIERS)
+	chance += member_affix_total(index, &"evade")  # 장비 어픽스 (방어구·악세 등급)
 	chance = clampf(chance, 0.0, 0.75)
 	return randf() < chance
 
@@ -3945,8 +4000,10 @@ func _equipment_bonus(index: int, property_name: StringName) -> int:
 ## Roll a crit. Returns { is_crit: bool, mult: float }.
 ## Multiple crit modifiers stack their chances (capped at 1.0); the largest
 ## multiplier wins.
-func roll_crit() -> Dictionary:
+func roll_crit(attacker_index: int = -1) -> Dictionary:
 	var total_chance: float = _tree_crit_bonus  # 노드트리 "도적 단련"
+	if attacker_index >= 0:
+		total_chance += member_affix_total(attacker_index, &"crit")  # 장비 어픽스 (무기 등급)
 	var max_mult: float = 1.0
 	for mod: ModifierData in active_modifiers:
 		total_chance += float(mod.effect_data.get("crit_chance", 0.0))
@@ -4034,6 +4091,8 @@ func reset_run() -> void:
 	_tree_member_atk_mult.clear()
 	_tree_member_hp_mult.clear()
 	_tree_crit_bonus = 0.0
+	_tree_double_gold_chance = 0.0
+	_tree_gold_bar_chance = 0.0
 	_tree_sell_mult = 1.0
 	_tree_ticket_bonus = 0.0
 	_tree_wave_time_bonus = 0.0

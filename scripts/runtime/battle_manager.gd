@@ -419,6 +419,23 @@ func _on_wave_reset(wave: int) -> void:
 		abort_all_battles()
 
 
+## SPACE = 강타: fire the ready battle window's smite from the keyboard — the
+## mouse stays on the field while the keyboard works the windows. Ties break
+## toward the window whose gauge filled first (they're all 1.0 when ready, so
+## effectively: any ready window).
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.keycode != KEY_SPACE:
+		return
+	if not GameState.smite_unlocked:
+		return
+	for w in _window_rects.keys():
+		if is_instance_valid(w) and w.has_method("try_smite") and w.is_smite_ready():
+			w.try_smite()
+			get_viewport().set_input_as_handled()
+			return
+
+
 ## Any battle window still on screen (fighting or resolving)? The 정산 waits on this.
 func has_active_windows() -> bool:
 	for w in _window_rects.keys():

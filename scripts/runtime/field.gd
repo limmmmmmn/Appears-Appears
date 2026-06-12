@@ -237,6 +237,8 @@ func _process(delta: float) -> void:
 	# gives the early game a calm "어디 칠까" beat. 자동 이동을 사면 항상 흐른다.
 	if _wave_clock_should_run() and not GameState.is_field_battle_paused():
 		GameState.tick_wave(delta)
+		_wave_elapsed += delta
+		_maybe_fire_field_event()
 	if GameState.is_field_frozen_for_battle():
 		return
 	if _loop_complete:
@@ -868,6 +870,43 @@ func _max_grid_y() -> int:
 var _wave_spawn_timer: float = 0.0
 
 
+## ─── 필드 랜덤 이벤트 (하루 한 번, 예고 없이) ─────────────────────────────
+## 웨이브마다 무작위 시점 하나를 잡아 두고, 그 순간이 오면 확률로 이벤트가 터진다:
+## ☄️ 보물 유성 (상자+코인 낙하) / 💰 골드 러시 (잠시 처치 골드 2배).
+var _wave_elapsed: float = 0.0
+var _event_at: float = -1.0  ## elapsed seconds when this wave's event may fire (-1 = spent)
+
+
+func _maybe_fire_field_event() -> void:
+	if _event_at < 0.0 or _wave_elapsed < _event_at:
+		return
+	_event_at = -1.0  # one shot per wave
+	if not GameState.wave_active or GameState.wave_winding_down:
+		return
+	if randf() > Balance.FIELD_EVENT_CHANCE:
+		return
+	if randf() < 0.5:
+		_event_treasure_meteor()
+	else:
+		_event_gold_rush()
+
+
+func _event_treasure_meteor() -> void:
+	var avoid: Vector2 = _player.position if _player else _field_size * 0.5
+	var pos: Vector2 = _random_safe_position(avoid)
+	EventBus.narration.emit("☄️ 하늘에서 보물 유성이 떨어졌다!")
+	EventBus.field_gear_box_drop_requested.emit(pos)
+	var data: EnemyData = GameState.wave_enemy_data()
+	var coin: int = maxi(2, GameState.scaled_enemy_gold_reward(data) if data else 3)
+	for i in Balance.METEOR_COIN_COUNT:
+		_spawn_gold_drop(coin, pos + Vector2(randf_range(-26.0, 26.0), randf_range(-16.0, 16.0)))
+
+
+func _event_gold_rush() -> void:
+	GameState.gold_rush_time_left = Balance.GOLD_RUSH_DURATION
+	EventBus.narration.emit("💰 골드 러시! 잠시 동안 처치 골드 2배!")
+
+
 ## 밤이 내린다: 낮 적은 모두 사라지고, 필드가 어두워지고, 사냥꾼(박쥐)이 사방에서
 ## 플레이어를 향해 달려든다. 열려 있던 전투창은 그대로 마저 끝난다.
 func _on_night_started(_wave: int) -> void:
@@ -891,6 +930,9 @@ func _on_wave_started(wave: int) -> void:
 	# 아침: lift the night shade.
 	var dawn := create_tween()
 	dawn.tween_property(self, "modulate", Color.WHITE, 0.8).set_trans(Tween.TRANS_SINE)
+	# 오늘의 랜덤 이벤트 시점 추첨 (초반 3초와 마지막 4초는 피한다).
+	_wave_elapsed = 0.0
+	_event_at = randf_range(3.0, maxf(4.0, GameState.wave_time_left - 4.0))
 	_wave_spawn_timer = 0.0
 	for i in Balance.WAVE_OPENING_BURST:
 		var data: EnemyData = GameState.wave_enemy_data()
@@ -1444,6 +1486,10 @@ func _spawn_item_drop(item: ItemData, world_position: Vector2, level: int = 1) -
 func _on_field_gold_drop_requested(amount: int, world_position: Vector2) -> void:
 	if amount <= 0:
 		return
+	# 금괴 (노드): chance the coin lands as a BAR worth ×5.
+	if randf() < GameState.gold_bar_chance():
+		amount *= Balance.GOLD_BAR_MULT
+		EventBus.narration.emit("✨ 금괴다!")
 	_spawn_gold_drop(amount, world_position)
 
 
